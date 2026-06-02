@@ -49,33 +49,51 @@ Virtual environment setup
 Install dependencies
 Configure .env file
 Connect OpenAI API
+
+
+
 🔹 Phase 2: Data Collection
 Crawl full Pharos documentation
 Extract and store raw text locally
+
+
 🔹 Phase 3: Vector Database
 Split text into chunks
 Generate embeddings
 Store in ChromaDB
+
+
 🔹 Phase 4: Retrieval System
 Build semantic search pipeline
 Retrieve relevant context for queries
+
+
 🔹 Phase 5: AI Engine
 Integrate OpenAI with retrieval system
 Ensure grounded answers only
 Fallback response if no data found
+
+
 🔹 Phase 6: UI
 Build Streamlit chat interface
 Display answers and sources
+
+
 🔹 Phase 7: Enhancements
 Add memory support
 Improve retrieval accuracy
 Add better citation handling
+
+
+
+
 ⚠️ Important Learning
 
 During development, GitHub Push Protection blocked the repository due to an exposed API key in a .env file.
 
-💡 Key Lesson:
 
+
+💡 Key Lesson:
 Never just delete secrets — always remove them from Git history.
 
 This highlighted real-world DevSecOps practices including:
@@ -83,6 +101,9 @@ This highlighted real-world DevSecOps practices including:
 Secret scanning
 Git history safety
 Secure environment handling
+
+
+
 📌 Project Goal
 
 OctoBot aims to become a reliable AI documentation assistant that:
@@ -91,7 +112,10 @@ Answers only from verified sources
 Avoids hallucinations completely
 Provides transparent, citation-based responses
 Demonstrates real-world RAG architecture
-🧑‍💻 Author
+
+
+
+🧑‍💻 Author Echoplex99 @discord
 
 Built as a learning project exploring:
 
