@@ -1,0 +1,33 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/zan
+TITLE: ZAN RPC | docs.pharos.xyz
+============================================================
+How to Access Pharos Testnet RPC from ZAN?
+Step 1: Create a ZAN account
+A ZAN account is required if you want to create an API key on the ZAN platform for configuring an RPC node service on Pharos. For more information, see
+Preparing a ZAN account
+.
+Step 2: Create the API key required for configuring RPC Service on Pharos Network
+If you want to configure the RPC node service network, you need to create an API key on the ZAN platform. This key is used for verification during node connection. You
+can create the API key on the ZAN platform
+. After the API key is created, you can get the URLs for the Pharos Network.
+Step 3: Copy your network URL
+After the API key is created, you can get the URLs that can be used for accessing Pharos Network. Search for Pharos in the Chain RPC section. Click Copy to the right of the HTTPS URL to quickly copy the URL.
+For Example:
+Network
+HTTPS URL
+WSS URL
+Atlantic Testnet
+https://api.zan.top/node/v1/pharos/testnet/{apikey}
+wss://api.zan.top/node/ws/v1/pharos/testnet/{apikey}
+Pacific Mainnet
+https://api.zan.top/node/v1/pharos/mainnet/{api_key}
+wss://api.zan.top/node/ws/v1/pharos/mainnet/{api_key}
+Video Reference:
+Pharos RPC.mp4
+Previous
+RPC Infrastructure
+Next
+Alchemy RPC
+Last updated
+1 month ago
+Was this helpful?

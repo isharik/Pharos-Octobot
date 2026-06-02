@@ -1,0 +1,163 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-binary-deployment
+TITLE: Using Binary | docs.pharos.xyz
+============================================================
+This guide describes how to deploy a Pharos node using pre-compiled binaries and the ops tool.
+📌 For the latest binary package, see
+Current Node Versions
+.
+Prerequisites
+Component
+Specification
+CPU
+32 cores, 2.8GHz or faster, AMD Milan EPYC or Intel Xeon Platinum
+Memory
+256 GB
+Storage
+5 TB SSD with at least 350MiB/s bandwidth and 30000 IOPS
+Network Bandwidth
+0.5 Gbps
+Open Files Limit
+ulimit -n ≥ 10000000
+1. Create working directory and download binary package
+Copy
+export
+WORKSPACE
+=
+pharos
+mkdir
+-p
+/data/
+$WORKSPACE
+&&
+cd
+/data/
+$WORKSPACE
+Download the latest binary release from GitHub:
+Copy
+wget
+https://github.com/PharosNetwork/resources/releases/latest/download/pharos-v0.12.2-f301031a.tar.gz
+tar
+-zxvf
+pharos-v0.12.2-f301031a.tar.gz
+The extracted package contains:
+bin/pharos_light
+- Pharos node binary
+bin/pharos_cli
+- Pharos CLI tool
+bin/libevmone.so
+- EVM execution engine library
+2. Download configuration files
+Download the genesis configuration and VERSION file based on your network:
+For Atlantic Testnet:
+For Mainnet:
+Note:
+When upgrading to a new version, you must also re-download the VERSION file to keep it in sync.
+Download the node configuration file (choose one based on your node type):
+For Archive/Full/Validator Node:
+Note:
+Pruning is disabled by default. To enable pruning, see
+Enable Pruning in Pharos Node
+.
+For TraceDB Node:
+3. Download and setup ops tool
+Download the latest ops tool for Linux:
+4. Set password for key encryption
+Set a password that will be used to encrypt your node's cryptographic keys:
+Important:
+Remember this password - you'll need it to start your node
+The password is stored in
+./.password
+file
+Keep this password secure and backed up
+5. Generate cryptographic keys
+Generate the domain and stabilizing keys for your node:
+This will create the following files in the
+./keys/
+directory:
+domain.key
+- ECDSA private key (prime256v1)
+domain.pub
+- ECDSA public key
+stabilizing.key
+- BLS12-381 private key
+stabilizing.pub
+- BLS12-381 public key
+6. Bootstrap the node
+Initialize the node with genesis state:
+This command will:
+Create the storage database
+Initialize the genesis block
+Prepare the node for first startup
+7. Start the node
+Start the Pharos node service:
+The node will start in daemon mode and begin syncing with the network.
+Check the logs to verify the node is running:
+8. (Optional) Setup systemd service
+For production deployments, it's recommended to manage the Pharos node with systemd.
+Create a systemd service file:
+Enable and start the service:
+Check service status:
+View logs:
+Note:
+If not using systemd, you can manually stop the node with
+pkill pharos_light
+and restart with
+./ops start --config ./pharos.conf
+Directory Structure
+After deployment, your directory structure should look like:
+9. (Optional) Register as Validator
+If you want to run a validator node, you need to register your node on-chain after it has synced with the network.
+Set up your validator private key
+The validator registration requires an Ethereum-compatible private key that holds sufficient tokens for staking. Set it as an environment variable:
+Security Note:
+Do not pass the private key via command-line arguments. Always use the environment variable.
+Register the validator
+Parameters:
+--rpc-endpoint
+- RPC endpoint of a synced Pharos node (default:
+http://127.0.0.1:18100
+)
+--domain-label
+- A description for your validator
+--domain-endpoint
+- The public-facing endpoint of your node for P2P communication
+--domain-pubkey
+- Path to the domain public key file generated in Step 5
+--stabilizing-pubkey
+- Path to the stabilizing public key file generated in Step 5
+--stake
+- Stake amount in tokens (default: 1,000,000 tokens)
+On success, the command will output the transaction hash and your Node ID.
+Exit the validator (if needed)
+To voluntarily exit your validator from the network:
+Security Recommendations
+Protect your keys
+: The files in
+keys/
+directory contain your node's private keys
+Secure your password
+: Keep the
+.password
+file secure with proper permissions
+Backup important files
+: Backup
+keys/
+,
+.password
+, and
+pharos.conf
+Firewall configuration
+: Ensure required ports are open (18100, 19000, 20000)
+Regular updates
+: Keep your node software up to date with latest releases
+Next Steps
+Node Monitoring Setup
+- Configure Prometheus metrics for your node
+To register as a validator, see Step 9 above
+Previous
+Using Docker
+Next
+Node Configuration
+Last updated
+11 days ago
+Was this helpful?

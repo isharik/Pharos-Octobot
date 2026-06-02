@@ -1,0 +1,44 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip
+TITLE: Chainlink CCIP | docs.pharos.xyz
+============================================================
+Chainlink CCIP enables secure cross-chain messaging and token transfers between supported blockchains.
+On Pharos, CCIP allows developers to build applications that interact with multiple networks, including cross-chain DeFi protocols, token bridges, and omnichain applications.
+Supported Lanes
+The following cross-chain lanes are currently available:
+Pharos ↔ Ethereum
+Pharos ↔ Jovay
+Pharos ↔ Polygon
+Pharos ↔ Base
+Network Configuration
+Chainlink CCIP is available on Pacific Mainnet with the following configuration:
+Core Parameters
+Parameter
+Value
+Chain Selector
+7801139999541420232
+Router Contract
+0x4e52dD94e9BCfeFE3C78153bDfB0AB1d30687297
+When to Use CCIP
+Chainlink CCIP is typically used for:
+Cross-chain token transfers
+Sending messages between smart contracts on different chains
+Building omnichain applications
+Integrating liquidity and users from other ecosystems
+Integration Notes
+Use the Router contract to initiate cross-chain messages and token transfers
+Ensure correct configuration of chain selectors and destination chains
+Suitable for applications requiring secure and standardized cross-chain communication
+Documentation
+For detailed integration guides and supported configurations:
+https://docs.chain.link/ccip/directory/mainnet/chain/pharos-mainnet
+Next Steps
+Configure your contracts to interact with the CCIP Router
+Test cross-chain messaging and transfers
+Combine with other infrastructure such as RPC and oracles for full application workflows
+Previous
+Cross Chain Infrastructure
+Next
+Circle CCTP
+Last updated
+1 month ago
+Was this helpful?

@@ -1,0 +1,27 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles
+TITLE: Oracle | docs.pharos.xyz
+============================================================
+Overview
+Oracles provide access to off-chain data within smart contracts. They enable applications on Pharos to interact with real-world information such as asset prices, market data, and external events.
+For many use cases, especially in DeFi and real-world asset applications, oracles are a critical component for bringing reliable data on-chain.
+What You Can Do with Oracles
+Access price feeds and market data
+Build applications that rely on real-world inputs
+Trigger contract logic based on external conditions
+Power lending, trading, and RWA protocols
+Integrate off-chain data into on-chain workflows
+Why It Matters
+Smart contracts operate in a deterministic on-chain environment and cannot directly access external data.
+Oracles bridge this gap by securely delivering off-chain data to the blockchain, enabling more advanced and dynamic applications.
+Available Oracle Providers
+Pharos supports oracle solutions for different data and integration needs.
+Refer to the pages below for setup and usage:
+Supra DORA Pull Oracle
+Chainlink Data Streams
+Previous
+Goldsky
+Next
+Chainlink Data Feeds
+Last updated
+1 month ago
+Was this helpful?

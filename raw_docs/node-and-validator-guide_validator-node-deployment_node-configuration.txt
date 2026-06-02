@@ -1,0 +1,358 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/node-configuration
+TITLE: Node Configuration | docs.pharos.xyz
+============================================================
+This document provides detailed configuration guidance for Pharos nodes, including node types, configuration files, RPC tuning, and node pool scheduling strategies.
+Node Types
+Pharos supports the following node types:
+Node Type
+Description
+Validator Node
+Joins the consensus network and participates in block production through consensus.
+Fullnode
+Similar to validator node, but not included in the consensus node set. Serves as a regular RPC node or as a failover backup for validators.
+Full Cache Node
+A fullnode with an additional flat state database to accelerate state data queries.
+Tracedb Node
+A fullnode with an additional trace database to accelerate trace-related request responses.
+Node Configuration (pharos.conf)
+Base Configuration
+All node types share the same base configuration. Pre-built configuration files are available:
+Fullnode / Validator
+:
+full.conf
+Full Cache Node (Archive)
+:
+archive.conf
+Tracedb Node
+:
+traceDB.conf
+The base configuration for fullnode/validator:
+Copy
+{
+"
+chain
+"
+:
+{
+"
+secret_config
+"
+:
+{
+"
+domain_key_path
+"
+:
+"
+../keys/domain.key
+"
+,
+"
+stabilizing_key_path
+"
+:
+"
+../keys/stabilizing.key
+"
+},
+"
+startup_config
+"
+:
+{
+"
+init_config
+"
+:
+{
+"
+meta_path
+"
+:
+"
+../data
+"
+,
+"
+host_ip
+"
+:
+"
+127.0.0.1
+"
+,
+"
+http_port
+"
+:
+"
+18100
+"
+,
+"
+rpc_port
+"
+:
+"
+20000
+"
+,
+"
+tcp_port
+"
+:
+"
+19000
+"
+,
+"
+ws_port
+"
+:
+"
+18200
+"
+}
+}
+},
+"
+storage
+"
+:
+{
+"
+mygrid_conf
+"
+:
+{},
+"
+mygrid_env
+"
+:
+{
+"
+storage_data_path
+"
+:
+"
+../data
+"
+}
+}
+}
+Enabling Full Cache Node (Flat State KV DB)
+To accelerate state data queries (e.g.,
+getBalance
+,
+getCode
+,
+getStorageAt
+), enable the flat state KV database on top of the base configuration:
+This adds a secondary key-value index alongside the Merkle state database, providing O(1) lookups for account and storage data across all historical blocks. Recommended for RPC nodes serving high-volume state queries.
+Enabling Tracedb Node
+To support
+debug_traceTransaction
+,
+debug_traceBlockByHash
+,
+debug_traceBlockByNumber
+, and
+trace_filter
+, enable trace persistence on top of the base configuration:
+This persists transaction execution traces to a dedicated database, enabling trace replay without re-executing transactions. Recommended for nodes serving debug/trace API requests.
+Combining Full Cache + Tracedb
+Both features can be enabled simultaneously for maximum query capability:
+Note:
+Enabling both features increases disk usage significantly. Plan for additional storage capacity beyond the base 5 TB requirement.
+RPC Node Tuning
+Since RPC nodes primarily handle state queries, block queries, and simulated transaction execution, they require strong JSON-RPC layer processing capabilities. The following configurations can be used to tune the JSON-RPC layer processing logic.
+Thread Counts and Queue Sizes
+Configuration Item
+Default Value
+Purpose
+Impact on RPC Node Performance
+cache_query_worker_count
+16
+Handles
+getBlock*
+/
+getTx*
+/
+getReceipt*
+and other cache queries
+High
+: Insufficient workers cause queuing and increased latency
+cache_query_worker_queue_size
+1000
+Pending queue for above workers
+Queue full at high QPS will reject or block
+db_query_worker_count
+4
+Handles
+getBalance
+/
+getCode
+/
+getStorageAt
+and other state queries
+High
+: Easy to become bottleneck when state queries are frequent
+db_query_worker_queue_size
+1000
+Queue for above
+Can increase appropriately
+heavy_task_worker_count
+4
+Handles
+getLogs
+,
+feeHistory
+Medium
+:
+getLogs
+is time-consuming, need more workers when concurrent
+heavy_task_worker_queue_size
+1000
+Queue for above
+Can increase when heavy tasks are frequent
+eth_default_worker_count
+4
+blockNumber
+,
+syncing
+,
+chainId
+,
+gasPrice
+,
+subscribe
+, etc.
+Medium
+: Can slightly increase when connection count is high
+sim_tx_worker_count
+16
+eth_call
+,
+estimateGas
+,
+createAccessList
+Medium-High
+: Easy to become bottleneck when dApps have many
+eth_call
+requests
+raw_tx_worker_count
+10
+sendRawTransaction
+Low
+: Can reduce if node doesn't primarily receive transactions
+Session Management
+Configuration Item
+Default Value
+Purpose
+Impact
+max_session
+102400
+Maximum session count
+Needs to be large enough for multi-client scenarios
+max_batch_request_size
+20
+Single batch JSON-RPC request count
+Increasing can reduce connections and round-trips
+enable_http_long_connection
+true
+HTTP long connection
+Recommend keeping
+true
+to reduce connection overhead
+session_idle_timeout_for_http
+400000
+HTTP session idle timeout (ms)
+Reduces invalid connections
+session_idle_timeout_for_ws
+360000
+WebSocket session idle timeout (ms)
+Reduces invalid connections
+socket_thread_count
+16
+Accept connections, read socket
+Insufficient when connection count is high will limit throughput
+Block Cache
+Configuration Item
+Default Value
+Purpose
+Impact
+cache_depth
+2048
+Number of recent blocks cached (header/body/tx/receipt)
+getBlock*
+/
+getTx*
+/
+getReceipt*
+cache hit avoids disk read, increasing can significantly improve hit rate and reduce latency
+Node Pool JSON-RPC API Scheduling Strategy
+Recommendations for node pool
+eth
+JSON-RPC API scheduling:
+By Node Type
+Node Type
+Scheduling Rule
+Tracedb Node
+trace_filter
+can
+only
+be served by tracedb node.
+debug_traceBlockByHash
+,
+debug_traceBlockByNumber
+,
+debug_traceTransaction
+should be
+preferentially
+scheduled to tracedb node.
+RPC Node
+Interfaces other than trace/debug can be scheduled to regular RPC nodes.
+Fullnode
+Can be scheduled as a regular RPC node.
+Validator Node
+Do not
+schedule any JSON-RPC requests, only handle transactions forwarded from other RPC nodes.
+By Data Availability
+When fullnode enables state data pruning and only retains
+(latest - pruning_window, latest]
+, please note the state data availability range and request range in scheduling strategy.
+By Interface Affinity
+Affinity-related requests need to be scheduled to the
+same node
+:
+Transaction submission group
+:
+eth_sendRawTransaction
+and related queries
+eth_getTransactionCount
+,
+eth_getTransactionByHash
+,
+eth_estimateGas
+/
+eth_call
+, especially pending state-based queries.
+Filter group
+:
+eth_newFilter
+,
+eth_newBlockFilter
+,
+eth_newPendingTransactionFilter
+for monitoring and event retrieval
+eth_getFilterChanges
+. (Pharos currently uses
+eth_subscribe
+instead of filter interfaces.)
+Previous
+Using Binary
+Next
+Node Management
+Last updated
+1 month ago
+Was this helpful?

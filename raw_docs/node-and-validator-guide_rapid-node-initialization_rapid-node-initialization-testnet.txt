@@ -1,0 +1,54 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization/rapid-node-initialization-testnet
+TITLE: Rapid Node Initialization(Testnet) | docs.pharos.xyz
+============================================================
+🧰 Initialization Using Snapshots
+Follow these steps to bootstrap a Pharos node using the latest snapshot:
+✅
+Step1: Download the Snapshot Dataset
+We periodically publish
+new snapshots
+. Use the following command to download and extract:
+Copy
+wget
+https://snapshot.dplabs-internal.com/atlantic/atlantic-snapshot-2026-03-05-11.tar.gz
+tar
+-zxvf
+atlantic-snapshot-2026-03-05-11.tar.gz
+Only use snapshots that match your target network.
+🧯
+Step2: Stop the Container
+Copy
+docker-compose
+down
+🧹
+Step3: Remove Local Data
+Copy
+rm
+-rf
+/data/
+$WORKSPACE
+/pharos-node/domain/light/data/public
+mv
+/data/
+$WORKSPACE
+/pharos-node/domain/light/data/local_storage
+/data/
+$WORKSPACE
+/pharos-node/domain/light/data/local_storage.bak
+📦
+Step4: Replace with the Latest Snapshot
+Copy
+mv
+public
+/data/
+$WORKSPACE
+/pharos-node/domain/light/data/public
+🚀
+Step5: Start the Container
+Previous
+Rapid Node Initialization
+Next
+Pharos Network Snapshots
+Last updated
+2 months ago
+Was this helpful?

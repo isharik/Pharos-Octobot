@@ -1,0 +1,128 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-docker-deployment
+TITLE: Using Docker | docs.pharos.xyz
+============================================================
+This guide describes how to deploy a Pharos node using Docker and Docker Compose.
+📌 For the latest Docker image tag, see
+Current Node Versions
+.
+Prerequisites
+Component
+Specification
+CPU
+32 cores, 2.8GHz or faster, AMD Milan EPYC or Intel Xeon Platinum
+Memory
+256 GB
+Storage
+5 TB SSD with at least 350MiB/s bandwidth and 30000 IOPS
+Network Bandwidth
+0.5 Gbps
+Open Files Limit
+ulimit -n ≥ 10000000
+Additionally, ensure Docker is installed:
+Docker Engine 20.10+
+Docker Compose 2.0+
+1. Create working directory
+Copy
+export
+WORKSPACE
+=
+pharos
+mkdir
+-p
+/data/
+$WORKSPACE
+&&
+cd
+/data/
+$WORKSPACE
+2. Download configuration files
+Download the genesis configuration and VERSION file based on your network:
+For Atlantic Testnet:
+For Mainnet:
+Note:
+When upgrading to a new version, you must also re-download the VERSION file to keep it in sync.
+Download the node configuration file (choose one based on your node type):
+For Archive/Full/Validator Node:
+Note:
+Pruning is disabled by default. To enable pruning, see
+Enable Pruning in Pharos Node
+.
+For TraceDB Node:
+3. Create docker-compose.yml
+Create the Docker Compose configuration file:
+Note:
+The image uses a specific version tag (
+pharos_community_v0.12.2_f301031a_0422
+).
+4. Set password in docker-compose.yml
+Edit
+docker-compose.yml
+and set your password:
+Change this line:
+To your actual password:
+5. Verify required files
+Before starting the container, verify all required files are present:
+You should see:
+Required files:
+genesis.conf
+- Genesis configuration
+pharos.conf
+- Node configuration
+docker-compose.yml
+- Docker Compose configuration with your password
+bin/VERSION
+- Network version information
+Missing files?
+Go back to steps 2-4 to download and configure them.
+6. Start the node
+Start the Pharos node with Docker Compose:
+7. Check node status
+View logs:
+Check if the node is running:
+You should see:
+Check node health:
+Managing the node
+Stop the node
+Restart the node
+Stop and remove the container
+Note:
+This does not delete your data. Data is persisted in
+/data/pharos/
+.
+View real-time logs
+Execute commands in the container
+Directory Structure
+After deployment, your directory structure will look like:
+Upgrading the node
+To upgrade to a new version, update the image tag in
+docker-compose.yml
+to the new version, then:
+Security Recommendations
+Use strong passwords
+: Set a secure password for
+CONSENSUS_KEY_PWD
+Protect your keys
+: Ensure
+/data/pharos/keys/
+has proper permissions
+Firewall configuration
+: Only expose necessary ports
+Regular backups
+: Backup
+/data/pharos/keys/
+and
+pharos.conf
+Keep updated
+: Regularly pull and update to the latest image
+Monitor logs
+: Regularly check logs for errors or warnings
+Next Steps
+Node Monitoring Setup
+- Configure Prometheus metrics for your node
+Previous
+Validator Node Deployment
+Next
+Using Binary
+Last updated
+11 days ago
+Was this helpful?

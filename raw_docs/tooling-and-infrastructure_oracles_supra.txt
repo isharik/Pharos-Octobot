@@ -1,0 +1,46 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles/supra
+TITLE: Supra | docs.pharos.xyz
+============================================================
+Overview
+Supra provides high-performance oracle services that deliver real-time price feeds and external data to decentralized applications.
+On Pharos, Supra’s DORA Pull Oracle is deployed on Pacific Mainnet and Atlantic Testnet, enabling smart contracts to securely fetch off-chain data directly from the oracle network.
+Network Deployment
+The DORA Pull Oracle is available on Pacific Mainnet and Atlantic Testnet with the following contracts:
+Pacific Mainnet Contracts
+Contract
+Address
+Storage
+0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57
+Pull
+0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD
+Atlantic Testnet Contracts
+Contract
+Address
+Storage
+0xaa2f56843Cec7840F0C106F0202313d8d8CB13d6
+Pull
+0x443A0f4Da5d2fdC47de3eeD45Af41d399F0E5702
+When to Use Supra
+Supra is typically used for:
+Fetching real-time price feeds
+Building DeFi applications (lending, trading, derivatives)
+Powering RWA protocols that depend on external data
+Triggering smart contract logic based on off-chain inputs
+Integration Notes
+The DORA Pull model allows contracts to request data directly from the oracle
+Ensure your contract is configured to interact with the correct oracle contract addresses
+Suitable for applications requiring reliable and up-to-date data feeds
+Documentation
+For detailed integration guides and supported features:
+https://docs.supra.com/oracles
+Next Steps
+Integrate the DORA Pull Oracle into your smart contracts
+Test oracle data flows on Mainnet and Testnet
+Combine with other infrastructure such as RPC and indexing for full application workflows
+Previous
+Chainlink Push Engine Feeds
+Next
+Cross Chain Infrastructure
+Last updated
+1 month ago
+Was this helpful?

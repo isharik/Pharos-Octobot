@@ -1,0 +1,19 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide
+TITLE: Validator Accountability | docs.pharos.xyz
+============================================================
+Validators are expected to actively and honestly participate in the consensus process. There is currently no automated slashing mechanism. However, if malicious behavior is detected, governance procedures may be initiated to penalize the offending validator.
+The following behaviors are considered violations:
+Prolonged offline: The validator node is unreachable or unresponsive for an extended period.
+Consensus inactivity: Failing to propose blocks or submit consensus votes when expected.
+Equivocation: Casting conflicting or duplicate votes for the same consensus round (double voting). This is treated as intentional misbehavior and may result in governance action.
+Validators who engage in any of the above will see their consensus participation degraded. As a result:
+Their block proposals may be rejected by the network.
+They will lose eligibility for transaction fee rewards associated with proposed blocks.
+Validator rewards are tied to consensus participation. Validators that maintain consistent uptime and submit timely, correct votes are eligible to propose blocks and receive the associated transaction fees.
+Previous
+FAQs
+Next
+Validator Requirements
+Last updated
+1 month ago
+Was this helpful?

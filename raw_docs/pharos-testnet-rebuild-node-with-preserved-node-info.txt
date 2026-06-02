@@ -1,0 +1,39 @@
+SOURCE_URL: https://docs.pharos.xyz/pharos-testnet-rebuild-node-with-preserved-node-info
+TITLE: Pharos Testnet: Rebuild Node with Preserved Node Info | docs.pharos.xyz
+============================================================
+This guide helps you
+rebuild your Pharos Testnet node
+while preserving your
+existing validator identity
+(node info). This is useful when resetting the database but retaining validator keys and configuration.
+1️⃣ Stop and Backup the Existing Node
+Copy
+docker stop pharos-testnet
+mv /data/testnet /data/testnet_bak
+docker rm pharos-testnet
+2️⃣ Start a Fresh Node Container
+Copy
+docker run -d --name pharos-testnet \\
+-v /data/testnet:/data \\
+-p 18100:18100 -p 18200:18200 -p 19000:19000 \\
+public.ecr.aws/k2g7b7g1/pharos/testnet:63b85b6b
+3️⃣ ⏳ Wait for Initial Sync (~3 minutes)
+Do not run docker stop or docker-compose down during this step.
+You can check sync progress using:
+Copy
+curl 127.0.0.1:18100/ \\
+-X POST \\
+-H "Content-Type: application/json" \\
+--data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}'
+4️⃣ Stop the Node and Restore Node Identity
+Replace new config with the backup node info:
+5️⃣ Restart and Finalize
+Wait ~3 minutes again for sync to resume. You can check status using:
+6️⃣ Clean Up Backup
+Previous
+Rollback Blocks
+Next
+Pharos Node Monitoring
+Last updated
+6 months ago
+Was this helpful?

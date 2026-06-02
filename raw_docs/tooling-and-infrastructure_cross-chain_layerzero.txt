@@ -1,0 +1,59 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero
+TITLE: LayerZero | docs.pharos.xyz
+============================================================
+Overview
+LayerZero provides omnichain messaging infrastructure that allows smart contracts to communicate across different blockchain networks.
+On Pharos, LayerZero enables developers to build applications that send messages and transfer assets across multiple chains, with configurable security through Decentralized Verifier Networks (DVNs).
+Network Configuration
+LayerZero is available on Pacific Mainnet with the following configuration:
+Core Parameters
+Parameter
+Value
+Chain Key
+pharos
+Stage
+mainnet
+Endpoint ID (EID)
+30407
+Endpoint V2 Contracts
+Contract
+Address
+endpointV2
+0x6F475642a6e85809B1c36Fa62763669b1b48DD5B
+sendUln302
+0xC39161c743D0307EB9BCc9FEF03eeb9Dc4802de7
+receiveUln302
+0xe1844c5D63a9543023008D332Bd3d2e6f1FE1043
+blockedMessageLib
+0xc1ce56b2099ca68720592583c7984cab4b6d7e7a
+executor
+0x4208D6E27538189bB48E603D6123A94b8Abe0A0b
+When to Use LayerZero
+LayerZero is typically used for:
+Sending messages across chains
+Building omnichain applications
+Coordinating contract logic across multiple networks
+Use cases requiring flexible security configuration via DVNs
+Integration Notes
+Use Endpoint V2 contracts to send and receive cross-chain messages
+Configure DVNs based on your application's security requirements
+Suitable for applications that require customizable cross-chain messaging
+Metadata API
+LayerZero provides metadata APIs to query deployments and configuration details.
+Deployments:
+https://metadata.layerzero-api.com/v1/metadata/deployments
+DVN Providers:
+https://metadata.layerzero-api.com/v1/metadata/dvns
+Example (Ethereum DVNs):
+https://metadata.layerzero-api.com/v1/metadata/dvns?chainNames=ethereum
+Next Steps
+Configure your contracts to interact with LayerZero endpoints
+Select appropriate DVNs for your use case
+Test cross-chain messaging flows across supported networks
+Previous
+Circle CCTP
+Next
+Wallet
+Last updated
+1 month ago
+Was this helpful?

@@ -1,0 +1,60 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rollback-blocks
+TITLE: Rollback Blocks | docs.pharos.xyz
+============================================================
+This guide describes how to revert the Pharos node to a previous block height.
+Step 1: Stop the Node
+Docker:
+Copy
+cd
+/data/
+$WORKSPACE
+docker
+compose
+down
+Binary:
+Copy
+cd
+/data/
+$WORKSPACE
+./ops
+stop
+Step 2: Backup local_storage
+Copy
+mv
+/data/
+$WORKSPACE
+/data/local_storage
+/data/
+$WORKSPACE
+/data/local_storage.bak
+Step 3: Revert Blocks
+Revert to latest stable block:
+Copy
+cd
+/data/
+$WORKSPACE
+/bin
+LD_PRELOAD
+=
+./libevmone.so
+./pharos_cli
+revert
+-c
+../pharos.conf
+-t
+stable
+Revert to a specific block number:
+You will see an interactive confirmation prompt:
+Enter
+y
+to confirm.
+Step 4: Start the Node
+Docker:
+Binary:
+Previous
+Node Monitoring Setup
+Next
+Pharos Testnet: Rebuild Node with Preserved Node Info
+Last updated
+4 months ago
+Was this helpful?

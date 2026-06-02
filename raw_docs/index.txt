@@ -1,0 +1,66 @@
+SOURCE_URL: https://docs.pharos.xyz
+TITLE: About Pharos | docs.pharos.xyz
+============================================================
+“We believe in: rough consensus and running code” - David Clark, 1992
+Pharos Network Overview
+Pharos has designed a
+Modular & Full-stack Parallel L1 Blockchain Network
+, structured into three primary layers:
+L1-Base
+,
+L1-Core
+, and
+L1-Extension
+.
+L1-Base
+: Delivers industry-leading data availability and hardware acceleration.
+L1-Core
+: A high-performance, globally distributed blockchain network powered by decentralized nodes. These nodes provide high-throughput and sub-second finality, enabling real-time Web3 user experiences.
+L1-Extension
+: Built on top of L1-Core, this layer supports network expansion across three dimensions:
+Leverages heterogeneous computation to create custom
+Special Processing Networks (SPNs)
+, capable of running blockchain networks, sidechains, or non-blockchain applications like
+HFT
+,
+ZKML
+, and
+AI models
+.
+Enables
+Native Restaking
+to support rapid SPN creation, shared security, staking rewards, and slashing mechanisms. SPNs utilize the excess computing power of validators, providing flexibility in resource use while incentivizing upgrades.
+Facilitates
+Cross-SPNs Interoperation
+, allowing infrastructure, middleware, and application-focused SPNs to communicate and collaborate effortlessly, fostering a highly modular and composable ecosystem.
+Ecosystem Architecture
+The Pharos ecosystem is structured across three key layers:
+Transaction Layer
+: Facilitates secure, confidential, and efficient cross-chain asset and account interactions via the secure and confidential cross-chain interoperability protocol.
+Consensus Layer
+: Integrates with external restaking protocols through the
+Adaptive Restaking Interaction Protocol
+, enabling shared security and liquidity. This includes circulating assets like stBTC and stETH within the Pharos DeFi ecosystem.
+Data Layer
+: Uses the
+Decentralized Data Exchange Protocol
+to synchronize and collaborate with external data centers, promoting innovative on-chain use cases like AI, FHE.
+Pharos Modular Stack
+A
+modular stack
+is provided to support SPNs, Pharos L2/L3 systems. Each modular component is open-sourced and available to partners and developers for scaling and customization.Performance benchmarks have been demonstrated on
+Geth
+, and future collaborations with ecosystem partners will help drive the development of Web3 infrastructure.
+Restaking Integration
+Pharos supports a
+multi-asset protocols
+to enhance security and liquidity, allowing seamless integration with restaking protocols like
+Babylon
+and
+Eigenlayer
+. Future updates will include more protocols, expanding interoperability and security across the network.
+Next
+Vision & Mission
+Last updated
+1 month ago
+Was this helpful?

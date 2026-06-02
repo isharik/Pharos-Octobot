@@ -1,0 +1,20 @@
+SOURCE_URL: https://docs.pharos.xyz/introduction/vision-and-mission
+TITLE: Vision & Mission | docs.pharos.xyz
+============================================================
+Vision
+Pharos Network is committed to driving trustless innovations that serve financially underserved communities and asset markets, supporting the future global economy and enabling true mass adoption of Web3 technologies.
+Mission
+The network aims to establish a Web3 infrastructure with the following characteristics:
+An Inclusive Payment System
+: Providing a Web2-equivalent user experience at the scale of billions of user accounts globally.
+An Inclusive Asset Exchange System
+: Facilitating extreme liquidity for both crypto assets and real-world assets, bridging traditional finance with decentralized markets.
+A dApp Innovation Platform
+: Empowering the development of rich Web3 SuperApps through a revolutionary world computing model, leveraging a generic Coprocessor architecture.
+Previous
+About Pharos
+Next
+Why Pharos
+Last updated
+1 year ago
+Was this helpful?

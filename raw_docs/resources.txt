@@ -1,0 +1,129 @@
+SOURCE_URL: https://docs.pharos.xyz/resources
+TITLE: EVM | docs.pharos.xyz
+============================================================
+The Ethereum Virtual Machine (EVM) is the core component of the Ethereum blockchain, responsible for executing smart contracts and managing the state of the network. It acts as a decentralized computer, maintaining a global state and executing program instructions defined in smart contracts. Key features include:
+State Machine
+: Executes transactions and changes the blockchain state.
+Deterministic Execution
+: Given the same input, it will always produce the same output.
+Isolated Execution
+: Executes code in a sandboxed environment.
+References
+:
+Ethereum Yellow Paper
+: The authoritative technical document that defines the EVM and its operational mechanisms.
+Learning Resources
+Tutorials and Guides
+EVM Playground
+: An interactive platform for experimenting with EVM opcodes and bytecode. It provides detailed explanations and visualizations of how EVM executes opcodes.
+Accessing Constant Variables
+: Learn how to define and use constant variables in EVM.
+Link
+Function Parameters from Calldata
+: Understand how to access function parameters using calldata.
+Link
+Testing Macros in EVM.codes
+: Build and test functions using raw EVM bytecode.
+Link
+General EVM Playground
+:
+Link
+EVM Cheatsheet
+: A comprehensive guide detailing EVM architecture, functionalities, and operational mechanisms. It covers:
+EVM Architecture: Stack, memory, storage, and instruction set.
+Bytecode and Opcodes: Detailed explanations of EVM bytecode and commonly used opcodes.
+Memory vs. Storage: Differences and use cases.
+Gas and Gas Management: Understanding gas costs and optimization techniques.
+Link
+:
+EVM Cheatsheet
+Academic Research
+Smart Contract Decompilation
+: Learn how to decompile EVM bytecode back into high-level languages like Solidity. Tools like Mythril, Ethersplay, or Porosity are used for this purpose.
+Mythril
+:
+Link
+Ethersplay
+:
+Link
+Porosity
+:
+Link
+EVM Execution Model
+: Explore how EVM executes opcodes, manages memory and storage, and handles transactions.
+Link
+:
+Ethereum Yellow Paper
+Tools for EVM Development
+EVM From Scratch
+: A project that guides you through implementing your own EVM in various programming languages. It helps in understanding the core mechanics of EVM.
+Link
+:
+EVM From Scratch
+EVM Puzzles
+: A collection of interactive puzzles designed to help you practice and understand EVM operations.
+Link
+:
+EVM Puzzles
+Community and Discussion
+EVM Learning Manual
+: A curated list of resources for learning EVM, maintained by the blockchain community.
+Link
+:
+EVM Learning Manual
+Stack Overflow
+: A platform where you can find answers to common EVM-related questions and participate in discussions.
+Link
+:
+Stack Overflow - EVM Tag
+Practical Examples and Use Cases
+Contract Address Generation
+: Learn how contract addresses are generated using sender address and nonce.
+Link
+:
+Contract Address Generation
+Bytecode Decompilation
+: Understand the process of converting bytecode into opcodes and reconstructing high-level code.
+Link
+:
+Mythril Documentation
+Storage Management
+: Explore how EVM handles storage variables, including writing to and reading from storage slots.
+Link
+:
+Solidity Documentation - Storage
+References
+EVM Playground
+:
+https://evm.codes
+EVM Cheatsheet
+:
+https://github.com/pylaugh/evm-cheatsheet
+EVM From Scratch
+:
+https://github.com/w1nt3r-eth/evm-from-scratch
+EVM Puzzles
+:
+https://github.com/fvictorio/evm-puzzles
+EVM Learning Manual
+:
+https://learnblockchain.cn/article/4800
+Stack Overflow - EVM Tag
+:
+https://stackoverflow.com/questions/tagged/evm
+Contract Address Generation
+:
+https://ethereum.stackexchange.com/questions/760/how-is-the-address-of-an-ethereum-contract-computed
+Mythril Documentation
+:
+https://mythril.readthedocs.io/en/latest/
+Solidity Documentation - Storage
+:
+https://docs.soliditylang.org/en/v0.8.17/internals/layout_in_storage.html
+Previous
+x402
+Next
+Solidity
+Last updated
+1 year ago
+Was this helpful?

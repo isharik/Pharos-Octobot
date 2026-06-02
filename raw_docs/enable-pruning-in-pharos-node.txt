@@ -1,0 +1,83 @@
+SOURCE_URL: https://docs.pharos.xyz/enable-pruning-in-pharos-node
+TITLE: Enable AutoPruning in Pharos Node | docs.pharos.xyz
+============================================================
+This guide describes how to enable automatic data pruning on your Pharos node to manage disk space.
+For v0.11+ Deployment (New Structure)
+If you deployed your node using the v0.11 deployment guide (Binary or Docker with the new structure), follow these steps.
+Step 1: Verify Node Status
+Check if the node is running:
+Copy
+curl
+-X
+POST
+-H
+"
+Content-Type: application/json
+"
+\
+--data
+'
+{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}
+'
+\
+http://localhost:18100
+Step 2: Enable Pruning
+For Binary Deployment:
+Copy
+cd
+/data/
+$WORKSPACE
+/bin
+LD_PRELOAD
+=
+./libevmone.so
+./pharos_cli
+prune
+--c
+../pharos.conf
+--enable_auto_prune
+For Docker Deployment:
+Copy
+docker
+exec
+-it
+pharos-node
+/bin/bash
+cd
+/data/bin
+LD_PRELOAD
+=
+./libevmone.so
+./pharos_cli
+prune
+--c
+../pharos.conf
+--enable_auto_prune
+Step 3: Query Pruning Settings (Optional)
+For Binary Deployment:
+For Docker Deployment:
+Expected output:
+If
+enable_auto_prune
+is
+1
+, auto pruning is enabled.
+For Legacy Deployment (Pre-v0.11)
+If you deployed your node using the old Python ops tool, follow these steps.
+Step 1: Verify Node Status
+Step 2: Enable Pruning
+Enter the container and enable auto-pruning:
+Step 3: Query Pruning Settings (Optional)
+Expected output:
+If
+enable_auto_prune
+is
+1
+, auto pruning is enabled.
+Previous
+Pharos Node Monitoring
+Next
+Block Explorer
+Last updated
+4 months ago
+Was this helpful?

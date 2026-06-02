@@ -1,0 +1,185 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/x402
+TITLE: x402 | docs.pharos.xyz
+============================================================
+Overview
+x402 is an open, internet-native payment protocol. The HTTP 402 status code was defined in the early HTTP/1.1 specification as “Payment Required.” However, for a long time, it served only as a reserved status code with few practical applications. With the maturation of blockchain and crypto-payment infrastructure, this status code has been reactivated, evolving into a lightweight, trustless mechanism for content payment.
+In this model, when a client requests protected resources (such as articles, API responses, or data streams), the server does not return the content directly. Instead, it returns an HTTP 402 response accompanied by payment instructions (e.g., recipient address, amount, supported payment networks, etc.). The client initiates a micro-payment—either on-chain or off-chain—via a wallet. Once the server verifies the validity of the transaction, it unlocks and delivers the requested content. In decentralized networks like Pharos, this process is typically implemented as follows: the user sends a micro-token transfer to a specified address → the network node or server-side listens for and verifies the transaction → the original requested resource is automatically returned upon successful verification. The entire process requires no registration, login, or traditional payment gateways, truly achieving “pay-as-you-go, instant access.”
+This mechanism provides native, programmable payment capabilities for AI agents, automated services, or IoT devices, serving as one of the key infrastructures for building an Autonomous Economy.
+Working
+x402 Flowchart
+Initial Request and Payment Requirements
+Resource Request Initiation:
+The client initiates an HTTP request (e.g.,
+GET /api
+) to the resource server for a specific protected resource.
+Payment Trigger Response:
+The server returns an
+HTTP 402 Payment Required
+status code. A Base64-encoded
+PaymentRequired
+object is carried in the response body via the
+PAYMENT-REQUIRED
+header. This object defines the payment scheme, target network, and specific payment parameters required for the current transaction.
+Payment Credential Construction and Signing
+Scheme Selection and Payment Payload Generation:
+The client parses the payment requirements returned by the server and selects a specific payment scheme based on its own supported payment capabilities. Subsequently, the client constructs a
+PaymentPayload
+containing the necessary metadata according to the protocol specifications of that scheme.
+Secondary Request Submission:
+The client re-initiates the resource request and attaches the signed
+PaymentPayload
+in the
+PAYMENT-SIGNATURE
+HTTP header.
+Verification
+Verification Routing:
+Upon receiving the signed request, the resource server executes validation logic. The server can choose to perform local verification or forward the
+PaymentPayload
+and the original
+PaymentRequirements
+to the Facilitator's
+/verify
+interface for remote verification.
+Compliance Check:
+The Facilitator verifies the payload according to the specified payment scheme and blockchain network rules, then returns a
+Verification Response
+to the resource server.
+Access Control Decisions:
+Verification Failed:
+If the verification does not pass, the resource server returns a 402 status code and error details again.
+Verification Succeeded:
+If the verification passes, the resource server confirms the payment credential is valid and immediately initiates business logic processing (Do Work), preparing for on-chain settlement.
+On-chain Settlement and Confirmation
+Transaction Broadcasting:
+The resource server is responsible for initiating fund settlement. This can be completed by interacting directly with a blockchain node or by delegating it to a Facilitator. If delegated, the server sends the payment credential to the Facilitator's
+/settle
+interface.
+Block Inclusion:
+The Facilitator submits the transaction to the blockchain network (Submit tx).
+Delivery and Receipt
+Settlement Feedback:
+Once the on-chain transaction is confirmed, the Facilitator returns a settlement execution response (Settlement Response) containing the transaction hash (
+tx_hash
+) to the resource server.
+Resource Delivery:
+The resource server sends an
+HTTP 200 OK
+response to the client, placing the requested resource content in the response body. Simultaneously, to provide proof of payment, the server attaches Base64-encoded settlement response information in the
+PAYMENT-RESPONSE
+response header, marking the completion of the entire "pay-before-receive" closed loop.
+Pharos Support:
+The x402 protocol itself is chain-agnostic. On Pharos, it supports all ERC-20 tokens. Pharos’s high-performance features (30,000 TPS, sub-second finality) make it particularly suitable for x402 micro-payment scenarios.
+Use Cases
+x402 enables micro-payment and pay-per-use scenarios that were previously impossible due to economic unfeasibility. Below are some possible application scenarios:
+Agent Commerce
+AI Agents subscribing to content services with auto-renewal:
+AI agents can represent users in subscribing to content services such as industry updates, financial newsletters, or in-depth analysis reports, automatically completing periodic fee payments and renewal operations through integrated digital wallets.
+Pay-per-use AI capability calls:
+Users or systems pay based on the actual number of uses when calling Large Language Model (LLM) inference, image generation, or other AI APIs.
+Payments between agents:
+Supports peer-to-peer payments between multiple autonomous agents for data sharing, task collaboration, or service provision without human intervention.
+Automated financial trading agents:
+Based on real-time market data and external information sources (e.g., paid data streams), these agents autonomously execute high-frequency trading strategies and dynamically procure necessary data resources to optimize decision-making.
+Medical and Health Tech
+AI-assisted diagnostic reports:
+After users upload medical images, they pay to unlock structured diagnostic suggestions.
+Personalized health advice APIs:
+Wearable devices call health analysis models and pay-per-call to obtain deep insights.
+Access to electronic medical record fragments:
+Third-party applications request specific medical visit records, and patients authorize and pay a small fee to share data.
+Education and Knowledge Services
+AI Tutor single-question answering:
+Basic prompts are free, while in-depth analysis requires payment to unlock.
+Professional course fragment unlocking:
+After a trial preview, users pay by the minute or chapter to continue learning.
+Single academic paper access:
+No subscription required; pay per paper for instant PDF access.
+E-commerce and Consumer Services
+Personalized recommendation engine calls:
+E-commerce platforms pay AI service providers based on successful conversions.
+AR try-on/make-up experience:
+Payment is required to unlock real-time rendering before high-precision virtual trials.
+Supply chain risk assessment queries:
+Enterprises pay-per-query for supplier risks, which can be used for procurement decision-making.
+Other Scenarios
+Computing power rental:
+Billing by the second for using GPU/CPU resources for training or inference.
+IoT micro-transactions:
+Sensor networks pay automatically based on data points or events (e.g., environmental monitoring, smart meters).
+Sustainability and carbon credits:
+Companies or individuals purchase carbon offsets on demand, with the API returning a 402 to trigger instant settlement.
+Key Advantage:
+x402 transaction costs on Pharos are extremely low, making true micro-payments possible. Combined with instant finality, this enables real-time access control.
+x402 SDK for Pharos
+Server-side: Using Express + x402 Middleware
+For Express applications, you can use the middleware pattern:
+Client-side: Using Fetch + x402 SDK
+Facilitator Implementation
+Skill
+Skill Repository:
+https://github.com/PharosNetwork/examples/tree/main/skills/x402-pharos
+This skill facilitates using the x402 SDK to construct the Pharos x402 server and the corresponding test client. Currently, this skill only supports the Pharos Atlantic testnet with chain ID 688689 and a test USDC token address (
+0xE0BE08c77f415F577A1B3A9aD7a1Df1479564ec8
+), which is not an official address.
+The following demonstrates building a server and client demo using this skill, taking opencode as an example.
+Create Server:
+Enter the prompt: "Help me create a pharos-x402 server." It will ask for corresponding parameters (recipient address, Facilitator URL, etc.) and automatically generate the corresponding code files and configuration files.
+During the process, you can ask it to generate simple example code through conversation, including
+/data
+and
+/premium
+endpoints.
+The service can then be started.
+Next, you can ask it to write a test client.
+Once the private key is configured, you can test the payment process.
+Please note: never reveal your private key to large models. Configure it via environment variables or file writing.
+Advantages of x402 on Pharos
+Features
+Pharos
+Other EVM Chains
+TPS
+30,000
+Usually < 5,000
+Block Time
+< 1 Second
+Usually 2 - 15 Seconds
+Finality Time
+Sub-second
+Usually several minutes
+Micro-payment Viability
+Extremely High
+Low - High
+Why Choose Pharos for x402?
+Ultra-low transaction costs:
+Pharos's high throughput and efficient consensus minimize transaction costs, making micro-payments truly economically viable.
+Instant Finality:
+Sub-second finality means users can access content immediately after payment without waiting for multiple block confirmations.
+EVM Compatibility:
+Fully compatible with Ethereum tools (ethers.js, viem, Hardhat, etc.); existing developers do not need to learn new tools.
+Compliance-Friendly:
+Pharos's built-in compliance modules (ZK-KYC/AML) allow x402 payments to meet regulatory requirements, making it suitable for institutional adoption.
+Modular Architecture:
+Through SPN (Specialized Processing Network), the execution environment can be customized for specific payment scenarios.
+Development Recommendations
+Temporary Access Authorization based on JWT:
+After the user completes payment verification, the server can issue a short-term valid JSON Web Token (JWT) as a credential for subsequent resource access. This token should have a reasonable expiration time to avoid repeated payments while reducing the overhead of frequent on-chain verification by the server.
+Security Management of Sensitive Information:
+All confidential data such as private keys and API keys should be injected into the application through environment variables or dedicated secret management services. Hardcoding them in source code or configuration files is strictly prohibited to prevent accidental leakage.
+Transaction Idempotency and Retry Support:
+The client should be able to initiate a retry request based on the original transaction hash after a network interruption or request failure. The server must implement idempotency processing logic to ensure that the same on-chain transaction is not billed multiple times or granted permissions repeatedly.
+Introducing Facilitator Service to Decouple Blockchain Interaction:
+Design a middleware service (Facilitator) to encapsulate complex logic such as blockchain node communication, transaction listening, and verification, simplifying the main business code. However, note that this component could become a performance bottleneck or a single point of failure; it is recommended to combine redundant deployment, health checks, multi-account strategies, and downgrade policies to improve system resilience.
+Reference Resources
+Pharos Official Website:
+https://www.pharos.xyz/
+Pharos Documentation:
+https://docs.pharos.xyz/
+x402 Specification:
+https://x402.org/
+Previous
+Call EVM From WASM
+Next
+EVM
+Last updated
+2 months ago
+Was this helpful?

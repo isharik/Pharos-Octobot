@@ -1,0 +1,47 @@
+SOURCE_URL: https://docs.pharos.xyz/introduction/encyclopedia
+TITLE: Encyclopedia | docs.pharos.xyz
+============================================================
+Deep Dive into Pharos Architecture, Concepts & Core Technologies
+The Pharos Encyclopedia is a dedicated knowledge hub designed for developers, researchers, and contributors who want to explore the technical foundations, core concepts, and architecture of the Pharos Network.
+While this Developer Documentation focuses on helping you build, integrate, and deploy applications, the Encyclopedia provides a deeper understanding of how Pharos works under the hood — from foundational concepts to protocol-level design.
+What You’ll Find in the Encyclopedia
+The Encyclopedia covers in-depth topics across the Pharos stack, including:
+Core Concepts
+Foundational concepts that help you understand how the Pharos ecosystem operates, including key primitives, system design patterns, and terminology.
+Architecture Overview
+A breakdown of Pharos’ layered architecture, including L1 Base, Core, and Extension layers.
+Consensus & Performance Design
+Insights into Pharos’ scalable BFT mechanisms and high-throughput execution model.
+Core Technologies
+Deep dives into components such as:
+Pharos DTVM
+Dual VM architecture (EVM + WASM)
+Special Processing Networks (SPNs)
+Native restaking and shared security
+High-performance storage systems
+Interoperability & Cross-Chain Design
+How Pharos enables seamless interaction across ecosystems.
+Research & Design Papers
+Detailed technical explorations and protocol-level innovations.
+When Should You Use the Encyclopedia?
+You should explore the Encyclopedia if you want to:
+Understand core concepts and how Pharos works internally
+Dive into protocol-level architecture and design decisions
+Build advanced infrastructure or protocol integrations
+Contribute to the core technology or ecosystem tooling
+Evaluate Pharos for research or system design purposes
+For Builders
+If your goal is to build and ship applications, we recommend starting with:
+Getting Started
+Developer Guide & Tutorials
+Tooling & Infrastructure
+These sections are designed to help you go from idea to deployment as quickly as possible.
+Explore the Pharos Encyclopedia
+Access the full Encyclopedia here:
+Previous
+Why Pharos
+Next
+Network
+Last updated
+1 month ago
+Was this helpful?

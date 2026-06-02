@@ -1,0 +1,112 @@
+SOURCE_URL: https://docs.pharos.xyz/introduction/why-pharos
+TITLE: Why Pharos | docs.pharos.xyz
+============================================================
+Blockchain technology has made significant strides in recent years, yet performance remains a primary bottleneck hindering the Web3 user experience. Although many protocols achieve high TPS in ideal or test environments, their performance in real-world falls far short of expectations. This performance gap makes it difficult for Web3 applications to compete with Web2 applications, limiting their mass adoption and enhancement of user experience.
+For instance, with bitcoin inscription frenzy hits EVM blockchains in early 2024, we observed that most public chains could not exceed a thousand TPS(Transaction Per Second), typically ranging from dozens to a few hundred. Some public chains, under high-stress conditions, opted to raise Gas Prices to reduce transaction frequency, but this is neither a healthy nor sustainable solution. In fact, the execution cost of smart contracts is usually far higher than that of inscription transactions. Given the current infrastructure, most public chains are still unable to support the operations of Web3 Super DApps, which is one of the crucial factors constraining the current development of Web3. Paradigm also provided some insightful
+data
+.
+Three Major Challenges Towards High-Performance Blockchains
+After extensive research and testing, Pharos has identified three significant challenges currently facing high-performance Web3 blockchains:
+Challenge 1: The "Bottleneck Effect" in Blockchain
+Throughout the development of programmable blockchains, many developer and researchers have continuously optimized various modules, such as consensus, execution, and storage. However, due to the complexity of blockchain systems, isolated optimizations often fail to address overall performance issues, resulting in a limited improvement in end to end transactions per second (TPS). This phenomenon is what we refer to as the “Bottleneck Effect” in blockchain. This issue is particularly pronounced in traditional sequential execution blockchain networks. For instance, in a simulation of Ethereum’s transaction on a Geth client running on a single node (32GB RAM, 16 cores, 2TB SSD), we observed the following time distribution across different stages under continuous load pressure.
+Although many Layer 1 and Layer 2 solutions focus on optimizing performance from the perspective of executing transactions (e.g., Parallel EVM), they still face bottlenecks in merklization and database operations, which limit overall blockchain network performance. Consequently, in the past 1-2 years, we have seen blockchains, such as
+Avalanche
+,
+Monad
+, and
+Sei Network
+, proposing their own database and merklization solutions.
+Challenge 2: The Need for Decentralized & Large-Scale Networking
+Blockchain is a decentralized distributed ledger system that must support efficient transaction execution and RPC services while maintaining decentralization and large-scale networking at a low cost to enhance network reliability and asset security. However, high hardware requirements can limit the network scale, reducing its security and degree of decentralization. The chart below shows the current hardware requirements for Validators/Sequencers on some L1 and L2 networks:
+Blockchain
+CPU (cores)
+Memory (GB)
+Network (Gbps)
+Storage (TB SSD)
+TPS
+Validator
+Ethereum
+4
+16
+0.025
+2
+30
+1.5 Million
+Solana
+12
+256
+1~10
+2
+65000
+~1,500
+Aptos
+32
+64
+1
+2
+30000
+~150
+Monad
+16
+32
+0.1
+2
+10000
+-
+Reth
+(Single Node)
+24
+256
+10
+2
+20000
+1
+Mega ETH
+(Single Sequencer)
+100
+1024~
+4096
+10
+2
+100000
+1
+In reality, most personal computers and mobile devices already have decent configurations, and some L1 and L2 networks are considering incorporating them into their ecosystems.
+Challenge 3: State Bloat Problem Hinders Blockchain Development
+In
+Why We Need a Blockchain-Native Store
+, we explore the main bottlenecks facing current blockchain storage systems. With the increase in blockchain users, state bloat has led to challenges such as performance degradation, network scalability limitations, and resource inefficiencies. These issues create significant barriers to the large-scale, production-ready deployment of most L1 and L2 networks.
+Shortcomings of Existing Solutions
+Pharos, considering the current state of monolithic chains and modular ecosystems, has identified four key shortcomings in the performance optimization of existing blockchains:
+Insufficient "Parallelism"
+The "parallelism" in existing blockchains is limited, particularly between the execution and storage layers.
+Execution Layer
+: While Parallel EVM technology enhances efficiency, actual parallelism remains below ideal levels due to limitations in optimistic execution algorithms and disk I/O speed. The current Parallel EVM framework also struggles to accommodate the diverse scenarios and execution logic of various DApps, especially AMM-based DEXs.
+Storage Layer
+: Most blockchains use traditional key-value stores and Merkle Tree structures, limiting concurrency in both I/O access and merklization. Teams like Reth and Monad have recognized this issue and are exploring async I/O and parallel merklization to overcome these bottlenecks.
+Verifiable Storage Remains a Bottleneck in Large-Scale Scenarios
+Most current L1 and L2 solutions still rely on verifiable storage architectures, but their inefficient querying and merklization performance severely limit overall blockchain throughput. The combination of MPT (Merkle Patricia Tree) and LSM Store, for instance, faces three performance issues:
+Long I/O Paths, Hash-Based Addressing,
+and
+State Bloat
+. As State Bloat worsens, the efficiency of starting new nodes continues to decline, further impacting network scale and decentralization.
+Insufficient Utilization of Node Resources
+The resources of existing blockchain nodes are not being fully utilized. One reason is that, in traditional blockchain models, CPU and I/O resources remain idle for much of the time. Furthermore, on-chain data and index maintenance also waste a significant amount of CPU and I/O resources. Taking the most typical LSM Database as an example, compaction consumes considerable CPU and I/O resources, competing with existing modular components and greatly reducing throughput.\
+In the
+Why We Need Pipelining
+section, we provide a detailed overview of the resource bottlenecks at each stage of blockchain processing.
+Limitations of Layer 2 Scaling Solutions
+While many Layer 2 (L2) solutions (such as ZK/OP Rollup, and Sidechains) have proven effective in improving Layer 1 (L1) scalability, several issues still persist:
+Increasing State Bloat in L2:
+Most L2 sequencers continue to use traditional blockchain node architectures, which do not effectively address the state bloat problem, resulting in significant throughput limitations. Many L2 networks only achieve between tens to a few hundred TPS, as shown in Paradigm's recent performance data for various L2 solutions. Moreover, while decentralized sequencer networks are an aspirational goal for many L2 projects, they encounter technical challenges as complex as those faced by L1 networks. In ZK rollup designs, this problem is often compounded by the use of binary Merkle trees, which further intensify state bloat.
+Data and Liquidity Fragmentation:
+While L2 solutions enhance scalability, they introduce significant delays in inter-network communication. For example, rollups typically require several hours to days for messages to transfer from L2 to L1 during the challenge period, slowing down communication and leading to severe data and liquidity fragmentation. Additionally, L2 networks cannot share assets and account states directly with each other and must rely on third-party bridges for transfers, which introduces both centralization and security risks.
+The Right Path to Improving Blockchain Scalability
+In the current blockchain ecosystem, isolated optimizations often fall short of expectations. A holistic approach is necessary, considering consensus, execution, storage, and parallel processing.
+Pharos introduces a suite of efficient modular components and parallel solutions, with a sustained focus on research and practical advancements in this field. We aims to deliver high-performance, low-latency, and cost-effective blockchain services, bringing a Web2-like user experience to Web3.
+Previous
+Vision & Mission
+Next
+Encyclopedia
+Last updated
+9 months ago
+Was this helpful?

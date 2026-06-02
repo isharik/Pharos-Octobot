@@ -1,0 +1,66 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/interoperability/call-evm-from-wasm
+TITLE: Call EVM From WASM | docs.pharos.xyz
+============================================================
+This guide will walk you through the process of calling EVM contracts from the WASM code e.g., Rust.
+Prerequisites
+Before you begin, ensure you have the following:
+Git: Used for code management and obtain examples.
+Rust: Install it from
+rust-lang.org
+.
+Pharos Devnet/Testnet Access: Access to a Pharos node (local or remote) for interacting with the blockchain.
+Setup 1: Install WASM Toolchains With Cargo
+Install the pharos wasm toolchain plugin using the Cargo tool:
+Copy
+cargo
+install
+--git
+https://github.com/PharosNetwork/pharos-cargo-stylus
+Add the
+wasm32-unknown-unknown
+build target to your Rust compiler:
+Copy
+rustup
+target
+add
+wasm32-unknown-unknown
+You should now have it available as a Cargo subcommand:
+Copy
+cargo
+stylus
+--help
+Cargo
+subcommand
+for
+developing
+Pharos
+Stylus
+projects
+Note: Pharos built the chain excution client from scratch using C++, and we design, developed and open-sourced the
+Dora
+VM, which combines EVM and WASM in a deeply compiled VM arch with native interoperability. The Rust toolchain and Rust SDK are forked from Stylus toolchain and SDK to facilitate easier adoption, the change here is the removal of Arbitrum ink billing and the simplification of the activation and compilation process on Pharos.
+Setup 2: Set Up the Project
+Clone the example repo:
+Setup 3: Write the Interoperability Contract
+Create a new file for your interoperability contract:
+Write the interoperability Contract:
+Open
+src/lib.rs
+in your favorite text editor and add the following code:
+Compile the Smart Contract:
+Use cargo to compile the contract:
+Step 4: Deploy the Interoperability Contract
+Troubleshooting
+Contract Deployment Fails
+: Ensure you have enough testnet tokens to cover the deployment cost.
+Interaction Issues
+: Verify that the contract address and ABI are correct.
+Insufficient Balance
+: Ensure your wallet has enough tokens to transfer.
+Previous
+Interoperability
+Next
+x402
+Last updated
+1 year ago
+Was this helpful?

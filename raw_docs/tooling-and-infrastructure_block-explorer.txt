@@ -1,0 +1,21 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/block-explorer
+TITLE: Block Explorer | docs.pharos.xyz
+============================================================
+Overview
+A block explorer is one of the most essential tools when building on Pharos. It gives you visibility into everything happening on-chain — from transactions and blocks to smart contracts and account activity.
+As a developer, you’ll frequently use a block explorer to verify deployments, debug issues, and track interactions with your contracts.
+What You Can Do with a Block Explorer
+View transactions and check their status
+Inspect blocks and network activity
+Explore wallet addresses and balances
+Interact with and inspect smart contracts
+Verify deployed contracts and view source code
+Why It Matters
+The block explorer acts as your primary interface for understanding on-chain behavior. Whether you're testing on Testnet or deploying to Mainnet, it helps you quickly validate that everything is working as expected.
+Previous
+Enable AutoPruning in Pharos Node
+Next
+Hemera SocialScan
+Last updated
+1 month ago
+Was this helpful?

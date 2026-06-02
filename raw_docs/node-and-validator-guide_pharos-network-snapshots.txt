@@ -1,0 +1,45 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/pharos-network-snapshots
+TITLE: Pharos Network Snapshots | docs.pharos.xyz
+============================================================
+Welcome to the official snapshot page for Pharos Network. Here you can find regularly updated data snapshots for each network environment — Atlantic Testnet and Mainnet — to help you quickly synchronize and bootstrap your nodes without performing a full sync from genesis.
+Snapshots include the latest database state and can be used for fast setup, disaster recovery, or performance testing.
+💡 Notes & Best Practices
+Snapshots do not contain full block history, only the latest validated state.
+Archival nodes should still sync from genesis.
+After applying a snapshot, the node will continue syncing from the latest height.
+Always ensure your snapshot corresponds to the correct network and version.
+⚠️ Always verify the snapshot source and integrity before applying it to your node.\
+See
+Rapid Node Initialization
+for detailed instructions.
+Atlantic Archive Node Snapshot
+Latest Snapshot
+atlantic-snapshot-2026-03-05-11.tar.gz
+Last Updated
+atlantic-snapshot-2026-03-05-11.tar.gz
+Format
+Compressed TAR archive
+Notes
+Only includes the
+public
+database
+Mainnet Archive Node Snapshot
+Latest Snapshot
+mainnet-snapshot-2026-06-01-03.tar.gz
+Last Updated
+mainnet-snapshot-2026-06-01-03.tar.gz
+Format
+Compressed TAR archive
+Notes
+Only includes the
+public
+database
+sha256 checksum
+119199eee1f03338d30de0fd497f20e4a24506e2664c0ab9699d23ff40cbbcf2
+Previous
+Rapid Node Initialization(Testnet)
+Next
+Node Debugging & Configuration
+Last updated
+1 day ago
+Was this helpful?

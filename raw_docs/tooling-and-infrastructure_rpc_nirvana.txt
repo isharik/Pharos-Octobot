@@ -1,0 +1,30 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/nirvana
+TITLE: Nirvana RPC | docs.pharos.xyz
+============================================================
+Overview
+Nirvana Labs provides enterprise-grade blockchain infrastructure, including high-performance RPC nodes and dedicated node services.
+On Pharos, Nirvana RPC can be used to power applications that require reliable network access, low latency, and scalable infrastructure.
+When to Use Nirvana RPC
+Nirvana RPC is well-suited for:
+Production applications requiring stable and consistent RPC access
+Backend services and APIs handling high request volumes
+Use cases where performance and reliability are critical
+Teams that may need dedicated or scalable node infrastructure
+Access
+Developers building on Pharos can access Nirvana RPC endpoints by requesting API keys through the Pharos team.
+Access Type:
+Dev API Key (unrestricted RPC access)
+Request:
+Contact the Pharos team to obtain credentials (Reach out on mail:
+[email protected]
+or tg: @janesh_dani)
+Documentation
+For more details on Nirvana Labs infrastructure and capabilities:
+https://nirvanalabs.io/product#rpc-nodes
+Previous
+Alchemy RPC
+Next
+Indexer
+Last updated
+1 month ago
+Was this helpful?
