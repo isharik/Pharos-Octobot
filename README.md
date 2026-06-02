@@ -25,6 +25,8 @@ It ensures accurate, grounded, and hallucination-free responses by retrieving in
 🔐 dotenv (environment variable management)
 🏗️ How It Works
 
+Video Guide : https://x.com/isharik99/status/2061857340744487276?s=20
+
 Pharos Docs
 ⬇️
 Web Crawler
