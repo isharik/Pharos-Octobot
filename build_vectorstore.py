@@ -37,6 +37,33 @@ from langchain_chroma import Chroma
 
 load_dotenv()
 
+def build_vectorstore():
+    # Create embeddings using HuggingFace
+    embeddings = HuggingFaceEmbeddings()
+
+    # Load documents from the raw_docs directory
+    documents = load_documents()  # This is your existing load function
+
+    # Split documents into chunks
+    splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+    chunks = splitter.split_documents(documents)
+
+    # Connect to ChromaDB
+    chroma_client = Chroma(persist_directory=CHROMA_DB_DIR)
+    collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+
+    # Add each chunk and embedding to the collection
+    for chunk in chunks:
+        embedding = embeddings.embed_text(chunk.page_content)
+        collection.add(
+            embeddings=embedding,
+            metadata={"source": chunk.metadata["source"]}
+        )
+    
+    # Persist the database
+    chroma_client.persist()
+    print("Vector store successfully built and saved.")
+
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────

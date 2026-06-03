@@ -16,6 +16,7 @@ Features:
 """
 
 import streamlit as st
+from build_vectorstore import build_vectorstore
 
 # ─────────────────────────────────────────────
 # PAGE CONFIGURATION
@@ -148,6 +149,13 @@ st.markdown('<div class="main-header">', unsafe_allow_html=True)
 st.title("🐙 OctoBot")
 st.caption("Your Pharos Documentation Assistant — Powered by RAG + Gemini")
 st.markdown('</div>', unsafe_allow_html=True)
+
+import os
+
+vectorstore_path = "path/to/your/vectorstore/files"
+
+if not os.path.exists(vectorstore_path):
+    build_vectorstore()  # Build only if it doesn't exist
 
 # Load the bot
 bot, load_error = load_octobot()
