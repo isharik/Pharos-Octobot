@@ -141,7 +141,7 @@ class OctoBot:
         count = self.vectorstore._collection.count()
         print(f"✅ OctoBot ready! ({count} chunks in knowledge base)")
 
-    def _format_docs(self, docs) -> str:
+def _format_docs(self, docs) -> str:
         """Format retrieved documents into a single string for the prompt."""
         parts = []
         for i, doc in enumerate(docs, 1):
@@ -152,17 +152,34 @@ class OctoBot:
             )
         return "\n\n---\n\n".join(parts)
 
-    def _extract_sources(self, docs) -> list[dict]:
-        """Extract source metadata from retrieved docs (for citation display)."""
-        seen = set()
-        sources = []
-        for doc in docs:
-            url = doc.metadata.get("source", "")
-            title = doc.metadata.get("title", "")
-            if url and url not in seen:
-                seen.add(url)
-                sources.append({"url": url, "title": title})
-        return sources
+def _extract_sources(self, docs):
+    sources = []
+    seen = set()
+
+    for doc in docs:
+
+        source = doc.metadata.get(
+            "source",
+            "Unknown Source"
+        )
+
+        title = doc.metadata.get(
+            "title",
+            "Untitled"
+        )
+
+        key = f"{title}-{source}"
+
+        if key not in seen:
+
+            seen.add(key)
+
+            sources.append({
+                "title": title,
+                "url": source
+            })
+
+    return sources
 
     def ask(self, question: str) -> tuple[str, list[dict]]:
         """
@@ -200,7 +217,11 @@ class OctoBot:
         # Step 5: Extract sources for citation
         sources = self._extract_sources(relevant_docs)
 
-        return answer, sources
+    print("\nDEBUG SOURCES:")
+    print(sources)
+
+        
+    return answer, sources
 
     def reset_memory(self):
         """Clear conversation history (start a new session)."""
