@@ -165,6 +165,11 @@ def build_vectorstore(chunks):
         print(f"🗑️ Removing old vector store at '{CHROMA_DB_DIR}'...")
         shutil.rmtree(CHROMA_DB_DIR)
 
+        clean_chunks = []
+        for chunk in chunks:
+            chunk.metadata = {k: str(v) for k, v in chunk.metadata.items() if v is not None}
+            clean_chunks.append(chunk)
+
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
