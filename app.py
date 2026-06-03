@@ -17,6 +17,7 @@ Features:
 
 import streamlit as st
 from build_vectorstore import build_vectorstore
+from build_vectorstore import load_documents, split_documents, build_vectorstore
 
 # ─────────────────────────────────────────────
 # PAGE CONFIGURATION
@@ -153,6 +154,10 @@ st.markdown('</div>', unsafe_allow_html=True)
 import os
 
 vectorstore_path = "path/to/your/vectorstore/files"
+
+documents = load_documents()
+chunks = split_documents(documents)
+build_vectorstore(chunks)
 
 if not os.path.exists(vectorstore_path):
     build_vectorstore()  # Build only if it doesn't exist
