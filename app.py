@@ -158,6 +158,13 @@ vectorstore_path = "path/to/your/vectorstore/files"
 documents = load_documents()
 chunks = split_documents(documents)
 
+print(f"Number of chunks: {len(chunks)}")
+for i, chunk in enumerate(chunks):
+    if not chunk.metadata:
+        print(f"Chunk {i} is missing metadata!")
+    else:
+        print(f"Chunk {i} has metadata: {chunk.metadata}")
+
 if not os.path.exists(vectorstore_path):
     documents = load_documents()
     chunks = split_documents(documents)
