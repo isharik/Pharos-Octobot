@@ -1,274 +1,299 @@
 """
 app.py
 ------
-Phase 6: OctoBot's Streamlit web interface.
+OctoBot Streamlit Web UI
 
-Run this command from your 'octobot' folder:
-    streamlit run app.py
-
-This will automatically open http://localhost:8501 in your browser.
-
-Features:
-  - Chat interface (like ChatGPT)
-  - Shows source documents used for each answer
-  - Session memory (remembers your conversation)
-  - Reset button to start a new conversation
+Run:
+streamlit run app.py
 """
 
 import streamlit as st
-from build_vectorstore import build_vectorstore
-from build_vectorstore import load_documents, split_documents, build_vectorstore
 
-# ─────────────────────────────────────────────
-# PAGE CONFIGURATION
-# Must be the FIRST Streamlit command called
-# ─────────────────────────────────────────────
+
+# PAGE CONFIG
 st.set_page_config(
-    page_title="OctoBot — Pharos Docs Assistant",
+    page_title="OctoBot",
     page_icon="🐙",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS — gives the app a polished look
-# ─────────────────────────────────────────────
+
+# STYLE
 st.markdown("""
 <style>
-    /* Main header */
-    .main-header {
-        text-align: center;
-        padding: 1rem 0;
-        border-bottom: 2px solid #f0f2f6;
-        margin-bottom: 1rem;
-    }
-    /* Source card styling */
-    .source-card {
-        background: #f8f9fa;
-        border-left: 3px solid #667eea;
-        padding: 0.5rem 0.75rem;
-        margin: 0.25rem 0;
-        border-radius: 0 6px 6px 0;
-        font-size: 0.85rem;
-    }
-    .source-card a {
-        color: #667eea;
-        text-decoration: none;
-    }
-    /* Status badges */
-    .status-ok { color: #28a745; font-weight: bold; }
-    .status-err { color: #dc3545; font-weight: bold; }
+
+.main-title{
+text-align:center;
+padding-bottom:15px;
+}
+
+.source{
+background:#f6f6f6;
+padding:10px;
+border-radius:10px;
+margin-top:6px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
-# LOAD OCTOBOT (cached so it only loads once)
-# ─────────────────────────────────────────────
-@st.cache_resource(show_spinner="🐙 Loading OctoBot knowledge base...")
-def load_octobot():
-    """
-    Load OctoBot once and cache it for the session.
-    @st.cache_resource means this function runs only once
-    and reuses the result for all users/reruns.
-    """
+# LOAD BOT
+@st.cache_resource
+def load_bot():
+
     try:
         from octobot import OctoBot
+
         bot = OctoBot()
-        return bot, None  # (bot, error)
-    except FileNotFoundError as e:
-        return None, str(e)
+
+        return bot, None
+
     except Exception as e:
-        return None, f"Unexpected error: {e}"
+
+        return None, str(e)
 
 
-# ─────────────────────────────────────────────
-# INITIALIZE SESSION STATE
-#
-# st.session_state persists data across reruns
-# (Streamlit reruns your script on every interaction)
-# ─────────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []  # Chat history for display
-if "sources_history" not in st.session_state:
-    st.session_state.sources_history = []  # Sources per message
+bot, error = load_bot()
 
 
-# ─────────────────────────────────────────────
 # SIDEBAR
-# ─────────────────────────────────────────────
 with st.sidebar:
-    st.image(
-        "https://img.icons8.com/fluency/96/octopus.png",
-        width=80
+
+    st.title("🐙 OctoBot")
+
+    st.caption(
+        "Pharos Documentation Assistant"
     )
-    st.title("OctoBot")
-    st.caption("Pharos Documentation Assistant")
+
     st.divider()
 
-    st.markdown("### 📋 About")
     st.markdown(
-        "OctoBot answers questions **only** from the "
-        "[Pharos documentation](https://docs.pharos.xyz). "
-        "It will not guess or make things up."
+        """
+Ask questions about:
+
+• Pharos Network  
+• SPNs  
+• Consensus  
+• Native Restaking  
+• L1 Core  
+"""
     )
+
     st.divider()
 
-    st.markdown("### ⚙️ Settings")
-    show_sources = st.toggle("Show source citations", value=True)
-    st.divider()
+    show_sources = st.toggle(
+        "Show Sources",
+        value=True
+    )
 
-    if st.button("🔄 Reset Conversation", use_container_width=True):
+    if st.button(
+        "Reset Chat"
+    ):
+
         st.session_state.messages = []
-        st.session_state.sources_history = []
-        # Also reset the bot's internal memory
-        bot, err = load_octobot()
+
         if bot:
             bot.reset_memory()
-        st.success("Conversation cleared!")
+
         st.rerun()
 
-    st.divider()
-    st.markdown("### 💡 Example Questions")
-    example_questions = [
-        "What is Pharos Network?",
-        "What are SPNs?",
-        "How does consensus work?",
-        "What is Native Restaking?",
-        "What is L1-Core?",
-    ]
-    for q in example_questions:
-        if st.button(q, use_container_width=True, key=f"ex_{q}"):
-            st.session_state["pending_question"] = q
-            st.rerun()
+
+# HEADER
+st.markdown(
+    """
+<div class='main-title'>
+<h1>🐙 OctoBot</h1>
+<p>Powered by RAG + Gemini</p>
+</div>
+""",
+unsafe_allow_html=True
+)
 
 
-# ─────────────────────────────────────────────
-# MAIN CONTENT AREA
-# ─────────────────────────────────────────────
-st.markdown('<div class="main-header">', unsafe_allow_html=True)
-st.title("🐙 OctoBot")
-st.caption("Your Pharos Documentation Assistant — Powered by RAG + Gemini")
-st.markdown('</div>', unsafe_allow_html=True)
+# CHECK LOAD
+if error:
 
-import os
+    st.error(error)
 
-vectorstore_path = "path/to/your/vectorstore/files"
-
-documents = load_documents()
-chunks = split_documents(documents)
-
-print(f"Number of chunks: {len(chunks)}")
-for i, chunk in enumerate(chunks):
-    if not chunk.metadata:
-        print(f"Chunk {i} is missing metadata!")
-    else:
-        print(f"Chunk {i} has metadata: {chunk.metadata}")
-
-        
-if not os.path.exists(vectorstore_path):
-    documents = load_documents()
-    chunks = split_documents(documents)
-    build_vectorstore(chunks)  # Now you call it with chunks inside the block
-
-# Load the bot
-bot, load_error = load_octobot()
-
-if load_error:
-    st.error(f"""
-    ❌ **OctoBot could not start.**
-
-    **Error:** {load_error}
-
-    **To fix this, run in your terminal:**
-    ```
-    python build_vectorstore.py
-    ```
-    Then refresh this page.
-    """)
     st.stop()
 
-# Show knowledge base stats
-chunk_count = bot.vectorstore._collection.count()
-col1, col2, col3 = st.columns(3)
-col1.metric("📚 Knowledge Chunks", chunk_count)
-col2.metric("🤖 Model", "Gemini")
-col3.metric("🗄️ Vector DB", "ChromaDB")
+
+# STATS
+count = bot.vectorstore._collection.count()
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    st.metric(
+        "Knowledge Chunks",
+        count
+    )
+
+with c2:
+    st.metric(
+        "Model",
+        "Gemini"
+    )
+
+with c3:
+    st.metric(
+        "Database",
+        "Chroma"
+    )
+
 
 st.divider()
 
-# ─────────────────────────────────────────────
-# CHAT HISTORY DISPLAY
-# ─────────────────────────────────────────────
-for i, message in enumerate(st.session_state.messages):
-    with st.chat_message(message["role"], avatar="👤" if message["role"] == "user" else "🐙"):
-        st.markdown(message["content"])
 
-        # Show sources for assistant messages
+# SESSION MEMORY
+if "messages" not in st.session_state:
+
+    st.session_state.messages = []
+
+if "sources" not in st.session_state:
+
+    st.session_state.sources = []
+
+
+# SHOW CHAT
+for i, msg in enumerate(
+    st.session_state.messages
+):
+
+    avatar = (
+        "👤"
+        if msg["role"] == "user"
+        else "🐙"
+    )
+
+    with st.chat_message(
+        msg["role"],
+        avatar=avatar
+    ):
+
+        st.markdown(
+            msg["content"]
+        )
+
         if (
-            message["role"] == "assistant"
+            msg["role"]
+            == "assistant"
             and show_sources
-            and i < len(st.session_state.sources_history)
+            and i // 2 < len(
+                st.session_state.sources
+            )
         ):
-            sources = st.session_state.sources_history[i // 2]  # i//2 maps to source index
+
+            sources = (
+                st.session_state
+                .sources[
+                    i // 2
+                ]
+            )
+
             if sources:
-                with st.expander(f"📚 Sources ({len(sources)} page(s) used)", expanded=False):
+
+                with st.expander(
+                    "Sources"
+                ):
+
                     for src in sources:
+
                         st.markdown(
-                            f'<div class="source-card">'
-                            f'<strong>{src["title"]}</strong><br>'
-                            f'<a href="{src["url"]}" target="_blank">{src["url"]}</a>'
-                            f'</div>',
-                            unsafe_allow_html=True,
+f"""
+<div class='source'>
+<b>{src["title"]}</b>
+<br>
+{src["url"]}
+</div>
+""",
+unsafe_allow_html=True
                         )
 
 
-# ─────────────────────────────────────────────
-# HANDLE EXAMPLE QUESTION BUTTONS
-# ─────────────────────────────────────────────
-pending = st.session_state.pop("pending_question", None)
-
-
-# ─────────────────────────────────────────────
-# CHAT INPUT BOX
-# ─────────────────────────────────────────────
-user_input = st.chat_input(
-    "Ask OctoBot about Pharos documentation...",
-    key="chat_input"
+# INPUT
+question = st.chat_input(
+    "Ask OctoBot..."
 )
 
-# Use pending question from sidebar button, or typed input
-question = pending or user_input
 
 if question:
-    # Display user message
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(question)
 
-    # Get OctoBot's answer
-    with st.chat_message("assistant", avatar="🐙"):
-        with st.spinner("🔍 Searching Pharos docs..."):
+    st.session_state.messages.append(
+        {
+            "role":"user",
+            "content":question
+        }
+    )
+
+    with st.chat_message(
+        "user",
+        avatar="👤"
+    ):
+
+        st.markdown(
+            question
+        )
+
+    with st.chat_message(
+        "assistant",
+        avatar="🐙"
+    ):
+
+        with st.spinner(
+            "Searching docs..."
+        ):
+
             try:
-                answer, sources = bot.ask(question)
+
+                answer, sources = (
+                    bot.ask(
+                        question
+                    )
+                )
+
             except Exception as e:
-                answer = f"❌ An error occurred: {e}"
+
+                answer = (
+                    f"Error: {e}"
+                )
+
                 sources = []
 
-        st.markdown(answer)
+        st.markdown(
+            answer
+        )
 
-        # Show sources inline
-        if show_sources and sources:
-            with st.expander(f"📚 Sources ({len(sources)} page(s) used)", expanded=True):
+        if (
+            show_sources
+            and sources
+        ):
+
+            with st.expander(
+                "Sources"
+            ):
+
                 for src in sources:
+
                     st.markdown(
-                        f'<div class="source-card">'
-                        f'<strong>{src["title"]}</strong><br>'
-                        f'<a href="{src["url"]}" target="_blank">{src["url"]}</a>'
-                        f'</div>',
-                        unsafe_allow_html=True,
+f"""
+<div class='source'>
+<b>{src["title"]}</b>
+<br>
+{src["url"]}
+</div>
+""",
+unsafe_allow_html=True
                     )
 
-    # Save to session state
-    st.session_state.messages.append({"role": "assistant", "content": answer})
-    st.session_state.sources_history.append(sources)
+    st.session_state.messages.append(
+        {
+            "role":"assistant",
+            "content":answer
+        }
+    )
+
+    st.session_state.sources.append(
+        sources
+    )
