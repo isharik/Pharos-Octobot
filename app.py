@@ -1,48 +1,61 @@
 """
 app.py
 ------
-OctoBot Streamlit Web UI
-
+Phase 6: OctoBot Streamlit UI
 Run:
 streamlit run app.py
 """
 
 import streamlit as st
 
-
+# ─────────────────────────────────────────────
 # PAGE CONFIG
+# ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="OctoBot",
+    page_title="OctoBot — Pharos Docs Assistant",
     page_icon="🐙",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-
+# ─────────────────────────────────────────────
 # STYLE
+# ─────────────────────────────────────────────
 st.markdown("""
 <style>
 
-.main-title{
+.main-header{
 text-align:center;
-padding-bottom:15px;
+padding:1rem;
+border-bottom:2px solid #f0f2f6;
+margin-bottom:1rem;
 }
 
-.source{
-background:#f6f6f6;
+.source-card{
+background:#f8f9fa;
 padding:10px;
-border-radius:10px;
-margin-top:6px;
+margin:8px 0;
+border-left:4px solid #667eea;
+border-radius:8px;
+}
+
+.source-card a{
+text-decoration:none;
+color:#667eea;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
 
+# ─────────────────────────────────────────────
 # LOAD BOT
-@st.cache_resource
-def load_bot():
+# ─────────────────────────────────────────────
+@st.cache_resource(show_spinner="🐙 Loading knowledge base...")
+def load_octobot():
 
     try:
+
         from octobot import OctoBot
 
         bot = OctoBot()
@@ -54,10 +67,19 @@ def load_bot():
         return None, str(e)
 
 
-bot, error = load_bot()
+# ─────────────────────────────────────────────
+# SESSION
+# ─────────────────────────────────────────────
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "sources" not in st.session_state:
+    st.session_state.sources = []
 
 
+# ─────────────────────────────────────────────
 # SIDEBAR
+# ─────────────────────────────────────────────
 with st.sidebar:
 
     st.title("🐙 OctoBot")
@@ -68,50 +90,77 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown(
-        """
-Ask questions about:
-
-• Pharos Network  
-• SPNs  
-• Consensus  
-• Native Restaking  
-• L1 Core  
-"""
-    )
-
-    st.divider()
-
     show_sources = st.toggle(
         "Show Sources",
         value=True
     )
 
     if st.button(
-        "Reset Chat"
+        "🔄 Reset Conversation",
+        use_container_width=True
     ):
 
-        st.session_state.messages = []
+        st.session_state.messages=[]
+
+        st.session_state.sources=[]
+
+        bot,_=load_octobot()
 
         if bot:
             bot.reset_memory()
 
         st.rerun()
 
+    st.divider()
 
-# HEADER
+    examples=[
+
+        "What is Pharos Network?",
+
+        "What are SPNs?",
+
+        "How does consensus work?",
+
+        "What is Native Restaking?"
+    ]
+
+    for q in examples:
+
+        if st.button(
+            q,
+            use_container_width=True
+        ):
+            st.session_state["pending"]=q
+            st.rerun()
+
+
+# ─────────────────────────────────────────────
+# TITLE
+# ─────────────────────────────────────────────
 st.markdown(
-    """
-<div class='main-title'>
-<h1>🐙 OctoBot</h1>
-<p>Powered by RAG + Gemini</p>
-</div>
-""",
+'<div class="main-header">',
+unsafe_allow_html=True
+)
+
+st.title(
+"🐙 OctoBot"
+)
+
+st.caption(
+"Powered by RAG + Gemini"
+)
+
+st.markdown(
+"</div>",
 unsafe_allow_html=True
 )
 
 
-# CHECK LOAD
+# ─────────────────────────────────────────────
+# LOAD
+# ─────────────────────────────────────────────
+bot,error=load_octobot()
+
 if error:
 
     st.error(error)
@@ -119,105 +168,103 @@ if error:
     st.stop()
 
 
-# STATS
-count = bot.vectorstore._collection.count()
+# Stats
+count=bot.vectorstore._collection.count()
 
-c1, c2, c3 = st.columns(3)
+c1,c2,c3=st.columns(3)
 
-with c1:
-    st.metric(
-        "Knowledge Chunks",
-        count
-    )
+c1.metric(
+"📚 Chunks",
+count
+)
 
-with c2:
-    st.metric(
-        "Model",
-        "Gemini"
-    )
+c2.metric(
+"🤖 Model",
+"Gemini"
+)
 
-with c3:
-    st.metric(
-        "Database",
-        "Chroma"
-    )
-
+c3.metric(
+"🗄️ DB",
+"Chroma"
+)
 
 st.divider()
 
 
-# SESSION MEMORY
-if "messages" not in st.session_state:
-
-    st.session_state.messages = []
-
-if "sources" not in st.session_state:
-
-    st.session_state.sources = []
-
-
-# SHOW CHAT
-for i, msg in enumerate(
+# ─────────────────────────────────────────────
+# DISPLAY HISTORY
+# ─────────────────────────────────────────────
+for idx,msg in enumerate(
     st.session_state.messages
 ):
 
-    avatar = (
-        "👤"
-        if msg["role"] == "user"
-        else "🐙"
-    )
-
     with st.chat_message(
-        msg["role"],
-        avatar=avatar
+        msg["role"]
     ):
 
         st.markdown(
             msg["content"]
         )
 
+        # FIXED SOURCE DISPLAY
         if (
-            msg["role"]
-            == "assistant"
+
+            msg["role"]=="assistant"
+
             and show_sources
-            and i // 2 < len(
+
+            and idx//2 < len(
                 st.session_state.sources
             )
+
         ):
 
-            sources = (
-                st.session_state
-                .sources[
-                    i // 2
-                ]
-            )
+            srcs=st.session_state.sources[
+                idx//2
+            ]
 
-            if sources:
+            if srcs:
 
                 with st.expander(
-                    "Sources"
+                    f"📚 Sources ({len(srcs)})"
                 ):
 
-                    for src in sources:
+                    for src in srcs:
 
                         st.markdown(
 f"""
-<div class='source'>
-<b>{src["title"]}</b>
-<br>
+<div class="source-card">
+<b>{src["title"]}</b><br>
+<a href="{src["url"]}">
 {src["url"]}
+</a>
 </div>
 """,
 unsafe_allow_html=True
                         )
 
 
+# ─────────────────────────────────────────────
 # INPUT
-question = st.chat_input(
-    "Ask OctoBot..."
+# ─────────────────────────────────────────────
+pending=st.session_state.pop(
+"pending",
+None
+)
+
+typed=st.chat_input(
+"Ask OctoBot..."
+)
+
+question=(
+pending
+or typed
 )
 
 
+# ─────────────────────────────────────────────
+# ASK
+# ─────────────────────────────────────────────
 if question:
 
     st.session_state.messages.append(
@@ -228,8 +275,7 @@ if question:
     )
 
     with st.chat_message(
-        "user",
-        avatar="👤"
+        "user"
     ):
 
         st.markdown(
@@ -237,8 +283,7 @@ if question:
         )
 
     with st.chat_message(
-        "assistant",
-        avatar="🐙"
+        "assistant"
     ):
 
         with st.spinner(
@@ -247,41 +292,42 @@ if question:
 
             try:
 
-                answer, sources = (
-                    bot.ask(
-                        question
-                    )
+                answer,sources=bot.ask(
+                    question
                 )
 
             except Exception as e:
 
-                answer = (
-                    f"Error: {e}"
-                )
+                answer=str(e)
 
-                sources = []
+                sources=[]
 
         st.markdown(
             answer
         )
 
         if (
+
             show_sources
+
             and sources
+
         ):
 
             with st.expander(
-                "Sources"
+                f"📚 Sources ({len(sources)})",
+                expanded=True
             ):
 
                 for src in sources:
 
                     st.markdown(
 f"""
-<div class='source'>
-<b>{src["title"]}</b>
-<br>
+<div class="source-card">
+<b>{src["title"]}</b><br>
+<a href="{src["url"]}">
 {src["url"]}
+</a>
 </div>
 """,
 unsafe_allow_html=True

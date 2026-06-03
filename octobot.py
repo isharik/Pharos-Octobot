@@ -3,261 +3,284 @@ octobot.py
 ----------
 Phase 5: OctoBot — the core RAG chatbot engine.
 
-This module defines:
-  - The system prompt (OctoBot's personality and rules)
-  - The retrieval pipeline (fetches relevant chunks)
-  - The answer generation chain (GPT reads chunks and answers)
+Now powered by:
+- Gemini (LLM)
+- HuggingFace embeddings
+- ChromaDB
 
-This file is imported by the Streamlit app (app.py).
-You can also test it directly:
-
-How to run:
+Run:
     python octobot.py
-
-Expected output:
-    🐙 OctoBot is ready!
-    You: What is Pharos?
-    OctoBot: Pharos is a Modular & Full-stack Parallel L1 Blockchain...
-    Sources used:
-      - https://docs.pharos.xyz/ (About Pharos)
 """
 
 import os
 from dotenv import load_dotenv
+
+# Gemini
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+# Local embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
+
+# Vector DB
 from langchain_chroma import Chroma
+
+# LangChain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
+# ─────────────────────────────────────────────
+# CHECK API KEY
+# ─────────────────────────────────────────────
 if not os.getenv("GEMINI_API_KEY"):
     raise ValueError(
-        "GEMINI_API_KEY not found in .env file"
+        "❌ GEMINI_API_KEY not found in .env"
     )
 
 # ─────────────────────────────────────────────
-# CONFIGURATION
+# CONFIG
 # ─────────────────────────────────────────────
 CHROMA_DB_DIR = "chroma_db"
 COLLECTION_NAME = "pharos_docs"
-TOP_K = 5          # Number of chunks to retrieve per question
-GEMINI_MODEL = "gemini-2.5-flash"  # Fast, cheap, and very capable
 
+TOP_K = 5
+
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # ─────────────────────────────────────────────
-# OCTOBOT'S SYSTEM PROMPT
-#
-# This is OctoBot's "personality" and rules.
-# The {context} placeholder is filled with retrieved chunks.
-# The {chat_history} placeholder holds the conversation so far.
-# The {question} placeholder is the user's current question.
+# SYSTEM PROMPT
 # ─────────────────────────────────────────────
-SYSTEM_PROMPT = """You are OctoBot, a helpful and accurate documentation assistant \
+SYSTEM_PROMPT = """
+You are OctoBot, a helpful and accurate documentation assistant
 for the Pharos blockchain network.
 
-Your job is to answer questions ONLY using the documentation excerpts provided \
-below in the <context> section.
+Answer ONLY using the provided context.
 
-RULES YOU MUST FOLLOW:
-1. ONLY answer based on what is in the provided context.
-2. If the answer is not in the context, respond EXACTLY with:
+RULES:
+1. Use ONLY documentation context.
+2. If answer missing:
    "I could not find that information in the Pharos documentation."
-3. Do NOT guess, invent, or hallucinate any information.
-4. Keep your answers clear, concise, and accurate.
-5. When possible, structure your answer with bullet points for clarity.
-6. Always be professional and helpful.
+3. Never hallucinate.
+4. Be concise.
+5. Use bullet points when useful.
 
 <context>
 {context}
 </context>
-
-Remember: You are OctoBot. Only answer from the documentation above.
 """
 
 PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
     MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{question}"),
+    ("human", "{question}")
 ])
 
 
 # ─────────────────────────────────────────────
-# OCTOBOT CLASS
+# OCTOBOT
 # ─────────────────────────────────────────────
 class OctoBot:
-    """
-    The main OctoBot RAG chatbot.
-
-    Usage:
-        bot = OctoBot()
-        answer, sources = bot.ask("What is Pharos?")
-        print(answer)
-        for src in sources:
-            print(src["url"], src["title"])
-    """
 
     def __init__(self):
-        """Initialize the vector store, embeddings, and LLM."""
+
         print("🐙 Initializing OctoBot...")
 
-        # Check the vector store exists
         if not os.path.exists(CHROMA_DB_DIR):
             raise FileNotFoundError(
-                f"Vector store not found at '{CHROMA_DB_DIR}'. "
-                "Please run build_vectorstore.py first."
+                f"Vector store missing: {CHROMA_DB_DIR}\n"
+                "Run build_vectorstore.py first"
             )
 
-        # Load embeddings (same model used when building the store)
+        # SAME embeddings used during vector creation
         self.embeddings = HuggingFaceEmbeddings(
-                 model_name="sentence-transformers/all-MiniLM-L6-v2"
-             ) 
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
 
-        # Load the ChromaDB vector store
         self.vectorstore = Chroma(
             collection_name=COLLECTION_NAME,
             embedding_function=self.embeddings,
             persist_directory=CHROMA_DB_DIR,
         )
 
-        # Create a retriever — this is what searches ChromaDB
         self.retriever = self.vectorstore.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": TOP_K}
+            search_kwargs={"k": TOP_K},
         )
 
-        # Create the LLM
+        # Gemini
         self.llm = ChatGoogleGenerativeAI(
-           model=GEMINI_MODEL,
-           temperature=0,
-           google_api_key=os.getenv("GEMINI_API_KEY")
+            model=GEMINI_MODEL,
+            temperature=0,
+            google_api_key=os.getenv("GEMINI_API_KEY"),
         )
-        # Conversation memory — stores the back-and-forth
-        self.chat_history: list = []
+
+        self.chat_history = []
 
         count = self.vectorstore._collection.count()
-        print(f"✅ OctoBot ready! ({count} chunks in knowledge base)")
 
-def _format_docs(self, docs) -> str:
-        """Format retrieved documents into a single string for the prompt."""
+        print(
+            f"✅ OctoBot ready! "
+            f"({count} chunks loaded)"
+        )
+
+    # ─────────────────────────────────────────
+
+    def _format_docs(self, docs):
+
         parts = []
+
         for i, doc in enumerate(docs, 1):
-            source = doc.metadata.get("source", "unknown")
-            title = doc.metadata.get("title", "")
-            parts.append(
-                f"[Excerpt {i} from: {title} ({source})]\n{doc.page_content}"
+
+            source = doc.metadata.get(
+                "source",
+                "unknown"
             )
+
+            title = doc.metadata.get(
+                "title",
+                "untitled"
+            )
+
+            parts.append(
+                f"[Excerpt {i}] "
+                f"{title}\n"
+                f"Source: {source}\n\n"
+                f"{doc.page_content}"
+            )
+
         return "\n\n---\n\n".join(parts)
 
-def _extract_sources(self, docs):
-    sources = []
-    seen = set()
+    # ─────────────────────────────────────────
 
-    for doc in docs:
+    def _extract_sources(self, docs):
 
-        source = doc.metadata.get(
-            "source",
-            "Unknown Source"
+        sources = []
+        seen = set()
+
+        for doc in docs:
+
+            url = doc.metadata.get(
+                "source",
+                ""
+            )
+
+            title = doc.metadata.get(
+                "title",
+                "Untitled"
+            )
+
+            if url and url not in seen:
+
+                seen.add(url)
+
+                sources.append({
+                    "url": url,
+                    "title": title
+                })
+
+        return sources
+
+    # ─────────────────────────────────────────
+
+    def ask(self, question):
+
+        relevant_docs = self.retriever.invoke(
+            question
         )
-
-        title = doc.metadata.get(
-            "title",
-            "Untitled"
-        )
-
-        key = f"{title}-{source}"
-
-        if key not in seen:
-
-            seen.add(key)
-
-            sources.append({
-                "title": title,
-                "url": source
-            })
-
-    return sources
-
-    def ask(self, question: str) -> tuple[str, list[dict]]:
-        """
-        Ask OctoBot a question.
-
-        Returns:
-            (answer_text, sources_list)
-            sources_list is a list of {"url": ..., "title": ...} dicts
-        """
-        # Step 1: Retrieve relevant chunks from ChromaDB
-        relevant_docs = self.retriever.invoke(question)
 
         if not relevant_docs:
+
             return (
                 "I could not find that information in the Pharos documentation.",
                 []
             )
 
-        # Step 2: Format the retrieved docs into context text
-        context = self._format_docs(relevant_docs)
+        context = self._format_docs(
+            relevant_docs
+        )
 
-        # Step 3: Build the prompt and get GPT's answer
-        chain = PROMPT_TEMPLATE | self.llm | StrOutputParser()
+        chain = (
+            PROMPT_TEMPLATE
+            | self.llm
+            | StrOutputParser()
+        )
 
         answer = chain.invoke({
             "context": context,
             "chat_history": self.chat_history,
-            "question": question,
+            "question": question
         })
 
-        # Step 4: Save this turn to memory
-        self.chat_history.append(HumanMessage(content=question))
-        self.chat_history.append(AIMessage(content=answer))
+        self.chat_history.append(
+            HumanMessage(
+                content=question
+            )
+        )
 
-        # Step 5: Extract sources for citation
-        sources = self._extract_sources(relevant_docs)
+        self.chat_history.append(
+            AIMessage(
+                content=answer
+            )
+        )
 
-    print("\nDEBUG SOURCES:")
-    print(sources)
+        sources = self._extract_sources(
+            relevant_docs
+        )
 
-        
-    return answer, sources
+        return answer, sources
+
+    # ─────────────────────────────────────────
 
     def reset_memory(self):
-        """Clear conversation history (start a new session)."""
+
         self.chat_history = []
-        print("🔄 Conversation memory cleared.")
+
+        print(
+            "🔄 Memory cleared"
+        )
 
 
 # ─────────────────────────────────────────────
-# COMMAND-LINE TEST
+# TERMINAL TEST
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
+
     bot = OctoBot()
-    print("\n" + "=" * 60)
-    print("🐙 OctoBot — Pharos Documentation Assistant")
-    print("   Type 'quit' to exit | Type 'reset' to clear memory")
-    print("=" * 60 + "\n")
+
+    print("\n🐙 OctoBot Ready\n")
 
     while True:
-        user_input = input("You: ").strip()
 
-        if not user_input:
-            continue
-        if user_input.lower() in ("quit", "exit", "q"):
-            print("👋 Goodbye!")
+        q = input("You: ").strip()
+
+        if q.lower() in [
+            "quit",
+            "exit"
+        ]:
             break
-        if user_input.lower() == "reset":
+
+        if q.lower() == "reset":
             bot.reset_memory()
             continue
 
-        answer, sources = bot.ask(user_input)
+        answer, sources = bot.ask(q)
 
-        print(f"\n🐙 OctoBot: {answer}\n")
+        print("\n🐙", answer)
 
         if sources:
-            print("📚 Sources:")
-            for src in sources:
-                print(f"   • {src['title']}")
-                print(f"     {src['url']}")
+
+            print("\n📚 Sources:")
+
+            for s in sources:
+
+                print(
+                    f"- {s['title']}"
+                )
+
+                print(
+                    f"  {s['url']}"
+                )
+
         print()

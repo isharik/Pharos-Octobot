@@ -63,6 +63,14 @@ def load_documents():
 
         loaded = loader.load()
 
+        docs.extend(loaded)
+
+    # Here is where you print the debug info
+    print(f"DEBUG: Loaded {len(docs)} documents from '{RAW_DOCS_DIR}'")
+    for doc in docs[:3]:  # Log first three documents for inspection
+        print(f" - Title: {doc.metadata.get('title')}, Source: {doc.metadata.get('source')}")
+
+
         for doc in loaded:
 
             source = "unknown"
@@ -109,6 +117,7 @@ def load_documents():
         docs.extend(loaded)
 
     print(f"📄 Loaded {len(docs)} documents")
+    for doc in docs[:3]:print(f" - Title: {doc.metadata.get('title')}, Source: {doc.metadata.get('source')}")
 
     return docs
 
