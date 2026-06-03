@@ -157,10 +157,11 @@ vectorstore_path = "path/to/your/vectorstore/files"
 
 documents = load_documents()
 chunks = split_documents(documents)
-build_vectorstore(chunks)
 
 if not os.path.exists(vectorstore_path):
-    build_vectorstore()  # Build only if it doesn't exist
+    documents = load_documents()
+    chunks = split_documents(documents)
+    build_vectorstore(chunks)  # Now you call it with chunks inside the block
 
 # Load the bot
 bot, load_error = load_octobot()
