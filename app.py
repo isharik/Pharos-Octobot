@@ -165,6 +165,7 @@ for i, chunk in enumerate(chunks):
     else:
         print(f"Chunk {i} has metadata: {chunk.metadata}")
 
+        
 if not os.path.exists(vectorstore_path):
     documents = load_documents()
     chunks = split_documents(documents)

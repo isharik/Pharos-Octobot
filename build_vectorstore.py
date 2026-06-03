@@ -171,7 +171,7 @@ def build_vectorstore(chunks):
             clean_chunks.append(chunk)
 
     vectorstore = Chroma.from_documents(
-        documents=chunks,
+        documents=clean_chunks,
         embedding=embeddings,
         collection_name=COLLECTION_NAME,
         persist_directory=CHROMA_DB_DIR,
