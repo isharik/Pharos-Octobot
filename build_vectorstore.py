@@ -158,6 +158,7 @@ def build_vectorstore(chunks):
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+    
 
     if os.path.exists(CHROMA_DB_DIR):
         import shutil
