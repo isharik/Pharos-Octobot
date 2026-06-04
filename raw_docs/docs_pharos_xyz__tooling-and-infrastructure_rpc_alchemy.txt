@@ -1,0 +1,54 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/alchemy
+TITLE: Alchemy RPC | docs.pharos.xyz
+============================================================
+Overview
+Alchemy provides scalable RPC infrastructure and developer tooling for interacting with blockchain networks.
+On Pharos, Alchemy can be used to access reliable RPC endpoints for both Pacific Mainnet and Atlantic Testnet, making it suitable for application development and production use.
+Getting Started with Alchemy
+To use Alchemy with Pharos, you’ll need to
+create an Alchemy account
+and generate an API key.
+Here are some prerequisites before you start interacting:
+Sign up or log in to Alchemy
+Create a new app
+Select the Pharos network
+Generate your API key
+Once done, the API key will let you interact with the Pharos network through a set of JSON-RPC methods. Follow the guide below to start interacting with Pharos.
+Step 1. Choose a package manager (npm or yarn)
+Choose between
+npm
+and
+yarn
+based on your preference or project requirements.
+# Begin with npm by following the npm documentation
+# https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
+# For yarn, refer to yarn's installation guide
+# https://classic.yarnpkg.com/lang/en/docs/install
+Step 2. Set up your project
+Run the following commands to create and initialize your project:
+This creates a new directory named
+pharos-api-quickstart
+and initializes a Node.js project within it.
+Step 3. Make your first request
+Install Axios, a popular HTTP client, to make API requests:
+Create an
+index.js
+file in your project directory and paste the following code:
+Replace
+your-api-key
+with your actual Alchemy API key from the
+Alchemy Dashboard
+Step 4. Run your script
+Run your script to make a request to the network:
+You should see the latest block information from Pharos's network outputted to your console:
+Next Steps
+You've made your first request to the Pharos using Alchemy API. You can now explore the various
+JSON-RPC methods
+available on Pharos and start building your dApps.
+Previous
+ZAN RPC
+Next
+Nirvana RPC
+Last updated
+1 month ago
+Was this helpful?

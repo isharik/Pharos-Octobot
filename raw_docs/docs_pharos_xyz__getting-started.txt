@@ -1,0 +1,26 @@
+SOURCE_URL: https://docs.pharos.xyz/getting-started
+TITLE: Network | docs.pharos.xyz
+============================================================
+Overview
+Pharos provides two primary network environments to help you move from development to production smoothly.
+Whether you're experimenting with smart contracts or deploying a live application, each network is designed to support a specific stage of your workflow.
+Available Networks
+Atlantic Testnet
+This is where you build and test. Use it to deploy contracts, try out integrations, and iterate on your application without worrying about real assets.
+Pacific Mainnet
+This is the production network. Once your application is ready, you can deploy to Mainnet and interact with real users, assets, and infrastructure.
+Which One Should You Use?
+In most cases:
+Start on
+Atlantic Testnet
+while developing and testing
+Move to
+Pacific Mainnet
+when you're ready to go live
+Previous
+Encyclopedia
+Next
+Atlantic Testnet
+Last updated
+1 month ago
+Was this helpful?

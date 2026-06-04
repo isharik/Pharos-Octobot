@@ -1,0 +1,34 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/wallets
+TITLE: Wallet | docs.pharos.xyz
+============================================================
+Overview
+Wallets and custody solutions are used to manage accounts, sign transactions, and control assets on the Pharos Network.
+As a developer, you’ll use wallets for interacting with applications, while custody solutions are important for managing funds securely, especially in production environments.
+What You Can Do with Wallets
+Create and manage accounts
+Sign and send transactions
+Interact with smart contracts
+Connect to decentralized applications
+Manage assets across networks
+Custody for Applications
+For applications and teams, custody solutions provide more advanced capabilities such as:
+Multi-signature (multisig) transaction approvals
+Secure key management
+Role-based access control
+Operational security for managing funds
+Why It Matters
+Choosing the right wallet or custody solution is important for both development and production.
+Individual developers typically use wallets for testing and interaction
+Teams and protocols rely on custody solutions for secure fund management and operational workflows
+Available Solutions
+Pharos supports wallet and custody solutions for different use cases.
+Refer to the pages below for setup and usage:
+Safe MultiSig
+Fordefi
+Previous
+LayerZero
+Next
+Safe MultiSig
+Last updated
+1 month ago
+Was this helpful?

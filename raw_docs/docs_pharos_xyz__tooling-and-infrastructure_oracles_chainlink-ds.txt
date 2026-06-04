@@ -1,0 +1,37 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles/chainlink-ds
+TITLE: Chainlink Data Feeds | docs.pharos.xyz
+============================================================
+Overview
+Chainlink provides secure and decentralized oracle services used across the blockchain ecosystem.
+On Pharos, Chainlink Data Streams enables developers to access high-frequency off-chain data with low latency, making it suitable for advanced financial and data-intensive applications.
+Network Configuration
+Chainlink Data Streams is available on Pacific Mainnet with the following configuration:
+Verifier Proxy
+Network
+Address
+Pacific Mainnet
+0xa094978891512268f4a4a4641B8da1A2a3E3BEB7
+When to Use Chainlink Data Streams
+Chainlink Data Streams is typically used for:
+High-frequency price data and market feeds
+Low-latency applications such as trading and derivatives
+Advanced DeFi protocols requiring real-time data updates
+Use cases where data freshness and speed are critical
+Integration Notes
+Designed for applications that require faster and more frequent data updates compared to traditional oracle models
+Ensure your contracts are configured to use the correct verifier proxy
+Suitable for performance-sensitive and data-intensive use cases
+Documentation
+For detailed integration guides and implementation details:
+https://docs.chain.link/data-streams
+Next Steps
+Integrate Data Streams into your smart contracts
+Validate data flows and performance for your use case
+Combine with other infrastructure such as RPC and indexing for full application workflows
+Previous
+Oracle
+Next
+Chainlink Push Engine Feeds
+Last updated
+1 month ago
+Was this helpful?

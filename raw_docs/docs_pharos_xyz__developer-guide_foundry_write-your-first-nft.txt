@@ -1,0 +1,70 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/foundry/write-your-first-nft
+TITLE: Write Your First NFT | docs.pharos.xyz
+============================================================
+Prerequisites
+Before you begin, ensure you have the following:
+Git: Used for code management and obtain examples.
+Node.js: Install it from
+nodejs.org
+.
+Pharos Devnet/Testnet Access: Access to a Pharos node (local or remote) for interacting with the blockchain.
+Setup 1: Install Foundry
+Foundry
+Setup 2: Set Up the Project
+Clone the example repo:
+git
+clone
+https://github.com/PharosNetwork/examples
+cd
+examples/nft/foundry/contract
+Install OpenZeppelin Contracts:
+Foundry uses forge to manage dependencies. Install OpenZeppelin contracts:
+forge
+install
+OpenZeppelin/openzeppelin-contracts
+--no-git
+Setup 3: Write the NFT Contract
+Create a New Solidity File:
+Create a new file for your NFT contract:
+Write the Token Contract:
+Open
+src/Token.sol
+in your favorite text editor and add the following code:
+Compile the Smart Contract:
+Use forge to compile the contract:
+Test the Smart Contract
+Use forge to test the contract:
+Step 4: Deploy the Token Contract
+Set the private key:
+Create a Deployment Script:
+Create a new file for the deployment script:
+Write the Deployment Script:
+Open script/DeployToken.s.sol and add the following code:
+Deploy the Contract:
+Use forge to deploy the contract to the Pharos Testnet:
+Step 5: Verify the Token Contract
+For Atlantic Testnet
+For Testnet
+Note: Replace with your token contract address
+Step 6: Interact with the NFT Contract
+Open
+script/InteractToken.s.sol
+and add the following code:
+Execute the script using forge:
+Troubleshooting
+Contract Deployment Fails
+: Ensure you have enough testnet tokens to cover the deployment cost.
+Interaction Issues
+: Verify that the contract address and ABI are correct.
+Insufficient Balance
+: Ensure your wallet has enough tokens to transfer.
+Conclusion
+Now that you’ve created and deployed your first NFT using Foundry.
+This guide provides a comprehensive introduction to to creating and deploying an NFT on the Pharos blockchain. If you encounter any issues, refer to the Troubleshooting section or consult the Foundry documentation. Happy building! 🚀
+Previous
+Write Your First Token
+Next
+Write Your First Uniswap Contract
+Last updated
+7 months ago
+Was this helpful?

@@ -1,0 +1,26 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/indexing
+TITLE: Indexer | docs.pharos.xyz
+============================================================
+Overview
+Indexing allows developers to efficiently query and access on-chain data without directly relying on raw RPC calls.
+Instead of scanning the blockchain for every request, indexing services process and organize data in a way that makes it easier to retrieve, filter, and use within applications.
+What You Can Do with Indexers
+Query smart contract data efficiently
+Track events and historical activity
+Build dashboards and analytics
+Power frontend applications with structured data
+Monitor protocol and application-level metrics
+Why It Matters
+While RPC endpoints are useful for direct interaction with the network, they are not optimized for complex queries or large-scale data retrieval.
+Indexing services solve this by providing faster and more flexible access to blockchain data, making them essential for building scalable applications.
+Available Indexing Providers
+Pharos supports indexing solutions that help developers access and structure on-chain data efficiently.
+Refer to the provider below for setup and integration details:
+Goldsky
+Previous
+Nirvana RPC
+Next
+Goldsky
+Last updated
+1 month ago
+Was this helpful?

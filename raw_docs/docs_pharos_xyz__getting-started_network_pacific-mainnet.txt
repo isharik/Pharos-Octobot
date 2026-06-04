@@ -1,0 +1,26 @@
+SOURCE_URL: https://docs.pharos.xyz/getting-started/network/pacific-mainnet
+TITLE: Pacific Mainnet | docs.pharos.xyz
+============================================================
+Network Information
+Parameter
+Value
+Network
+Pharos Pacific Mainnet
+ChainID
+1672
+Coin Symbol/Ticker
+PROS
+RPC URL
+https://rpc.pharos.xyz
+Block Explorer
+https://www.pharosscan.xyz
+For the current node binary and Docker image versions, see
+Current Node Versions
+.
+Previous
+Atlantic Testnet
+Next
+Canonical Contracts
+Last updated
+13 days ago
+Was this helpful?

@@ -1,0 +1,28 @@
+SOURCE_URL: https://docs.pharos.xyz/getting-started/faqs
+TITLE: FAQs | docs.pharos.xyz
+============================================================
+Problem Explanation
+Ethereum's execution model deducts the full gas limit at the start of execution and refunds a portion of the gas at the end if applicable. However, if the gas limit is set too tightly (equal to the actual gas used before refunds), the refund cannot be processed, and the transaction fails with an out-of-gas error.
+Key reasons why this happens:
+Gas is initially reserved: The EVM deducts the full gas limit at the beginning of execution.
+Gas refund happens at the end: If a contract includes operations that delete storage variables (e.g.,
+SELFDESTRUCT
+,
+SSTORE
+clearing a slot), the gas refund is only applied after execution completes.
+If gas runs out before refunding, the transaction fails because the EVM does not get a chance to apply the refund.
+Example Scenario
+Below is an example of a Uniswap V3 transaction deployed on Pharos Devnet, where the actual gas used was 4,618,680:
+https://pharosscan.xyz/tx/0x205a123820ad75de162ba3cabe06183d34377e239c3a8f6f18636d4c87b3a524
+However, since the gas limit was set exactly equal to the gas used, the transaction failed.
+To verify this behavior, we deployed the same transaction on Ethereum Sepolia Testnet, and observed the same failure due to the gas limit issue:
+https://sepolia.etherscan.io/tx/0x55af4ffe714ad075c6f979e7f89670e1498647abedd6ea7112e1c6339cef64aa
+To ensure the transaction executes successfully, we need to set the gas limit slightly higher than the expected gas usage.
+https://pharosscan.xyz/tx/0x6ccf7f593f5783414b3726e147319e74046526d800b325110bdf81ac3012aa5e
+Previous
+Gas Model
+Next
+Validator Accountability
+Last updated
+1 year ago
+Was this helpful?

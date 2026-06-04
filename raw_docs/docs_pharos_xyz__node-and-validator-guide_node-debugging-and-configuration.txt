@@ -1,0 +1,48 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-debugging-and-configuration
+TITLE: Node Debugging & Configuration | docs.pharos.xyz
+============================================================
+Pharos Block Validation
+You can refer to the
+Pharos Block Validation
+document for details on the Pharos consensus mechanism and block validation process.
+Block Sync Verification
+You can use the RPC API to check whether the node is actively syncing blocks. If the block number is increasing, the node is catching up to the latest chain height.
+curl
+127.0.0.1:18100/
+\
+-X
+POST
+\
+-H
+"
+Content-Type: application/json
+"
+\
+--data
+'
+{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}
+'
+Check if the Node has joined as a Validator
+Query the local NodeID
+cat
+/data/domain.json
+|
+grep
+"
+NODE_ID
+"
+Send a transaction to join the Validator
+https://pharosscan.xyz/tx/0xf0045f3551f3d70df2ce5a1b2abe51839c3c2cf4a3e487c89ef6e5a006e16b92?tab=state
+Check NodeID in Pharos system contract
+Log Inspection
+All logs are written to the directory:
+To monitor logs in real-time, use:
+Port Configuration
+Ensure that the following ports are open and accessible for proper node operation:
+Previous
+Pharos Network Snapshots
+Next
+Node Monitoring Setup
+Last updated
+4 months ago
+Was this helpful?

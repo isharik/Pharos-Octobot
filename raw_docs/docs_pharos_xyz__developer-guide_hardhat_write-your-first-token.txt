@@ -1,0 +1,83 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-token
+TITLE: Write Your First Token | docs.pharos.xyz
+============================================================
+This guide will walk you through the process of creating and deploying your first token on the Pharos blockchain. By the end of this guide, you will have a fully functional token contract and understand how to interact with it.
+Prerequisites
+Before you begin, ensure you have the following:
+Git: Used for code management and obtain examples.
+Node.js: Install it from
+nodejs.org
+.
+Pharos Devnet/Testnet Access: Access to a Pharos node (local or remote) for interacting with the blockchain.
+Setup 1: Install Hardhat
+Hardhat
+Setup 2: Set Up the Project
+Clone the example repo:
+git
+clone
+https://github.com/PharosNetwork/examples
+cd
+examples/token/hardhat/contract
+Install OpenZeppelin Contracts:
+npm
+install
+Setup 3: Write the Token Contract
+Create a New Solidity File:
+Create a new file for your token contract:
+Write the Token Contract:
+Open
+contracts/Token.sol
+in your favorite text editor and add the following code:
+Compile the Smart Contract:
+Test the Smart Contract
+Step 4: Deploy the Token Contract
+Set the private key:
+Deploy the Contract:
+Step 5: Verify the Token Contract
+Add the following content to your
+hardhat.config.js
+file
+For Atlantic Testnet
+Field
+Value
+chain_name
+pharos
+chain_id
+688689
+rpc_endpoint
+https://atlantic.dplabs-internal.com"
+api_host
+https://api.socialscan.io/pharos-atlantic-testnet/v1/explorer/command_api/contract
+explorer_url
+https://atlantic.pharosscan.xyz/
+For Testnet
+Field
+Value
+chain_name
+pharos
+chain_id
+688688
+rpc_endpoint
+https://testnet.dplabs-internal.com
+api_host
+https://api.socialscan.io/pharos-testnet/v1/explorer/command_api/contract
+explorer_url
+https://testnet.pharosscan.xyz/
+Run the hardhat verify command
+Troubleshooting
+Contract Deployment Fails
+: Ensure you have enough testnet tokens to cover the deployment cost.
+Interaction Issues
+: Verify that the contract address and ABI are correct.
+Insufficient Balance
+: Ensure your wallet has enough tokens to transfer.
+Conclusion
+Now that you’ve created and deployed your first token using Hardhat.
+This guide provides a comprehensive introduction to creating and deploying a token on the Pharos blockchain using Hardhat. If you encounter any issues, refer to the Troubleshooting section or consult the Hardhat documentation. Happy building! 🚀
+Previous
+Write Your First dApp
+Next
+Write Your First NFT
+Last updated
+7 months ago
+Was this helpful?

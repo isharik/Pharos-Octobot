@@ -1,0 +1,55 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/foundry/write-your-first-dapp
+TITLE: Write Your First dApp | docs.pharos.xyz
+============================================================
+This guide will walk you through the process of building and deploying your first end-to-end decentralized application (dApp) on the Pharos blockchain. By the end of this guide, you will have a fully functional dApp that includes a smart contract, a backend, and a frontend.
+Prerequisites
+Before you begin, ensure you have the following:
+Git: Used for code management and obtain examples.
+Node.js: Install it from
+nodejs.org
+.
+Pharos Devnet/Testnet Access: Access to a Pharos node (local or remote) for interacting with the blockchain.
+Setup 1: Install Foundry
+Foundry
+Setup 2: Set Up the Project
+Clone the example repo:
+git
+clone
+https://github.com/PharosNetwork/examples
+cd
+examples/dapp/foundry
+npm
+install
+Setup 3: Deploy the Smart Contract
+Set the private key:
+Then
+Setup 4: Build the Frontend
+Connect the Frontend to the Smart Contract:
+Open
+src/app.jsx
+and replace its content with the following code:
+Replace Placeholder Values
+Replace
+YOUR_CONTRACT_ADDRESS
+with the address of your deployed contract.
+Step 5: Run the dApp
+Start the React App
+Navigate to the frontend directory and start the app:
+Interact with the dApp:
+Open your browser and navigate to
+http://localhost:3000
+.
+Use the input field and buttons to interact with your smart contract.
+Troubleshooting
+Contract Deployment Fails: Ensure you have enough testnet tokens to cover the deployment cost.
+Frontend Connection Issues: Verify that the contract address and ABI are correct.
+Conclusion
+Now that you’ve built your first end-to-end dApp.
+This guide provides a comprehensive introduction to building and deploying an end-to-end dApp on the Pharos blockchain. If you encounter any issues, refer to the Troubleshooting section or consult the Pharos documentation. Happy building! 🚀
+Previous
+Foundry
+Next
+Write Your First Token
+Last updated
+7 months ago
+Was this helpful?

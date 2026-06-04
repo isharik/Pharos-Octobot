@@ -1,0 +1,74 @@
+SOURCE_URL: https://docs.pharos.xyz/developer-guide/rust
+TITLE: Rust | docs.pharos.xyz
+============================================================
+This guide is suitable for developers who want to start building dApps using Pharos and Rust WASM toolchains. If you are a new user of Ethereum, please consider researching the
+Ethereum documentation
+before continuing.
+This guide will walk you through the process of creating and deploying your first token on the Pharos blockchain using Rust and WASM toolchains. By the end of this guide, you will have a fully functional token contract and understand how to interact with it.
+Prerequisites
+Before you begin, ensure you have the following:
+Git: Used for code management and obtain examples.
+Python: Used to interact with the Pharos network and execute contract testing scripts.
+Rust: Install it from
+rust-lang.org
+.
+Pharos Devnet/Testnet Access: Access to a Pharos node (local or remote) for interacting with the blockchain.
+Setup 1: Install WASM Toolchains With Cargo
+Install the pharos wasm toolchain plugin using the Cargo tool:
+cargo
+install
+--git
+https://github.com/PharosNetwork/pharos-cargo-stylus
+Add the
+wasm32-unknown-unknown
+build target to your Rust compiler:
+rustup
+target
+add
+wasm32-unknown-unknown
+You should now have it available as a Cargo subcommand:
+cargo
+stylus
+--help
+Cargo
+subcommand
+for
+developing
+Pharos
+Stylus
+projects
+Note: Pharos built the chain execution client from scratch using C++, and we design, developed and open-sourced the
+Dora
+VM, which combines EVM and WASM in a deeply compiled VM arch with native interoperability. The Rust toolchain and Rust SDK are forked from Stylus toolchain and SDK to facilitate easier adoption, the change here is the removal of Arbitrum ink billing and the simplification of the activation and compilation process on Pharos.
+Setup 3: Write the Token Contract
+Create a new file for your token contract:
+Write the Token Contract:
+Open
+src/lib.rs
+in your favorite text editor and add the following code:
+Compile the Smart Contract:
+Use cargo to compile the contract:
+Step 4: Deploy the Token Contract
+Step 5: Interact with the Token Contract
+Open
+scripts/main.py
+and replace your deployed contract address to the variable
+CONTRACT_ADDRESS
+:
+Execute the script using python:
+Troubleshooting
+Contract Deployment Fails
+: Ensure you have enough testnet tokens to cover the deployment cost.
+Interaction Issues
+: Verify that the contract address and ABI are correct.
+Insufficient Balance
+: Ensure your wallet has enough tokens to transfer.
+Next Steps
+Now that you’ve created and deployed your first token using Rust. This guide provides a comprehensive introduction to creating and deploying a token on the Pharos blockchain using Rust. If you encounter any issues, refer to the Troubleshooting section or consult the Rust documentation. Happy building! 🚀
+Previous
+Write Your First Uniswap Contract
+Next
+Interoperability
+Last updated
+1 year ago
+Was this helpful?

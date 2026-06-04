@@ -1,0 +1,19 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization
+TITLE: Rapid Node Initialization | docs.pharos.xyz
+============================================================
+To help developers and validators quickly join the Pharos Network without syncing from genesis, we provide regularly updated snapshot datasets for each network. These snapshots contain pre-synced state data and allow rapid setup of Devnet, Testnet, or Mainnet nodes.
+⚠️ Snapshots should only be used from trusted sources. Always verify integrity before replacing production data.
+Pharos Network
+Atlantic
+💡 Notes & Best Practices
+Snapshots currently contain the full block history. In the future, we will support pruned snapshots that include only the most recent blocks and state.
+Archive nodes should still sync from genesis.
+After applying a snapshot, the node will continue syncing to the latest height.
+Always ensure your snapshot corresponds to the correct network and version.
+Previous
+Node Management
+Next
+Rapid Node Initialization(Testnet)
+Last updated
+4 months ago
+Was this helpful?

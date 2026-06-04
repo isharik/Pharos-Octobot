@@ -1,0 +1,42 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-management
+TITLE: Node Management | docs.pharos.xyz
+============================================================
+Node Initialization
+Pharos Full Nodes automatically generate cryptographic keys on startup — no manual configuration is needed. To start a validator node, run the following command in your working directory:
+docker
+start
+atlantic-testnet
+Entering the container
+docker
+exec
+-it
+atlantic-testnet
+/bin/bash
+Join validator sets
+If your full node has synced up with the latest block, you can convert it to a validator.
+If you need to join Pharos Atlantic as a Validator, please contact and send domain file and pubkeys to
+[email protected]
+or TG (
+@janesh_dani
+)
+⚠️ Note: If more than one-third of validators go offline, the Atlantic may halt due to consensus safety constraints.
+⚠️ To join the network, the corresponding account needs to stake a certain amount of tokens. Please contact us to obtain the staking tokens.
+Pack needed files into
+node_info.tar.gz
+tar -zcvf node_info.tar.gz /data/atlantic/domain.json
+\
+/data/atlantic/resources/domain_keys/prime256v1/domain/new.pub
+\
+/data/atlantic/resources/domain_keys/bls12381/domain/new.pub
+Domain config:
+/data/atlantic/domain.json
+Node pubkeys:
+/data/atlantic/resources/domain_keys/prime256v1/domain/new.pub
+/data/atlantic/resources/domain_keys/bls12381/domain/new.pub
+Previous
+Node Configuration
+Next
+Rapid Node Initialization
+Last updated
+7 months ago
+Was this helpful?

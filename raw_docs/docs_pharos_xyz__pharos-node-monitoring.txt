@@ -1,0 +1,74 @@
+SOURCE_URL: https://docs.pharos.xyz/pharos-node-monitoring
+TITLE: Pharos Node Monitoring | docs.pharos.xyz
+============================================================
+We recommend deploying Prometheus, Pushgateway, and Grafana to monitor Pharos Node metrics.
+Deploy Prometheus and pushgateway
+If you have already deployed a Prometheus monitoring and alerting system, you can skip this step:
+Create the Prometheus namespace:
+kubectl
+create
+namespace
+prometheus
+Add the
+prometheus-community
+chart repository:
+helm
+repo
+add
+prometheus-community
+https://prometheus-community.github.io/helm-charts
+Deploy Prometheus:
+helm
+upgrade
+-i
+prometheus
+prometheus-community/prometheus
+\
+--namespace
+prometheus
+\
+--set
+alertmanager.persistence.storageClass=
+"
+gp2
+"
+\
+--set
+server.persistentVolume.storageClass=
+"
+gp2
+"
+Verify that all pods in the
+prometheus
+namespace are in the
+READY
+state:
+kubectl
+get
+pods
+-n
+prometheus
+Get the Pushgateway Service IP/Domain:
+kubectl
+-n
+prometheus-agent-namespace
+get
+svc
+You should see the
+prometheus-pushgateway
+Service. Save the
+IP address
+of the Pushgateway Service.
+Modify the metrics push configuration file
+For detailed instructions on configuring the metrics push in your
+pharos.conf
+, see
+Node Monitoring Setup
+.
+Previous
+Pharos Testnet: Rebuild Node with Preserved Node Info
+Next
+Enable AutoPruning in Pharos Node
+Last updated
+3 months ago
+Was this helpful?

@@ -2,361 +2,361 @@
   {
     "url": "https://docs.pharos.xyz",
     "title": "About Pharos | docs.pharos.xyz",
-    "filename": "index.txt"
+    "filename": "docs_pharos_xyz__index.txt"
   },
   {
     "url": "https://docs.pharos.xyz/introduction/vision-and-mission",
     "title": "Vision & Mission | docs.pharos.xyz",
-    "filename": "introduction_vision-and-mission.txt"
+    "filename": "docs_pharos_xyz__introduction_vision-and-mission.txt"
   },
   {
     "url": "https://docs.pharos.xyz/introduction/why-pharos",
     "title": "Why Pharos | docs.pharos.xyz",
-    "filename": "introduction_why-pharos.txt"
+    "filename": "docs_pharos_xyz__introduction_why-pharos.txt"
   },
   {
     "url": "https://docs.pharos.xyz/introduction/encyclopedia",
     "title": "Encyclopedia | docs.pharos.xyz",
-    "filename": "introduction_encyclopedia.txt"
+    "filename": "docs_pharos_xyz__introduction_encyclopedia.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/network",
     "title": "Network | docs.pharos.xyz",
-    "filename": "getting-started_network.txt"
+    "filename": "docs_pharos_xyz__getting-started_network.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/canonical-contracts",
     "title": "Canonical Contracts | docs.pharos.xyz",
-    "filename": "getting-started_canonical-contracts.txt"
+    "filename": "docs_pharos_xyz__getting-started_canonical-contracts.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/token-registry",
     "title": "Token Registry | docs.pharos.xyz",
-    "filename": "getting-started_token-registry.txt"
+    "filename": "docs_pharos_xyz__getting-started_token-registry.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/gas-model",
     "title": "Gas Model | docs.pharos.xyz",
-    "filename": "getting-started_gas-model.txt"
+    "filename": "docs_pharos_xyz__getting-started_gas-model.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/faqs",
     "title": "FAQs | docs.pharos.xyz",
-    "filename": "getting-started_faqs.txt"
+    "filename": "docs_pharos_xyz__getting-started_faqs.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-accountability",
     "title": "Validator Accountability | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-accountability.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-accountability.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-requirements",
     "title": "Validator Requirements | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-requirements.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-requirements.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment",
     "title": "Validator Node Deployment | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-node-deployment.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-node-deployment.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/node-management",
     "title": "Node Management | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_node-management.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_node-management.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization",
     "title": "Rapid Node Initialization | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_rapid-node-initialization.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_rapid-node-initialization.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/pharos-network-snapshots",
     "title": "Pharos Network Snapshots | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_pharos-network-snapshots.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_pharos-network-snapshots.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/node-debugging-and-configuration",
     "title": "Node Debugging & Configuration | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_node-debugging-and-configuration.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_node-debugging-and-configuration.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/node-monitoring-setup",
     "title": "Node Monitoring Setup | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_node-monitoring-setup.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_node-monitoring-setup.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/rollback-blocks",
     "title": "Rollback Blocks | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_rollback-blocks.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_rollback-blocks.txt"
   },
   {
     "url": "https://docs.pharos.xyz/pharos-testnet-rebuild-node-with-preserved-node-info",
     "title": "Pharos Testnet: Rebuild Node with Preserved Node Info | docs.pharos.xyz",
-    "filename": "pharos-testnet-rebuild-node-with-preserved-node-info.txt"
+    "filename": "docs_pharos_xyz__pharos-testnet-rebuild-node-with-preserved-node-info.txt"
   },
   {
     "url": "https://docs.pharos.xyz/pharos-node-monitoring",
     "title": "Pharos Node Monitoring | docs.pharos.xyz",
-    "filename": "pharos-node-monitoring.txt"
+    "filename": "docs_pharos_xyz__pharos-node-monitoring.txt"
   },
   {
     "url": "https://docs.pharos.xyz/enable-pruning-in-pharos-node",
     "title": "Enable AutoPruning in Pharos Node | docs.pharos.xyz",
-    "filename": "enable-pruning-in-pharos-node.txt"
+    "filename": "docs_pharos_xyz__enable-pruning-in-pharos-node.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/block-explorer",
     "title": "Block Explorer | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_block-explorer.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_block-explorer.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/rpc",
     "title": "RPC Infrastructure | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_rpc.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_rpc.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/indexing",
     "title": "Indexer | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_indexing.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_indexing.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/oracles",
     "title": "Oracle | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_oracles.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_oracles.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain",
     "title": "Cross Chain Infrastructure | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_cross-chain.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_cross-chain.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/wallets",
     "title": "Wallet | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_wallets.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_wallets.txt"
   },
   {
     "url": "https://docs.pharos.xyz/api-and-sdk/json-rpc-methods",
     "title": "JSON-RPC API Methods | docs.pharos.xyz",
-    "filename": "api-and-sdk_json-rpc-methods.txt"
+    "filename": "docs_pharos_xyz__api-and-sdk_json-rpc-methods.txt"
   },
   {
     "url": "https://docs.pharos.xyz/api-and-sdk/eth-getproof",
     "title": "eth_getProof \u2014 Storage State Verification (SPV) | docs.pharos.xyz",
-    "filename": "api-and-sdk_eth-getproof.txt"
+    "filename": "docs_pharos_xyz__api-and-sdk_eth-getproof.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/foundry",
     "title": "Foundry | docs.pharos.xyz",
-    "filename": "developer-guide_foundry.txt"
+    "filename": "docs_pharos_xyz__developer-guide_foundry.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/hardhat",
     "title": "Hardhat | docs.pharos.xyz",
-    "filename": "developer-guide_hardhat.txt"
+    "filename": "docs_pharos_xyz__developer-guide_hardhat.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/rust",
     "title": "Rust | docs.pharos.xyz",
-    "filename": "developer-guide_rust.txt"
+    "filename": "docs_pharos_xyz__developer-guide_rust.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/interoperability",
     "title": "Interoperability | docs.pharos.xyz",
-    "filename": "developer-guide_interoperability.txt"
+    "filename": "docs_pharos_xyz__developer-guide_interoperability.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/x402",
     "title": "x402 | docs.pharos.xyz",
-    "filename": "developer-guide_x402.txt"
+    "filename": "docs_pharos_xyz__developer-guide_x402.txt"
   },
   {
     "url": "https://docs.pharos.xyz/resources/evm",
     "title": "EVM | docs.pharos.xyz",
-    "filename": "resources_evm.txt"
+    "filename": "docs_pharos_xyz__resources_evm.txt"
   },
   {
     "url": "https://docs.pharos.xyz/resources/solidity",
     "title": "Solidity | docs.pharos.xyz",
-    "filename": "resources_solidity.txt"
+    "filename": "docs_pharos_xyz__resources_solidity.txt"
   },
   {
     "url": "https://docs.pharos.xyz/introduction",
     "title": "About Pharos | docs.pharos.xyz",
-    "filename": "introduction.txt"
+    "filename": "docs_pharos_xyz__introduction.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/network/atlantic-testnet",
     "title": "Atlantic Testnet | docs.pharos.xyz",
-    "filename": "getting-started_network_atlantic-testnet.txt"
+    "filename": "docs_pharos_xyz__getting-started_network_atlantic-testnet.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started/network/pacific-mainnet",
     "title": "Pacific Mainnet | docs.pharos.xyz",
-    "filename": "getting-started_network_pacific-mainnet.txt"
+    "filename": "docs_pharos_xyz__getting-started_network_pacific-mainnet.txt"
   },
   {
     "url": "https://docs.pharos.xyz/getting-started",
     "title": "Network | docs.pharos.xyz",
-    "filename": "getting-started.txt"
+    "filename": "docs_pharos_xyz__getting-started.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide",
     "title": "Validator Accountability | docs.pharos.xyz",
-    "filename": "node-and-validator-guide.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-docker-deployment",
     "title": "Using Docker | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-node-deployment_using-docker-deployment.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-node-deployment_using-docker-deployment.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-binary-deployment",
     "title": "Using Binary | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-node-deployment_using-binary-deployment.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-node-deployment_using-binary-deployment.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/node-configuration",
     "title": "Node Configuration | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_validator-node-deployment_node-configuration.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_validator-node-deployment_node-configuration.txt"
   },
   {
     "url": "https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization/rapid-node-initialization-testnet",
     "title": "Rapid Node Initialization(Testnet) | docs.pharos.xyz",
-    "filename": "node-and-validator-guide_rapid-node-initialization_rapid-node-initialization-testnet.txt"
+    "filename": "docs_pharos_xyz__node-and-validator-guide_rapid-node-initialization_rapid-node-initialization-testnet.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/block-explorer/hemera-socialscan",
     "title": "Hemera SocialScan | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_block-explorer_hemera-socialscan.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_block-explorer_hemera-socialscan.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure",
     "title": "Block Explorer | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/rpc/zan",
     "title": "ZAN RPC | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_rpc_zan.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_rpc_zan.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/rpc/alchemy",
     "title": "Alchemy RPC | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_rpc_alchemy.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_rpc_alchemy.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/rpc/nirvana",
     "title": "Nirvana RPC | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_rpc_nirvana.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_rpc_nirvana.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/indexing/goldsky",
     "title": "Goldsky | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_indexing_goldsky.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_indexing_goldsky.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/oracles/chainlink-ds",
     "title": "Chainlink Data Feeds | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_oracles_chainlink-ds.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_oracles_chainlink-ds.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/oracles/chainlink-pe",
     "title": "Chainlink Push Engine Feeds | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_oracles_chainlink-pe.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_oracles_chainlink-pe.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/oracles/supra",
     "title": "Supra | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_oracles_supra.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_oracles_supra.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip",
     "title": "Chainlink CCIP | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_cross-chain_chainlink-ccip.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_cross-chain_chainlink-ccip.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp",
     "title": "Circle CCTP | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_cross-chain_circle-cctp.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_cross-chain_circle-cctp.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero",
     "title": "LayerZero | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_cross-chain_layerzero.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_cross-chain_layerzero.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/wallets/safe",
     "title": "Safe MultiSig | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_wallets_safe.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_wallets_safe.txt"
   },
   {
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/wallets/fordefi",
     "title": "Fordefi | docs.pharos.xyz",
-    "filename": "tooling-and-infrastructure_wallets_fordefi.txt"
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_wallets_fordefi.txt"
   },
   {
     "url": "https://docs.pharos.xyz/api-and-sdk",
     "title": "JSON-RPC API Methods | docs.pharos.xyz",
-    "filename": "api-and-sdk.txt"
+    "filename": "docs_pharos_xyz__api-and-sdk.txt"
   },
   {
     "url": "https://docs.pharos.xyz/api-and-sdk/eth-getproof/spv-proof-theory",
     "title": "SPV Proof Theory Explanation | docs.pharos.xyz",
-    "filename": "api-and-sdk_eth-getproof_spv-proof-theory.txt"
+    "filename": "docs_pharos_xyz__api-and-sdk_eth-getproof_spv-proof-theory.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/foundry/write-your-first-dapp",
     "title": "Write Your First dApp | docs.pharos.xyz",
-    "filename": "developer-guide_foundry_write-your-first-dapp.txt"
+    "filename": "docs_pharos_xyz__developer-guide_foundry_write-your-first-dapp.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/foundry/write-your-first-token",
     "title": "Write Your First Token | docs.pharos.xyz",
-    "filename": "developer-guide_foundry_write-your-first-token.txt"
+    "filename": "docs_pharos_xyz__developer-guide_foundry_write-your-first-token.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/foundry/write-your-first-nft",
     "title": "Write Your First NFT | docs.pharos.xyz",
-    "filename": "developer-guide_foundry_write-your-first-nft.txt"
+    "filename": "docs_pharos_xyz__developer-guide_foundry_write-your-first-nft.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/foundry/write-your-first-uniswap-contract",
     "title": "Write Your First Uniswap Contract | docs.pharos.xyz",
-    "filename": "developer-guide_foundry_write-your-first-uniswap-contract.txt"
+    "filename": "docs_pharos_xyz__developer-guide_foundry_write-your-first-uniswap-contract.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide",
     "title": "Foundry | docs.pharos.xyz",
-    "filename": "developer-guide.txt"
+    "filename": "docs_pharos_xyz__developer-guide.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-dapp",
     "title": "Write Your First dApp | docs.pharos.xyz",
-    "filename": "developer-guide_hardhat_write-your-first-dapp.txt"
+    "filename": "docs_pharos_xyz__developer-guide_hardhat_write-your-first-dapp.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-token",
     "title": "Write Your First Token | docs.pharos.xyz",
-    "filename": "developer-guide_hardhat_write-your-first-token.txt"
+    "filename": "docs_pharos_xyz__developer-guide_hardhat_write-your-first-token.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-nft",
     "title": "Write Your First NFT | docs.pharos.xyz",
-    "filename": "developer-guide_hardhat_write-your-first-nft.txt"
+    "filename": "docs_pharos_xyz__developer-guide_hardhat_write-your-first-nft.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-uniswap-contract",
     "title": "Write Your First Uniswap Contract | docs.pharos.xyz",
-    "filename": "developer-guide_hardhat_write-your-first-uniswap-contract.txt"
+    "filename": "docs_pharos_xyz__developer-guide_hardhat_write-your-first-uniswap-contract.txt"
   },
   {
     "url": "https://docs.pharos.xyz/developer-guide/interoperability/call-evm-from-wasm",
     "title": "Call EVM From WASM | docs.pharos.xyz",
-    "filename": "developer-guide_interoperability_call-evm-from-wasm.txt"
+    "filename": "docs_pharos_xyz__developer-guide_interoperability_call-evm-from-wasm.txt"
   },
   {
     "url": "https://docs.pharos.xyz/resources",
     "title": "EVM | docs.pharos.xyz",
-    "filename": "resources.txt"
+    "filename": "docs_pharos_xyz__resources.txt"
   }
 ]

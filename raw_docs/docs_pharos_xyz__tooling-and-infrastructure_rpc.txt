@@ -1,0 +1,26 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc
+TITLE: RPC Infrastructure | docs.pharos.xyz
+============================================================
+Overview
+RPC endpoints are the primary way your application interacts with the Pharos Network. They allow you to send transactions, query on-chain data, and communicate with the network programmatically.
+As a developer, you’ll use RPCs to connect your frontend, backend, or scripts to the blockchain during development and in production.
+What You Can Do with RPC
+Send transactions to the network
+Read on-chain data (balances, contract state, logs)
+Interact with smart contracts
+Listen to events and track activity
+Power applications, scripts, and integrations
+Why It Matters
+RPC endpoints act as the bridge between your application and the blockchain. Choosing the right provider and configuration is important for performance, reliability, and scalability.
+Available RPC Providers
+Pharos supports multiple RPC providers for both Mainnet and Testnet environments.
+ZAN RPC
+Nirvana RPC
+Alchemy RPC
+Previous
+Hemera SocialScan
+Next
+ZAN RPC
+Last updated
+1 month ago
+Was this helpful?

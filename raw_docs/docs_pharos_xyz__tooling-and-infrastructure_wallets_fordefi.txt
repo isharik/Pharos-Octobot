@@ -1,0 +1,36 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/wallets/fordefi
+TITLE: Fordefi | docs.pharos.xyz
+============================================================
+Overview
+Fordefi provides institutional-grade wallet infrastructure for securely managing digital assets.
+It uses MPC (Multi-Party Computation) technology to eliminate single private keys, enabling secure transaction signing along with policy-based access control for teams and organizations.
+Enable Pharos Network
+Pharos can be enabled directly within the Fordefi platform from the Chains settings:
+https://app.fordefi.com/settings/chains?search=PHAROS&page=1
+Key Features
+MPC-based key management
+Policy-based transaction approvals
+Institutional custody workflows
+Secure signing infrastructure
+Integration with DeFi protocols
+When to Use Fordefi
+Fordefi is typically used for:
+Managing treasury and protocol funds
+Secure transaction signing without single key exposure
+Teams requiring policy-driven approval workflows
+Institutional-grade custody and operations
+Integration Notes
+Enable Pharos from the Chains settings before initiating transactions
+Configure policies and approval flows based on your team’s requirements
+Suitable for both operational workflows and production environments
+Next Steps
+Enable Pharos in your Fordefi account
+Set up policies and access controls
+Start managing assets and signing transactions securely
+Previous
+Safe MultiSig
+Next
+JSON-RPC API Methods
+Last updated
+1 month ago
+Was this helpful?

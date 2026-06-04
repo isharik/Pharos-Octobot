@@ -1,0 +1,53 @@
+SOURCE_URL: https://docs.pharos.xyz/getting-started/gas-model
+TITLE: Gas Model | docs.pharos.xyz
+============================================================
+Overview
+When sending a transaction on Ethereum or an EVM-compatible blockchain, it is essential to set an appropriate gas limit to ensure successful execution. One common issue arises when the gas limit is set exactly equal to the gas used, particularly when the transaction involves a gas refund mechanism.
+Summary Table
+Feature
+Details
+Opcode pricing
+Fully aligned with Ethereum EVM opcode
+gas table
+EIP-1559 support
+✅ Compatible (base fee + priority fee)
+Base fee
+Dynamic (will re-calculate per epoch)
+Transaction fee model
+Charged by gas_limit at inclusion time
+Refund logic
+Full EVM-style refund tracking supported, but refund does not affect charge
+Best Practices for Developers
+Set a slightly higher gas limit:
+Allow extra gas beyond the expected execution cost.
+Example: If you expect 100,000 gas used before refund, set the gas limit to 120,000 to avoid failures.
+Use Estimation APIs:
+When sending transactions via Web3 libraries (
+ethers.js
+,
+web3.js
+), always use
+estimateGas()
+and add a buffer.
+Example (
+ethers.js
+):
+Monitor Gas Refund Logic:
+If your contract relies heavily on gas refunds (e.g., clearing storage or
+SELFDESTRUCT
+), test transactions with different gas limits to find an optimal value.
+Check for Out-of-Gas Failures:
+If a transaction fails unexpectedly despite having enough gas, check whether gas refunds are affecting execution.
+Debug with
+debug_traceTransaction
+or EVM logs.
+Conclusion
+To prevent transactions from failing due to gas refund issues, always set a gas limit slightly higher than the expected gas usage. This ensures smooth execution and prevents out-of-gas errors caused by refund mechanisms.
+By following these best practices, developers can avoid failed transactions and improve the reliability of smart contract interactions.
+Previous
+Token Registry
+Next
+FAQs
+Last updated
+1 year ago
+Was this helpful?

@@ -1,0 +1,209 @@
+SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-monitoring-setup
+TITLE: Node Monitoring Setup | docs.pharos.xyz
+============================================================
+This guide describes how to configure monitoring for your Pharos node using Prometheus Pushgateway.
+Overview
+Pharos nodes can push metrics to a Prometheus Pushgateway, which allows you to monitor node performance, block production, and other key metrics.
+Configuration
+To enable monitoring, add the
+monitor_config
+section to your
+pharos.conf
+file.
+Example Configuration
+{
+"
+chain
+"
+:
+{
+"
+monitor_config
+"
+:
+{
+"
+enable_pamir_cetina
+"
+:
+true
+,
+"
+pamir_cetina_job_name
+"
+:
+"
+your_job_name
+"
+,
+"
+pamir_cetina_push_address
+"
+:
+"
+your_pushgateway_address
+"
+,
+"
+pamir_cetina_push_interval
+"
+:
+5
+,
+"
+pamir_cetina_push_port
+"
+:
+9091
+},
+"
+secret_config
+"
+:
+{
+"
+domain_key_path
+"
+:
+"
+../keys/domain.key
+"
+,
+"
+stabilizing_key_path
+"
+:
+"
+../keys/stabilizing.key
+"
+},
+"
+startup_config
+"
+:
+{
+"
+init_config
+"
+:
+{
+"
+meta_path
+"
+:
+"
+../data
+"
+,
+"
+host_ip
+"
+:
+"
+127.0.0.1
+"
+,
+"
+http_port
+"
+:
+"
+18100
+"
+,
+"
+rpc_port
+"
+:
+"
+20000
+"
+,
+"
+tcp_port
+"
+:
+"
+19000
+"
+,
+"
+ws_port
+"
+:
+"
+18200
+"
+}
+}
+},
+"
+storage
+"
+:
+{
+"
+mygrid_conf
+"
+:
+{},
+"
+mygrid_env
+"
+:
+{
+"
+storage_data_path
+"
+:
+"
+../data
+"
+}
+}
+}
+Configuration Parameters
+Parameter
+Description
+Example
+enable_pamir_cetina
+Enable/disable metrics pushing
+true
+pamir_cetina_job_name
+Job name for Prometheus metrics
+"atlantic_testnet"
+pamir_cetina_push_address
+Pushgateway address (without protocol)
+"your_pushgateway_address"
+pamir_cetina_push_interval
+Push interval in seconds
+5
+pamir_cetina_push_port
+Pushgateway port
+9091
+Setup Steps
+Ensure you have a Prometheus Pushgateway running and accessible from your node
+Edit your
+pharos.conf
+file and add the
+monitor_config
+section under
+chain
+:
+Replace the placeholder values:
+your_job_name
+: A unique identifier for your node (e.g.,
+my_validator_node
+)
+your_pushgateway_address
+: Your Pushgateway hostname or IP
+Restart your node to apply the changes:
+For Docker:
+For Binary:
+Previous
+Node Debugging & Configuration
+Next
+Rollback Blocks
+Last updated
+4 months ago
+Was this helpful?

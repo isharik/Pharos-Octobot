@@ -1,0 +1,114 @@
+SOURCE_URL: https://docs.pharos.xyz/resources/solidity
+TITLE: Solidity | docs.pharos.xyz
+============================================================
+The official Solidity documentation is the most comprehensive and up-to-date resource for learning about the Solidity language. It covers everything from basic syntax to advanced topics and provides detailed explanations, examples, and code snippets.
+Link
+:
+Solidity Documentation
+Learning Resources
+Online Tutorials and Courses
+CryptoZombies
+: An interactive online course that teaches Solidity through building a zombie game.
+Link
+:
+CryptoZombies
+Dapp University
+: A YouTube channel with over 10 hours of hands-on tutorials for both beginners and experienced Solidity developers.
+Link
+:
+Dapp University
+Udemy Ethereum Blockchain Developer Bootcamp With Solidity
+: An extensive course providing up-to-date blockchain development tools and resources.
+Link
+:
+Udemy Course
+Community and Discussion
+Ethereum StackExchange
+: A platform for asking and answering questions related to Solidity and Ethereum development.
+Link
+:
+Ethereum StackExchange
+Solidity Language Users Chat
+: A chat room for Solidity developers to discuss and share knowledge.
+Link
+:
+Solidity Chat
+Development Environments and Tools
+Integrated Development Environments (IDEs)
+Remix
+: A browser-based IDE with an integrated compiler and Solidity runtime environment.
+Link
+:
+Remix IDE
+Hardhat
+: An Ethereum development environment with local Ethereum network, debugging features, and a plugin ecosystem.
+Link
+:
+Hardhat
+Foundry
+: A fast, portable, and modular toolkit for Ethereum application development written in Rust.
+Link
+:
+Foundry
+Editor Integrations
+Visual Studio Code (VS Code)
+: Solidity extensions for syntax highlighting, compilation, and debugging.
+Link
+:
+Solidity VS Code Extension
+IntelliJ IDEA
+: Solidity plugin for IntelliJ IDEA and other JetBrains IDEs.
+Link
+:
+IntelliJ IDEA Solidity Plugin
+Linters and Tools
+Solhint
+: A Solidity linter that provides security, style guide, and best practice rules for smart contract validation.
+Link
+:
+Solhint
+Ethlint
+: A linter to identify and fix style and security issues in Solidity.
+Link
+:
+Ethlint
+Additional Resources
+Example Projects
+Solidity by Example
+: A collection of example contracts to help you understand Solidity in practice.
+Link
+:
+Solidity by Example
+Security and Best Practices
+Security Considerations
+: A section in the Solidity documentation that provides guidance on security best practices.
+Link
+:
+Security Considerations
+Community Translations
+The Solidity documentation is available in multiple languages, thanks to community volunteers.
+Chinese (Simplified)
+:
+Solidity Documentation (Chinese)
+Spanish
+:
+Solidity Documentation (Spanish)
+Russian
+:
+Solidity Documentation (Russian)
+Third-Party Tools and Parsers
+Solidity Parser for JavaScript
+: A Solidity parser built on top of ANTLR4 grammar for JavaScript.
+Link
+:
+Solidity Parser for JavaScript
+Sūrya
+: A utility tool for smart contract systems, offering visual outputs and information about contract structure.
+Link
+:
+Sūrya
+Previous
+EVM
+Last updated
+1 year ago
+Was this helpful?

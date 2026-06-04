@@ -1,0 +1,335 @@
+SOURCE_URL: https://docs.pharos.xyz/api-and-sdk/eth-getproof
+TITLE: eth_getProof — Storage State Verification (SPV) | docs.pharos.xyz
+============================================================
+1. Introduction
+Like Ethereum Merkle Proof verification, Pharos provides Simplified Payment Verification (SPV) to allow light clients to verify the existence — or non-existence — of accounts and storage values at a given block height, without possessing the full state.
+Pharos implements the storage state trie using a
+hexary hash tree
+with the
+SHA-256
+hash algorithm. The trie consists of three node types:
+Node Type
+Size (bytes)
+Structure
+MSU Root
+8192
+256 × 32-byte SHA-256 hashes. The SHA-256 of this node equals the
+stateRoot
+in the block header.
+Internal
+515
+3-byte header + 16 × 32-byte child hashes.
+Leaf
+65
+1-byte type + 32-byte key hash + 32-byte value hash.
+The first-level subtree (MSU Root) contains 256 slots, with each slot representing a shard (partition) of the storage. The actual Merkle proof begins from the second-level subtree. Starting from the second-level subtree, each Internal node value starts with 3 bytes of metadata followed by 16 child node hashes. The hashes of child nodes at the corresponding offset positions in the parent node can be verified recursively, allowing us to determine whether the given root node hash can ultimately be computed, thus justifying the storage data at the specified block height.
+Pharos storage state trie
+For more details of how Pharos implements SPV, you can check
+SPV Proof Theory Explanation
+2. API Reference
+eth_getProof
+Returns the account information and Merkle proof for a given account address (and optionally specific storage keys) at a specified block height.
+Parameters:
+#
+Type
+Description
+1
+string
+Account address (20-byte hex,
+0x
+-prefixed)
+2
+string[]
+Array of storage keys to prove (each 32-byte hex,
+0x
+-prefixed). Pass
+[]
+if only the account proof is needed.
+3
+string
+Block number (hex
+0x
+-prefixed) or block tag (
+"latest"
+,
+"earliest"
+)
+curl Example — account proof only:
+curl Example — account proof + storage proof:
+3. Response Format
+Common Fields
+Field
+Type
+Description
+balance
+string
+Account balance in hex.
+"0x0"
+if account does not exist.
+nonce
+string
+Account nonce in hex.
+"0x0"
+if account does not exist.
+codeHash
+string
+SHA-256 hash of the account's contract code. All-zero if none.
+storageHash
+string
+Root hash of the account's storage trie.
+isExist
+bool
+true
+if the account exists at the given block,
+false
+otherwise.
+accountProof
+object[]
+Array of proof nodes from MSU Root to the target account. See
+Proof Node Format
+.
+storageProof
+object[]
+Array of storage proof entries (one per requested storage key). See
+Storage Proof Format
+.
+rawValue
+string
+Raw RLP-encoded account value (hex). Empty
+"0x"
+if account does not exist.
+Proof Node Format
+Unlike Ethereum (which returns RLP-encoded hex strings), each Pharos proof node is a JSON object:
+proofNode
+: The hex-encoded binary data of the trie node (MSU Root, Internal, or Leaf).
+nextBeginOffset
+/
+nextEndOffset
+: The byte offset range within this node's binary data that points to the
+next
+node in the proof chain.
+These offsets are advisory only — a sound verifier MUST independently compute the expected offset from the key and reject the proof on mismatch. See
+§ Slot Offset Derivation
+.
+Slot Offset Derivation
+For each non-leaf node in the proof chain, the verifier must independently derive the offset of the child hash slot from the queried key.
+Trusting the prover-supplied
+nextBeginOffset
+without this independent derivation breaks non-existence soundness
+— an attacker could redirect the chain to traverse a different subtree that genuinely does not contain the key.
+There are two distinct cases:
+(1) MSU Root layer (the first node in
+accountProof
+/
+storageProof.proof
+)
+The MSU Root is a flat array of 256 × 32-byte slots. The slot index for a given key is the
+last byte of the key
+, and the byte offset is:
+Where
+key
+is:
+For
+accountProof
+: the 20-byte account address.
+For
+storageProof[i].proof
+:
+address (20 bytes) || storageKey (32 bytes)
+= 52 bytes total.
+The verifier MUST assert
+proofNode[0].nextBeginOffset == expected_offset
+before reading the slot, otherwise reject the proof.
+(2) Internal node layer (every subsequent non-leaf node)
+Internal nodes inside an MSU subtree have a 3-byte header followed by 16 × 32-byte child slots. The slot index is the nibble of
+SHA-256(key)
+at the corresponding trie depth:
+Where
+depth
+is the layer's position in the proof chain (the first internal node has depth = 0).
+The verifier should likewise cross-check
+nextBeginOffset == expected_offset
+at each internal layer.
+Storage Proof Format
+Each entry in
+storageProof
+has the following structure:
+4. Existence Proof
+When the queried account (or storage key)
+exists
+, the response contains a complete proof chain from the MSU Root node down to the Leaf node. The
+isExist
+field is
+true
+.
+Example Response (Existence)
+Verification Logic (Existence)
+Leaf verification
+: The last proof node is a Leaf. Verify that
+SHA256(key) == leaf.key_hash
+and
+SHA256(value) == leaf.value_hash
+.
+Hash chain
+: Compute
+current_hash = SHA256(leaf_node)
+. Walk upward through the proof chain. At each parent,
+independently derive the expected slot offset from the key
+(see
+§ Slot Offset Derivation
+) — do
+not
+read offsets blindly from
+nextBeginOffset
+. Confirm:
+The slot at the key-derived offset in the parent equals
+current_hash
+.
+The parent's
+nextBeginOffset
+matches the key-derived offset (cross-check). Then recompute
+current_hash = SHA256(parent_node)
+.
+Root verification
+: The hash of the MSU Root node must equal the trusted
+stateRoot
+from the block header.
+5. Non-existence Proof
+When the queried account (or storage key)
+does not exist
+, the proof chain terminates at an Internal node where the target slot is all-zero (empty). The
+isExist
+field is
+false
+.
+Why Additional Sibling Proofs Are Needed
+In an existence proof, the Leaf node's key hash and value hash provide a self-contained anchor: the verifier can compute hashes upward through the chain and confirm the root. However, for a non-existence proof, the chain terminates at an Internal node with an empty slot — and an Internal node filled with only zeros would itself hash to zero, which could be trivially forged.
+To ensure the Internal node's integrity, the response includes
+sibling leftmost leaf proofs
+(
+siblingLeftmostLeafProofs
+). These provide proof paths from the non-empty sibling slots to their leftmost leaf nodes, enabling the verifier to:
+Independently recompute each sibling slot's hash.
+Reconstruct the full Internal node (including the empty target slot).
+Verify the hash chain upward to the
+stateRoot
+.
+This is a deliberate
+trade-off
+: the proof structure is more complex, but it enables compact storage optimization in the underlying trie engine. The verification semantics are complete — a non-existence proof fully demonstrates that the queried key is absent from the state at the given block height, and is sufficient for all practical use cases such as cross-chain bridge verification.
+siblingLeftmostLeafProofs
+Format
+When
+isExist
+is
+false
+and the proof terminates at an Internal node with an empty slot, the response includes:
+Each entry represents a non-empty sibling slot of the terminating Internal node:
+Field
+Type
+Description
+slotIndex
+int
+The slot index (0–15) of the sibling in the parent Internal node.
+leftmostLeafKey
+string
+The key of the leftmost leaf node reachable from this sibling slot.
+proofPath
+object[]
+Proof path from the sibling slot down to the leftmost leaf. Same format as
+accountProof
+entries.
+Example Response (Non-existence)
+Verification Logic (Non-existence)
+Main chain
+: Walk the proof chain as usual.
+Slot offsets at every layer (including the MSU Root) MUST be derived from the key, not read from
+nextBeginOffset
+— see
+§ Slot Offset Derivation
+. The last node is an Internal node — verify that the target slot (determined by the key hash nibble at the corresponding depth) is all-zero.
+Sibling verification
+: For each entry in
+siblingLeftmostLeafProofs
+:
+Concatenate the main proof chain (excluding the last node) with the sibling's
+proofPath
+.
+Verify that this combined chain is a valid existence proof for
+leftmostLeafKey
+. Slot offsets within the combined chain are derived from
+leftmostLeafKey
+, including the MSU Root slot — which, for honest data, must resolve to the same MSU as the main key.
+Root verification
+: Confirm the MSU Root node hashes to the trusted
+stateRoot
+.
+Why MSU Root slot derivation is load-bearing for non-existence.
+The 16-slot semantics of internal nodes are bound to the key via SHA-256 nibbles, so an attacker cannot redirect those hops. The MSU Root layer is the
+only
+layer not bound to the key by the trie structure itself — if a verifier accepts the prover-supplied
+nextBeginOffset
+there, an attacker can prove non-existence for any key by pointing the chain at any of the 255 MSU subtrees that genuinely don't contain it (an honest path within the wrong subtree will validate against the unchanged
+stateRoot
+). Deriving the MSU Root slot from the key closes this gap.
+6. Verification Script
+A Python verification script
+spv_verify.py
+is provided to verify both existence and non-existence proofs. It handles:
+Automatic
+stateRoot
+computation from the MSU Root node (SHA-256) if not present in the JSON.
+Both existence proofs (leaf-terminated) and non-existence proofs (empty-slot-terminated with sibling verification).
+Key-derived MSU Root slot offset (see
+§ Slot Offset Derivation
+), enforced as a soundness invariant.
+Optional cross-validation of
+stateRoot
+against an RPC endpoint.
+Earlier versions of this script trusted
+nextBeginOffset
+for the MSU Root layer. Integrators using a downstream fork of this script should ensure their copy includes the key-derived slot check; without it, non-existence proofs are forgeable.
+Usage
+The full script source is available at the
+examples
+repository
+.
+7. Comparison with Ethereum
+For teams familiar with Ethereum's
+eth_getProof
+(
+EIP-1186
+), the key differences are:
+Aspect
+Ethereum
+Pharos
+Hash algorithm
+Keccak-256
+SHA-256
+Trie structure
+Merkle Patricia Trie (MPT)
+Hexary hash tree with 256-slot MSU Root
+Node encoding
+RLP-encoded hex strings
+Fixed-size binary objects
+Proof format
+accountProof: string[]
+accountProof: object[]
+(with
+nextBeginOffset/nextEndOffset
+)
+Non-existence proof
+Implicit (path terminates naturally)
+Explicit
+siblingLeftmostLeafProofs
+Why are non-existence proofs different?
+In Ethereum's MPT, nodes are RLP-encoded and self-describing — an empty branch is simply an empty string in the RLP list, and the verifier can decode and confirm it directly. In Pharos's hexary trie, Internal nodes are fixed-size binary structures where an empty slot is 32 zero-bytes. To prevent trivial forgery of all-zero Internal nodes, the non-existence proof includes sibling subtree proofs that allow the verifier to independently reconstruct and validate the Internal node's hash. This is a trade-off: proof verification is more complex, but the underlying storage engine benefits from significant optimizations. The verification semantics are complete and fully meet practical use case requirements.
+For users who're interested in the implementation details of such proof and how it works, you can refer to
+SPV Proof Theory Explanation
+Previous
+JSON-RPC API Methods
+Next
+SPV Proof Theory Explanation
+Last updated
+13 days ago
+Was this helpful?

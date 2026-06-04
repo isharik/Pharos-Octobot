@@ -1,0 +1,241 @@
+SOURCE_URL: https://docs.pharos.xyz/api-and-sdk/eth-getproof/spv-proof-theory
+TITLE: SPV Proof Theory Explanation | docs.pharos.xyz
+============================================================
+SPV Proof Theory Explanation
+SPV (in the context of this repository) refers to: On a Merkle state tree of a certain data version, for a key provided by the user, the server constructs proof data, allowing the verifier to independently verify "whether the key exists, and if so, what the value is" or "that the key does not exist", given that the verifier only knows the root hash (or equivalent commitment). In this implementation, the state is organized as a
+nibble Trie
+, with node hashes cryptographically bound to keys/values. The Letus-side entry point is
+MerkleIndex::GetSPV
+, and the key-based downward traversal follows
+TrieNode::NodeRead
+(TreeOpType::kGetSPV).
+Merkle Tree Structure
+Two Layers: Grid (MSU) + Subtrees
+In upper layers such as MyGrid, the state is sharded by MSU (Multi-Shard Unit): it can be understood as first routing keys to one of 256 slots based on the key, with each slot corresponding to a Letus Merkle subtree. The global root hash is obtained by concatenating "the root hashes of each MSU subtree" and then hashing them once more; on the client side, the 256×32-byte subtree roots are concatenated into a "large internal node" as the first hop of the proof chain, see
+GetMerkleProofGridReq::handleAllPartIOSuccess
+.
+RootHash = Hash( MSU[0] || MSU[1] || ... || MSU[255] ) (each MSU[i] is a 32-byte subtree root hash)
+MSU[0]        MSU[1]        MSU[255]
+|             |             |
++--- Letus    +--- Letus    +--- ... (nibble Trie)
+subtree       subtree
+(nibble Trie) (nibble Trie)
+Within a single MSU is Letus's 16-ary nibble Trie (each layer takes one nibble 0~F of the key_hash). Below is a minimal schematic diagram using ASCII art (showing only some slots and two layers):
+[ Root_internal ]
+/      |      \\   ... (up to 16 child slots)
+/       |       \\
+v        v        v
+slot_3    slot_7    slot_A
+|         |         |
+[Inter]   (Leaf K1) [Inter]
+|         \\
+v          v
+(Leaf K2)  (Leaf K3)
+Internal nodes
+: Up to 16 child slots, each slot corresponding to a 32-byte subtree hash (empty slots are often all zeros).
+Leaf nodes
+: Store key_hash and value_hash, corresponding one-to-one with the existence of the queried key.
+State Tree Root Hash Calculation Method
+Additionally, note that to more efficiently handle the case where there are many empty slots in intermediate nodes in the Trie, Letus chooses to skip empty slots when computing hashes. The relevant logic is similar to the following code:
+SPV Verification Method
+Like other Merkle tree implementations, Letus's SPV is the reverse process of computing the root hash. Specifically, the process is as follows:
+Trie Path
+Perform
+ComputeKeyHash
+on the user key to obtain a fixed-length NibbleHash.
+Starting from the MSU root (and the Grid layer above), sequentially take key_hash[d] as the slot index 0~15 for depth d = 0,1,2…, enter the corresponding subtree on the internal node, until reaching a
+leaf
+or terminating at some layer where the
+slot is empty
+.
+These obtained slots (slot_idx) will be used later to verify the SPV return results layer by layer.
+Proof Chain tree_proofs
+Each element in the chain is a
+TreeProofNode
+, which may correspond to an intermediate node or a leaf node.
+For an
+intermediate node TreeProofNode
+: It contains the
+proof_node
+with hex-encoded node content, and
+next_begin_offset
+and
+next_end_offset
+that indicate "where the current subtree root hash falls within the parent node's byte string".
+A sound verifier MUST independently derive these offsets from the key and treat the prover-supplied values as advisory cross-check inputs only.
+The derivation differs by layer:
+MSU Root layer
+(the first proof node, 256 × 32-byte flat slot array, no header):
+next_begin_offset = slot_idx * 32
+, where
+slot_idx
+is derived from the queried key via the network's MSU routing function —
+slot_idx = key[len(key) - 1]
+for the Pharos mainnet/testnet — not from any prover-supplied data.
+Internal node layer
+(every subsequent non-leaf node):
+next_begin_offset = 3 + 32 * slot_idx
+, where
+slot_idx
+is the nibble of
+ComputeKeyHash(key)
+at the corresponding trie depth. The leading 3 bytes are node metadata.
+next_end_offset = next_begin_offset + 32
+in both cases.
+If the prover-supplied
+next_begin_offset
+disagrees with the key-derived value at any layer — especially at the MSU Root — the proof must be rejected. See the Correctness Discussion below for why this is load-bearing for non-existence soundness.
+For a
+leaf node TreeProofNode
+: It contains the
+proof_node
+with hex-encoded node content, representing the concatenation of the key's hash and the value's hash (specific encoding depends on the implementation).
+Proof Chain Verification Logic
+Verifier input:
+root_hash
+(committed root),
+key
+, returned
+proofs[]
+(and optional sibling sub-proofs, see below).
+Existence
+: The last hop is a leaf, and the key_hash in the leaf is consistent with
+ComputeKeyHash(key)
+, and the value can be verified.
+Non-existence
+has two typical forms (consistent with the "instance" numbering below):
+Case 1
+: The last hop is a leaf, but the key_hash in the leaf is inconsistent with the queried key (the path leads to "someone else's leaf") — typically without sibling sub-proofs.
+Case 2
+: At an internal node, the next nibble corresponding to the query is an empty slot, while other slots at the same layer have data — often accompanied by
+sibling_leftmost_leaf_proofs
+(sub-chains to the leftmost leaf of each sibling slot); the information of these sibling slots is also used to assist in non-existence proofs.
+SPV Instance Explanation
+Consistent with the implementation: The
+sha256(key)
+in the pseudocode below and the hexadecimal strings in the comments (such as "12e2aef") are only for illustrative purposes to facilitate comparison with the diagrams; actual verification should be based on the NibbleHash obtained from
+ComputeKeyHash
+and the node encoding rules.
+Existence Proof
+Scenario
+: key = K, (K, V) exists in the tree, the query path goes from the MSU root along the nibble of hash(K) all the way to a leaf, and that leaf is the storage for K.
+Instance
+:
+SPV Existence Proof
+As shown in the figure above, a total of three diagrams illustrate an actual example of SPV verification.
+The
+leftmost diagram
+shows the structure of the Trie, and the hash corresponding to the key we expect to verify, i.e., "12e2aef"
+The
+middle diagram
+shows the response given by SPV, and the correspondence between the response content and each layer of the Trie
+The
+rightmost diagram
+shows the SPV verification flow, verifying from the leaf node to the state root hash. We focus on explaining the SPV verification flow shown on the rightmost side:
+Non-Existence Proof - Case 1
+Meaning
+: The proof chain ends with a leaf node, but the key_hash stored in that leaf is inconsistent with the key_hash obtained by applying the same hash algorithm to the queried key — that is, following the query path leads to the leaf of another existing key (the path prefix overlaps with another, and the last hop lands on "someone else's leaf").
+SPV Non-Existence Proof - Case 1
+As shown in the figure above, this is an example of a non-existence proof: the hash corresponding to the key we expect to verify is "12e2111".
+Obviously, from the leftmost diagram, we can see that according to our expected key_hash, a leaf node of the Merkle tree is still found. However, the key corresponding to this leaf node is not the same as the key we expect, which indicates that the key we expect for SPV does not exist. Next, let's look at how to verify this through SPV.
+In summary
+: "key_hash verification fails" && "the entire proof can be verified using the target key's offset" yields a valid non-existence proof.
+Non-Existence Proof - Case 2
+Meaning
+: At a certain internal node, the next nibble of the query path corresponds to an empty slot (the subtree is not created, or an all-zero empty slot proof is provided), and the path ends at an intermediate node rather than a leaf node.
+SPV Non-Existence Proof - Case 2
+As shown in the figure above, this is an example of a non-existence proof: the hash corresponding to the key we expect to verify is "12221".
+In this case, the verification process is more complex. Returning only the main path of the target key (tree_proofs) is not sufficient; we also need
+sibling_leftmost_leaf_proofs
+corresponding to each non-empty sibling slot: each sibling item contains
+slot_index
+,
+leftmost_leaf_key
+(the original key of the leftmost leaf in that slot's subtree), and
+proof_path
+(the sequence of nodes from a certain layer's internal node down to that leaf along the leftmost path). The reason is explained in the "Non-Existence Proof Case Discussion - Case 2" section below. During verification, it can be understood in a manner consistent with the implementation: the main chain first verifies to the "empty slot internal"; then for each sibling sub-proof, concatenate "main chain prefix + sibling path" to form a complete chain, and verify to the root using the existence proof method (using the sibling's leftmost leaf key to walk the nibble path).
+Summary
+: Case 2 = Main chain (terminating at empty slot internal) + Several sibling chains (each being an "existence-style" sub-proof of the leftmost leaf of a certain slot); sibling chains share the same root_hash with the main chain, ensuring branch completeness under the parent node's 16-slot semantics.
+Correctness Discussion
+This section explains: Given that the root_hash root_hash is trustworthy (or has been anchored to a trusted state), why the verification steps above are semantically sufficient to support the conclusion of "existence / non-existence". The text first explains SkipEmpty and the overall security goals, then discusses existence, non-existence (leaf key mismatch), and non-existence (internal empty slot + sibling sub-proofs) in three sections.
+Prerequisites and Overall Conclusions (Including SkipEmpty)
+Prerequisite — Key-Derived Slot Offsets at Every Layer (including MSU Root).
+All correctness arguments below presume that the verifier derives the slot offset at each layer of the proof chain from the queried key itself,
+not
+from prover-supplied fields. For internal nodes inside an MSU subtree the slot index is the corresponding nibble of
+ComputeKeyHash(key)
+; for the MSU Root layer the slot index is fixed by the network's MSU routing function applied to the key (the last byte of the key for the Pharos network). If a verifier accepts the prover-supplied
+next_begin_offset
+for the MSU Root layer, the Case 2 non-existence argument below collapses: a malicious prover can redirect the chain to a sibling MSU that genuinely does not contain the key, present an honest non-existence path inside that wrong MSU, and the sibling-leftmost-leaf subchains will still close to the unchanged
+root_hash
+. The 16-slot pinning argument constrains internal layers within an MSU but does not by itself constrain which MSU subtree was descended into. The key→MSU-slot derivation is therefore load-bearing and must be enforced before any other check.
+Letus skips committed empty slots when computing hashes for internal nodes (see the loop illustration earlier), therefore:
+The same root_hash may correspond to multiple "logical tree shapes" (which slots are empty, how nodes are laid out), and the proof_node byte layout seen by the verifier from the SPV may not necessarily correspond one-to-one with the "complete 16-ary expanded diagram".
+However, this does not weaken the SPV's goal: The verifier only cares about "whether the path of this key is consistent with the root commitment under the current hash rules". Skipping empty slots changes "how to compress and encode child hashes", but does not change the commitment relationship that "non-empty subtree hashes are rolled into the root by the parent node and ancestors all the way".
+Under this premise, when the hash function satisfies the expected cryptographic properties (collision resistance, preimage resistance; corresponding to the algorithms used in ComputeKeyHash, node hashes, etc. in the implementation), it can be considered that:
+An attacker cannot tamper with a valid existence proof for a certain key and turn it into a valid non-existence proof for the same key;
+Nor can they tamper with a valid non-existence proof and turn it into a valid existence proof for the same key.
+(If hashes could be arbitrarily collided or preimages could be found, the above conclusions would no longer hold; the arguments below all assume "ideal" hash behavior.)
+Existence Proof Case Discussion
+An existence proof must simultaneously satisfy: rolling hashes from bottom to top are consistent with root_hash, and the key_hash in the leaf is consistent with the hash computed from the queried key using the same rules.
+The key points of reliability can be broken down into three layers:
+Leaf Layer Binding
+The leaf node encoding contains key_hash (and value-side commitments). The verifier explicitly checks that the key_hash in the leaf is consistent with
+ComputeKeyHash(query key)
+, which is equivalent to requiring that "this existence claim is bound to this key", not some other preimage.
+Path and Slot Consistency
+In each layer's internal node, the 32-byte subtree root hash of the child slot must be consistent with the "current subtree root" being verified; and the slot_idx used by the verifier to select slots is derived entirely from the nibble path of the
+same key_hash
+. Therefore, an attacker cannot disguise a "subtree hash pointing elsewhere" as "the one that should be seen when going down along the query key", unless they can break the binding between the parent node hash and the child slot content (which boils down to hash collision or forging node encoding).
+Root Anchoring
+The final
+tmp_hash == root_hash
+pins the entire path to that version of the state. If the root comes from a trusted source, then the meaning of "exists (K, V)" under that version is fixed jointly by the tree and encoding rules.
+In summary
+: The three-layer checks of leaf—path—root together ensure that the "claimed existing key" aligns with the "actual leaf content on the Merkle path" and the "global state commitment".
+Non-Existence Proof Case Discussion - Case 1
+Case 1
+: Following the nibble path of the query key leads to a leaf, but the key_hash in the leaf ≠
+ComputeKeyHash(query key)
+(reaching "someone else's leaf" — the path prefix overlaps with another, and the last hop lands on an already existing different key).
+Argument
+:
+Path Authenticity
+If the proof chain can close from bottom to top to root_hash under the slot_idx (and next_begin_offset consistency) at each layer derived from the query key, it indicates: On the slot sequence that the key claims to follow, the Merkle structure is self-consistent, not randomly assembled isolated nodes.
+Uniqueness Semantics of Leaf Content
+The key_hash in the leaf is obtained from the key at storage time using the same hash rules. In the sense of preimage resistance, it is impossible to forge a value for the "query key" that is the same as the key_hash already written in the leaf, unless by chance of collision or it is the original key. What is written in the leaf is the hash of "another key", so the query key is not the key bound by that leaf.
+Conclusion
+Chain verification passes ⇒ There is indeed a leaf hanging at the end of the query path on the tree; the key bound in the leaf is determined and is not the query key ⇒ In that version of the state, one cannot claim that the query key exists using that leaf as evidence. This is the semantics of "non-existence" in Case 1.
+Non-Existence Proof Case Discussion - Case 2
+Case 2
+: At a certain internal node in the query path, the next nibble corresponds to an empty slot, the main chain tree_proofs ends at the internal node without passing through a leaf.
+Why "Only Main Chain, No Sibling Information" Is Not Sufficient
+When only providing node material for "walking to a certain layer's internal node along the query key, with the next slot being empty", the verifier can only confirm: On the chain provided by the attacker, the sub-slot in the query direction appears to be empty. However, the SkipEmpty and sparse Trie encoding methods make the "appearance of the intermediate" less transparent in the proof than the "entire subtree commitment": A malicious Prover could theoretically attempt to construct a kind of local view — pretending the slot is empty on the query nibble, while concealing or forging the subtrees that actually exist on other slots at the same layer, as long as those slots' real paths and leaf bindings below have not been required to be shown.
+In other words: Relying solely on the main chain of "empty slot termination" is not sufficient to prove that "the subtree hashes on other non-empty slots at the same layer are also consistent with the current parent node, ancestors, and root"; without constraints on the "side branches", the "emptiness" could be fabricated.
+The figure above illustrates this kind of tampering/concealment: For example, the attacker lets the query path stop at an empty slot in the narrative, but does not synchronously provide sibling branch information consistent with the real state.
+What Role Do sibling_leftmost_leaf_proofs Play
+For each non-empty sibling slot that needs to be declared as "indeed having data at the same layer", the Prover additionally provides
+sibling_leftmost_leaf_proofs
+: for the key of the leftmost leaf in that slot's subtree, and a sub-chain from a certain layer's internal node (sharing a prefix with the main chain) down to that leaf along the "leftmost path" (see the combined in the instance pseudocode earlier).
+During verification:
+The main chain still verifies according to the query key's slot_idx to the internal node where "empty slot termination" occurs, and closes with root_hash.
+Each sibling sub-proof, after concatenating "the main chain minus the last section" with proof_path, rolls to the
+same
+root_hash in the manner of an existence proof, recalculating the slot indices at each layer using leftmost_leaf_key.
+In this way, under the same parent node (and ancestors), the "empty slot" in the query direction and the "non-empty subtree down to a certain leaf" in the sibling direction are simultaneously constrained by the same root commitment: The subtree hashes of each non-empty slot in the parent internal must be able to support both the empty slot narrative on the main chain and the sibling chains going all the way down to real leaf nodes; both must be consistent with the parent hash computed under the node encoding and SkipEmpty rules.
+Why It Is Difficult for an Attacker to Forge Sibling Chains
+The verification of sibling chains uses the
+own nibble path of leftmost_leaf_key
+, not the path of the query key. Therefore:
+One cannot arbitrarily take "any other leaf on the tree" to impersonate the "leftmost leaf" of that slot, unless going down from the leftmost path along leftmost_leaf_key, the next_begin_offset / slot_idx at each layer are consistent with the encoding and close to the root — this is equivalent to performing a complete existence-style verification for that key.
+One cannot simply reuse "another key" as leftmost_leaf_key without regard to the path: If that key is not the leftmost leaf in that slot's subtree, or if its slot positions at deeper layers are inconsistent with the structure implied by proof_path, the verification will fail at some layer.
+Under the assumptions of preimage resistance and collision resistance, forging a sibling chain that can pass verification means forging node content and leaf bindings compatible with the real root_hash, which is computationally infeasible.
+Summary (Correctness Discussion)
+: Existence relies on leaf key binding + path slots + root; Case 1 relies on path authenticity + leaf bound to non-query key; Case 2 uses sibling leftmost leaf existence sub-chains in addition to the empty slot main chain to pin non-empty branches at the same layer to the same root_hash, thereby plugging the gap of "only fabricating a segment of internal". All three are compatible with Letus's SkipEmpty encoding: not pursuing "one-to-one correspondence between proof and unique tree shape", but pursuing "semantic consistency under root commitment, and types cannot be mutually tampered".
+Previous
+eth_getProof — Storage State Verification (SPV)
+Next
+Foundry
+Last updated
+13 days ago
+Was this helpful?
