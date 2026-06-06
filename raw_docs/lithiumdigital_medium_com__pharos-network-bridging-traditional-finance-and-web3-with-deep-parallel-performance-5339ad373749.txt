@@ -1,0 +1,127 @@
+SOURCE_URL: https://lithiumdigital.medium.com/pharos-network-bridging-traditional-finance-and-web3-with-deep-parallel-performance-5339ad373749
+TITLE: Pharos Network: Bridging Traditional Finance and Web3 with Deep-Parallel Performance | by Lithium Digital | Medium
+============================================================
+Pharos Network: Bridging Traditional Finance and Web3 with Deep-Parallel Performance
+Lithium Digital
+8 min read
+·
+Nov 10, 2025
+--
+The world of finance is changing fast. Traditional systems, though reliable, are struggling to keep up with our digital-first reality. At the same time, exciting decentralised technologies like blockchain promise innovation without borders, but they often hit roadblocks with speed, scale, and integrating with existing setups. This results in a gap that prevents everyday users from fully realising Web3’s potential.
+That’s where
+Pharos
+comes in. It’s an incredibly fast blockchain that works with existing Ethereum tools, specifically built to connect these two worlds. Pharos uses a unique “deep-parallel” design, meaning it’s ready for the kind of performance real-world finance needs. It’s not just about linking old and new systems; Pharos blends them together, opening up new levels of interoperability, all at speed and scale.
+Whether you’re a developer dreaming up the next generation of DeFi, or a financial institution looking to bring your operations on-chain, Pharos gives you the power and platform to shape the future of finance.
+Press enter or click to view image in full size
+Pharos Network Overview
+Pharos is setting a new standard for blockchain infrastructure with
+a modular
+, full-stack Layer 1 network built to fix the performance, scalability, and composability issues seen in current
+monolithic and modular chains.
+Its architecture is split into
+three layers,
+L1-Base, L1-Core, and L1-Extension, each engineered for speed, flexibility, and real-world scalability. L1-Base delivers reliable data availability and hardware acceleration, while L1-Core powers sub-second finality through a decentralised network. L1-Extension brings in
+Special Processing Networks (SPNs),
+customizable environments ideal for complex use cases like AI, high-frequency trading, and zero-knowledge ML.
+Pharos also supports native restaking, letting SPNs tap into shared validator security and incentives, while promoting efficient use of idle computing resources. Its ecosystem spans a transaction layer (for fast, private cross-chain activity), a consensus layer (with restaking protocols like Babylon and Eigenlayer), and a data layer (that links external data centres via a decentralised protocol for advanced applications).
+By addressing limitations in parallel execution, storage, and interoperability, and avoiding common pitfalls like state bloat and centralised bridges, Pharos offers a future-ready blockchain system.
+Pharos Network Technical Architecture
+Pharos Network introduces a fresh, modular approach to blockchain infrastructure, one designed for scalability, performance, and developer flexibility. At its core is a fully integrated architecture that moves away from rigid monolithic chains and fragmented modular setups. Instead, Pharos delivers both customisability and high performance
+across six layers
+: network, consensus, execution, settlement, data availability, and the SPN framework.
+While the architecture is often explained using the simplified three-layer model (L1-Base, L1-Core, and L1-Extension) to demonstrate system scalability, the network ultimately
+operates through more specialised components
+. This expanded view helps developers understand how the network, consensus, execution, settlement, and data availability layers interoperate within specialised environments such as SPNs.
+Developers can launch their own Special Processing Networks (SPNs), sidechains or rollups, choosing custom consensus, execution, and data strategies. These SPNs are secured through
+Pharos’s Adaptive Restaking
+Interaction Protocol, allowing validators to restake across networks like Ethereum or Bitcoin for increased capital efficiency and shared security.
+The Cross-SPN Protocol enables seamless communication between SPNs and the main network, making cross-chain interaction fast and reliable. Dual support for EVM and WasmVM means developers can build using legacy tools or cutting-edge frameworks like zero-knowledge proofs and homomorphic encryption.
+Pharos also optimises for speed and resource efficiency through a high-throughput consensus protocol and specialised node roles
+(validators, full nodes, relayers)
+. SPNs can launch quickly with native tooling and customised validator sets, creating tailored networks for everything from private AI systems to high-frequency trading. Altogether, Pharos lays the foundation for the next era of decentralised innovation.
+Key Features of Pharos Network
+Pharos introduces several key features designed to solve core blockchain challenges
+Press enter or click to view image in full size
+Pharos VM
+:
+Pharos VM
+is a high-performance, dual-spec virtual machine built for speed, security, and interoperability. Supporting both EVM and WASM, it enables developers to run optimised smart contracts efficiently across Layer 1 and Layer 2 networks, with advanced parallel execution, built-in safety, and broad language support for scalable blockchain applications.
+Special Processing Networks (SPNs)
+: These are customisable blockchain environments on the Pharos Network, built for specific use cases like AI, IoT, and privacy-preserving computation. They offer high performance, low cost, and seamless interoperability. SPNs leverage native restaking for security and liquidity, support heterogeneous computing, and enable near-instant cross-network communication.
+Pharos Store:
+This is a blockchain-native, verifiable storage engine that solves issues like state bloat, long I/O paths, and inefficient addressing. It integrates merkle-based data structures directly into storage, replaces hash-based addressing with version-based methods, and uses delta encoding for efficient storage. This results in 15.8× faster throughput and 80% cost savings.
+Pharos Pipelining
+:
+Pipelining
+boosts blockchain performance by breaking processes into six parallel stages, improving throughput, reducing latency, and enhancing reliability. It tackles CPU, disk I/O, and network bottlenecks through dynamic resource allocation, parallel block execution, and flexible finality, ensuring faster, more efficient, and secure transaction processing in Web3 applications.
+Pharos Consensus:
+The
+Pharos Consensus
+is built for high throughput and low latency in large-scale, wide-area blockchain networks. Unlike traditional protocols, it avoids fixed block intervals and single-proposer bottlenecks. All validators can propose blocks simultaneously, responding to real network delays. This design enables scalability, efficient bandwidth use, and over 130,000 TPS performance.
+Pharos Network Use Cases
+Pharos Network is engineered to address the limitations of existing blockchain infrastructures, offering a modular and highly parallel architecture that enables a wide range of use cases across various industries.
+Press enter or click to view image in full size
+Real-World Asset (RWA) Tokenisation
+Enables fractional ownership and improved liquidity of assets like real estate, commodities, and equities on-chain.
+Decentralised Finance (DeFi)
+Supports scalable DeFi applications such as lending protocols, decentralised exchanges (DEXs), and yield optimisation tools with high throughput and low latency.
+Decentralised Physical Infrastructure Networks (DePIN)
+Facilitates the management and coordination of physical infrastructure, such as energy grids, transportation systems, and supply chains, using transparent and secure blockchain-based systems.
+Decentralised Identity (DID)
+Enables privacy-preserving identity verification using zero-knowledge proofs (zkDID), ideal for secure KYC and AML compliance.
+AI and Machine Learning Integration
+Allows for the deployment of intelligent, decentralised applications powered by AI/ML, enhancing automation and data-driven decision-making.
+Blockchain-Native Storage
+Provides tamper-proof, on-chain data storage (Pharos Store), ensuring authenticity and permanence without depending on centralised storage solutions.
+Notable Milestones and Achievements by Pharos Network
+Pharos Network has made steady progress since its launch, establishing a solid presence in the blockchain space through a series of important developments.
+The journey began in July 2024 with a seed funding round. By September, the team
+successfully raised $8 million
+. The round was co-led by Lightspeed Faction and Hack VC, with SNZ Capital joining as a strategic partner. Additional support came from investors such as Reforge, Dispersion Capital, Hash Global, Generative Ventures, MH Ventures, Zion, and Chorus One. This funding gave Pharos the resources to begin building out its vision.
+On March 6, 2025,
+Pharos launched its Public Devnet
+, its first open testnet, giving developers access to a flexible and modular blockchain infrastructure. This was a key step toward enabling a new wave of decentralised applications.
+Just one day later, on March 7, the team
+introduced the Pharos Network Ecosystem Grant Program
+, a $20 million initiative aimed at supporting innovative projects that share Pharos Network’s vision for scalable and secure blockchain solutions.
+To further support developers, Pharos launched the
+Builder Base Camp
+on March 10, 2025, in partnership with
+Hackquest
+. This global program offers mentorship and resources to developers, startups, and institutions working on applications related to real-world assets (RWAs), decentralised payment systems, and financial tools using the Pharos modular stack.
+Another important milestone arrived on May 12, 2025, when
+Pharos partnered with Primus Labs
+to co-develop a zero-knowledge decentralised identity (zkDID) framework. Built on zkTLS and zkFHE technologies, this project aims to improve privacy and user control in identity management.
+Around the same period,
+Pharos also integrated Bitget Wallet
+into its testnet. This integration allows Bitget Wallet users to interact with the Pharos ecosystem directly, making it easier for developers and users to explore cross-chain features with added security and usability.
+By July 2025, the Pharos Testnet reached another major milestone by
+launching its first on-chain financial stack
+. It featured five composable decentralised applications that reflect traditional financial use cases:
+Fiamma
+— a trust-minimised bridge for Bitcoin
+Primus
+— a zkTLS/FHE-powered network for verifying Web2 data
+AutoStaking
+— an AI-based stablecoin yield aggregator
+Brokex
+— a decentralised CFD exchange
+AquaFlux
+— a protocol offering liquidity for real-world assets
+These applications are fully on-chain, interoperable, and modular, showing what’s possible when transparency and advanced financial logic come together.
+On October 21, 2025,
+the Pharos AtlanticOcean Testnet officially went live
+. Designed to bridge real-world assets and global liquidity on-chain, much like the Atlantic once connected continents, AtlanticOcean is a modular, high-performance testing environment built for scale, memory, and speed. This launch represents a key step toward mainnet, enabling deeper experimentation for institutions, developers, and RWA-focused applications within a unified, interoperable environment.
+Shortly after, on October 27, 2025,
+Pharos adopted Chainlink CCIP
+as its canonical cross-chain messaging infrastructure, alongside Chainlink Data Streams to support tokenized RWA markets. This integration enhances secure interoperability, improves data reliability for high-throughput financial applications, and strengthens the foundation for institutional-grade liquidity.
+Together, these milestones highlight Pharos Network’s ongoing commitment to building a robust and accessible blockchain platform that supports real-world applications and developer innovation.
+Conclusion
+Pharos Network stands at the forefront of next-generation blockchain innovation, offering a modular, high-performance infrastructure that addresses the evolving needs of developers, enterprises, and users alike. By enabling secure, scalable, and interoperable solutions, from Real-World Asset tokenisation and DeFi to decentralised identity and AI-integrated applications, Pharos is not just building a blockchain, but an ecosystem designed for trustless innovation at scale. As it continues to grow its developer community, launch critical partnerships, and expand its suite of tools, Pharos is poised to redefine what’s possible in the decentralised digital economy.
+Feel free to check out our
+website
+. For more articles like this, check our
+blog
+and follow us on
+X (formerly Twitter)
+.

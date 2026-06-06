@@ -1,0 +1,137 @@
+SOURCE_URL: https://github.com/PharosNetwork/contracts
+TITLE: GitHub - PharosNetwork/contracts · GitHub
+============================================================
+PharosNetwork
+/
+contracts
+Public
+Notifications
+You must be signed in to change notification settings
+Fork
+1
+Star
+5
+Branches
+Tags
+Open more actions menu
+Folders and files
+Name
+Name
+Last commit message
+Last commit date
+Latest commit
+History
+2 Commits
+2 Commits
+.github/
+workflows
+.github/
+workflows
+lib
+lib
+src
+src
+test
+test
+.gitignore
+.gitignore
+.gitmodules
+.gitmodules
+Makefile
+Makefile
+README.md
+README.md
+foundry.toml
+foundry.toml
+remappings.txt
+remappings.txt
+Repository files navigation
+System Contracts
+Smart contract system for managing blockchain configuration, rules, access control, and staking functionality.
+Overview
+This repository contains core system contracts built with Solidity and Foundry, providing:
+ChainConfig
+- Blockchain configuration management
+RuleManager
+- Rule governance and enforcement
+TransactionDeny
+- Transaction blacklist control
+Staking
+- Proof-of-stake mechanism implementation
+Requirements
+Foundry
+installed
+Solidity 0.8.22
+Installation
+forge install
+Usage
+Build
+Compile all contracts with IR-based optimization:
+make build
+#
+or
+forge build --via-ir --extra-output storageLayout
+Test
+Run the full test suite:
+make
+test
+#
+or
+forge
+test
+--via-ir -vvv
+Format
+Format all Solidity files:
+make fmt
+#
+or
+forge fmt
+Project Structure
+src/
+├── chainConfig/          # Chain configuration contracts
+├── ruleManager/          # Rule management contracts
+├── blacklist/            # Transaction denylist contracts
+├── staking/              # Staking mechanism contracts
+└── TransparentUpgradeableProxy.sol
+Configuration
+See
+foundry.toml
+for build settings and compiler options.
+License
+MIT
+About
+No description, website, or topics provided.
+Resources
+Readme
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Activity
+Custom properties
+Stars
+5
+stars
+Watchers
+0
+watching
+Forks
+1
+fork
+Report repository
+Releases
+No releases published
+Packages
+0
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Contributors
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Languages
+Solidity
+100.0%

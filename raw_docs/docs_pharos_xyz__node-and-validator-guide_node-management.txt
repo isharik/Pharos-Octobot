@@ -15,7 +15,7 @@ atlantic-testnet
 Join validator sets
 If your full node has synced up with the latest block, you can convert it to a validator.
 If you need to join Pharos Atlantic as a Validator, please contact and send domain file and pubkeys to
-[email protected]
+janesh@dplabs.xyz
 or TG (
 @janesh_dani
 )

@@ -1,0 +1,153 @@
+SOURCE_URL: https://web3.bitget.com/en/dapp/pharos-network-30127
+TITLE: Pharos Network: Project Guide | Latest Updates, Presale & Airdrop
+============================================================
+All chains
+Manta
+zkSync Era
+Base
+Linea
+Chiliz
+ETH
+BSC
+Polygon
+Sei
+Sei V2
+Plume
+Fuel
+AB
+World Chain
+Sonic
+Katana
+Hyper EVM
+Monad Testnet
+Monad
+APChain
+ENI
+Mova
+Mezo
+Sahara AI Testnet
+Plasma Testnet
+Lens
+Babylon Genesis
+Hemi Network
+svmBNB
+Nara
+Abstract Mainnet
+Soneium
+Berachain
+Story Mainnet
+Matchain
+Arbitrum
+Optimism
+Bitcoin
+Bitcoin Testnet
+Bitcoin Signet
+ZetaChain Mainnet
+Zeta Evm Testnet
+opBNB
+Scroll
+Core
+Mantle
+Sui
+TRON
+Solana
+Aptos
+Movement Testnet
+SOON Devnet
+SOON Mainnet
+Fantom
+Starknet old
+Starknetv2
+Nautilus
+Polygon zkEVM
+Avalanche-C
+Celo
+Heco
+OKC Chain
+KLAY
+Cronos
+WAX
+Gnosis Chain
+EOS
+Terra Classic
+NEAR Protocol
+Harmony
+Aurora
+KCC Chain
+Boba Network
+Fuse
+KardiaChain
+IOST
+ClassZZ
+Caduceus
+TRUE
+Velas
+smartBCH
+Vision
+Cosmos
+TomoChain
+Findora
+GateChain
+BitTorrent
+Callisto Mainnet
+Meter Mainnet
+HALO
+Yotta
+IoTeX
+Kava
+BRISE
+Telos
+DogeChain
+zkSync
+PEGO
+Fsc Scan
+ThunderCore
+Conflux eSpace
+Shardeum Liberty 2.X
+Ethereum Classic
+Berachain Artio
+Artio Testnet (Berachain)
+Morph Testnet
+Morph Holesky
+Morph
+Lumia
+Merlin Chain
+Sonic Testnet
+Osmosis
+Nillion Testnet
+XION
+Babylon Testnet
+zkfair
+Blast
+Degen
+Bitlayer
+Taiko
+Celestia
+Saga
+Mode
+Ton
+Coreum
+BOB
+Aleph Zero EVM
+MEGA Testnet
+Stellar
+XRP Ledger
+Kite Testnet
+X Layer
+Ethereum Sepolia
+Noble
+Stable Testnet
+0G Mainnet
+Stable
+Plasma Mainnet
+MegaETH
+Ink
+JuChain
+Morph Hoodi
+Pharos Testnet
+PopChain
+FusnChain
+Tempo Testnet
+Tempo
+Anubis
+Time Trace Chain

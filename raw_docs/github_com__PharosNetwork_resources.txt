@@ -1,0 +1,79 @@
+SOURCE_URL: https://github.com/PharosNetwork/resources
+TITLE: GitHub - PharosNetwork/resources · GitHub
+============================================================
+PharosNetwork
+/
+resources
+Public
+Notifications
+You must be signed in to change notification settings
+Fork
+2
+Star
+3
+Branches
+Tags
+Open more actions menu
+Folders and files
+Name
+Name
+Last commit message
+Last commit date
+Latest commit
+History
+226 Commits
+226 Commits
+conf
+conf
+atlantic.genesis
+atlantic.genesis
+atlantic.version
+atlantic.version
+docker-compose.yml
+docker-compose.yml
+docker-entrypoint.sh
+docker-entrypoint.sh
+dockerfile
+dockerfile
+mainnet.genesis
+mainnet.genesis
+mainnet.version
+mainnet.version
+About
+No description, website, or topics provided.
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Activity
+Custom properties
+Stars
+3
+stars
+Watchers
+0
+watching
+Forks
+2
+forks
+Report repository
+Releases
+15
+Pharos v0.13.1
+Latest
+Jun 5, 2026
++ 14 releases
+Packages
+0
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Contributors
+Uh oh!
+There was an error while loading.
+Please reload this page
+.
+Languages
+Shell
+100.0%

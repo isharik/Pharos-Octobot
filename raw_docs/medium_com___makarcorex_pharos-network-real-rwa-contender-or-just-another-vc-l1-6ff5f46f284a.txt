@@ -1,0 +1,260 @@
+SOURCE_URL: https://medium.com/@makarcorex/pharos-network-real-rwa-contender-or-just-another-vc-l1-6ff5f46f284a
+TITLE: Pharos Network: real RWA contender or just another VC L1? | by Makar Core | Medium
+============================================================
+Pharos Network: real RWA contender or just another VC L1?
+Makar Core
+15 min read
+·
+Nov 20, 2025
+--
+MakarCoreX
+Press enter or click to view image in full size
+How I analysed Pharos…
+Who is really behind Pharos (and how I checked them)
+When I look at a new Layer-1, I don’t start with “is this the next Solana?”.
+I start with much more boring questions:
+Who is building this? Who is paying for it? And is there anything here beyond a glossy deck?
+With Pharos, I went through that process step by step.1.1. This is not an anonymous Telegram launch
+1.1. This is not an anonymous Telegram launch
+Pharos is not a meme coin spun up by a random anon. The network is being built by people who used to run AntChain — the blockchain arm of Ant Group, the company behind Alipay.
+The founder and CEO, Alex Zhang, previously served as CTO of Ant’s blockchain unit and later as CEO of ZAN, Ant Group’s Web3 technology company.
+In normal language: these are people who have already dealt with real money flows, banks and regulators, not just yield farms and degen casinos.
+Around him you see a very “infra-native” cast:
+engineers and researchers with background in Ant Financial, Microsoft Research, PayPal, Stanford, and on the broader ecosystem side — experience from Solana, Ripple, OKX and other crypto companies.
+You can dislike corporate builders, but it’s hard to call this an amateur team.
+1.2. Follow the money: who actually funded Pharos
+Next question: who was confident enough to write real cheques?
+In November 2024, Pharos announced an $8M seed round, co-led by Lightspeed Faction and Hack VC — funds that specialise in crypto infra and DeFi. Alongside them came SNZ Capital, Reforge, Dispersion Capital, Hash Global, Generative Ventures, Legend Star, MH Ventures, Zion, Chorus One and a few others.
+Later, data platforms also mentioned a strategic round with Yunfeng Financial Group — a fund linked to Jack Ma’s ecosystem.
+For me that means two simple things:
+This is not a “friends raised $200k and launched a chain” story.
+This is a classic VC Layer-1: serious backers, serious expectations and, of course, future unlock risk.
+If you’re only into fair-launch anarchist chains, Pharos is not your religion.
+If you’re okay with VC-backed infra bets, this one clearly belongs to that category.
+1.3. Is there anything beyond slides?
+Logos and titles are nice, but in crypto I always ask:
+Where is the code? Where is the network actually running?
+Pharos has a public documentation portal where they describe themselves as a modular, high-performance Layer-1 split into three layers:
+L1-Base — data availability and hardware-accelerated storage,
+L1-Core — the main chain with high throughput and fast finality,
+L1-Extension — specialised networks that plug into the core.
+They also published a technical deep-dive where they explain their hybrid parallel engine — a mix of DAG and Block-STM style execution on top of a pipelined consensus.
+You don’t have to be a protocol engineer to follow every detail. The important part is this:
+Pharos at least has a concrete story for how they plan to scale, not just the usual “we are 100x faster” slogan.
+1.4. Testnet reality: does any of this work?
+Paper is cheap. Running nodes is not.
+According to project announcements and ecosystem reports, the initial Pharos testnet (before AtlanticOcean) has already processed roughly 3 billion transactions since May 2025, with block times around 0.5 seconds.
+The newer AtlanticOcean testnet goes further:
+it introduces a formal Proof-of-Stake economic model with 1B total token supply, aligned with what they plan for mainnet;
+it modularises the stack into consensus / execution / node / storage;
+it runs the upgraded hybrid parallel engine in more realistic conditions.
+That doesn’t prove that Pharos will succeed.
+But it does show that the team has already spent time and money pushing their design through a live testnet, not just a keynote.
+1.5. The red flags I see right now
+So far this might sound almost too clean. Let’s fix that.
+There are at least two things that make me keep Pharos firmly in the “high-risk infra” bucket:
+As of writing, there is no fully public token allocation table — no final numbers for how the 1B supply is split between team, investors, ecosystem and community. We only know the total supply, PoS model and that details will come closer to mainnet.
+I haven’t seen any loudly promoted security audits from top names like Trail of Bits or Halborn. They may exist in the background, but they are not a central part of the public story yet.
+Put simply: Pharos looks like a serious but still early VC Layer-1 with real tech and incomplete transparency.
+That’s the frame I’m using for the rest of this article.
+Not “Pharos will definitely moon”, not “Pharos is a scam” — just a high-risk infrastructure bet built by ex-AntChain leadership, funded by big crypto VCs, already tested on billions of transactions, but still pre-mainnet and without a fully disclosed tokenomics map.
+Why build a new Layer-1 instead of just scaling on Ethereum?
+Whenever a new chain appears, the only honest first question is:
+Do we really need this chain if Ethereum and its L2 zoo already exist?
+Pharos has a very specific answer: it’s trying to be a programmable financial Layer-1 for real-world assets and open finance, not just another playground for memecoins.
+Whether that’s realistic is another story. But at least the intention is clear.
+2.1. Ethereum & L2s are powerful, but they share their engine with everything
+If you want NFTs, memecoins and basic DeFi, you don’t need a new L1 in 2025. Ethereum + L2s already do the job.
+But once you talk to people building payment rails, RWA platforms, supply-chain finance or tokenised real estate, you hear the same pain points again and again:
+Unpredictable fees. When the market goes nuts, gas spikes and your “stable” business model is suddenly at the mercy of Pepe season.
+Shared throughput.
+Your serious financial flows compete in the same blockspace with meme-casino traffic.
+Latency / finality.
+“Good enough for DeFi” is not always acceptable for high-frequency settlement, factoring, or streaming payments.
+For a degen swapping $1k, a $3–5 fee and some variability are annoying, but fine.
+For a platform that wants to stream thousands of small payments, coupons or tokenised invoices every hour, it’s a deal-breaker.
+Pharos basically looks at this and says:
+“We want a chain where high-frequency financial logic doesn’t have to fight with the latest dog coin mint for blockspace.”
+Their own messaging is very direct: they want to solve scalability, compliance and flexibility for RWA finance — payments, supply-chain lending, renewable energy, real estate securitisation.
+2.2. “Why not just be an L2?” — the sovereignty argument
+From the outside, the obvious alternative is:
+“Why don’t you just launch as an L2 or appchain on Ethereum and inherit its security and ecosystem?”
+For many consumer or gaming projects, that would be the smartest path.
+Pharos is trying to play a different game.
+From their own docs and public talks, you can extract three key reasons:
+Full control over the base layer.
+They want to tune consensus, data layer and execution specifically for
+financial workloads
+— lots of small, independent transactions, predictable finality, and tight integration with off-chain systems.
+Deep integration with TradFi and compliance.
+The project constantly talks about servicing banks, fintechs, RWA platforms and building compliant rails for payments, supply-chain finance and securitised assets. That world often wants custom rules at the base layer, not just smart-contract logic on top of someone else’s chain.
+Positioning as a “financial public chain”, not just “another rollup”.
+In their own words, Pharos wants to become a public financial Layer-1 that unifies Web2 and Web3 liquidity — effectively a “Silk Road of crypto” for RWA and open finance.
+You don’t have to fully buy into that vision. But it explains why they choose the harder path of building a sovereign L1: if they were just one more L2, they would be much easier to replace.
+2.3. Design choices that match this story
+Every L1 claims to be “fast and scalable”. The interesting part is what Pharos actually did differently.
+According to their docs and infra partners, Pharos is built as a
+modular, full-stack parallel Layer-1
+with three main layers:
+L1-Base
+— data availability and hardware-accelerated storage.
+L1-Core
+— a decentralised high-throughput chain with
+sub-second finality
+for real-time transactions.
+L1-Extension
+— “Special Processing Networks” (SPNs) for specialised workloads (AI, high-frequency trading, ZK-ML, niche RWA logic), with cross-SPN interoperability and native restaking.
+On top of that:
+They use a hybrid parallel engine (DAG + Block-STM-style execution),
+Aim for up to 50,000 TPS and sub-second blocks in practice,
+Claim storage optimisations that can reduce costs by ~80% using a DMM-Tree structure and other tricks.
+Again, you don’t need to be a protocol dev to follow the details. The key point is:
+They are explicitly optimising for a huge number of small, independent transactions — exactly what you see in payments, RWA accounting, rewards, interest accruals, supply-chain events — rather than rare, giant DeFi trades.
+Real-world signals back this up. Chain analytics show the Pharos environment processing over 3.6 billion transactions and more than 170M active wallets on its main test deployments, with Atlantic/AtlanticOcean adding hundreds of millions more tx on top.
+You can argue about how “real” every testnet transaction is — but purely by the numbers, this is not a toy demo on three nodes anymore.
+2.4. Can this really put Pharos “among the best”?
+Every new chain claims it will be “top-tier”. Most never get close.
+Pharos does have a few non-trivial advantages:
+A team that has already shipped large-scale financial infrastructure
+(AntChain / Alipay world).
+Backers that live in the infra / DeFi space
+(Lightspeed Faction, Hack VC, SNZ and others).
+A clear narrative focus
+— RWA and open finance, not “we’ll do gaming, memes, and DeFi all at once”.
+A testnet track record measured in billions of tx
+, not a toy network that collapses under basic load.
+At the same time, the risks are very real:
+They are jumping into a battlefield that already includes
+Solana, Sui, Aptos, Sei, Monad, multiple Ethereum L2s
+and competing RWA-focused chains.
+There is still
+no fully public token allocation breakdown
+and no live mainnet — which means both
+execution risk
+and
+tokenomics risk
+remain high.
+So my own answer to “why a new L1?” is not “because Pharos is magically special”.
+It’s simpler:
+Pharos is trying to be a
+dedicated financial engine
+— a base layer where institutional-grade RWA, payments and DeFi don’t have to share the highway with every degen mania.
+If they execute, they can earn a real place alongside the serious infra players.
+If they don’t, they’ll be remembered as just another VC L1 with an ambitious deck.
+As a reader, you don’t have to believe the marketing.
+You just need to understand
+what game they think they’re playing
+before you decide whether Pharos deserves your time, your farm, or a line in your long-term watchlist.
+Tokenomics, supply and roadmap: what is actually known
+3.1 What we know for sure
+Right now Pharos is still pre-mainnet. There is no live TGE date, no official CEX listings and no public token price yet. What
+is
+clear from official testnet materials:
+Pharos will run a Proof-of-Stake model with a total supply of 1 billion tokens, and AtlanticOcean already uses this model as a dry run for mainnet.
+AtlanticOcean and the first testnet will co-exist for a few months, all contributions on the first testnet are snapshotted, and the goal is to launch mainnet around Q1 2026.
+So if someone tells you “PHAR will launch at X price on Y exchange”, that’s guesswork, not official info.
+3.2 Community share and early incentives
+One of the clearer hints about distribution comes from incentivised testnet tokenomics: in Pharos community posts you can find a breakdown where 350M tokens (about 34.5% of the 1B total) are reserved for the community, with around 90M (~9%) described as circulating supply in that incentive model.
+Important nuance:
+This is testnet / incentive design, not the final TGE table. Percentages for investors, team, ecosystem and public sale are not fully published yet.
+But it shows the direction: Pharos is clearly planning a large community allocation, not a tiny airdrop on top of a pure VC bag.
+If you’re farming, the message is simple: on-chain activity matters, because the team is explicitly designing tokenomics around community and validators, not only funds.
+3.3 Roadmap in simple words
+If you strip away all marketing, the Pharos roadmap right now выглядит так:
+Phase 1 — First Testnet (already running):
+Billions of transactions, stress-testing throughput and basic infra.
+Phase 2 — AtlanticOcean Testnet (live now):
+-PoS model with 1B total supply,
+-modular architecture (consensus / execution / node / storage),
+-validator program, ecosystem campaigns, RWA / DeFi partners.
+Phase 3 — Mainnet (target Q1 2026):
+-migrate partners from old testnet,
+-promote top validators into the mainnet set,
+-start real RWA / payments / DeFi flows on a live chain.
+The key idea:
+everything you do now in testnets is training data
+— for both the protocol and for future rewards.
+3.4 What this means for a normal reader (not just VCs)
+If you’re reading this as a normal crypto user, not a fund, the practical takeaways are:
+No token yet.
+There is no official price or listing, so any “over-the-counter” PHAR right now is either fake or a derivative you should treat as high risk.
+High community share planned.
+Numbers like 34.5% to community in incentive docs suggest that testnet usage, quests, validators and ecosystem participation can matter a lot.
+Timeline is long.
+Q1 2026 mainnet means this is not a “pump and list tomorrow” story. You’re betting on an infra project that needs time to ship.
+I treat it this way: high-risk, long-duration infra bet. If you farm it — фармишь тестнет и екосистему, но не вкладываешь останню зарплату. If you just watch — you at least understand how the supply and roadmap are structured, before the hype really starts.
+What Pharos can give to builders, users and the wider market
+This is where the story stops being about architecture and starts being about
+“so what?”
+What does Pharos actually change for real people and real projects if it works as intended?
+4.1. For builders: a chain designed around financial logic
+If you’re a dev or a small team, Pharos is pitching itself as a place where you can build financial apps that don’t have to fight memes for blockspace:
+For a payments or payroll dApp, sub-second finality and cheap micro-transactions mean you can run salaries, rewards or cashback on-chain without praying for low gas.
+For an RWA platform, you can track interest, coupons, loan states and collateral updates in real time, without every market pump breaking your fee model.
+For a DeFi protocol, you get EVM-compatible infra, so you can reuse Solidity, existing tools and auditors instead of learning an exotic VM.
+On top of that, AtlanticOcean already runs validator programs, ecosystem campaigns and partner pilots — so builders don’t deploy into a desert, but into an environment where the core team is actively trying to bootstrap liquidity and users.
+4.2. For the community: how the testnet works right now
+From a normal user’s perspective, the current Pharos testnet setup looks like this:
+You interact with dApps on AtlanticOcean — swaps, bridges, mints, sometimes NFT or RWA demos.
+Your actions are tracked in quests and incentive programs (Layer3, campaigns with wallets and partners).
+The team is explicit that both the first testnet and AtlanticOcean are part of a long incentivised program, and past activity is being snapshotted for future rewards.
+In other words: the testnet is not just a sandbox for devs — it’s also a way for early users to earn a place in the future distribution.
+If you’re farming, the logic is simple:
+use the chain as if it were real, not once for the quest, but over time — swaps, liquidity, NFT / RWA demos, validator / node participation if you’re technical.
+4.3. Who could realistically come to Pharos?
+You’ll see big words in the decks:
+banks, institutions, RWA giants
+. Let’s translate that into more concrete categories:
+RWA & credit platforms
+: tokenised invoices, trade finance, SME lending, real estate funds — places where you have lots of off-chain paperwork but want transparent on-chain accounting and settlement.
+Payment & remittance projects
+: cross-border payments, stablecoin rails for fintech apps, loyalty and cashback systems.
+DeFi protocols
+that need a high-throughput chain for perps, options or structured products, but don’t want to build on Solana/Sui for strategic reasons.
+Infrastructure and AI / data projects
+that use Special Processing Networks (SPNs) for analytics, pricing, or risk engines close to the chain.
+Will all of them come? Obviously not.
+But if even a small part of Asian fintech / RWA traffic lands on Pharos, that’s already real volume and fees, not just recycled DeFi TVL.
+4.4. How this could strengthen the market cap (if it works)
+Let’s keep it simple and not play the x100 prediction game.
+If Pharos manages to:
+onboard a few meaningful RWA / payments platforms, keep fees low and finality fast under real load,
+and convert today’s testnet users into sticky mainnet users and validators,
+then the chain gets three important things:
+Organic transaction flow
+— real payments, loans, redemptions, not just farming loops.
+Sustainable fee revenue
+— even with low fees per tx, large volume adds up over time.
+A story institutions can sell internally
+— “we use a chain built for finance, not for dog tokens”.
+Market cap then becomes a question of how much of that real flow the token actually captures (through staking, gas, MEV, restaking, etc.) — and that’s exactly what we’ll have to watch once full tokenomics is public and mainnet is live.
+Until then, the only honest thing you can do is:
+-understand the design and positioning,
+-decide whether it deserves a place in your time / attention / farm,
+and remember that even good infra can stay underpriced for a long time — or never reprice at all.
+Hype and real risks around Pharos
+Let’s talk about Pharos simply, without buzzwords
+What looks good
+There are a few reasons why people even care about this chain
+First, the team is not random anons from Telegram The core background is AntChain and Alipay, so these are people who already worked with big financial systems and real money flows
+Second, the money behind the project is serious The seed round came from well-known crypto funds like Lightspeed Faction, Hack VC, SNZ and others This means the project is not “raised 5k from friends and launched a chain”
+Third, the testnets are not just a toy Pharos already shows billions of transactions and a lot of wallets in testing That does not guarantee success, but it means the network has at least been pushed under load, not just presented on slides
+For most builders and farmers this is enough to at least watch the project and try the testnets
+What can go wrong
+At the same time there are clear risks that you should remember
+Pharos looks like a classic VC Layer-1 Total supply is 1 billion tokens, funds are already in, but there is still no full public table that shows who gets how much and when tokens unlock This means there is a real risk of a large slice going to investors and the team, with unlock pressure later
+The narrative is very crowded Everyone is selling the RWA and “real world finance on chain” story Pharos will compete with Solana, Sui, Aptos, Ethereum L2s and other RWA or finance chains If they do not bring strong live partners and volume, they can easily become just one more logo in a long list
+The timeline is long Mainnet is planned only around 2026 Any delay, technical problems or loss of community interest on the way can strongly weaken the story
+On top of that, the RWA and payments angle means regulators, banks and compliance This is slow and conservative, very different from meme coins and pure DeFi
+How I personally see it
+I do not see Pharos as a guaranteed winner, and I also do not see it as an obvious scam
+For me it is a high risk infrastructure bet If you like this type of play, you can farm testnets and follow the ecosystem, but it makes no sense to treat it as a guaranteed golden ticket
+The key things to watch are simple
+First, full tokenomics when they publish it, especially real shares for funds, team and community and the vesting schedule
+Second, real products on Pharos that have users and volume, not only pilot announcements
+Third, how they treat early community and validators when it is time for rewards and airdrops If this part is fair and meaningful, it will say a lot about what kind of chain Pharos really wants to be
+Conclusion on Pharos
+Pharos is not “the next Solana” today and not “obvious scam” either. It is a classic high-risk infrastructure bet: a new Layer-1 that wants to become a financial chain for real-world assets and payments, built by people who already worked with big finance and serious systems.
+The strong side of this story is simple. There is a real team, real money behind it, and a clear focus on finance, not just memes. The architecture is designed for many small transactions, fast finality and integrations with traditional finance. Testnets are not just a demo: the network has already been pushed under load and used by a lot of early users and farmers.
+The weak side is just as clear. This is a VC Layer-1 with a 1B supply and still incomplete public tokenomics. Competition in the RWA and L1 space is brutal. Mainnet is not live yet and the path to 2026 is long, with plenty of room for delays, technical problems or simple loss of attention. Until we see full allocation, real partners with volume and how early community is rewarded, the risks stay high.
+So the honest conclusion is this. If you are looking for a fast pump, Pharos is the wrong place to put your hopes. If you are ready to treat it as a long-term infrastructure experiment, where you farm testnets, follow the ecosystem and risk only what you are ready to lose, then it can be an interesting piece of your watchlist. Not a guaranteed golden ticket, but one of the more serious attempts to build a finance-focused chain in this cycle.

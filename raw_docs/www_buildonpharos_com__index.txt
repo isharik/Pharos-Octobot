@@ -1,0 +1,207 @@
+SOURCE_URL: https://www.buildonpharos.com
+TITLE: Pharos
+============================================================
+Timeline
+Empowers
+Structure
+Feature
+Prize Track
+Pharos Builder Base Camp
+Pharos Builder Base Camp: Bridging TradFi with DeFi to Unlock the Future of RWA, Payments, and Beyond.
+Bridging TradFi with DeFi to Unlock the Future of RWA, Payments, and Beyond
+The Pharos Builder Base Camp is a global initiative designed to empower developers, startups, and institutions to build the next generation of Real-World Asset (RWA) applications, decentralized payments, and financial innovations on Pharos Network—a modular and full-stack parallel Layer 1 blockchain.
+By leveraging the high-performance blockchain architecture, advanced modular stack, and cross-chain interoperability of Pharos, this program bridges the gap between Traditional Finance (TradFi) and Decentralized Finance (DeFi), unlocking new opportunities for financial inclusion, scalability, and market expansion.
+Participants will gain hands-on experience, expert mentorship, and access to Pharos’ ecosystem of SPNs (Special Processing Networks), native restaking, and high-speed parallel execution frameworks. Whether you're working on tokenized assets, decentralized payment rails, or cross-chain financial infrastructures, the Builder Base Camp provides the ideal platform to turn ideas into reality.
+Builder Base Camp Timeline
+Registration Start
+10th March 2025
+Submission DDL
+30th April
+Demo Day
+15th May 2025
+Registration Start
+10th March 2025
+Submission DDL
+30th April
+Demo Day
+15th May 2025
+Event :
+Developer tour Station for each country - 2 in China, 2 in India, 1 in Vietnam (total 5)
+How Pharos Empowers Builders
+Pharos Network is uniquely designed to support complex financial applications and real-world assets with the following features:
+Modular & Scalable Infrastructure
+L1-Base:
+High-performance data availability with hardware acceleration.
+L1-Core:
+A decentralized, high-throughput blockchain with subsecond finality for real-time transactions.
+L1-Extension:
+Enables Special Processing Networks (SPNs), cross-SPN interoperability, and native restaking to expand financial applications seamlessly.
+High-Speed Parallel Execution & Data Processing
+Pharos Virtual Machine (PVM):
+Optimized for parallel transaction execution, reducing congestion and latency.
+Parallel Merklization & Indexing:
+Enables high-speed asset transactions, real-time verification, and seamless integration with external TradFi systems.
+Full Life Cycle Asynchronous Pipelining:
+Enhances efficiency by processing transactions independently, ensuring uninterrupted performance.
+Cross-Chain Interoperability & Financial Ecosystem Integration
+Decentralized Data Exchange Protocol:
+Synchronizes external financial data sources with Pharos applications to enable real-world financial integrations.
+Adaptive Restaking Interaction Protocol:
+Facilitates shared security and liquidity circulation, allowing seamless DeFi & TradFi asset movements (e.g., stBTC, stETH, tokenized securities).
+SPN-Native Restaking:
+Allows developers to create customized financial services leveraging the computing power of Pharos validators.
+Builder Base Camp Structure
+The Builder Base Camp Program aims to provide technical knowledge, mentorship and support to build and ship projects on Pharos. The program is divided into key phases, starting from onboarding and technical deep dives and going all the way to the pitching projects on the Demo Day. Each phase is designed to ensure that participants not only build but also deploy and scale their innovations on Pharos Network.
+The registration process for the Pharos Builder Base Camp will begin from 10th March 2025.
+Once the registration is complete, there will be a team formation and onboarding call.
+Following the onboarding and team formation, there will be an idea brainstorming session with all the teams participating.
+The Builder Base Camp will also have weekly Office-Hours for mentoring and advice.
+Why Join THe Pharos Builder Base Camp?
+Global Reach
+The program welcomes participants from across the world, fostering diverse perspectives and innovative solutions for the financial ecosystem.
+High Performance Infrastructure
+The parallel execution and specialized processing networks (SPNs) of Pharos ensure real-world financial applications are scalable, efficient, and user-friendly.
+Break Boundaries
+By integrating TradFi and DeFi, participants will explore the tokenization of RWAs, cross-chain payments, and decentralized finance innovations within the modular and composable ecosystem of Pharos.
+Startup & Entrepreneurial Spirit
+Builder Base Camp serves as a launchpad for startups and developers, offering a platform to showcase ideas, build prototypes, and gain market traction through grants, incubation, and strategic ecosystem partnerships.
+Builder Base Camp Prize Track
+The Builder Base Camp plans to incubate specialized project tracks for builders that align with their expertise and vision. These tracks focus on tokenized RWAs, decentralized payments, tooling & infrastructure, and advanced DeFi solutions, allowing builders to explore new frontiers in financial technology.
+RWA & Payments Track
+$125,000
+For five winners
+DeFi Track
+$100,000
+For five winners
+Open Innovation Track
+$50,000
+For Three winners
+Tooling & Infra Track
+$25,000
+For five winners
+Judging Criteria (Tooling & Infra)
+The Builder Base Camp plans to incubate specialized project tracks for builders that align with their expertise and vision. These tracks focus on tokenized RWAs, decentralized payments, tooling & infrastructure, and advanced DeFi solutions, allowing builders to explore new frontiers in financial technology.
+Criterion
+Weight (%)
+Description
+Team Expertise and Capability
+30%
+Evaluates the skills, expertise, and experience of team members, including technical knowledge, problem-solving abilities, adaptability, and prior accomplishments.
+Innovation and Impact
+30%
+Judging will focus on the solution's technical innovation,
+scalability, reliability, maintainability, and efficiency in delivering
+robust tooling and infrastructure on Pharos.
+Ecosystem Contribution to Pharos
+30%
+Assesses the project's integration with the Pharos ecosystem, its contribution to ecosystem growth, scalability, and sustainability
+Business Model and Feasibility, User adoption
+5%
+Evaluates the viability and sustainability of the business model, including revenue generation, scalability, and strategies for user acquisition and retention.
+Resourcefulness
+5%
+Examines the team's efficiency in utilizing available resources, including funding, partnerships, technology stacks, and ecosystem tools to achieve maximum output.
+Criterion
+Description
+Team Expertise and Capability
+Evaluates the skills, expertise, and experience of team members, including technical knowledge, problem-solving abilities, adaptability, and prior accomplishments.
+Weight (%)
+30%
+Innovation and Impact
+Judging will focus on the solution's technical innovation,
+scalability, reliability, maintainability, and efficiency in delivering
+robust tooling and infrastructure on Pharos.
+Weight (%)
+30%
+Ecosystem Contribution to Pharos
+Assesses the project's integration with the Pharos ecosystem, its contribution to ecosystem growth, scalability, and sustainability
+Weight (%)
+30%
+Business Model and Feasibility, User adoption
+Evaluates the viability and sustainability of the business model, including revenue generation, scalability, and strategies for user acquisition and retention.
+Weight (%)
+5%
+Resourcefulness
+Examines the team's efficiency in utilizing available resources, including funding, partnerships, technology stacks, and ecosystem tools to achieve maximum output.
+Weight (%)
+5%
+Judging Criteria (RWA & Payment ; DeFi ; Innovative)
+Criterion
+Weight (%)
+Description
+Team Expertise and Capability
+30%
+Evaluates the skills, expertise, and experience of team members, including technical knowledge, problem-solving abilities, adaptability, and prior accomplishments.
+Ecosystem Contribution to Pharos
+30%
+Assesses the project's integration with the Pharos ecosystem, its contribution to ecosystem growth, scalability, and sustainability
+Business Model and Feasibility, User adoption
+15%
+Evaluates the viability and sustainability of the business model, including revenue generation, scalability, and strategies for user acquisition and retention.
+Marketing & Community Engagement Capability
+15%
+Reviews the project's ability to promote itself effectively through branding, community building, user engagement, and growth strategies within Web3 communities.
+Resourcefulness
+5%
+Examines the team's efficiency in utilizing available resources, including funding, partnerships, technology stacks, and ecosystem tools to achieve maximum output.
+Innovation and Impact
+5%
+Measures the project's originality, creativity, and potential to create meaningful, long-term change within the Pharos ecosystem and the broader blockchain space.
+Criterion
+Description
+Team Expertise and Capability
+Evaluates the skills, expertise, and experience of team members, including technical knowledge, problem-solving abilities, adaptability, and prior accomplishments.
+Weight (%)
+30%
+Ecosystem Contribution to Pharos
+Assesses the project's integration with the Pharos ecosystem, its contribution to ecosystem growth, scalability, and sustainability
+Weight (%)
+30%
+Business Model and Feasibility, User adoption
+Evaluates the viability and sustainability of the business model, including revenue generation, scalability, and strategies for user acquisition and retention.
+Weight (%)
+15%
+Marketing & Community Engagement Capability
+Reviews the project's ability to promote itself effectively through branding, community building, user engagement, and growth strategies within Web3 communities.
+Weight (%)
+15%
+Resourcefulness
+Examines the team's efficiency in utilizing available resources, including funding, partnerships, technology stacks, and ecosystem tools to achieve maximum output.
+Weight (%)
+5%
+Innovation and Impact
+Measures the project's originality, creativity, and potential to create meaningful, long-term change within the Pharos ecosystem and the broader blockchain space.
+Weight (%)
+5%
+Disclaimer
+Pharos reserves the discretion to determine if a team qualifies for prizes. Prizes may not be awarded to teams whose projects lack feasible business implications.
+Prize Distribution
+- 70% in stablecoin (upon testnet deployment), and 30% in Pharos tokens, with the final 30% distribution approved only after reaching production stage on Mainnet
+- Token distribution subject to token launching schedule
+judges
+Engineering Head at Pharos
+Ethan
+Developer Relation Lead at Pharos
+Janesh
+Europe Ecosystem Lead at Pharos
+Aliu
+APAC Ecosystem Lead at Pharos
+Wilguish
+CEO at Pharos (Cofounder)
+Alex
+CTO at Pharos (CoFounder)
+Wishlonger
+Faction VC
+Clara
+SNZ Capital
+Jenniferrr
+Reforge VC
+Carl Hua
+SNZ Capital
+Walker Z
+Mentors
+Partner & Head of Platform at HackVC
+Hsin-Ju
+Product Lead of KuCoin Web3
+Mike
+Ready to join Pharos Network and build the next-generation Web3 applications?

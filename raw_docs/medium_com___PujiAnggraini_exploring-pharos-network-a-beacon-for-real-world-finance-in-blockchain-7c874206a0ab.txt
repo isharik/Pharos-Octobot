@@ -1,0 +1,94 @@
+SOURCE_URL: https://medium.com/@PujiAnggraini/exploring-pharos-network-a-beacon-for-real-world-finance-in-blockchain-7c874206a0ab
+TITLE: Exploring Pharos Network: A Beacon for Real-World Finance in Blockchain | by Puji Anggraini | Medium
+============================================================
+Exploring Pharos Network: A Beacon for Real-World Finance in Blockchain
+Puji Anggraini
+8 min read
+·
+Nov 19, 2025
+--
+Press enter or click to view image in full size
+Pharos Network stands out as an innovative Layer 1 blockchain, uniquely positioned to bridge real-world assets with decentralized finance through its high-performance, parallel architecture. With strong backing and a focus on institutional-grade applications, it offers promising advantages over established chains like Ethereum, Solana, and Sui, particularly in scalability, compliance, and RWA integration.
+Key Points
+High-Performance Edge
+: Pharos delivers up to 50,000 TPS with sub-second finality, potentially surpassing Solana’s theoretical 65,000 TPS in real-world financial scenarios due to its deep-parallel design, while avoiding Solana’s historical network congestion issues.
+RWA-Centric Innovation
+: Unlike Ethereum’s general-purpose approach or Sui’s object-based model, Pharos embeds zk-KYC and programmable AML, making it ideally suited for tokenizing assets like bonds and real estate, fostering inclusive finance without compromising speed or security.
+Developer-Friendly Ecosystem
+: EVM compatibility combined with WASM support provides broader accessibility than Solana’s Rust or Sui’s Move, enabling seamless migrations and attracting builders focused on real-time DeFi and AI integrations.
+Community and Growth Momentum
+: Active engagements, such as bi-weekly creator contests and validator onboardings, build a vibrant ecosystem, contrasting with more mature but sometimes centralized networks like Ethereum.
+Future Potential
+: With mainnet approaching by late 2025 and integrations like Chainlink and Morpho, Pharos appears poised for rapid adoption in the booming RWA sector, where it could outpace competitors by unifying Web2 and Web3 liquidity.
+Press enter or click to view image in full size
+Why Pharos Shines in Comparisons
+When stacked against Ethereum, Solana, and Sui, Pharos emphasizes practical scalability for finance. Ethereum’s robust security comes at the cost of higher fees and slower base-layer speeds (around 30 TPS), relying on Layer 2s for scaling — Pharos, however, integrates high throughput natively, reducing dependency on rollups. Solana excels in raw speed but has faced outages; Pharos’s leaderless BFT consensus and global validator distribution aim for greater reliability. Sui’s impressive lab TPS (297,000) is object-oriented, limiting EVM compatibility — Pharos bridges this gap with modular extensions for custom computations, making it more versatile for RWAs.
+These strengths position Pharos as a forward-thinking option, especially for regions underserved by traditional finance, where its compliance features could drive mass adoption without the regulatory hurdles often seen in other chains.
+Press enter or click to view image in full size
+Opportunities Ahead
+Backed by $8 million in seed funding and a $20 million ecosystem fund, Pharos is building momentum through partnerships and testnet successes. Its focus on real-value finance suggests it could capture a significant share of the $50 trillion+ RWA market, offering higher efficiency and inclusivity compared to competitors’ more generalized approaches.
+Pharos Network represents a compelling advancement in blockchain technology, designed specifically to integrate real-world assets (RWAs) with decentralized finance (DeFi) in a way that emphasizes efficiency, compliance, and global accessibility. As an EVM-compatible Layer 1, it draws inspiration from the ancient Lighthouse of Alexandria, guiding users through the complexities of digital finance. This in-depth exploration highlights Pharos’s innovative features, recent developments, and favorable comparisons to other leading blockchains like Ethereum, Solana, Sui, and Sei. By focusing on its positive attributes — such as unparalleled scalability, built-in regulatory tools, and a thriving ecosystem — Pharos emerges as a beacon of optimism in the evolving Web3 landscape, potentially unlocking trillions in tokenized assets while addressing pain points in competitors.
+Introduction to Pharos: Pioneering RealFi
+Pharos Network, founded in 2024 and based in the British Virgin Islands, is a programmable financial Layer 1 blockchain tailored for “RealFi” — real-value finance that makes institutional-grade assets accessible to all. Unlike general-purpose chains, Pharos prioritizes unifying traditional (Web2) and decentralized (Web3) systems into a modular on-chain economy. This includes tokenizing RWAs like real estate, bonds, commodities, and infrastructure, enabling fractional ownership and instant settlements. With performance claims of 30,000–50,000 TPS and sub-second finality, Pharos supports real-time applications such as compliant DeFi, stablecoins backed by real collateral, and cross-border payments, all while ensuring transparency and security.
+The project’s optimistic vision is rooted in democratizing finance, particularly for underserved regions. By embedding compliance features like zk-KYC (zero-knowledge Know Your Customer) and programmable AML (Anti-Money Laundering), Pharos reduces barriers to entry, fostering trust and adoption. Early metrics, including over 3 billion transactions processed on its testnets, underscore its potential to handle internet-scale operations, positioning it as a positive force for inclusive economic growth.
+Team and Funding: Strong Foundations for Success
+Pharos boasts a team of seasoned experts, led by CEO Alex Zhang, former CTO of Ant Chain (Ant Group’s blockchain division) and CEO of ZAN, Ant’s Web3 brand. With over 20 years in technology, finance, and strategy, Zhang brings proven experience from scaling infrastructure for China’s $100 billion+ fintech ecosystem. Co-founder Wishlonger oversees the decentralized protocol stack, supported by alumni from Microsoft Research and Stanford University. This multidisciplinary expertise enables Pharos to blend enterprise-grade reliability with open-source innovation, a refreshing contrast to some competitors’ more siloed development approaches.
+Funding further bolsters Pharos’s positive trajectory: An $8 million seed round in September 2024, led by Hack VC and Faction VC, with participation from MH Ventures, Big Brain Holdings, and IBC Group. An additional $20 million ecosystem fund fuels grants, partnerships, and developer incentives. Investors like Mario Nawfal (IBC Group) and Suji Yan (Mask Network) highlight confidence in Pharos’s RWA focus, providing resources for sustained growth amid a competitive market.
+Technical Architecture: A Parallel Powerhouse
+Press enter or click to view image in full size
+At its core, Pharos employs a full-stack parallel blockchain design, divided into three layers that operate concurrently for optimal efficiency:
+L1-Base
+: Ensures robust data availability and hardware acceleration, supporting large-scale operations with tamper-proof storage.
+L1-Core
+: Delivers high throughput via an asynchronous, leaderless Byzantine Fault Tolerance (BFT) consensus, with dual-incentive staking (inflation rewards and EIP-1559 fees) to encourage participation.
+L1-Extension
+: Introduces Special Processing Networks (SPNs) for customizable extensions, enabling sidechains, AI integrations (e.g., ZKML), and native restaking with cross-SPN interoperability.
+The Pharos VM (Dora) supports parallel execution, superscalar pipelining, and unified Intermediate Representation for EVM and WASM, making it highly developer-friendly. Integrations with Chainlink’s CCIP (Cross-Chain Interoperability Protocol) and Data Streams (as of October 27, 2025) enhance secure RWA markets and real-time data feeds. Compared to Ethereum’s trie storage, Pharos’s model achieves faster state retrieval and 80% cost reductions, while its modular stack avoids Solana’s single-threaded bottlenecks, promoting greater resilience.
+In benchmarks, Pharos’s architecture shines for financial use cases, where sub-second confirmations and near-zero fees enable instant payments — advantages over Sui’s object-centric model, which, while fast, lacks Pharos’s finance-specific compliance layers, or Sei’s trading optimization without broad RWA tooling.
+Testnet Progress and Roadmap: Building Momentum
+Pharos’s development reflects steady, positive advancement:
+Pharos Testnet (May 2025)
+: Launched with 30,000 TPS, processing over 3 billion transactions.
+AtlanticOcean Testnet (October 2025)
+: Upgraded to Proof-of-Stake tokenomics, Chainlink integrations, and validator tools, simulating real-world scenarios with global accessibility.
+Mainnet (Late 2025)
+: Targets 50,000 TPS and $300 million in onboarded RWAs, with expansions into DePIN (Decentralized Physical Infrastructure Networks) and AI.
+Long-Term (2027 Projection)
+: Aims for $100 billion in tokenized assets, emphasizing a “Digital Financial City” — a borderless economy with inclusive access and frictionless value movement.
+Recent partnerships, such as with Morpho (August 2025) for native RWA lending and Chainlink for enhanced markets, demonstrate proactive ecosystem building. Unlike Ethereum’s slower upgrade cycles or Solana’s occasional disruptions, Pharos’s roadmap prioritizes reliable, incremental improvements, fostering optimism for mainstream adoption.
+Ecosystem and Community: Vibrant and Inclusive
+Pharos’s ecosystem is rapidly expanding, with over 50 projects including:
+Bitverse
+: A perp DEX for RWAs, US stocks, and memes, offering zero gas/slippage and AI precision trading.
+Asseto Finance
+: Tokenized retail funds with fractional access.
+PNS (Pharos Name Service)
+: Decentralized identities for Web3.
+Community engagement is a highlight, with 425,000+ X followers, active Discord (including bi-weekly creator contests with $500 prizes launched in November 2025), and regional accounts for localized vibes. Validators like TecnodesNetwork and Lithiumdigital (onboarded in November 2025) enhance decentralization. X Spaces, such as “Unlocking Mass Adoption: UX, Access & Trust” on November 20, 2025, and industry news threads on RWAs (e.g., Hong Kong’s digital bonds, Singapore’s tokenized funds) keep the conversation positive and educational.
+In contrast to Ethereum’s vast but fragmented ecosystem or Solana’s meme-driven volatility, Pharos cultivates a focused, value-oriented community, with incentives like potential airdrops through testnet tasks encouraging participation.
+Positive Vibes: Challenges Met with Innovation
+While blockchain projects face scalability and regulatory hurdles, Pharos addresses them head-on with proactive features. Its parallel design mitigates congestion seen in Solana, and built-in compliance tools navigate RWA regulations better than Sui’s general speed focus. No major controversies have arisen, and its youth allows for agile adaptations, such as restaking integrations with EigenLayer for shared security.
+The project’s emphasis on “rough consensus and running code” promotes practical progress, creating an uplifting narrative of empowerment — enabling creators, freelancers, and institutions to thrive in a compliant, high-speed environment.
+Comparative Analysis: Pharos’s Advantages
+Pharos differentiates itself through finance-specific optimizations, offering a positive alternative in a crowded field. Here’s a detailed comparison:
+Press enter or click to view image in full size
+Pharos’s modular, parallel approach provides superior versatility for RWAs compared to Ethereum’s layered scaling or Solana’s monolithic speed. It edges Sui in developer accessibility and Sei in broad financial tooling, making it a positively disruptive choice for the next wave of blockchain adoption.
+Future Outlook: A Bright Horizon
+Pharos’s alignment with RWA trends — such as Visa’s USDC pilots and Asia’s tokenization initiatives — positions it for exponential growth. By scaling finance rather than “noise,” it offers a hopeful vision: A world where blockchain empowers equitable access, outshining competitors through targeted innovation and community-driven progress.
+Key Milestones Table
+Press enter or click to view image in full size
+Pharos Network is emerging as one of the most promising Layer 1 blockchains focused on Real-World Asset (RWA) adoption, delivering a powerful blend of scalability, compliance, and developer accessibility. With its leaderless BFT consensus, deep-parallel architecture, SPN modular extensions, and native zk-KYC/AML features, Pharos is uniquely equipped to support institutional-grade financial applications at internet scale.
+The rapid evolution from the Pacific Testnet to the AtlanticOcean Testnet, combined with strategic partnerships like Chainlink and Morpho, reflects a project moving with strong momentum and confidence. Its community-driven growth, growing validator network, and dedicated ecosystem fund reinforce long-term sustainability.
+As global finance continues shifting toward tokenization and digital infrastructure, Pharos stands ready as a lighthouse — guiding users, builders, and institutions toward a compliant, high-performance future. With mainnet launch on the horizon and a roadmap aligned with real economic utility, Pharos holds the potential to redefine how value is created, managed, and transferred worldwide.
+Pharos Official Socials & Links
+Stay connected with Pharos through their official channels:
+Website:
+https://www.pharos.xyz
+X :
+https://x.com/pharos_network
+Discord:
+https://discord.com/invite/pharos
+Docs:
+https://docs.pharos.xyz
+Blog / Updates:
+https://www.pharos.xyz/resources

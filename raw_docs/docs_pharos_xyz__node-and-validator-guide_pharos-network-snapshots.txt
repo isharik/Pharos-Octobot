@@ -41,5 +41,5 @@ Rapid Node Initialization(Testnet)
 Next
 Node Debugging & Configuration
 Last updated
-2 days ago
+4 days ago
 Was this helpful?

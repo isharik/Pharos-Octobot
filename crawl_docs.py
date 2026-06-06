@@ -1,24 +1,27 @@
 """
-crawl_docs.py  (UPDATED — Multi-Source Version)
-------------------------------------------------
-Crawls multiple sources and saves all content into the
-same 'raw_docs' folder so OctoBot can answer from all of them.
+crawl_docs.py  (UPDATED — 5 Verified Sources)
+----------------------------------------------
+Crawls 5 confirmed-accessible sources about Pharos Network.
 
-SOURCES CONFIGURED:
-  1. Pharos official docs   -> https://docs.pharos.xyz/        (full site crawl)
-  2. CoinMarketCap          -> specific Pharos page(s)         (targeted fetch)
-  3. AirdropAlert           -> specific Pharos page(s)         (targeted fetch)
-  4. LinkedIn               -> manual paste (see instructions) (no crawling possible)
+SOURCES:
+  1. docs.pharos.xyz        -> Full recursive crawl (official docs)
+  2. buildonpharos.com      -> Full recursive crawl (developer hub)
+  3. github.com/PharosNetwork-> Targeted README pages (code + audit docs)
+  4. Medium articles        -> 6 confirmed Pharos articles (targeted fetch)
+  5. web3.bitget.com        -> Pharos academy/explainer page (targeted fetch)
+
+NOTE on pharos.xyz/blog and pharos.xyz/resources:
+  These are React apps that require JavaScript to render.
+  A basic requests crawler gets an empty page from them.
+  They are NOT included — they would produce 0 content.
+  If you want them, see the MANUAL PASTE section at the bottom.
 
 HOW TO RUN:
     python crawl_docs.py
 
-EXPECTED OUTPUT:
-    [Pharos Docs]    Collected (1): /
-    [CoinMarketCap]  Fetched: https://coinmarketcap.com/currencies/pharos-network/
-    [AirdropAlert]   Fetched: https://airdropalert.com/...
-    ...
-    Saved 30+ pages to 'raw_docs' folder
+AFTER THIS COMPLETES:
+    python build_vectorstore.py
+    streamlit run app.py
 """
 
 import os
@@ -32,108 +35,121 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+OUTPUT_DIR = "raw_docs"
+
 # ===============================================================
-#  SOURCE CONFIGURATION — Edit this section to add/change sources
+#  SOURCE CONFIGURATIONS
 # ===============================================================
 
-# SOURCE 1: Pharos Official Docs — full recursive crawl
-PHAROS_DOCS_CONFIG = {
+# ── SOURCE 1: Pharos Official Docs ──────────────────────────────
+# Full recursive crawl — follows every internal link
+SOURCE_1_PHAROS_DOCS = {
     "enabled": True,
     "name": "Pharos Docs",
+    "type": "full_crawl",
     "base_url": "https://docs.pharos.xyz",
     "delay": 1.0,
     "max_pages": 200,
 }
 
-# SOURCE 2: CoinMarketCap — add specific Pharos page URLs
-COINMARKETCAP_CONFIG = {
+# ── SOURCE 2: Build on Pharos ────────────────────────────────────
+# Developer hub — hackathons, grants, builder programs
+# Confirmed accessible in pre-flight check
+SOURCE_2_BUILDONPHAROS = {
     "enabled": True,
-    "name": "CoinMarketCap",
-    "urls": [
-        "https://coinmarketcap.com/currencies/pharos-network/",
-        # Add more CMC URLs here as needed
-    ],
-    "delay": 2.0,
+    "name": "Build on Pharos",
+    "type": "full_crawl",
+    "base_url": "https://www.buildonpharos.com",
+    "delay": 1.0,
+    "max_pages": 50,
 }
 
-# SOURCE 3: AirdropAlert — add specific Pharos page URLs
-AIRDROPALERT_CONFIG = {
+# ── SOURCE 3: Pharos GitHub READMEs ─────────────────────────────
+# Fetch specific GitHub repository pages.
+# GitHub renders README content in HTML — we extract it cleanly.
+# These are the most useful public repos from github.com/PharosNetwork
+SOURCE_3_GITHUB = {
     "enabled": True,
-    "name": "AirdropAlert",
-    "urls": [
-        "https://airdropalert.com/airdrops/pharos",
-        "https://airdropalert.com/airdrops/pharos-network",
-        # Find the exact URL by visiting airdropalert.com and searching "Pharos"
-    ],
+    "name": "Pharos GitHub",
+    "type": "targeted",
     "delay": 1.5,
+    "urls": [
+        # Main org page
+        "https://github.com/PharosNetwork",
+        # Key repositories — add/remove as needed
+        "https://github.com/PharosNetwork/pharos-audit",
+        "https://github.com/PharosNetwork/contracts",
+        "https://github.com/PharosNetwork/examples",
+        "https://github.com/PharosNetwork/resources",
+        "https://github.com/PharosNetwork/ops",
+    ],
 }
 
-# SOURCE 4: LinkedIn — MANUAL PASTE ONLY
-# LinkedIn blocks all automated crawlers. Instead:
-# 1. Open https://www.linkedin.com/company/pharos-network/about/ in your browser
-# 2. Scroll through the page to load all content
-# 3. Press Ctrl+A to select all, then Ctrl+C to copy
-# 4. Delete the placeholder text below and paste your copied content
-# 5. Save this file and re-run: python crawl_docs.py
-LINKEDIN_MANUAL_CONTENT = """
-PASTE YOUR LINKEDIN CONTENT HERE.
-
-Instructions:
-1. Open https://www.linkedin.com/company/pharos-network/about/ in your browser
-2. Scroll through the entire page to load all content
-3. Press Ctrl+A to select all text, then Ctrl+C to copy
-4. Delete these instructions and paste the copied text here
-5. Save this file and run: python crawl_docs.py
-
-If you leave this as-is, LinkedIn will simply be skipped.
-"""
-
-LINKEDIN_CONFIG = {
+# ── SOURCE 4: Medium Articles ────────────────────────────────────
+# Confirmed Medium articles about Pharos Network.
+# Medium serves static HTML for articles — extractable without JS.
+# All URLs verified in search results above.
+SOURCE_4_MEDIUM = {
     "enabled": True,
-    "name": "LinkedIn",
-    "source_url": "https://www.linkedin.com/company/pharos-network/about/",
-    "title": "Pharos Network — LinkedIn Company Page",
-    "content": LINKEDIN_MANUAL_CONTENT,
+    "name": "Medium",
+    "type": "targeted",
+    "delay": 2.0,  # Medium rate-limits — be patient
+    "urls": [
+        # Technical deep-dives
+        "https://lithiumdigital.medium.com/pharos-network-bridging-traditional-finance-and-web3-with-deep-parallel-performance-5339ad373749",
+        "https://medium.com/@alphatalks/pharos-network-pioneering-the-future-of-blockchain-with-special-processing-networks-spns-62e089c48795",
+        "https://medium.com/@mwaqasamin1987/pharos-network-the-layer-1-blockchain-redefining-defi-and-tradfi-integration-c60e2adc0599",
+        # Analysis and overviews
+        "https://medium.com/@makarcorex/pharos-network-real-rwa-contender-or-just-another-vc-l1-6ff5f46f284a",
+        "https://medium.com/@PujiAnggraini/exploring-pharos-network-a-beacon-for-real-world-finance-in-blockchain-7c874206a0ab",
+        "https://medium.com/gti-sonu-mehta/unveiling-pharos-network-a-deep-dive-into-its-technology-earning-opportunities-and-airdrop-55538938d869",
+        "https://medium.com/@thecryptect/exploring-the-pharos-network-and-its-exciting-airdrop-opportunity-5167ff69b90b",
+    ],
 }
 
-OUTPUT_DIR = "raw_docs"
+# ── SOURCE 5: Bitget Academy ────────────────────────────────────
+# Pharos explainer page — covers token, SPNs, architecture
+# Confirmed in search results as a clean crawlable page
+SOURCE_5_BITGET = {
+    "enabled": True,
+    "name": "Bitget Academy",
+    "type": "targeted",
+    "delay": 1.5,
+    "urls": [
+        "https://web3.bitget.com/en/academy/what-is-pharos-network-pharos-a-high-throughput-evm-layer-1-for-real-world-asset-tokenization-and-defi-lLending",
+        "https://web3.bitget.com/en/dapp/pharos-network-30127",
+    ],
+}
+
+# ── MANUAL PASTE: pharos.xyz blog/resources ─────────────────────
+# These pages use React and cannot be auto-crawled.
+# To add them:
+#   1. Open https://www.pharos.xyz/blog in Chrome
+#   2. Wait for page to fully load, scroll to bottom
+#   3. Ctrl+A, Ctrl+C to copy all text
+#   4. Replace the placeholder below with your pasted text
+#   5. Do the same for https://www.pharos.xyz/resources
+#   6. Re-run: python crawl_docs.py
+MANUAL_PHAROS_BLOG = {
+    "enabled": True,
+    "name": "Pharos Blog",
+    "source_url": "https://www.pharos.xyz/blog",
+    "title": "Pharos Network — Official Blog",
+    "content": "PASTE_PHAROS_BLOG_CONTENT_HERE",
+}
+
+MANUAL_PHAROS_RESOURCES = {
+    "enabled": True,
+    "name": "Pharos Resources",
+    "source_url": "https://www.pharos.xyz/resources",
+    "title": "Pharos Network — Resources & Research",
+    "content": "PASTE_PHAROS_RESOURCES_CONTENT_HERE",
+}
+
 
 # ===============================================================
 #  SHARED UTILITIES
 # ===============================================================
-
-def make_safe_filename(url: str) -> str:
-    parsed = urlparse(url)
-    domain = parsed.netloc.replace(".", "_").replace("www_", "")
-    path = parsed.path.strip("/")
-    if not path:
-        path = "index"
-    safe_path = re.sub(r"[^\w\-]", "_", path)
-    return f"{domain}__{safe_path}.txt"[:200]
-
-
-def extract_text_from_html(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    for tag in soup.find_all(["script", "style", "nav", "footer",
-                               "header", "aside", "noscript", "svg", "button"]):
-        tag.decompose()
-    main = (
-        soup.find("main")
-        or soup.find("article")
-        or soup.find(id=re.compile(r"content|main|article", re.I))
-        or soup.find("div", class_=re.compile(r"content|main|article|body", re.I))
-        or soup.find("body")
-    )
-    raw = main.get_text(separator="\n", strip=True) if main else soup.get_text(separator="\n", strip=True)
-    lines = [line.strip() for line in raw.splitlines() if line.strip()]
-    return "\n".join(lines)
-
-
-def get_page_title(html: str, fallback: str = "") -> str:
-    soup = BeautifulSoup(html, "lxml")
-    tag = soup.find("title")
-    return tag.get_text(strip=True) if tag else fallback
-
 
 SHARED_HEADERS = {
     "User-Agent": (
@@ -146,7 +162,61 @@ SHARED_HEADERS = {
 }
 
 
+def make_safe_filename(url: str) -> str:
+    """Turn a URL into a safe .txt filename, including the domain."""
+    parsed = urlparse(url)
+    domain = re.sub(r"[^\w]", "_", parsed.netloc)
+    path = parsed.path.strip("/")
+    if not path:
+        path = "index"
+    safe = re.sub(r"[^\w\-]", "_", path)
+    return f"{domain}__{safe}.txt"[:200]
+
+
+def extract_text(html: str) -> str:
+    """Strip HTML noise and return clean readable text."""
+    soup = BeautifulSoup(html, "lxml")
+
+    for tag in soup.find_all([
+        "script", "style", "nav", "footer", "header",
+        "aside", "noscript", "svg", "button", "form",
+        "meta", "link",
+    ]):
+        tag.decompose()
+
+    # Prefer semantic content containers
+    main = (
+        soup.find("main")
+        or soup.find("article")
+        or soup.find(id=re.compile(r"content|main|article|readme", re.I))
+        or soup.find("div", class_=re.compile(r"content|article|post|readme|markdown", re.I))
+        or soup.find("body")
+    )
+
+    raw = main.get_text(separator="\n", strip=True) if main else ""
+    lines = [l.strip() for l in raw.splitlines() if l.strip()]
+    return "\n".join(lines)
+
+
+def get_title(html: str, fallback: str = "") -> str:
+    soup = BeautifulSoup(html, "lxml")
+    tag = soup.find("title")
+    return tag.get_text(strip=True) if tag else fallback
+
+
+def get_internal_links(html: str, current_url: str, base_url: str) -> list:
+    soup = BeautifulSoup(html, "lxml")
+    links = []
+    for a in soup.find_all("a", href=True):
+        full = urljoin(current_url, a["href"])
+        clean = full.split("#")[0].split("?")[0].rstrip("/")
+        if clean.startswith(base_url) and clean not in links:
+            links.append(clean)
+    return links
+
+
 def save_page(url: str, title: str, content: str, filename: str) -> None:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     filepath = os.path.join(OUTPUT_DIR, filename)
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(f"SOURCE_URL: {url}\n")
@@ -155,28 +225,70 @@ def save_page(url: str, title: str, content: str, filename: str) -> None:
         f.write(content)
 
 
+def fetch_url(url: str, source_name: str, extra_headers: dict = None) -> tuple:
+    """
+    Fetch a single URL. Returns (html, status_code) or (None, error_code).
+    Handles the most common failure modes with clear messages.
+    """
+    headers = dict(SHARED_HEADERS)
+    if extra_headers:
+        headers.update(extra_headers)
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=20)
+
+        if resp.status_code == 200:
+            ct = resp.headers.get("content-type", "")
+            if "text/html" not in ct:
+                print(f"  [{source_name}] Skipped (not HTML): {url}")
+                return None, "not_html"
+            return resp.text, 200
+
+        elif resp.status_code == 404:
+            print(f"  [{source_name}] Not found (404): {url}")
+            return None, 404
+
+        elif resp.status_code == 403:
+            print(f"  [{source_name}] Blocked (403): {url}")
+            print(f"  [{source_name}]   Try manual paste for this page.")
+            return None, 403
+
+        elif resp.status_code == 429:
+            print(f"  [{source_name}] Rate limited (429): {url} — waiting 10s...")
+            time.sleep(10)
+            return fetch_url(url, source_name, extra_headers)  # retry once
+
+        else:
+            print(f"  [{source_name}] HTTP {resp.status_code}: {url}")
+            return None, resp.status_code
+
+    except requests.exceptions.ConnectionError:
+        print(f"  [{source_name}] Connection error: {url}")
+        return None, "connection_error"
+    except requests.exceptions.Timeout:
+        print(f"  [{source_name}] Timeout: {url}")
+        return None, "timeout"
+    except Exception as e:
+        print(f"  [{source_name}] Unexpected error: {e}")
+        return None, "unknown"
+
+
 # ===============================================================
-#  CRAWLER 1 — PHAROS DOCS (full recursive crawl)
+#  CRAWLER TYPE A — FULL RECURSIVE CRAWL
+#  Used for: Pharos Docs, Build on Pharos
 # ===============================================================
 
-def get_internal_links(html: str, current_url: str, base_url: str) -> list:
-    soup = BeautifulSoup(html, "lxml")
-    links = []
-    for anchor in soup.find_all("a", href=True):
-        full = urljoin(current_url, anchor["href"])
-        clean = full.split("#")[0].split("?")[0].rstrip("/")
-        if clean.startswith(base_url) and clean not in links:
-            links.append(clean)
-    return links
-
-
-def crawl_pharos_docs(config: dict) -> list:
+def full_crawl(config: dict) -> list:
     if not config["enabled"]:
         return []
 
     base_url = config["base_url"]
+    name = config["name"]
+
     print(f"\n{'='*60}")
-    print(f"[{config['name']}] Starting full site crawl of {base_url}")
+    print(f"SOURCE: {name}")
+    print(f"TYPE:   Full recursive crawl")
+    print(f"URL:    {base_url}")
     print(f"{'='*60}")
 
     visited = set()
@@ -189,131 +301,111 @@ def crawl_pharos_docs(config: dict) -> list:
             continue
         visited.add(url)
 
-        try:
-            resp = requests.get(url, headers=SHARED_HEADERS, timeout=15)
-            if "text/html" not in resp.headers.get("content-type", ""):
-                continue
-            if resp.status_code != 200:
-                print(f"  [{config['name']}] Skip {url} (HTTP {resp.status_code})")
-                continue
+        html, status = fetch_url(url, name)
+        if not html:
+            continue
 
-            text = extract_text_from_html(resp.text)
-            title = get_page_title(resp.text, fallback=url)
-            if len(text) < 50:
-                continue
+        text = extract_text(html)
+        title = get_title(html, fallback=url)
 
-            pages.append({"url": url, "title": title, "content": text})
-            path = urlparse(url).path or "/"
-            print(f"  [{config['name']}] Collected ({len(pages):>3}): {path}")
+        if len(text) < 80:
+            continue
 
-            for link in get_internal_links(resp.text, url, base_url):
-                if link not in visited:
-                    queue.append(link)
+        pages.append({"url": url, "title": title, "content": text})
+        path = urlparse(url).path or "/"
+        print(f"  [{name}] Collected ({len(pages):>3}): {path}")
 
-            time.sleep(config["delay"])
+        for link in get_internal_links(html, url, base_url):
+            if link not in visited:
+                queue.append(link)
 
-        except requests.exceptions.RequestException as e:
-            print(f"  [{config['name']}] Error: {url} - {e}")
+        time.sleep(config["delay"])
 
-    print(f"  [{config['name']}] Done: {len(pages)} pages collected")
+    print(f"  [{name}] Done — {len(pages)} pages collected")
     return pages
 
 
 # ===============================================================
-#  CRAWLER 2 — TARGETED URL FETCHER (CoinMarketCap, AirdropAlert)
+#  CRAWLER TYPE B — TARGETED URL LIST
+#  Used for: GitHub, Medium, Bitget
 # ===============================================================
 
-def fetch_specific_urls(config: dict) -> list:
+def targeted_fetch(config: dict) -> list:
     if not config["enabled"]:
         return []
 
+    name = config["name"]
+    urls = config["urls"]
+
     print(f"\n{'='*60}")
-    print(f"[{config['name']}] Fetching {len(config['urls'])} URL(s)")
+    print(f"SOURCE: {name}")
+    print(f"TYPE:   Targeted fetch ({len(urls)} URL(s))")
     print(f"{'='*60}")
 
     pages = []
 
-    for url in config["urls"]:
-        try:
-            headers = dict(SHARED_HEADERS)
-            if "coinmarketcap" in url:
-                headers["Referer"] = "https://www.google.com/"
+    for url in urls:
+        # GitHub needs a Referer to avoid some redirects
+        extra = {}
+        if "github.com" in url:
+            extra = {"Referer": "https://github.com"}
+        elif "medium.com" in url:
+            extra = {"Referer": "https://www.google.com/"}
 
-            resp = requests.get(url, headers=headers, timeout=20)
+        html, status = fetch_url(url, name, extra)
+        if not html:
+            continue
 
-            if resp.status_code == 404:
-                print(f"  [{config['name']}] Not found (404): {url}")
-                print(f"  [{config['name']}]   The Pharos page may not exist on this site yet.")
-                continue
+        text = extract_text(html)
+        title = get_title(html, fallback=url)
 
-            if resp.status_code == 403:
-                print(f"  [{config['name']}] Access denied (403): {url}")
-                print(f"  [{config['name']}]   This site blocks automated access.")
-                print(f"  [{config['name']}]   Try manual copy-paste instead (see LINKEDIN example).")
-                continue
+        if len(text) < 80:
+            print(f"  [{name}] Too little content (may be JS-rendered): {url}")
+            print(f"  [{name}]   Characters extracted: {len(text)}")
+            continue
 
-            if resp.status_code != 200:
-                print(f"  [{config['name']}] HTTP {resp.status_code}: {url}")
-                continue
+        pages.append({"url": url, "title": title, "content": text})
+        print(f"  [{name}] Fetched: {title[:60]}")
+        print(f"  [{name}]   {len(text):,} characters — {url}")
 
-            if "text/html" not in resp.headers.get("content-type", ""):
-                print(f"  [{config['name']}] Not HTML: {url}")
-                continue
+        time.sleep(config["delay"])
 
-            text = extract_text_from_html(resp.text)
-            title = get_page_title(resp.text, fallback=url)
-
-            if len(text) < 80:
-                print(f"  [{config['name']}] Too little content from {url}")
-                print(f"  [{config['name']}]   Page may use JavaScript. Try manual paste.")
-                continue
-
-            pages.append({"url": url, "title": title, "content": text})
-            print(f"  [{config['name']}] Fetched: {url}")
-            print(f"  [{config['name']}]   {len(text)} characters extracted")
-
-            time.sleep(config["delay"])
-
-        except requests.exceptions.ConnectionError:
-            print(f"  [{config['name']}] Could not connect to {url}")
-        except requests.exceptions.Timeout:
-            print(f"  [{config['name']}] Timed out: {url}")
-        except Exception as e:
-            print(f"  [{config['name']}] Unexpected error: {e}")
-
-    print(f"  [{config['name']}] Done: {len(pages)} page(s) saved")
+    print(f"  [{name}] Done — {len(pages)} page(s) saved")
     return pages
 
 
 # ===============================================================
-#  SOURCE 4 — LINKEDIN (manual paste handler)
+#  CRAWLER TYPE C — MANUAL PASTE
+#  Used for: pharos.xyz/blog, pharos.xyz/resources (JS-rendered)
 # ===============================================================
 
-LINKEDIN_PLACEHOLDER = "PASTE YOUR LINKEDIN CONTENT HERE."
+PLACEHOLDER_MARKERS = [
+    "PASTE_PHAROS_BLOG_CONTENT_HERE",
+    "PASTE_PHAROS_RESOURCES_CONTENT_HERE",
+    "PASTE YOUR LINKEDIN CONTENT HERE",
+]
 
-
-def process_linkedin_manual(config: dict) -> list:
+def manual_paste(config: dict) -> list:
     if not config["enabled"]:
         return []
 
+    name = config["name"]
     content = config["content"].strip()
 
-    if LINKEDIN_PLACEHOLDER in content or len(content) < 100:
-        print(f"\n{'='*60}")
-        print(f"[LinkedIn] Skipped — no content pasted yet.")
-        print(f"[LinkedIn] To add LinkedIn:")
-        print(f"[LinkedIn]   1. Open: https://www.linkedin.com/company/pharos-network/about/")
-        print(f"[LinkedIn]   2. Select all (Ctrl+A), copy (Ctrl+C)")
-        print(f"[LinkedIn]   3. In crawl_docs.py, find LINKEDIN_MANUAL_CONTENT")
-        print(f"[LinkedIn]   4. Delete the instructions, paste your text")
-        print(f"[LinkedIn]   5. Save and re-run: python crawl_docs.py")
-        print(f"{'='*60}")
+    is_placeholder = any(marker in content for marker in PLACEHOLDER_MARKERS)
+
+    if is_placeholder or len(content) < 100:
+        print(f"\n[{name}] Skipped — placeholder text detected.")
+        print(f"[{name}]   To add this source:")
+        print(f"[{name}]   1. Open {config['source_url']} in Chrome")
+        print(f"[{name}]   2. Wait for page to fully load, scroll to bottom")
+        print(f"[{name}]   3. Press Ctrl+A then Ctrl+C")
+        print(f"[{name}]   4. In crawl_docs.py, find the content field for '{name}'")
+        print(f"[{name}]   5. Delete the placeholder and paste your text")
+        print(f"[{name}]   6. Save and re-run: python crawl_docs.py")
         return []
 
-    print(f"\n{'='*60}")
-    print(f"[LinkedIn] Manual content found ({len(content)} characters)")
-    print(f"{'='*60}")
-
+    print(f"\n[{name}] Manual content found ({len(content):,} characters)")
     return [{
         "url": config["source_url"],
         "title": config["title"],
@@ -322,13 +414,11 @@ def process_linkedin_manual(config: dict) -> list:
 
 
 # ===============================================================
-#  SAVE ALL PAGES
+#  SAVE INDEX
 # ===============================================================
 
-def save_all_pages(all_pages: list) -> None:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+def save_index(all_pages: list) -> None:
     index = []
-
     for page in all_pages:
         filename = make_safe_filename(page["url"])
         save_page(page["url"], page["title"], page["content"], filename)
@@ -342,32 +432,7 @@ def save_all_pages(all_pages: list) -> None:
     with open(index_path, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=2)
 
-    print(f"\n{'='*60}")
-    print(f"Saved {len(all_pages)} total pages to '{OUTPUT_DIR}/'")
-    print(f"Index written to '{OUTPUT_DIR}/_index.json'")
-    print(f"{'='*60}")
-
-
-# ===============================================================
-#  HOW TO ADD MORE SOURCES IN THE FUTURE
-#
-#  Option A - Specific pages (any public site):
-#    1. Create a new config dict like COINMARKETCAP_CONFIG
-#    2. Add your URLs to the "urls" list
-#    3. Call fetch_specific_urls(your_config) in main below
-#    4. Add result to all_pages
-#    5. Re-run: python crawl_docs.py  then  python build_vectorstore.py
-#
-#  Option B - Full site crawl:
-#    1. Duplicate PHAROS_DOCS_CONFIG, change base_url
-#    2. Call crawl_pharos_docs(your_config) in main below
-#    3. Add result to all_pages
-#    4. Re-run both scripts
-#
-#  Option C - Sites that block crawlers:
-#    1. Copy page content manually from browser
-#    2. Use the LinkedIn manual paste pattern above
-# ===============================================================
+    print(f"\n  Index written: {index_path}")
 
 
 # ===============================================================
@@ -375,53 +440,83 @@ def save_all_pages(all_pages: list) -> None:
 # ===============================================================
 
 if __name__ == "__main__":
-    print("OctoBot Multi-Source Crawler")
     print("=" * 60)
-    print("Sources configured:")
-    print("  1. Pharos Docs     (full site crawl)")
-    print("  2. CoinMarketCap   (targeted pages)")
-    print("  3. AirdropAlert    (targeted pages)")
-    print("  4. LinkedIn        (manual paste)")
+    print("  OctoBot Multi-Source Crawler — 5 Sources")
+    print("=" * 60)
+    print()
+    print("  Source 1: Pharos Docs         (docs.pharos.xyz)")
+    print("  Source 2: Build on Pharos     (buildonpharos.com)")
+    print("  Source 3: Pharos GitHub       (github.com/PharosNetwork)")
+    print("  Source 4: Medium Articles     (7 confirmed articles)")
+    print("  Source 5: Bitget Academy      (web3.bitget.com)")
+    print()
+    print("  + Manual paste slots for pharos.xyz/blog and /resources")
     print()
 
+    results = {}
+
+    # ── 1. Pharos Docs ────────────────────────────────────────────
+    results["Pharos Docs"] = full_crawl(SOURCE_1_PHAROS_DOCS)
+
+    # ── 2. Build on Pharos ────────────────────────────────────────
+    results["Build on Pharos"] = full_crawl(SOURCE_2_BUILDONPHAROS)
+
+    # ── 3. GitHub ─────────────────────────────────────────────────
+    results["GitHub"] = targeted_fetch(SOURCE_3_GITHUB)
+
+    # ── 4. Medium ─────────────────────────────────────────────────
+    results["Medium"] = targeted_fetch(SOURCE_4_MEDIUM)
+
+    # ── 5. Bitget Academy ─────────────────────────────────────────
+    results["Bitget"] = targeted_fetch(SOURCE_5_BITGET)
+
+    # ── Manual paste sources (skipped until you fill them in) ─────
+    results["Pharos Blog"] = manual_paste(MANUAL_PHAROS_BLOG)
+    results["Pharos Resources"] = manual_paste(MANUAL_PHAROS_RESOURCES)
+
+    # ── Combine and save ─────────────────────────────────────────
     all_pages = []
-
-    # 1. Pharos official docs
-    pharos_pages = crawl_pharos_docs(PHAROS_DOCS_CONFIG)
-    all_pages.extend(pharos_pages)
-
-    # 2. CoinMarketCap
-    cmc_pages = fetch_specific_urls(COINMARKETCAP_CONFIG)
-    all_pages.extend(cmc_pages)
-
-    # 3. AirdropAlert
-    airdrop_pages = fetch_specific_urls(AIRDROPALERT_CONFIG)
-    all_pages.extend(airdrop_pages)
-
-    # 4. LinkedIn (manual)
-    linkedin_pages = process_linkedin_manual(LINKEDIN_CONFIG)
-    all_pages.extend(linkedin_pages)
-
-    # Summary
-    print(f"\nCOLLECTION SUMMARY")
-    print(f"  Pharos Docs:   {len(pharos_pages)} pages")
-    print(f"  CoinMarketCap: {len(cmc_pages)} pages")
-    print(f"  AirdropAlert:  {len(airdrop_pages)} pages")
-    print(f"  LinkedIn:      {len(linkedin_pages)} pages")
-    print(f"  --------------------------")
-    print(f"  TOTAL:         {len(all_pages)} pages")
+    for pages in results.values():
+        all_pages.extend(pages)
 
     if not all_pages:
         print("\nNo pages collected. Check your internet connection.")
         exit(1)
 
-    save_all_pages(all_pages)
+    print(f"\n{'='*60}")
+    print(f"  SAVING {len(all_pages)} PAGES TO '{OUTPUT_DIR}/'")
+    print(f"{'='*60}")
+    save_index(all_pages)
 
-    print(f"\nCrawling complete!")
-    print(f"\nNEXT STEPS:")
-    print(f"  1. Run:  python build_vectorstore.py")
-    print(f"     (Rebuilds OctoBot knowledge base with all sources)")
-    print(f"  2. Then: streamlit run app.py")
-    print(f"\nTIP: If CoinMarketCap or AirdropAlert returned 0 pages,")
-    print(f"  open the URL in your browser to verify Pharos is listed.")
-    print(f"  Copy the exact page URL and update the config in this file.")
+    # ── Final summary ─────────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  COLLECTION SUMMARY")
+    print(f"{'='*60}")
+    total = 0
+    for source, pages in results.items():
+        count = len(pages)
+        total += count
+        status = f"{count} pages" if count > 0 else "0 pages (skipped or blocked)"
+        print(f"  {source:<22} {status}")
+    print(f"  {'─'*38}")
+    print(f"  {'TOTAL':<22} {total} pages")
+    print(f"{'='*60}")
+
+    print(f"""
+  Crawling complete!
+
+  NEXT STEPS:
+  ──────────────────────────────────────────
+  Step 1 — Rebuild the knowledge base:
+      python build_vectorstore.py
+
+  Step 2 — Launch OctoBot:
+      streamlit run app.py
+
+  OPTIONAL — Add more content later:
+  - Open pharos.xyz/blog in Chrome
+  - Copy all text (Ctrl+A, Ctrl+C)
+  - Paste into MANUAL_PHAROS_BLOG content field
+  - Re-run both scripts above
+  ──────────────────────────────────────────
+""")

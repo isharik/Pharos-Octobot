@@ -15,9 +15,7 @@ Developers building on Pharos can access Nirvana RPC endpoints by requesting API
 Access Type:
 Dev API Key (unrestricted RPC access)
 Request:
-Contact the Pharos team to obtain credentials (Reach out on mail:
-[email protected]
-or tg: @janesh_dani)
+Contact the Pharos team to obtain credentials (Reach out on mail: janesh@pharos.xyz or tg: @janesh_dani)
 Documentation
 For more details on Nirvana Labs infrastructure and capabilities:
 https://nirvanalabs.io/product#rpc-nodes

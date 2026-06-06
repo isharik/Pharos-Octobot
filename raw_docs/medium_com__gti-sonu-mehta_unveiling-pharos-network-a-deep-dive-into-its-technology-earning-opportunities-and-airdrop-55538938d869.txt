@@ -1,0 +1,38 @@
+SOURCE_URL: https://medium.com/gti-sonu-mehta/unveiling-pharos-network-a-deep-dive-into-its-technology-earning-opportunities-and-airdrop-55538938d869
+TITLE: Unveiling Pharos Network: A Deep Dive into its Technology, Earning Opportunities, and Airdrop Program | by GTI sonu mehta | GTI sonu mehta | Medium
+============================================================
+Member-only story
+Featured
+Unveiling Pharos Network: A Deep Dive into its Technology, Earning Opportunities, and Airdrop Program
+GTI sonu mehta
+4 min read
+·
+Aug 30, 2025
+--
+Press enter or click to view image in full size
+Introduction
+Pharos Network is emerging as a significant player in the blockchain space, aiming to bridge the gap between Web2 and Web3 with its innovative Layer 1 solution. This article provides a comprehensive overview of Pharos Network, exploring its core technology, potential earning opportunities, and the highly anticipated airdrop program. We will delve into the technical intricacies that set Pharos apart, examine how users can engage with the ecosystem to earn rewards, and detail the eligibility criteria for its airdrop.
+🔧 A Deep Dive into Pharos Network’s Technology
+Pharos Network distinguishes itself with a sophisticated and modular architecture designed for high performance, scalability, and interoperability. Its core components work in synergy to deliver a seamless experience for both developers and users.
+⚡ Modular and Full-Stack Parallel L1 Blockchain Network
+Pharos is built on a modular, full-stack parallel Layer 1 blockchain network, which is a key differentiator. This architecture is divided into three primary layers:
+L1-Base
+: Provides industry-leading data availability and hardware acceleration, forming the foundation of the network.
+L1-Core
+: A high-performance, globally distributed blockchain powered by decentralized nodes. It delivers
+high throughput and sub-second finality
+, crucial for real-time Web3 experiences.
+L1-Extension
+: Built on top of L1-Core, it supports network expansion across three dimensions:
+Heterogeneous computation for custom
+Special Processing Networks (SPNs)
+Native Restaking
+for shared security and rewards
+Cross-SPN Interoperation
+for a modular, composable ecosystem
+🗳️ Pharos Consensus: Responsive and Efficient
+Pharos employs a consensus protocol designed for
+high throughput and low latency
+in large-scale, wide-area networks. It introduces two unique features:
+Responsiveness
+: Block…

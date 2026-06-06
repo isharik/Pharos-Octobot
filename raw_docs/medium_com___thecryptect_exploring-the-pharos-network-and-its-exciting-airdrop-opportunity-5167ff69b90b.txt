@@ -1,0 +1,42 @@
+SOURCE_URL: https://medium.com/@thecryptect/exploring-the-pharos-network-and-its-exciting-airdrop-opportunity-5167ff69b90b
+TITLE: Exploring the Pharos Network and Its Exciting Airdrop Opportunity | by The.Cryptect | Medium
+============================================================
+Exploring the Pharos Network and Its Exciting Airdrop Opportunity
+The.Cryptect
+3 min read
+·
+Jul 1, 2025
+--
+Press enter or click to view image in full size
+Pharos Network, a promising Layer 1 (L1) blockchain initiative currently in its testnet phase. With a successful $8 million seed funding round and an engaging airdrop campaign, Pharos is positioning itself as a noteworthy player in the decentralized ecosystem. This article delves into the Pharos Network, its testnet Season 1, and the airdrop opportunity that has sparked both excitement and scrutiny.
+What is the Pharos Network?
+The Pharos Network is an emerging L1 blockchain designed to facilitate scalable and efficient transactions, with $PHRS as its native gas token. The project draws its name from the Pharos of Alexandria, the ancient lighthouse that guided ships safely to shore — a metaphor for its mission to illuminate the path toward a robust decentralized future. Backed by prominent investors such as Lightspeed Faction, Hack VC, SNZ, and others,
+Pharos raised $8 million in a seed funding round
+, as highlighted in a November 2024 announcement on Finsmes.com. The network aims to empower users through a decentralized infrastructure, offering features like governance functions for $PHRS tokens and a suite of tools for developers and participants. While specific tokenomics and the mainnet launch date remain undisclosed, the current testnet phase — Season 1 — is a critical step toward building a thriving ecosystem.
+Pharos Testnet Season 1: A Gateway to Rewards
+Launched in late June 2025, the Pharos Testnet Season 1 invites participants to engage with the network through a series of tasks, offering the potential to earn $PHRS tokens as rewards. The testnet serves as a proving ground for the network’s technology, allowing users to test its capabilities while incentivizing participation through gamified activities.
+How to Participate in the Airdrop
+Here’s a breakdown of the steps to get involved, based on the X post and related web insights:
+Visit the Official Site via my referral link:
+https://testnet.pharosnetwork.xyz/experience?inviteCode=oYTBnVMu1qpyiknN
+Connect an EVM Wallet: Use a compatible wallet like MetaMask, Rabby Wallet, or OKX wallet (recommended) to link to the Pharos testnet.
+Switch to Pharos Testnet: Add the Pharos testnet to your wallet settings.
+Claim Daily $PHRS Faucet: Access the homepage and scroll down to claim free $PHRS tokens daily
+(
+https://pharos.network
+)
+.
+Explore the Experience Page: Visit
+https://pharos.network/experience
+for tasks such as swapping and liquidity provision (LP), to be completed daily.
+Claim $USDC Faucet on Zenith: Secure additional testnet assets via
+https://zenith.pharos.network
+Transfer $PHRS: Send some $PHRS to a different wallet address to test transaction functionality.
+Mint a Testnet Badge NFT: With over 2 $PHRS, mint a Pharos Testnet Badge NFT via the Experience page.
+Complete Social Tasks: Engage in community activities listed on the Experience page.
+Deploy Contracts: Visit
+https://dev.pharos.network
+to deploy smart contracts and deepen your involvement.
+Participants are encouraged to perform these tasks daily to climb the leaderboard and maximize their potential rewards. The campaign also includes a referral program, allowing users to invite friends and boost their earnings, a tactic proven to enhance engagement in crypto ecosystems (Journal of Behavioral Economics, 2023).
+Conclusion
+The Pharos Network’s Testnet Season 1 airdrop offers a compelling entry point for crypto enthusiasts willing to navigate its risks. With a clear participation process, significant backing, and the allure of free tokens, it’s an opportunity worth exploring — provided users exercise due diligence. As the campaign’s duration remains unspecified, acting promptly and staying updated via official channels (e.g., @pharos_network on X or the Telegram group linked in the post) is advisable. Whether Pharos will light the way to a new blockchain era or fade into the speculative haze remains to be seen, but for now, it’s a beacon worth watching.
