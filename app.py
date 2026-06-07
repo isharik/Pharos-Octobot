@@ -636,7 +636,7 @@ if load_error:
 chunk_count = bot.vectorstore._collection.count()
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Knowledge Chunks", f"{chunk_count:,}")
-c2.metric("AI Model", "GEMINI")
+c2.metric("API Source", "Studio/Gemini")
 c3.metric("Vector DB", "ChromaDB")
 c4.metric("Mode", "RAG · No Hallucination")
 
