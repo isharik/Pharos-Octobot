@@ -1,4 +1,4 @@
-🐙 OctoBot — AI Documentation RAG Chatbot
+🐙 OctoBot — AI Documentation & Agent Skill for Pharos
 
 (Important : Before you try to run the app yu might want to configure your api keys and chroma db properly so that no error persists , i haven't made the site public yet as its still wip , after i deploy the site and make the data locally available , you can easily test it out till then keep open sourcing)
 
