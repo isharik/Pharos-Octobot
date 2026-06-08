@@ -1,0 +1,35 @@
+{
+  "skill_name": "pharos-knowledge",
+  "version": "1.0.0",
+  "description": "Answers any question about the Pharos Network using verified documentation sources. Returns structured answers with source citations. Zero hallucination — only responds from real Pharos docs.",
+  "category": "data-fetch",
+  "author": "OctoBot",
+  "hackathon": "Pharos AI Agent Carnival — Phase 1",
+  "input": {
+    "question": "string — any question about Pharos Network"
+  },
+  "output": {
+    "answer": "string — the answer extracted from documentation",
+    "sources": "array of objects with url and title fields",
+    "found_in_docs": "boolean — true if answer was found in the knowledge base"
+  },
+  "endpoint": "POST /query",
+  "health_check": "GET /",
+  "interactive_docs": "GET /docs",
+  "knowledge_sources": [
+    "https://docs.pharos.xyz (full site crawl)",
+    "https://www.buildonpharos.com (developer hub)",
+    "https://github.com/PharosNetwork (repository READMEs)",
+    "Medium — 7 verified Pharos deep-dive articles",
+    "Bitget Academy — Pharos explainer pages"
+  ],
+  "tech_stack": {
+    "llm": "GEMINI (Google)",
+    "embeddings": "text-embedding-3-small (GEMINI)",
+    "vector_db": "ChromaDB",
+    "rag_framework": "LangChain",
+    "api_framework": "FastAPI",
+    "ui": "Streamlit"
+  },
+  "tags": ["pharos", "documentation", "RAG", "knowledge-base", "AI", "data-fetch"]
+}
