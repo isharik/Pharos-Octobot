@@ -92,7 +92,7 @@ If the answer is not in the documentation:
 
 ## Knowledge Sources
 
-OctoBot is trained on **5 verified Pharos sources**:
+OctoBot is trained on **5 verified Pharos sources. More sources will be added as developments are made**:
 
 | # | Source | Type | Coverage |
 |---|---|---|---|
