@@ -242,7 +242,7 @@ the entire Pharos Agent ecosystem — exactly what the hackathon is asking for.
 | Category | Data Fetch / Knowledge Base |
 | Submission deadline | June 15, 2025 |
 | Platform | [DoraHacks](https://dorahacks.io/hackathon/pharos-phase1) |
- Check out my submission and do Upvote :) https://dorahacks.io/buidl/44453
+| Check out my submission and do Upvote :)| https://dorahacks.io/buidl/44453 |
 ---
 
 ## .gitignore
