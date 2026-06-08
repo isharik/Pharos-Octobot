@@ -591,7 +591,7 @@ if logo_b64:
             <img src="{logo_b64}" class="pharos-logo-img" alt="Pharos Logo" />
         </div>
         <h1 class="hero-title">OctoBot</h1>
-        <p class="hero-subtitle">Pharos Network · AI Documentation Assistant</p>
+        <p class="hero-subtitle">Pharos Network · AI Documentation & Agent Skill for Pharos</p>
     </div>
     """, unsafe_allow_html=True)
 else:
