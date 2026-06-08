@@ -27,6 +27,8 @@ It is powered by a RAG (Retrieval Augmented Generation) pipeline that crawls
 Gemini (Google AI) to answer questions strictly from that knowledge base.
 
 > **No hallucination. No guessing. If the answer isn't in the docs, OctoBot says so.**
+>
+> https://youtu.be/gIsav6XI6HE?si=wWhH1JpkjOefvJ20 (VIDEO GUIDE)
 
 ---
 
