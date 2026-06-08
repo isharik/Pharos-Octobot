@@ -1,173 +1,273 @@
-🐙 OctoBot — AI Documentation & Agent Skill for Pharos
+<div align="center">
 
-## What it does
-A reusable AI Skill that answers any question about the Pharos Network
-using verified documentation. Built for the Pharos AI Agent Carnival.
+<img src="pharos_logo.jpg" width="80" alt="Pharos Logo" />
 
-## Skill category
-Data Fetch / Knowledge Base
+# 🐙 OctoBot — Pharos Knowledge Skill
 
-## How any Agent can use this Skill
-POST https://your-deployment/query
+**A reusable AI Skill that answers any question about the Pharos Network**
+**using verified documentation. Zero hallucination. Built for the Pharos AI Agent Carnival.**
+
+[![Pharos](https://img.shields.io/badge/Built%20on-Pharos%20Network-1A1AFF?style=for-the-badge)](https://pharos.xyz)
+[![Hackathon](https://img.shields.io/badge/Pharos-AI%20Agent%20Carnival-blueviolet?style=for-the-badge)](https://dorahacks.io/hackathon/pharos-phase1)
+[![FastAPI](https://img.shields.io/badge/Skill%20API-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
+[![LangChain](https://img.shields.io/badge/RAG-LangChain-1C3C3C?style=for-the-badge)](https://langchain.com)
+
+</div>
+
+---
+
+## What is OctoBot?
+
+OctoBot is a **Pharos Knowledge Skill** — a reusable AI module built for the
+Pharos AI Agent Carnival. Any Agent deployed on Pharos can call it with a single
+POST request and receive a structured, source-cited answer about the Pharos Network.
+
+It is powered by a RAG (Retrieval Augmented Generation) pipeline that crawls
+5 verified Pharos sources, stores them as vector embeddings in ChromaDB, and uses
+Gemini (Google AI) to answer questions strictly from that knowledge base.
+
+> **No hallucination. No guessing. If the answer isn't in the docs, OctoBot says so.**
+
+---
+
+## Live Demo
+
+| Interface | URL | Description |
+|---|---|---|
+| 💬 Chat UI | Streamlit app | Full visual chat interface |
+| ⚡ Skill API | `POST /query` | For Agents to call programmatically |
+| 📖 Swagger UI | `/docs` | Interactive API tester in browser |
+| ❤️ Health Check | `GET /` | Confirms Skill is online |
+
+---
+
+## How any Agent uses this Skill
+
+**One POST request. Structured response. That's it.**
+
+```
+POST /query
+Content-Type: application/json
+
 {
-  "question": "What are SPNs?"
+  "question": "What are Special Processing Networks?"
 }
+```
 
-Returns:
+**Response:**
+```json
 {
-  "answer": "SPNs (Special Processing Networks) are...",
-  "sources": [{"url": "...", "title": "..."}],
+  "answer": "SPNs (Special Processing Networks) are specialized execution environments within Pharos that handle specific computation types...",
+  "sources": [
+    {
+      "url": "https://docs.pharos.xyz/spns",
+      "title": "Special Processing Networks — Pharos Docs"
+    }
+  ],
   "found_in_docs": true
 }
+```
 
-## Sources it knows about
-- docs.pharos.xyz (full site)
-- buildonpharos.com
-- github.com/PharosNetwork
-- 7 Medium deep-dive articles
-- Bitget Academy
+If the answer is not in the documentation:
+```json
+{
+  "answer": "I could not find that information in the Pharos documentation.",
+  "sources": [],
+  "found_in_docs": false
+}
+```
 
-## Stack
-LangChain · ChromaDB · GPT-4o mini · FastAPI · Streamlit
+---
 
-## Run locally
+## Skill API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Health check — returns status and chunk count |
+| `POST` | `/query` | Main Skill endpoint — ask any Pharos question |
+| `GET` | `/info` | Skill metadata for Agent discovery |
+| `GET` | `/docs` | Interactive Swagger UI to test live |
+
+---
+
+## Knowledge Sources
+
+OctoBot is trained on **5 verified Pharos sources**:
+
+| # | Source | Type | Coverage |
+|---|---|---|---|
+| 1 | [docs.pharos.xyz](https://docs.pharos.xyz) | Full site crawl | Official documentation |
+| 2 | [buildonpharos.com](https://www.buildonpharos.com) | Full site crawl | Developer hub, grants, hackathons |
+| 3 | [github.com/PharosNetwork](https://github.com/PharosNetwork) | Targeted fetch | READMEs, technical specs |
+| 4 | Medium — 7 articles | Targeted fetch | Deep-dive technical analysis |
+| 5 | Bitget Academy | Targeted fetch | Architecture and token explainers |
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| LLM | Gemini (Google AI Studio) | Generates answers from retrieved context |
+| Embeddings | Google Generative AI Embeddings | Converts text to vectors |
+| Vector DB | ChromaDB | Stores and searches document embeddings |
+| RAG Framework | LangChain | Orchestrates retrieval + generation pipeline |
+| Skill API | FastAPI | Exposes OctoBot as a callable Skill |
+| Chat UI | Streamlit | Pharos-branded visual chat interface |
+| Crawler | Python + BeautifulSoup | Crawls 5 documentation sources |
+| Language | Python 3.11+ | Core language |
+
+---
+
+## Project Structure
+
+```
+octobot/
+│
+├── skill_api.py          ← Skill API (hackathon submission entry point)
+├── skill.json            ← Skill metadata for Agent discovery
+├── octobot.py            ← Core RAG engine (retrieval + generation)
+├── app.py                ← Streamlit chat UI (Pharos-branded)
+│
+├── crawl_docs.py         ← Multi-source documentation crawler (5 sources)
+├── build_vectorstore.py  ← Generates embeddings + builds ChromaDB
+│
+├── test_connection.py    ← Tests Gemini API connection
+├── test_retrieval.py     ← Tests ChromaDB retrieval pipeline
+│
+├── requirements.txt      ← All Python dependencies
+├── skill.json            ← Skill metadata
+├── .env                  ← API keys (never commit this file)
+│
+├── raw_docs/             ← Crawled documentation text files (auto-generated)
+├── chroma_db/            ← ChromaDB vector store (auto-generated)
+└── pharos_logo.jpg       ← Pharos logo (used in the UI hero section)
+```
+
+---
+
+## Run it Yourself — Step by Step
+
+### Prerequisites
+- Python 3.11 or higher installed
+- A Google AI Studio API key (free at [aistudio.google.com](https://aistudio.google.com))
+- Git installed
+
+---
+
+### Step 1 — Clone the repo
+```bash
+git clone https://github.com/YOUR_USERNAME/octobot.git
+cd octobot
+```
+
+### Step 2 — Create a virtual environment
+```bash
+python -m venv venv
+
+# Windows:
+venv\Scripts\activate
+
+# Mac/Linux:
+source venv/bin/activate
+```
+
+### Step 3 — Install all dependencies
+```bash
 pip install -r requirements.txt
+```
+
+### Step 4 — Add your API key
+Create a `.env` file in the `octobot` folder:
+```
+GOOGLE_API_KEY=your-google-ai-studio-key-here
+```
+
+### Step 5 — Crawl the Pharos documentation
+```bash
+python crawl_docs.py
+```
+Expected output: 40+ pages collected from 5 sources, saved to `raw_docs/`
+
+### Step 6 — Build the vector store
+```bash
 python build_vectorstore.py
-uvicorn skill_api:app --port 8000
+```
+Expected output: 300+ chunks embedded and stored in `chroma_db/`
 
+### Step 7A — Start the Skill API
+```bash
+uvicorn skill_api:app --host 0.0.0.0 --port 8000
+```
 
+Then open in your browser:
+- **Interactive tester:** http://localhost:8000/docs
+- **Health check:** http://localhost:8000/
+- **Skill info:** http://localhost:8000/info
 
+**Test the Skill from terminal:**
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"What is Pharos Network?\"}"
+```
 
-(Important : Before you try to run the app you might want to configure your api keys and chroma db properly so that no error persists , i haven't made the site public yet as its still wip , after i deploy the site and make the data locally available , you can easily test it out till then keep open sourcing)
+### Step 7B — Start the Chat UI (optional)
+```bash
+streamlit run app.py
+```
+Opens at: http://localhost:8501
 
-OctoBot is a Retrieval-Augmented Generation (RAG) AI chatbot designed to answer questions strictly from the official Pharos documentation.
+---
 
-📚 Documentation Source: https://docs.pharos.xyz/
+## Why This Skill Matters for the Pharos Ecosystem
 
-It ensures accurate, grounded, and hallucination-free responses by retrieving information directly from verified documents.
+Every Agent built on Pharos will eventually need to answer user questions about
+the protocol — SPNs, staking, RWA, consensus, how to build on Pharos.
 
-🚀 Features
-🧠 RAG-based architecture for accurate answers
-📄 Crawls and processes full Pharos documentation
-✂️ Intelligent document chunking for better retrieval
-🧬 Vector search using ChromaDB
-🤖 OpenAI-powered response generation
-🔍 Strict “no hallucination” response policy
-💬 Streamlit chat interface for easy interaction
-📌 Source-based answers with citations
-⚙️ Tech Stack
-🐍 Python 3.x
-🔗 OpenAI API
-🧠 LangChain (latest stable version)
-🗄️ ChromaDB (vector database)
-🎨 Streamlit (UI framework)
-🕷️ BeautifulSoup (web scraping)
-🔐 dotenv (environment variable management)
-🏗️ How It Works
+Instead of every Agent building its own documentation reader from scratch, they
+call this one reusable Skill. It becomes the **foundational knowledge layer** for
+the entire Pharos Agent ecosystem — exactly what the hackathon is asking for.
 
-Video Guide : https://x.com/isharik99/status/2061857340744487276?s=20
+> *"Skills become infrastructure that lives on-chain permanently."*
+> — Pharos AI Agent Carnival
 
-Pharos Docs
-⬇️
-Web Crawler
-⬇️
-Text Extraction
-⬇️
-Chunking
-⬇️
-Embeddings (OpenAI)
-⬇️
-ChromaDB Vector Store
-⬇️
-Retriever System
-⬇️
-GPT Model
-⬇️
-🐙 OctoBot Response (with citations)
+---
 
-🧩 Project Phases
-🔹 Phase 1: Setup
-Virtual environment setup
-Install dependencies
-Configure .env file
-Connect OpenAI API
+## Hackathon Submission
 
+| Field | Detail |
+|---|---|
+| Event | Pharos AI Agent Carnival — Phase 1 Skill Hackathon |
+| Category | Data Fetch / Knowledge Base |
+| Submission deadline | June 15, 2025 |
+| Platform | [DoraHacks](https://dorahacks.io/hackathon/pharos-phase1) |
 
+---
 
-🔹 Phase 2: Data Collection
-Crawl full Pharos documentation
-Extract and store raw text locally
+## .gitignore
 
+Make sure these are in your `.gitignore` before pushing to GitHub:
+```
+.env
+chroma_db/
+raw_docs/
+venv/
+__pycache__/
+*.pyc
+```
 
-🔹 Phase 3: Vector Database
-Split text into chunks
-Generate embeddings
-Store in ChromaDB
+---
 
+## License
 
-🔹 Phase 4: Retrieval System
-Build semantic search pipeline
-Retrieve relevant context for queries
+MIT — free to use, fork, and build upon.
 
+---
 
-🔹 Phase 5: AI Engine
-Integrate OpenAI with retrieval system
-Ensure grounded answers only
-Fallback response if no data found
-
-
-🔹 Phase 6: UI
-Build Streamlit chat interface
-Display answers and sources
-
-
-🔹 Phase 7: Enhancements
-Add memory support
-Improve retrieval accuracy
-Add better citation handling
-
-
-
-
-⚠️ Important Learning
-
-During development, GitHub Push Protection blocked the repository due to an exposed API key in a .env file.
-
-
-
-💡 Key Lesson:
-Never just delete secrets — always remove them from Git history.
-
-This highlighted real-world DevSecOps practices including:
-
-Secret scanning
-Git history safety
-Secure environment handling
-
-
-
-📌 Project Goal
-
-OctoBot aims to become a reliable AI documentation assistant that:
-
-Answers only from verified sources
-Avoids hallucinations completely
-Provides transparent, citation-based responses
-Demonstrates real-world RAG architecture
-
-
-
-🧑‍💻 Author Echoplex99 @discord
-
-Built as a learning project exploring:
-
-RAG systems
-Modern AI architecture
-OpenAI integration
-Vector databases
-⭐ Future Improvements
-Better retrieval ranking
-Multi-document support
-Faster embedding pipeline
-Deployment to cloud
-Authentication system
+<div align="center">
+Built with 🐙 for the Pharos community<br>
+<a href="https://pharos.xyz">pharos.xyz</a> ·
+<a href="https://docs.pharos.xyz">docs.pharos.xyz</a> ·
+<a href="https://dorahacks.io/hackathon/pharos-phase1">DoraHacks</a>
+</div>
