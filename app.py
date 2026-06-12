@@ -22,7 +22,8 @@ st.set_page_config(
     page_title="OctoBot — Pharos AI Assistant",
     page_icon="🐙",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded" \
+    
 )
 
 # ─────────────────────────────────────────────
@@ -75,7 +76,9 @@ html, body, [class*="css"] {
 }
 
 /* ── HIDE STREAMLIT CHROME ──────────────────────────── */
-#MainMenu, footer, header { visibility: hidden !important; }
+#MainMenu, footer {
+    visibility: hidden !important;
+}
 .stDeployButton { display: none !important; }
 
 /* ── SIDEBAR ────────────────────────────────────────── */
@@ -545,11 +548,10 @@ with st.sidebar:
     st.markdown('<p class="sidebar-section">Example Questions</p>', unsafe_allow_html=True)
     examples = [
         "What is Pharos Network?",
+        "What is PROS?",
         "What are SPNs?",
         "How does Native Restaking work?",
-        "What is L1-Core?",
         "How do I build on Pharos?",
-        "What is the consensus mechanism?",
         "What are RWA use cases?",
     ]
     for q in examples:
