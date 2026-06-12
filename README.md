@@ -265,6 +265,24 @@ __pycache__/
 
 MIT — free to use, fork, and build upon.
 
+
+🚧 WIP Update
+
+Currently working on bringing live PROS token data to OctoBot through CoinGecko integration.
+
+Upcoming features:
+• Real-time PROS price and market cap tracking
+• Dedicated `/pros-price` API endpoint
+• Automatic token data responses inside OctoBot
+• Streamlit UI integration so users can check live token data directly from the web app
+
+The goal is to combine Pharos documentation with live ecosystem data in a single experience.
+
+Target release: **14 June 2026** (subject to testing and feedback).
+
+As always, the project remains under active development and community feedback is highly appreciated.
+
+
 ---
 
 <div align="center">
