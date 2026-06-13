@@ -275,11 +275,6 @@ __pycache__/
 
 ---
 
-## License
-
-MIT — free to use, fork, and build upon.
-
-
 Update (DONE)
 
 Finishes working on bringing live PROS token data to OctoBot through CoinGecko integration.
@@ -306,6 +301,12 @@ CoinGecko has a free /news endpoint filtered by coin ID. No API key. One fetch c
 2- A visual interactive diagram in Streamlit showing the full Pharos ecosystem like L1-Core, SPNs, Native Restaking, RWA layer, DeFi protocols with clickable nodes that trigger OctoBot questions about each component.
 Turns OctoBot from a text chatbot into a visual knowledge explorer. It is the kind of thing that gets screenshots shared on X and noticed by the Pharos team.
 Planning to Develop if selected for Phase 2
+
+---
+
+## License
+
+MIT — free to use, fork, and build upon.
 
 <div align="center">
 Built with 🐙 for the Pharos community<br>
