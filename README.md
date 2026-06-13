@@ -299,6 +299,14 @@ As always, the project remains under active development and community feedback i
 
 ---
 
+## Upcoming Features :
+1-Planning to implement Fetching the latest Pharos news from CoinGecko's free news endpoint and show a "latest updates" panel in the sidebar. Users see what's happening with Pharos right now, not just static docs.
+CoinGecko has a free /news endpoint filtered by coin ID. No API key. One fetch call. Adds live context that makes OctoBot feel like a real-time assistant.
+
+2- A visual interactive diagram in Streamlit showing the full Pharos ecosystem like L1-Core, SPNs, Native Restaking, RWA layer, DeFi protocols with clickable nodes that trigger OctoBot questions about each component.
+Turns OctoBot from a text chatbot into a visual knowledge explorer. It is the kind of thing that gets screenshots shared on X and noticed by the Pharos team.
+Planning to Develop if selected for Phase 2
+
 <div align="center">
 Built with 🐙 for the Pharos community<br>
 <a href="https://pharos.xyz">pharos.xyz</a> ·
