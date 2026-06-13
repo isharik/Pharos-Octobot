@@ -222,7 +222,7 @@ Opens at: http://localhost:8501
 
 
 
-##Check Price on Octobot Using terminal :
+## Check Price on Octobot Using terminal :
 
 Enter this command into the terminal 
 
@@ -275,16 +275,11 @@ __pycache__/
 
 ---
 
-## License
+Update (DONE)
 
-MIT — free to use, fork, and build upon.
+Finishes working on bringing live PROS token data to OctoBot through CoinGecko integration.
 
-
-🚧 WIP Update
-
-Currently working on bringing live PROS token data to OctoBot through CoinGecko integration.
-
-Upcoming features:
+Features:
 • Real-time PROS price and market cap tracking
 • Dedicated `/pros-price` API endpoint
 • Automatic token data responses inside OctoBot
@@ -298,6 +293,20 @@ As always, the project remains under active development and community feedback i
 
 
 ---
+
+## Upcoming Features :
+1-Planning to implement Fetching the latest Pharos news from CoinGecko's free news endpoint and show a "latest updates" panel in the sidebar. Users see what's happening with Pharos right now, not just static docs.
+CoinGecko has a free /news endpoint filtered by coin ID. No API key. One fetch call. Adds live context that makes OctoBot feel like a real-time assistant.
+
+2- A visual interactive diagram in Streamlit showing the full Pharos ecosystem like L1-Core, SPNs, Native Restaking, RWA layer, DeFi protocols with clickable nodes that trigger OctoBot questions about each component.
+Turns OctoBot from a text chatbot into a visual knowledge explorer. It is the kind of thing that gets screenshots shared on X and noticed by the Pharos team.
+Planning to Develop if selected for Phase 2
+
+---
+
+## License
+
+MIT — free to use, fork, and build upon.
 
 <div align="center">
 Built with 🐙 for the Pharos community<br>
