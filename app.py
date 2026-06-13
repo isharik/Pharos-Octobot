@@ -175,13 +175,13 @@ html, body, [class*="css"] {
 }
 .sb-logo-name {
     font-family: var(--fn-d);
-    font-size: 13px;
+    font-size: 14.5px;
     font-weight: 700;
     color: var(--txt-1);
     line-height: 1.1;
 }
 .sb-logo-sub {
-    font-size: 9px;
+    font-size: 11px;
     color: var(--txt-3);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -209,13 +209,13 @@ html, body, [class*="css"] {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10px;
+    font-size: 12px;
     color: var(--txt-3);
     padding: 0.3rem 0;
 }
 .dot-live {
-    width: 6px; height: 6px;
-    border-radius: 50%;
+    width: 8px; height: 8px;
+    border-radius: 60%;
     background: var(--green);
     box-shadow: 0 0 5px var(--green);
     animation: blink 2.5s ease-in-out infinite;
@@ -227,7 +227,7 @@ html, body, [class*="css"] {
 
 /* ── SIDEBAR FOOTER NOTE ────────────── */
 .sb-note {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--txt-3);
     line-height: 1.6;
     margin-top: 0.8rem;
@@ -267,7 +267,7 @@ html, body, [class*="css"] {
 
 /* ── TOGGLE ─────────────────────────── */
 [data-testid="stToggle"] label {
-    font-size: 12px !important;
+    font-size: 13.5px !important;
     color: var(--txt-2) !important;
 }
 
@@ -281,26 +281,26 @@ html, body, [class*="css"] {
     margin-bottom: 0.9rem;
 }
 .main-header img {
-    width: 40px; height: 34px;
-    border-radius: 50%;
+    width: 50px; height: 46px;
+    border-radius: 60%;
     filter: drop-shadow(0 0 8px rgba(26,26,255,0.55));
     flex-shrink: 0;
 }
 .main-header-fallback {
-    font-size: 22px;
+    font-size: 23px;
     line-height: 1;
     flex-shrink: 0;
 }
 .main-title {
     font-family: var(--fn-d);
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 700;
     color: var(--txt-1);
     line-height: 1.1;
     letter-spacing: -0.01em;
 }
 .main-subtitle {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--txt-3);
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -314,7 +314,7 @@ html, body, [class*="css"] {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 9px;
+    font-size: 10px;
     color: var(--txt-3);
     background: var(--bg-2);
     border: 1px solid var(--border-1);
@@ -379,7 +379,7 @@ html, body, [class*="css"] {
     border: 1px solid var(--border-1);
     border-radius: 20px;
     padding: 4px 11px;
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--txt-2);
 }
 .stat-pill-dot {
@@ -411,13 +411,13 @@ html, body, [class*="css"] {
 }
 .welcome-card h3 {
     font-family: var(--fn-d) !important;
-    font-size: 14px !important;
+    font-size: 15px !important;
     font-weight: 700 !important;
     color: var(--txt-1) !important;
-    margin: 0 0 0.4rem 0 !important;
+    margin: 0 0 0.5rem 0 !important;
 }
 .welcome-card p {
-    font-size: 12px !important;
+    font-size: 13px !important;
     color: var(--txt-2) !important;
     line-height: 1.65 !important;
     margin: 0 !important;
@@ -758,9 +758,7 @@ if not st.session_state.messages:
     st.markdown(
         '<div class="welcome-card">'
         '<h3>Welcome to OctoBot</h3>'
-        '<p>Ask me anything about Pharos Network — SPNs, consensus, '
-'Native Restaking, RWA, L1 architecture, developer programs, '
-'or how to build on Pharos. Answers come only from verified '
+        '<p>Ask me anything about Pharos Network. Answers come only from verified '
 'documentation sources.</p>'
 '<div class="tag-row">'
 '<span class="tag">SPNs</span>'
@@ -773,18 +771,18 @@ if not st.session_state.messages:
 '<span class="tag">$PROS Token</span>'
 '</div>'
 '<div style="margin-top:0.9rem;padding-top:0.8rem;border-top:1px solid #1A1A30;">'
-'<div style="font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;'
-'color:#52527A;margin-bottom:0.5rem;">Coming Soon</div>'
+'<div style="font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;'
+'color:#52527A;margin-bottom:0.6rem;">Coming Soon</div>'
 '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
 '<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
 'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Pharos Ecosystem Map</span>'
+'<span style="font-size:11px;color:#52527A;">Multi-Language Support (Expected around 18th June)</span>'
 '</div>'
 '<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
 'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Daily Briefing Endpoint</span>'
+'<span style="font-size:11px;color:#52527A;">CoinGecko News Feed on PROS (After 18th)</span>'
 '</div>'
 '<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
 'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
@@ -794,7 +792,7 @@ if not st.session_state.messages:
 '<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
 'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Multi-language Support</span>'
+'<span style="font-size:11px;color:#52527A;">Pharos Ecosystem Map (Will take time)</span>'
 '</div>'
 '</div>'
 '</div>'
