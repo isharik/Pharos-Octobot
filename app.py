@@ -138,7 +138,9 @@ html, body, [class*="css"] {
         radial-gradient(ellipse 40% 30% at 80% 80%, rgba(26,26,255,0.06) 0%, transparent 50%) !important;
 }
 
-#MainMenu, footer, header { visibility: hidden !important; }
+#MainMenu, footer {
+    visibility: hidden !important;
+}
 .stDeployButton { display: none !important; }
 
 [data-testid="stSidebar"] {
