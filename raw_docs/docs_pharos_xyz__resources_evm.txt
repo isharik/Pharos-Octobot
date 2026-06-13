@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/resources/evm
 TITLE: EVM | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 The Ethereum Virtual Machine (EVM) is the core component of the Ethereum blockchain, responsible for executing smart contracts and managing the state of the network. It acts as a decentralized computer, maintaining a global state and executing program instructions defined in smart contracts. Key features include:
 State Machine
 : Executes transactions and changes the blockchain state.

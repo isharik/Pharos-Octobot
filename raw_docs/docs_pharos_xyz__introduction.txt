@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/introduction
 TITLE: About Pharos | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 “We believe in: rough consensus and running code” - David Clark, 1992
 Pharos Network Overview
 Pharos has designed a

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization
 TITLE: Rapid Node Initialization | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 To help developers and validators quickly join the Pharos Network without syncing from genesis, we provide regularly updated snapshot datasets for each network. These snapshots contain pre-synced state data and allow rapid setup of Devnet, Testnet, or Mainnet nodes.
 ⚠️ Snapshots should only be used from trusted sources. Always verify integrity before replacing production data.
 Pharos Network

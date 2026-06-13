@@ -1,0 +1,251 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/pharos-skill-engine-guide/piggybank-skill-guide
+TITLE: Piggy Bank Tutorial | docs.pharos.xyz
+============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
+This guide walks through building a time-locked native token vault (SimpleVault/PiggyBank) as a Pharos Skill — from setting up the Skill Engine in VS Code, writing the contract and reference file inside the Skill Engine folder, updating
+SKILL.md
+, to testing everything through Claude in your VS Code terminal.
+What You Will Build
+By the end of this guide you will have a published Pharos skill that lets anyone ask an AI to:
+Deploy a
+Simple Vault
+(piggy bank) contract on Pharos
+Deposit PHRS into the vault
+Check how much time remains before withdrawal is allowed
+Withdraw funds after the time lock expires
+Query the full on-chain history of deposits and withdrawals
+Along the way, you will learn three core Solidity/EVM concepts:
+Concept
+Where It Appears
+--value
+flag
+Sending native PHRS with a function call
+block.timestamp
+Setting and enforcing a time lock
+Event querying
+Reading on-chain history with
+cast logs
+How the Skill Engine Works
+What is a Pharos Skill?
+A Pharos Skill is a folder of files that teaches an AI (Claude) how to interact with the Pharos blockchain. When you ask the AI something like
+"Deploy a vault on Pharos"
+, it reads your skill files to know exactly which commands to run.
+The AI is smart but it does not automatically know your contract. You teach it by writing instruction files in plain Markdown. The AI reads those files and follows them precisely.
+The Flow from User Prompt to On-Chain Action
+Folder Structure Overview
+What is a Reference File?
+A reference file is a Markdown file the AI reads at runtime. It is not code and not meant for humans to execute directly. It tells the AI:
+Which
+cast
+or
+forge
+command to run
+What each parameter in the command means
+What the terminal output means
+What errors can happen and what to tell the user
+Every section in a reference file follows the same 4-part structure:
+Plus an
+> Agent Guidelines
+block that gives the AI an ordered checklist to follow.
+Prerequisites
+Tools to Install
+Foundry
+— compiles and deploys Solidity contracts
+Verify installation:
+Both should print a version number. If either fails, re-run
+foundryup
+.
+Claude Code
+— the AI CLI that runs your skill
+Verify:
+Wallet Setup
+Create an EVM-compatible wallet (MetaMask or any EVM wallet)
+Add the Pharos Atlantic Testnet to your wallet:
+Network Name:
+Pharos Atlantic Testnet
+RPC URL:
+https://atlantic.dplabs-internal.com
+Chain ID:
+688689
+Symbol:
+PHRS
+Get testnet PHRS from the Pharos faucet or directly from the team.
+Export your private key — you will need it when deploying
+⚠️
+Security Warning:
+Never share your private key. Never commit it to git. Always use the
+$PRIVATE_KEY
+environment variable — never paste it directly into commands you share with others.
+Project Structure
+Before you start, your skill folder should look like this:
+After completing this guide it will look like this:
+You are adding 2 new files and making 2 small edits to
+SKILL.md
+.
+Step 1 — Write the Smart Contract
+Create the File
+Create a new folder and file at this exact path inside the Skill Engine folder:
+The Contract
+Contract Explained
+Part
+What It Does
+owner
+Stores the deployer's address. Only this address can withdraw.
+unlockTime
+The Unix timestamp after which withdrawal is allowed. Set once at deploy.
+constructor(_lockDurationSeconds)
+Runs once at deploy. Sets
+unlockTime = now + duration
+.
+deposit()
+Marked
+payable
+— means it can receive PHRS. Requires
+msg.value > 0
+.
+withdraw()
+Checks caller is owner AND current time is past
+unlockTime
+. Sends all PHRS back.
+timeLeft()
+Read-only. Returns seconds remaining. Returns
+0
+if unlocked.
+getBalance()
+Read-only. Returns how much PHRS is currently in the vault.
+Deposited
+event
+Logged on-chain every time someone deposits. Queryable with
+cast logs
+.
+Withdrawn
+event
+Logged on-chain when owner withdraws. Queryable with
+cast logs
+.
+Verify the Contract Compiles
+You should see
+Compiler run successful
+. If you see errors, check that the Solidity version in
+foundry.toml
+is
+^0.8.20
+or higher.
+Step 2 — Create the Reference File
+Create the File
+Create a new file at:
+Why This File Exists
+This is the instruction manual the AI reads when a user asks about the vault. Without this file the AI has no idea your vault contract exists or how to use it.
+The Complete File Contents
+Paste this entire block into
+references/vault.md
+:
+Step 3 — Edit SKILL.md
+You need to make two small edits to
+SKILL.md
+.
+Edit 1 — Add Vault Keywords to the Description
+Find the end of the
+description
+field. It currently ends with:
+Change it to:
+Why:
+This controls when the AI triggers your skill. Adding these keywords means the AI will load your skill whenever someone asks about vaults or time locks.
+Edit 2 — Add Rows to the Capability Index Table
+Find the last row of the Capability Index table. It currently ends with:
+Add these 5 rows directly after it:
+Why:
+This table is how the AI navigates the skill. When a user asks to deposit PHRS, the AI scans this table, finds the matching row, and opens the reference file linked there.
+Step 4 — Run and Test the Skill
+Setup (One Time Only)
+Set your private key in the terminal:
+Open Claude Code inside the skill folder:
+Full End-to-End Test Sequence
+Run these prompts in order inside Claude Code:
+Deploy
+Deploy a Simple Vault on Pharos with a 5 minute lock
+The AI will ask you to confirm your wallet address and network, check your balance, generate the deploy script, and run it. You will get back a vault address like
+0xAbc123...
+.
+Deposit
+Deposit 0.1 PHRS into vault at 0xYourVaultAddress
+The AI runs
+cast send
+with
+--value 0.1ether
+. You will see a transaction hash.
+Check Time Remaining
+How much time is left on my vault at 0xYourVaultAddress
+The AI runs
+timeLeft()
+and tells you something like "4 minutes 32 seconds remaining."
+Try Early Withdrawal — Should Fail Gracefully
+Withdraw from my vault at 0xYourVaultAddress
+The AI checks
+timeLeft()
+first, sees the lock has not expired, and tells you to wait. It will
+not
+send the transaction.
+Withdraw After Lock Expires
+Wait 5 minutes, then repeat the withdraw prompt. This time the AI will execute
+withdraw()
+and your PHRS comes back to your wallet.
+Query Events
+Show me the deposit history for vault 0xYourVaultAddress
+The AI runs
+cast logs
+and shows you the
+Deposited
+event with the amount, timestamp, and transaction link.
+Common Errors and Fixes
+Error
+Cause
+Fix
+Still locked
+Too early to withdraw
+Run
+timeLeft()
+and wait
+Not owner
+Wrong wallet
+Check
+$PRIVATE_KEY
+matches the deployer address
+Must send PHRS
+Missing
+--value
+flag
+Add
+--value 0.1ether
+to the deposit command
+Nothing to withdraw
+Vault is empty
+Deposit PHRS first
+insufficient funds
+Not enough PHRS for gas
+Get testnet PHRS from the faucet
+connection refused
+Missing
+--rpc-url
+Always pass
+--rpc-url
+explicitly in every command
+compiler error
+Solidity compilation failed
+Check Foundry is up to date with
+foundryup
+contract not found
+during verify
+Explorer not indexed yet
+Wait 10–15 seconds and retry verification
+Previous
+Pharos Skill Engine
+Next
+JSON-RPC API Methods
+Last updated
+1 day ago
+Was this helpful?

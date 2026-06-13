@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rollback-blocks
 TITLE: Rollback Blocks | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide describes how to revert the Pharos node to a previous block height.
 Step 1: Stop the Node
 Docker:

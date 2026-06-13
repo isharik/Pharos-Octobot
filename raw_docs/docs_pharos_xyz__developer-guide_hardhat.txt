@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/developer-guide/hardhat
 TITLE: Hardhat | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide is suitable for developers who want to start building dApps using Pharos and hardhat toolchains. If you are a new user of Ethereum, please consider researching the
 Ethereum documentation
 before continuing.

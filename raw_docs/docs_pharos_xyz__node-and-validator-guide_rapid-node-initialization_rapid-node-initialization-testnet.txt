@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/rapid-node-initialization/rapid-node-initialization-testnet
 TITLE: Rapid Node Initialization(Testnet) | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 🧰 Initialization Using Snapshots
 Follow these steps to bootstrap a Pharos node using the latest snapshot:
 ✅
@@ -46,5 +51,5 @@ Rapid Node Initialization
 Next
 Pharos Network Snapshots
 Last updated
-2 months ago
+3 months ago
 Was this helpful?

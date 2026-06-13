@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/wallets/safe
 TITLE: Safe MultiSig | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Safe (Gnosis Safe) is one of the most widely used multi-signature wallets in the blockchain ecosystem. It enables teams and DAOs to securely manage digital assets and smart contract permissions through configurable multi-signature approvals. Developers and organizations can create Safe wallets to manage treasury funds, protocol upgrades, and governance-controlled contracts on the Pharos network.
 Safe UI
 Production interface for interacting with Safe wallets on Pharos:
@@ -19,5 +24,5 @@ Wallet
 Next
 Fordefi
 Last updated
-28 days ago
+1 month ago
 Was this helpful?

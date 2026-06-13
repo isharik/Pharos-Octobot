@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide
 TITLE: Validator Accountability | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Validators are expected to actively and honestly participate in the consensus process. There is currently no automated slashing mechanism. However, if malicious behavior is detected, governance procedures may be initiated to penalize the offending validator.
 The following behaviors are considered violations:
 Prolonged offline: The validator node is unreachable or unresponsive for an extended period.

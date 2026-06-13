@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp
 TITLE: Circle CCTP | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Circle’s Cross-Chain Transfer Protocol (CCTP) enables secure transfer of USDC across blockchains using a native burn-and-mint mechanism.
 On Pharos, CCTP allows developers to move USDC between supported networks without relying on traditional bridges or wrapped tokens.

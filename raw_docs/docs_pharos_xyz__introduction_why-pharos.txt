@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/introduction/why-pharos
 TITLE: Why Pharos | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Blockchain technology has made significant strides in recent years, yet performance remains a primary bottleneck hindering the Web3 user experience. Although many protocols achieve high TPS in ideal or test environments, their performance in real-world falls far short of expectations. This performance gap makes it difficult for Web3 applications to compete with Web2 applications, limiting their mass adoption and enhancement of user experience.
 For instance, with bitcoin inscription frenzy hits EVM blockchains in early 2024, we observed that most public chains could not exceed a thousand TPS(Transaction Per Second), typically ranging from dozens to a few hundred. Some public chains, under high-stress conditions, opted to raise Gas Prices to reduce transaction frequency, but this is neither a healthy nor sustainable solution. In fact, the execution cost of smart contracts is usually far higher than that of inscription transactions. Given the current infrastructure, most public chains are still unable to support the operations of Web3 Super DApps, which is one of the crucial factors constraining the current development of Web3. Paradigm also provided some insightful
 data

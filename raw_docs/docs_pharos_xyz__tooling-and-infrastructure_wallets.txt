@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/wallets
 TITLE: Wallet | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Wallets and custody solutions are used to manage accounts, sign transactions, and control assets on the Pharos Network.
 As a developer, you’ll use wallets for interacting with applications, while custody solutions are important for managing funds securely, especially in production environments.

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/developer-guide/interoperability/call-evm-from-wasm
 TITLE: Call EVM From WASM | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide will walk you through the process of calling EVM contracts from the WASM code e.g., Rust.
 Prerequisites
 Before you begin, ensure you have the following:

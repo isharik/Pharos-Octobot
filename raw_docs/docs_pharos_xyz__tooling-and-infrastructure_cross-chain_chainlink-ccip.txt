@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip
 TITLE: Chainlink CCIP | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Chainlink CCIP enables secure cross-chain messaging and token transfers between supported blockchains.
 On Pharos, CCIP allows developers to build applications that interact with multiple networks, including cross-chain DeFi protocols, token bridges, and omnichain applications.
 Supported Lanes

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles/supra
 TITLE: Supra | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Supra provides high-performance oracle services that deliver real-time price feeds and external data to decentralized applications.
 On Pharos, Supra’s DORA Pull Oracle is deployed on Pacific Mainnet and Atlantic Testnet, enabling smart contracts to securely fetch off-chain data directly from the oracle network.

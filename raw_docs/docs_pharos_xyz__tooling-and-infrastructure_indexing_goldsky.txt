@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/indexing/goldsky
 TITLE: Goldsky | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Indexing Pharos with Goldsky
 Goldsky is Web3’s realtime data platform, giving developers access to world-class data infrastructure to power their onchain applications.
 Seamlessly access the data you need with lightning-fast indexing, resilient subgraphs, and flexible data streaming pipelines. Spend less time on the complexities of infra maintenance and more time building incredible user experiences.
@@ -42,5 +47,5 @@ Indexer
 Next
 Oracle
 Last updated
-10 months ago
+11 months ago
 Was this helpful?

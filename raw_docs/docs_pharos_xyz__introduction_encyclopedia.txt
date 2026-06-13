@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/introduction/encyclopedia
 TITLE: Encyclopedia | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Deep Dive into Pharos Architecture, Concepts & Core Technologies
 The Pharos Encyclopedia is a dedicated knowledge hub designed for developers, researchers, and contributors who want to explore the technical foundations, core concepts, and architecture of the Pharos Network.
 While this Developer Documentation focuses on helping you build, integrate, and deploy applications, the Encyclopedia provides a deeper understanding of how Pharos works under the hood — from foundational concepts to protocol-level design.

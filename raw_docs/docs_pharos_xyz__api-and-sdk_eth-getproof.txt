@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/api-and-sdk/eth-getproof
 TITLE: eth_getProof — Storage State Verification (SPV) | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 1. Introduction
 Like Ethereum Merkle Proof verification, Pharos provides Simplified Payment Verification (SPV) to allow light clients to verify the existence — or non-existence — of accounts and storage values at a given block height, without possessing the full state.
 Pharos implements the storage state trie using a
@@ -331,5 +336,5 @@ JSON-RPC API Methods
 Next
 SPV Proof Theory Explanation
 Last updated
-15 days ago
+22 days ago
 Was this helpful?

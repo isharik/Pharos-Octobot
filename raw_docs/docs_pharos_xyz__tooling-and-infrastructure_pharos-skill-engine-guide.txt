@@ -1,0 +1,314 @@
+SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/pharos-skill-engine-guide
+TITLE: Pharos Skill Engine | docs.pharos.xyz
+============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
+v0.1.0 · Atlantic Testnet & Pacific Mainnet
+Part 1 — What Is the Pharos Skill Engine?
+The Pharos Skill Engine is a packaged developer toolkit that lets an AI agent perform any on-chain operation on the Pharos — check balances, send transactions, deploy and verify Solidity contracts, run batch airdrops, and generate Web3 interaction scripts — entirely through CLI commands.
+It is not an SDK, not an API, and not a smart contract framework. It is a self-contained knowledge and tooling package that a developer installs once and then hands to an AI agent (like Claude). The agent reads the package, understands what Pharos operations are available, and executes them by running the correct
+cast
+and
+forge
+commands.
+The Core Idea
+Natural language in → on-chain action out.
+A developer says "deploy an ERC20 token called Pharos Gold with symbol PGD" and the agent reads the Skill Engine, finds the one-click ERC20 template, generates the deploy script, runs it, and returns the contract address — all without the developer writing a single line of Solidity or a single CLI command by hand.
+What It Is Made Of
+File / Folder
+What It Is
+Role
+SKILL.md
+The entry point — read by the AI agent first
+Defines what capabilities exist and where to find detailed instructions for each
+assets/networks.json
+Network configuration
+RPC URLs, chain IDs, explorer URLs, native token symbols for both Atlantic testnet and mainnet
+assets/tokens.json
+Known token registry
+Pre-populated ERC20 addresses and decimals for both networks
+assets/erc20/StandardERC20.sol
+Built-in ERC20 contract template
+Ready-to-deploy OpenZeppelin-based ERC20 with configurable name, symbol, decimals, supply
+assets/airdrop/
+Built-in airdrop infrastructure
+Distributor contracts and batch scripts; supports up to 6000+ addresses via CSV
+assets/templates/
+Script generation templates
+JS (ethers.js v6), TypeScript (viem), Python (web3.py) templates for contract interaction
+references/query.md
+Query command reference
+Full
+cast call
+/
+cast balance
+/
+cast tx
+command specs
+references/transaction.md
+Transaction command reference
+Full
+cast send
+/
+cast estimate
+/ airdrop specs
+references/contract.md
+Contract command reference
+Full
+forge script
+/
+forge verify-contract
+/ ERC20 deploy specs
+references/script-gen.md
+Script generation reference
+Rules for generating JS/TS/Python interaction scripts from ABI or source
+File Structure Reference
+Part 2 — How It Works
+Understanding how the Skill Engine works helps both users who want to use it and developers who want to build new skills. The system has three layers.
+Layer 1 — The Agent Reads SKILL.md First
+When a developer asks the AI agent to do something on Pharos, the agent's first action is to read
+SKILL.md
+. This file does two things:
+Declares the prerequisites the agent must satisfy (Foundry installed, private key configured)
+Provides a
+Capability Index
+— a table that maps every possible user intent to the correct capability and points to detailed instructions in a reference file
+For example: if a developer says "check my wallet balance", the agent reads the Capability Index, finds the row for balance queries, and then reads
+references/query.md
+for the exact
+cast balance
+command template, parameter spec, and output parsing rules.
+Layer 2 — The Reference Files Contain the Commands
+The four reference files are detailed machine-readable specs. Each one covers a domain of operations:
+Every section in every reference file has the same structure: command template, parameter table, output parsing guide, error handling table, and agent guidelines. This consistency means the agent always knows where to find what it needs.
+Layer 3 — The Assets Are the Raw Materials
+The
+assets/
+folder contains everything the agent copies into the user's project or reads directly:
+The Write Operation Pre-Check Sequence
+Every operation that sends a transaction (transfer, deploy, airdrop, contract write) must pass four checks before the command runs. This is enforced by
+SKILL.md
+and cannot be skipped.
+⚠️ Foundry does NOT read env vars automatically.
+cast
+and
+forge
+do not pick up
+$PRIVATE_KEY
+from the environment on their own. The agent must always pass it explicitly as
+--private-key $PRIVATE_KEY
+in every command. This is a common source of confusion.
+How the Agent Resolves a Request — Step by Step
+Developer makes a request in natural language
+Agent checks if Foundry is installed (
+which cast
+). If not, install it before proceeding
+Agent reads
+SKILL.md
+→ scans the Capability Index for the matching intent
+Agent reads the relevant reference file section for the exact command template
+Agent reads
+assets/networks.json
+to get the correct RPC URL and chain ID
+For write operations: agent runs all four pre-checks (private key, address, network, balance)
+Agent executes the
+cast
+or
+forge
+command
+Agent parses the output per the reference file's output parsing rules
+Agent shows result with block explorer link
+Part 3 — How to Use It
+Step 1 — Install the Skill Engine
+Step 2 — Install Foundry
+Foundry is mandatory. The Skill Engine has no fallback — do not try curl/JSON-RPC workarounds.
+Step 3 — Configure Your Wallet
+⚠️ Private Key Safety.
+Never hardcode your private key in a script file or commit it to git. Always use the
+$PRIVATE_KEY
+env var pattern. The Skill Engine will never auto-read it — you must pass it explicitly.
+Step 4 — Start Using Capabilities
+Query Operations (free — no gas)
+Send Transactions
+Estimate Gas Before Sending
+Deploy and Verify a Contract
+Part 4 — How to Publish New Skills
+Publishing a new skill means extending the Skill Engine, so an AI agent can perform a new on-chain operation — for example, interacting with a vault contract, a governance contract, a staking protocol, etc. The process has three stages.
+Stage 1 — Write the Contract
+The contract is the source of truth. Every public function and event you write becomes a command in the reference. Write the contract first — the reference is derived from it.
+Good contracts for skills have:
+Clear
+public
+or
+external
+functions with descriptive names
+Events emitted on every state change (so the agent can show
+cast logs
+output)
+View functions for reading state (
+getBalance
+,
+timeLeft
+,
+owner
+, etc.)
+Revert messages that are human-readable (
+"Still locked"
+,
+"Not owner"
+,
+"Must send PHRS"
+)
+Copy the contract into your project:
+Stage 2 — Write the Reference File
+The reference file is what the agent reads when a user invokes your skill. It must be precise and complete — the agent runs commands exactly as written.
+Reference File Structure (
+references/<skill>.md
+)
+Every section in the reference follows this template:
+Note:
+When writing your reference file, replace
+<exact cast or forge command>
+with the actual command formatted as a
+bash
+code block.
+What to Cover in Your Reference File
+Operation Type
+Include?
+Notes
+Deploy contract
+Always
+Include script generation step
+Verify contract
+Always
+Include
+--constructor-args
+if needed
+Write functions
+All public ones
+One section per function
+Read functions
+Useful ones
+Skip trivial getters
+Events
+All emitted events
+Include
+cast logs
+query
+Error cases
+All revert strings
+Map each to a suggested fix
+Stage 3 — Register in SKILL.md
+Open
+SKILL.md
+and add rows to the Capability Index table for every user intent your skill handles.
+Capability Index Format
+Write for how users actually speak.
+The "User Need" column should capture how a non-technical user would phrase the request — not just the function name. Include synonyms. The agent matches intents, not exact phrases.
+Complete SKILL.md Registration Checklist
+Add a row in the Capability Index for every public write function in your contract
+Add a row for every public read function (if useful to expose)
+Add a row for event querying if your contract emits events
+Add a row for contract verification
+Include common natural language phrasings as synonyms in the User Need column
+Point each row to the exact anchor in your reference file
+Publishing Checklist
+Check
+What to Verify
+Contract compiles
+forge build
+succeeds with no errors or warnings
+Contract deployed on testnet
+Confirmed transaction hash and contract address on
+atlantic.pharosscan.xyz
+Contract verified
+Source code visible on Pharos Scan with green verified badge
+Reference file complete
+Every public function has a command template, parameter table, output parsing, and error handling section
+Agent Guidelines written
+Each section has numbered steps the agent follows in order
+Capability Index updated
+SKILL.md
+has rows for every operation, with natural language phrasings
+10-second delay documented
+Verification section in reference file mentions the
+sleep 10
+indexer delay
+Assets copied
+Contract template in both
+assets/<skill>/
+and
+src/<skill>/
+if applicable
+Error messages match
+Revert messages in error handling table match exact strings in the Solidity contract
+Part 5 — Global Error Reference
+Error / CLI Signature
+Cause
+Fix
+invalid address
+Address format is wrong
+Confirm address is
+0x
++ 40 hex characters (42 chars total)
+transaction not found
+TX hash doesn't exist or node hasn't synced
+Double-check the hash; wait and retry if the node is still syncing
+Empty return value from
+cast call
+No contract code at the target address
+Confirm the contract address and that you're on the right network
+execution reverted
+Contract call reverted
+Extract the revert reason from the error message; check business logic
+insufficient funds
+Wallet balance too low for amount + gas
+Run
+cast balance --ether
+and compare against required amount
+nonce too low
+Nonce conflict — previous transaction still pending
+Wait for prior transaction to confirm, or manually set
+--nonce
+connection refused
+Missing
+--rpc-url
+; Foundry defaulted to
+localhost:8545
+Always pass
+--rpc-url $RPC
+explicitly
+assets/networks.json
+unreadable
+Config file missing or malformed JSON
+Confirm you are running commands from inside the
+pharos-skill-engine
+directory
+psycopg2
+/ SQL error on verify
+forge verify-contract
+run too soon after deployment
+Add
+sleep 10
+between deployment and verification
+PRIVATE_KEY
+not set
+export PRIVATE_KEY
+not run in current shell
+Run:
+export PRIVATE_KEY=0x...
+forge/cast: command not found
+Foundry not installed
+Run: `curl -L https://foundry.paradigm.xyz
+Part 6 — Quick Reference
+All Commands at a Glance
+Previous
+Fordefi
+Next
+Piggy Bank Tutorial
+Last updated
+1 day ago
+Was this helpful?

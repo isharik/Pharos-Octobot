@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/api-and-sdk
 TITLE: JSON-RPC API Methods | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Pharos Network is a fully EVM-equivalent Layer 1 blockchain, supporting a
 JSON-RPC
 interface for seamless blockchain interactions. This RPC API is fully compatible with existing
@@ -709,7 +714,7 @@ range is limited to 100 blocks (with rate limiting) or 10,000 blocks (fallback).
 trace_filter
 is limited to 500 blocks.
 Previous
-Fordefi
+Piggy Bank Tutorial
 Next
 eth_getProof — Storage State Verification (SPV)
 Last updated

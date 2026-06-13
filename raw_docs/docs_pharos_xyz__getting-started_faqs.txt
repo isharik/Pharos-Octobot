@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started/faqs
 TITLE: FAQs | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Problem Explanation
 Ethereum's execution model deducts the full gas limit at the start of execution and refunds a portion of the gas at the end if applicable. However, if the gas limit is set too tightly (equal to the actual gas used before refunds), the refund cannot be processed, and the transaction fails with an out-of-gas error.
 Key reasons why this happens:

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment
 TITLE: Validator Node Deployment | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Deploying Pharos Nodes
 Before running a Validator Node or Validator Full Node (VFN) on the Pharos Network, you must choose a deployment method and ensure your machine meets the required specifications.
 This guide provides clear instructions for deploying nodes using different methods. Once deployed, you can connect your node to the Pharos network and begin participating in consensus or network operations.
@@ -12,10 +17,10 @@ Binary Version
 Docker Image
 Binary Package
 Atlantic Testnet
-12
-f301031a
-public.ecr.aws/k2g7b7g1/pharos:pharos_community_v0.12.2_f301031a_0422
-pharos-v0.12.2-f301031a.tar.gz
+13
+6d82e95c
+public.ecr.aws/k2g7b7g1/pharos:pharos_community_v0.13.1_6d82e95c_0612
+pharos-v0.13.1-6d82e95c.tar.gz
 Pacific Mainnet
 12
 f301031a
@@ -32,5 +37,5 @@ Validator Requirements
 Next
 Using Docker
 Last updated
-15 days ago
+3 hours ago
 Was this helpful?

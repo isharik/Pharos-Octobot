@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/nirvana
 TITLE: Nirvana RPC | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Nirvana Labs provides enterprise-grade blockchain infrastructure, including high-performance RPC nodes and dedicated node services.
 On Pharos, Nirvana RPC can be used to power applications that require reliable network access, low latency, and scalable infrastructure.

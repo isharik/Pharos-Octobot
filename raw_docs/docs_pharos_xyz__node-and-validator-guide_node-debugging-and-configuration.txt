@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-debugging-and-configuration
 TITLE: Node Debugging & Configuration | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Pharos Block Validation
 You can refer to the
 Pharos Block Validation

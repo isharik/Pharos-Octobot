@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles/chainlink-ds
 TITLE: Chainlink Data Feeds | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Chainlink provides secure and decentralized oracle services used across the blockchain ecosystem.
 On Pharos, Chainlink Data Streams enables developers to access high-frequency off-chain data with low latency, making it suitable for advanced financial and data-intensive applications.

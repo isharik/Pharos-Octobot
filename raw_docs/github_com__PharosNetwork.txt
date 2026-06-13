@@ -119,7 +119,7 @@ PharosNetwork/safe-wallet-monorepo’s past year of commit activity
 TypeScript
 3
 GPL-3.0
-698
+700
 0
 1
 Updated

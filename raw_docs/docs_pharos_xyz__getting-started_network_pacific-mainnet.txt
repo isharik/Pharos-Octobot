@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started/network/pacific-mainnet
 TITLE: Pacific Mainnet | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Network Information
 Parameter
 Value
@@ -22,5 +27,5 @@ Atlantic Testnet
 Next
 Canonical Contracts
 Last updated
-14 days ago
+22 days ago
 Was this helpful?

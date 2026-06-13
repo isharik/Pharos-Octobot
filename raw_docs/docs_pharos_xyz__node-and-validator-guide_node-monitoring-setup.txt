@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-monitoring-setup
 TITLE: Node Monitoring Setup | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide describes how to configure monitoring for your Pharos node using Prometheus Pushgateway.
 Overview
 Pharos nodes can push metrics to a Prometheus Pushgateway, which allows you to monitor node performance, block production, and other key metrics.

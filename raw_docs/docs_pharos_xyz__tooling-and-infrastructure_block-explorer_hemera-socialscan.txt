@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/block-explorer/hemera-socialscan
 TITLE: Hemera SocialScan | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Hemera SocialScan is the official block explorer for the Pharos Network. It provides real-time visibility into on-chain activity, allowing developers and users to inspect transactions, blocks, accounts, tokens, and smart contracts.
 For developers, the explorer provides a familiar interface of EVM that includes tools for contract verification, token analytics, and transaction debugging.

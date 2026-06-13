@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/developer-guide/foundry/write-your-first-token
 TITLE: Write Your First Token | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide will walk you through the process of creating and deploying your first token on the Pharos blockchain. By the end of this guide, you will have a fully functional token contract and understand how to interact with it.
 Prerequisites
 Before you begin, ensure you have the following:
@@ -67,5 +72,5 @@ Write Your First dApp
 Next
 Write Your First NFT
 Last updated
-7 months ago
+8 months ago
 Was this helpful?

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started/gas-model
 TITLE: Gas Model | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 When sending a transaction on Ethereum or an EVM-compatible blockchain, it is essential to set an appropriate gas limit to ensure successful execution. One common issue arises when the gas limit is set exactly equal to the gas used, particularly when the transaction involves a gas refund mechanism.
 Summary Table

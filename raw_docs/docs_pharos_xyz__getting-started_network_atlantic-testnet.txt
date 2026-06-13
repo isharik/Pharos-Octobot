@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started/network/atlantic-testnet
 TITLE: Atlantic Testnet | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Network Information
 Parameter
 Value
@@ -26,5 +31,5 @@ Network
 Next
 Pacific Mainnet
 Last updated
-14 days ago
+22 days ago
 Was this helpful?

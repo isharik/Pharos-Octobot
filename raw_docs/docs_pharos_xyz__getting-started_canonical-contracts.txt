@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started/canonical-contracts
 TITLE: Canonical Contracts | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Atlantic Testnet Canonical Contracts
 Contract Name
 Description

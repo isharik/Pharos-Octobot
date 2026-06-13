@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/pharos-node-monitoring
 TITLE: Pharos Node Monitoring | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 We recommend deploying Prometheus, Pushgateway, and Grafana to monitor Pharos Node metrics.
 Deploy Prometheus and pushgateway
 If you have already deployed a Prometheus monitoring and alerting system, you can skip this step:
@@ -70,5 +75,5 @@ Pharos Testnet: Rebuild Node with Preserved Node Info
 Next
 Enable AutoPruning in Pharos Node
 Last updated
-3 months ago
+4 months ago
 Was this helpful?

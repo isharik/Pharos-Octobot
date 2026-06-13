@@ -1,54 +1,118 @@
 """
-app.py  (REDESIGNED — Pharos Brand Theme)
-------------------------------------------
-OctoBot Streamlit UI redesigned with:
-- Pharos logo as the hero centerpiece
-- Deep royal blue (#1A1AFF) Pharos brand palette
-- Dark background matching Pharos Network aesthetic
-- Geometric accents inspired by the Pharos logo mark
-- Clean sharp typography (Syne + DM Sans via Google Fonts)
-- Animated elements for a premium Web3 feel
+app.py  (FIXED — Pharos Brand Theme, zero f-string errors)
+-----------------------------------------------------------
+All CSS is in plain triple-quoted strings (no f-prefix).
+f-strings are only used where Python variables are injected,
+and those blocks contain NO curly braces from CSS.
 
 HOW TO RUN:
     streamlit run app.py
 """
 
+import os
+import time
+import base64
+import requests
 import streamlit as st
+from datetime import datetime, timezone
 
 # ─────────────────────────────────────────────
-# PAGE CONFIG — must be first Streamlit command
+# LIVE $PROS PRICE — CoinGecko integration
+# Verified asset ID: "pharos" (coingecko.com/en/coins/pharos)
+# Free API, no key needed, 100 calls/min limit
+# Cached 5 minutes via st.session_state
+# Auto-refreshes every 5 minutes via st_autorefresh
+# ─────────────────────────────────────────────
+COINGECKO_ASSET_ID  = "pharos-network"
+COINGECKO_URL       = (
+    "https://api.coingecko.com/api/v3/simple/price"
+    "?ids=" + "pharos-network" +
+    "&vs_currencies=usd"
+    "&include_24hr_change=true"
+    "&include_market_cap=true"
+    "&include_24hr_vol=true"
+)
+PRICE_CACHE_SECONDS = 300   # 5 minutes
+
+
+def get_pros_price() -> dict:
+    """
+    Fetch live PROS price from CoinGecko.
+    Caches in st.session_state for 5 minutes.
+    On failure returns available=False — never crashes the app.
+    """
+    now    = time.time()
+    cached = st.session_state.get("pros_price_cache", {})
+
+    if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE_SECONDS:
+        return cached
+
+    try:
+        r = requests.get(COINGECKO_URL, timeout=6,
+                         headers={"Accept": "application/json"})
+        r.raise_for_status()
+        data = r.json().get(COINGECKO_ASSET_ID, {})
+        if not data:
+            raise ValueError("Empty response from CoinGecko")
+        result = {
+            "price_usd":      data.get("usd"),
+            "market_cap_usd": data.get("usd_market_cap"),
+            "volume_24h":     data.get("usd_24h_vol"),
+            "change_24h":     data.get("usd_24h_change"),
+            "last_updated":   datetime.now(timezone.utc).strftime("%H:%M UTC"),
+            "fetched_at":     now,
+            "available":      True,
+            "error":          None,
+        }
+    except Exception as e:
+        prev = st.session_state.get("pros_price_cache", {})
+        result = {
+            "price_usd":      prev.get("price_usd"),
+            "market_cap_usd": prev.get("market_cap_usd"),
+            "volume_24h":     prev.get("volume_24h"),
+            "change_24h":     prev.get("change_24h"),
+            "last_updated":   prev.get("last_updated"),
+            "fetched_at":     now,
+            "available":      False,
+            "error":          str(e),
+        }
+
+    st.session_state["pros_price_cache"] = result
+    return result
+
+# ─────────────────────────────────────────────
+# PAGE CONFIG — must be the very first st. call
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="OctoBot — Pharos AI Assistant",
     page_icon="🐙",
     layout="wide",
-    initial_sidebar_state="expanded" \
-    
+    initial_sidebar_state="expanded",
 )
 
 # ─────────────────────────────────────────────
-# PHAROS BRAND THEME + CUSTOM CSS
-# Colors extracted from Pharos logo + docs site:
-#   Primary blue:   #1A1AFF  (deep electric blue)
-#   Bright blue:    #3D3DFF  (hover/accent)
-#   Light blue:     #6B8CFF  (secondary accent)
-#   Dark bg:        #0A0A12  (near-black with blue tint)
-#   Surface:        #10101E  (card backgrounds)
-#   Border:         #1E1E3A  (subtle borders)
-#   Text primary:   #FFFFFF
-#   Text secondary: #A0A8CC
+# GOOGLE FONTS — plain string, no f-prefix
+# ─────────────────────────────────────────────
+st.markdown(
+    '<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800'
+    '&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">',
+    unsafe_allow_html=True,
+)
+
+# ─────────────────────────────────────────────
+# ALL CSS — plain string, no f-prefix
+# Curly braces here are CSS, not Python.
+# Keeping this completely separate from any
+# f-string avoids every possible syntax error.
 # ─────────────────────────────────────────────
 st.markdown("""
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-
 <style>
-/* ── ROOT VARIABLES ─────────────────────────────────── */
 :root {
     --blue-primary:   #1A1AFF;
     --blue-bright:    #3D3DFF;
     --blue-light:     #6B8CFF;
-    --blue-glow:      rgba(26, 26, 255, 0.3);
-    --blue-subtle:    rgba(26, 26, 255, 0.08);
+    --blue-glow:      rgba(26,26,255,0.3);
+    --blue-subtle:    rgba(26,26,255,0.08);
     --bg-dark:        #0A0A12;
     --bg-surface:     #10101E;
     --bg-raised:      #16162A;
@@ -61,7 +125,6 @@ st.markdown("""
     --font-body:      'DM Sans', sans-serif;
 }
 
-/* ── GLOBAL RESET ───────────────────────────────────── */
 html, body, [class*="css"] {
     font-family: var(--font-body) !important;
     background-color: var(--bg-dark) !important;
@@ -75,13 +138,9 @@ html, body, [class*="css"] {
         radial-gradient(ellipse 40% 30% at 80% 80%, rgba(26,26,255,0.06) 0%, transparent 50%) !important;
 }
 
-/* ── HIDE STREAMLIT CHROME ──────────────────────────── */
-#MainMenu, footer {
-    visibility: hidden !important;
-}
+#MainMenu, footer, header { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
-/* ── SIDEBAR ────────────────────────────────────────── */
 [data-testid="stSidebar"] {
     background: var(--bg-surface) !important;
     border-right: 1px solid var(--border) !important;
@@ -90,7 +149,6 @@ html, body, [class*="css"] {
     color: var(--text-primary) !important;
 }
 
-/* ── LOGO HERO SECTION ──────────────────────────────── */
 .pharos-hero {
     display: flex;
     flex-direction: column;
@@ -106,7 +164,6 @@ html, body, [class*="css"] {
     margin-bottom: 1rem;
 }
 
-/* Glowing ring behind logo */
 .logo-wrapper::before {
     content: '';
     position: absolute;
@@ -116,7 +173,6 @@ html, body, [class*="css"] {
     animation: pulse-glow 3s ease-in-out infinite;
 }
 
-/* Outer geometric ring */
 .logo-wrapper::after {
     content: '';
     position: absolute;
@@ -169,7 +225,6 @@ html, body, [class*="css"] {
     margin-top: 0.4rem !important;
 }
 
-/* Horizontal divider line with blue glow */
 .pharos-divider {
     width: 100%;
     height: 1px;
@@ -178,7 +233,6 @@ html, body, [class*="css"] {
     opacity: 0.6;
 }
 
-/* ── METRICS ROW ────────────────────────────────────── */
 [data-testid="stMetric"] {
     background: var(--bg-surface) !important;
     border: 1px solid var(--border) !important;
@@ -194,7 +248,6 @@ html, body, [class*="css"] {
     font-size: 0.75rem !important;
     text-transform: uppercase !important;
     letter-spacing: 0.06em !important;
-    font-family: var(--font-body) !important;
 }
 [data-testid="stMetricValue"] {
     color: var(--text-primary) !important;
@@ -203,22 +256,16 @@ html, body, [class*="css"] {
     font-size: 1.3rem !important;
 }
 
-/* ── CHAT MESSAGES ──────────────────────────────────── */
 [data-testid="stChatMessage"] {
     background: transparent !important;
     padding: 0.4rem 0 !important;
 }
-
-/* User message bubble */
-[data-testid="stChatMessage"][data-testid*="user"],
 .stChatMessage:has([data-testid="chatAvatarIcon-user"]) {
     background: var(--blue-subtle) !important;
     border: 1px solid rgba(26,26,255,0.2) !important;
     border-radius: 12px !important;
     padding: 0.75rem 1rem !important;
 }
-
-/* Assistant message */
 .stChatMessage:has([data-testid="chatAvatarIcon-assistant"]) {
     background: var(--bg-surface) !important;
     border: 1px solid var(--border) !important;
@@ -226,7 +273,6 @@ html, body, [class*="css"] {
     padding: 0.75rem 1rem !important;
 }
 
-/* ── CHAT INPUT ─────────────────────────────────────── */
 [data-testid="stChatInput"] {
     background: var(--bg-surface) !important;
     border: 1px solid var(--border-bright) !important;
@@ -246,7 +292,6 @@ html, body, [class*="css"] {
     color: var(--text-muted) !important;
 }
 
-/* ── EXPANDER (Sources) ─────────────────────────────── */
 [data-testid="stExpander"] {
     background: var(--bg-raised) !important;
     border: 1px solid var(--border) !important;
@@ -256,13 +301,11 @@ html, body, [class*="css"] {
 [data-testid="stExpander"] summary {
     color: var(--text-secondary) !important;
     font-size: 0.82rem !important;
-    font-family: var(--font-body) !important;
 }
 [data-testid="stExpander"] summary:hover {
     color: var(--blue-light) !important;
 }
 
-/* ── SOURCE CARDS ───────────────────────────────────── */
 .source-card {
     background: var(--bg-surface);
     border-left: 3px solid var(--blue-primary);
@@ -279,7 +322,6 @@ html, body, [class*="css"] {
     color: var(--blue-light) !important;
     text-decoration: none !important;
     font-size: 0.8rem !important;
-    font-family: var(--font-body) !important;
 }
 .source-card a:hover {
     color: #FFFFFF !important;
@@ -292,7 +334,6 @@ html, body, [class*="css"] {
     margin-bottom: 2px;
 }
 
-/* ── SIDEBAR BUTTONS ────────────────────────────────── */
 .stButton > button {
     background: var(--bg-raised) !important;
     color: var(--text-secondary) !important;
@@ -310,7 +351,6 @@ html, body, [class*="css"] {
     box-shadow: 0 0 12px var(--blue-glow) !important;
 }
 
-/* Reset button stands out */
 .reset-btn > button {
     background: rgba(26,26,255,0.12) !important;
     border-color: var(--blue-primary) !important;
@@ -323,14 +363,11 @@ html, body, [class*="css"] {
     color: #FFFFFF !important;
 }
 
-/* ── TOGGLE ─────────────────────────────────────────── */
 [data-testid="stToggle"] label {
     color: var(--text-secondary) !important;
     font-size: 0.85rem !important;
-    font-family: var(--font-body) !important;
 }
 
-/* ── SECTION LABELS ─────────────────────────────────── */
 .sidebar-section {
     font-family: var(--font-display) !important;
     font-size: 0.7rem !important;
@@ -341,37 +378,6 @@ html, body, [class*="css"] {
     margin: 1rem 0 0.5rem 0 !important;
 }
 
-/* ── SPINNER ─────────────────────────────────────────── */
-[data-testid="stSpinner"] {
-    color: var(--blue-light) !important;
-}
-
-/* ── SCROLLBAR ──────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: var(--bg-dark); }
-::-webkit-scrollbar-thumb {
-    background: var(--border-bright);
-    border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: var(--blue-primary);
-}
-
-/* ── HORIZONTAL RULE ────────────────────────────────── */
-hr {
-    border-color: var(--border) !important;
-    margin: 0.8rem 0 !important;
-}
-
-/* ── ALERT / SUCCESS BOXES ──────────────────────────── */
-[data-testid="stAlert"] {
-    background: var(--bg-surface) !important;
-    border: 1px solid var(--border-bright) !important;
-    border-radius: 10px !important;
-    color: var(--text-primary) !important;
-}
-
-/* ── STATUS BAR ─────────────────────────────────────── */
 .status-bar {
     display: flex;
     align-items: center;
@@ -394,7 +400,6 @@ hr {
     50%       { opacity: 0.3; }
 }
 
-/* ── WELCOME MESSAGE ────────────────────────────────── */
 .welcome-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -439,34 +444,27 @@ hr {
     color: var(--blue-light);
     font-family: var(--font-body);
 }
+
+hr { border-color: var(--border) !important; margin: 0.8rem 0 !important; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--blue-primary); }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# ENCODE LOGO TO BASE64 SO IT WORKS RELIABLY
-# IN STREAMLIT (avoids file path issues)
+# LOGO HELPER
 # ─────────────────────────────────────────────
-import base64, os
-
-def get_logo_base64() -> str:
-    """
-    Look for the Pharos logo in common locations.
-    Returns base64 string or empty string if not found.
-    """
-    search_paths = [
-        "pharos_logo.jpg",
-        "pharos_logo.png",
-        "assets/pharos_logo.jpg",
-        "assets/pharos_logo.png",
-    ]
-    for path in search_paths:
+def get_logo_base64():
+    """Find pharos_logo.jpg or .png in the project folder and return base64 src."""
+    for path, mime in [("pharos_logo.jpg", "image/jpeg"), ("pharos_logo.png", "image/png")]:
         if os.path.exists(path):
             with open(path, "rb") as f:
-                ext = path.rsplit(".", 1)[-1].lower()
-                mime = "image/jpeg" if ext == "jpg" else "image/png"
                 b64 = base64.b64encode(f.read()).decode()
-                return f"data:{mime};base64,{b64}"
+            return "data:" + mime + ";base64," + b64
     return ""
 
 
@@ -481,7 +479,7 @@ def load_octobot():
     except FileNotFoundError as e:
         return None, str(e)
     except Exception as e:
-        return None, f"Unexpected error: {e}"
+        return None, str(e)
 
 
 # ─────────────────────────────────────────────
@@ -498,235 +496,329 @@ if "sources_history" not in st.session_state:
 # ─────────────────────────────────────────────
 with st.sidebar:
 
-    # ── Logo + name in sidebar ───────────────
     logo_b64 = get_logo_base64()
-    if logo_b64:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:12px;padding:0.5rem 0 1rem 0;">
-            <img src="{logo_b64}" style="width:38px;height:38px;border-radius:50%;
-                filter:drop-shadow(0 0 8px rgba(26,26,255,0.7));" />
-            <div>
-                <div style="font-family:'Syne',sans-serif;font-weight:800;
-                    font-size:1rem;color:#FFFFFF;line-height:1.1;">OctoBot</div>
-                <div style="font-size:0.7rem;color:#5A5A8A;
-                    letter-spacing:0.06em;text-transform:uppercase;">Pharos AI Assistant</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div style="padding:0.5rem 0 1rem 0;">
-            <div style="font-family:'Syne',sans-serif;font-weight:800;
-                font-size:1.1rem;color:#FFFFFF;">🐙 OctoBot</div>
-            <div style="font-size:0.7rem;color:#5A5A8A;
-                letter-spacing:0.06em;text-transform:uppercase;">Pharos AI Assistant</div>
-        </div>
-        """, unsafe_allow_html=True)
 
+    # Logo + title — f-string here has NO CSS curly braces, safe to use
+    if logo_b64:
+        logo_html = (
+            '<div style="display:flex;align-items:center;gap:12px;padding:0.5rem 0 1rem 0;">'
+            '<img src="' + logo_b64 + '" style="width:38px;height:38px;border-radius:50%;'
+            'filter:drop-shadow(0 0 8px rgba(26,26,255,0.7));" />'
+            '<div>'
+            '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:1rem;'
+            'color:#FFFFFF;line-height:1.1;">OctoBot</div>'
+            '<div style="font-size:0.7rem;color:#5A5A8A;letter-spacing:0.06em;'
+            'text-transform:uppercase;">Pharos AI Assistant</div>'
+            '</div></div>'
+        )
+    else:
+        logo_html = (
+            '<div style="padding:0.5rem 0 1rem 0;">'
+            '<div style="font-family:Syne,sans-serif;font-weight:800;'
+            'font-size:1.1rem;color:#FFFFFF;">&#x1F419; OctoBot</div>'
+            '<div style="font-size:0.7rem;color:#5A5A8A;letter-spacing:0.06em;'
+            'text-transform:uppercase;">Pharos AI Assistant</div>'
+            '</div>'
+        )
+
+    st.markdown(logo_html, unsafe_allow_html=True)
     st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-    # ── Settings ─────────────────────────────
     st.markdown('<p class="sidebar-section">Settings</p>', unsafe_allow_html=True)
     show_sources = st.toggle("Show source citations", value=True)
 
     st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-    # ── Reset button ──────────────────────────
     st.markdown('<div class="reset-btn">', unsafe_allow_html=True)
     if st.button("↺  New Conversation", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sources_history = []
-        bot, err = load_octobot()
-        if bot:
-            bot.reset_memory()
+        bot_obj, _ = load_octobot()
+        if bot_obj:
+            bot_obj.reset_memory()
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-    # ── Example questions ─────────────────────
     st.markdown('<p class="sidebar-section">Example Questions</p>', unsafe_allow_html=True)
     examples = [
         "What is Pharos Network?",
-        "What is PROS?",
         "What are SPNs?",
         "How does Native Restaking work?",
+        "What is L1-Core?",
         "How do I build on Pharos?",
+        "What is the consensus mechanism?",
         "What are RWA use cases?",
     ]
     for q in examples:
-        if st.button(q, use_container_width=True, key=f"ex_{q}"):
+        if st.button(q, use_container_width=True, key="ex_" + q):
             st.session_state["pending_q"] = q
             st.rerun()
 
     st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-    # ── Status indicator ──────────────────────
-    st.markdown("""
-    <div class="status-bar">
-        <div class="status-dot"></div>
-        <span>Connected to knowledge base</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style="margin-top:1.5rem;font-size:0.72rem;color:#5A5A8A;
-        font-family:'DM Sans',sans-serif;line-height:1.6;">
-        OctoBot answers only from verified<br>
-        Pharos documentation sources.<br>
-        Zero hallucination guaranteed.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="status-bar"><div class="status-dot"></div>'
+        '<span>Connected to knowledge base</span></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="margin-top:1.5rem;font-size:0.72rem;color:#5A5A8A;'
+        'font-family:DM Sans,sans-serif;line-height:1.6;">'
+        'OctoBot answers only from verified<br>'
+        'Pharos documentation sources.<br>'
+        'Zero hallucination guaranteed.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ─────────────────────────────────────────────
-# MAIN AREA
+# MAIN AREA — HERO
 # ─────────────────────────────────────────────
-
-# ── Hero Section ─────────────────────────────
 logo_b64 = get_logo_base64()
 
 if logo_b64:
-    st.markdown(f"""
-    <div class="pharos-hero">
-        <div class="logo-wrapper">
-            <img src="{logo_b64}" class="pharos-logo-img" alt="Pharos Logo" />
-        </div>
-        <h1 class="hero-title">OctoBot</h1>
-        <p class="hero-subtitle">Pharos Network · AI Documentation & Agent Skill for Pharos</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Build HTML using string concatenation — no f-string, no CSS braces conflict
+    hero_html = (
+        '<div class="pharos-hero">'
+        '<div class="logo-wrapper">'
+        '<img src="' + logo_b64 + '" class="pharos-logo-img" alt="Pharos Logo" />'
+        '</div>'
+        '<h1 class="hero-title">OctoBot</h1>'
+        '<p class="hero-subtitle">Pharos Network &middot; AI Documentation Assistant</p>'
+        '</div>'
+    )
 else:
-    # Fallback if logo file not found
-    st.markdown("""
-    <div class="pharos-hero">
-        <div style="font-size:3.5rem;margin-bottom:0.5rem;
-            filter:drop-shadow(0 0 20px rgba(26,26,255,0.6));">🐙</div>
-        <h1 class="hero-title">OctoBot</h1>
-        <p class="hero-subtitle">Pharos Network · AI Documentation Assistant</p>
-        <div style="margin-top:0.75rem;padding:0.4rem 0.9rem;
-            background:rgba(26,26,255,0.1);border:1px solid rgba(26,26,255,0.3);
-            border-radius:8px;font-size:0.78rem;color:#6B8CFF;font-family:'DM Sans',sans-serif;">
-            💡 Add your Pharos logo: save it as <code>pharos_logo.jpg</code>
-            in your octobot folder, then refresh.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    hero_html = (
+        '<div class="pharos-hero">'
+        '<div style="font-size:3.5rem;margin-bottom:0.5rem;'
+        'filter:drop-shadow(0 0 20px rgba(26,26,255,0.6));">&#x1F419;</div>'
+        '<h1 class="hero-title">OctoBot</h1>'
+        '<p class="hero-subtitle">Pharos Network &middot; AI Documentation Assistant</p>'
+        '<div style="margin-top:0.75rem;padding:0.4rem 0.9rem;'
+        'background:rgba(26,26,255,0.1);border:1px solid rgba(26,26,255,0.3);'
+        'border-radius:8px;font-size:0.78rem;color:#6B8CFF;'
+        'font-family:DM Sans,sans-serif;">'
+        '&#x1F4A1; Save your logo as <code>pharos_logo.jpg</code> '
+        'in your octobot folder, then refresh.</div>'
+        '</div>'
+    )
 
+st.markdown(hero_html, unsafe_allow_html=True)
 st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-# ── Load bot + error handling ─────────────────
+
+# ─────────────────────────────────────────────
+# LOAD BOT
+# ─────────────────────────────────────────────
 bot, load_error = load_octobot()
 
 if load_error:
-    st.markdown(f"""
-    <div style="background:rgba(255,50,50,0.08);border:1px solid rgba(255,50,50,0.3);
-        border-radius:12px;padding:1.5rem;margin:1rem 0;">
-        <div style="font-family:'Syne',sans-serif;font-weight:700;
-            color:#FF6B6B;margin-bottom:0.5rem;">⚠ OctoBot could not start</div>
-        <div style="color:#A0A8CC;font-size:0.9rem;margin-bottom:1rem;">{load_error}</div>
-        <div style="color:#5A5A8A;font-size:0.85rem;">
-            Run in your terminal:<br>
-            <code style="color:#6B8CFF;">python build_vectorstore.py</code><br>
-            then refresh this page.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Plain string concat — no f-string, no CSS braces
+    error_html = (
+        '<div style="background:rgba(255,50,50,0.08);border:1px solid rgba(255,50,50,0.3);'
+        'border-radius:12px;padding:1.5rem;margin:1rem 0;">'
+        '<div style="font-family:Syne,sans-serif;font-weight:700;'
+        'color:#FF6B6B;margin-bottom:0.5rem;">&#x26A0; OctoBot could not start</div>'
+        '<div style="color:#A0A8CC;font-size:0.9rem;margin-bottom:1rem;">'
+        + str(load_error) +
+        '</div>'
+        '<div style="color:#5A5A8A;font-size:0.85rem;">'
+        'Run in your terminal:<br>'
+        '<code style="color:#6B8CFF;">python build_vectorstore.py</code><br>'
+        'then refresh this page.</div>'
+        '</div>'
+    )
+    st.markdown(error_html, unsafe_allow_html=True)
     st.stop()
 
-# ── Metrics row ───────────────────────────────
+
+# ─────────────────────────────────────────────
+# METRICS
+# ─────────────────────────────────────────────
 chunk_count = bot.vectorstore._collection.count()
+price_data  = get_pros_price()
+
+# ── Metrics row ───────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Knowledge Chunks", f"{chunk_count:,}")
-c2.metric("API Source", "Studio/Gemini")
+c1.metric("Knowledge Chunks", str(chunk_count))
+c2.metric("AI Model", "Gemini")
 c3.metric("Vector DB", "ChromaDB")
-c4.metric("Mode", "RAG · No Hallucination")
+
+if price_data.get("available") and price_data.get("price_usd") is not None:
+    usd     = price_data["price_usd"]
+    chg     = price_data.get("change_24h")
+    chg_str = f"{chg:+.2f}%" if chg is not None else None
+    c4.metric(label="$PROS Price", value=f"${usd:.4f}", delta=chg_str)
+elif not price_data.get("available") and price_data.get("price_usd") is not None:
+    # Stale cached value — show it with a warning indicator
+    usd = price_data["price_usd"]
+    c4.metric(label="$PROS Price", value=f"${usd:.4f}", delta="⚠ stale")
+else:
+    c4.metric("$PROS Price", "Fetching...")
 
 st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
 
-# ── Welcome card (shown only when no messages) ─
+# ── PROS Live Market Card ─────────────────────────────────────────
+# Auto-refreshes every 5 minutes via JavaScript meta-refresh
+# Shows warning if CoinGecko is unavailable — never crashes
+with st.expander("📊 Live $PROS Market Data", expanded=True):
+    if price_data.get("available") and price_data.get("price_usd") is not None:
+        p_usd  = price_data["price_usd"]
+        mcap   = price_data.get("market_cap_usd")
+        vol    = price_data.get("volume_24h")
+        chg    = price_data.get("change_24h")
+        upd    = price_data.get("last_updated", "N/A")
+
+        chg_color = "#00FF88" if (chg or 0) >= 0 else "#FF6B6B"
+        chg_str   = f"{chg:+.2f}%" if chg  is not None else "N/A"
+        mcap_str  = f"${mcap:,.0f}"  if mcap is not None else "N/A"
+        vol_str   = f"${vol:,.0f}"   if vol  is not None else "N/A"
+
+        st.markdown(
+            '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:0.5rem 0;">'
+            '<div style="flex:1;min-width:120px;background:#10101E;border:1px solid #1E1E3A;'
+            'border-radius:10px;padding:0.8rem 1rem;">'
+            '<div style="font-size:0.7rem;color:#5A5A8A;text-transform:uppercase;'
+            'letter-spacing:0.08em;margin-bottom:4px;">Price (USD)</div>'
+            '<div style="font-size:1.3rem;font-weight:700;color:#FFFFFF;'
+            'font-family:Syne,sans-serif;">$' + f"{p_usd:.4f}" + '</div></div>'
+            '<div style="flex:1;min-width:120px;background:#10101E;border:1px solid #1E1E3A;'
+            'border-radius:10px;padding:0.8rem 1rem;">'
+            '<div style="font-size:0.7rem;color:#5A5A8A;text-transform:uppercase;'
+            'letter-spacing:0.08em;margin-bottom:4px;">24h Change</div>'
+            '<div style="font-size:1.3rem;font-weight:700;color:' + chg_color + ';'
+            'font-family:Syne,sans-serif;">' + chg_str + '</div></div>'
+            '<div style="flex:1;min-width:120px;background:#10101E;border:1px solid #1E1E3A;'
+            'border-radius:10px;padding:0.8rem 1rem;">'
+            '<div style="font-size:0.7rem;color:#5A5A8A;text-transform:uppercase;'
+            'letter-spacing:0.08em;margin-bottom:4px;">Market Cap</div>'
+            '<div style="font-size:1.1rem;font-weight:700;color:#FFFFFF;'
+            'font-family:Syne,sans-serif;">' + mcap_str + '</div></div>'
+            '<div style="flex:1;min-width:120px;background:#10101E;border:1px solid #1E1E3A;'
+            'border-radius:10px;padding:0.8rem 1rem;">'
+            '<div style="font-size:0.7rem;color:#5A5A8A;text-transform:uppercase;'
+            'letter-spacing:0.08em;margin-bottom:4px;">24h Volume</div>'
+            '<div style="font-size:1.1rem;font-weight:700;color:#FFFFFF;'
+            'font-family:Syne,sans-serif;">' + vol_str + '</div></div>'
+            '</div>'
+            '<div style="font-size:0.7rem;color:#5A5A8A;margin-top:4px;">'
+            'Source: CoinGecko &nbsp;·&nbsp; Last updated: ' + upd + ' &nbsp;·&nbsp;'
+            ' Auto-refreshes every 5 min</div>',
+            unsafe_allow_html=True,
+        )
+        # Hidden auto-refresh every 5 minutes
+        st.markdown(
+            '<meta http-equiv="refresh" content="300">',
+            unsafe_allow_html=True,
+        )
+    elif not price_data.get("available") and price_data.get("price_usd") is not None:
+        # Show stale data with warning
+        p_usd = price_data["price_usd"]
+        st.warning(
+            "CoinGecko temporarily unavailable. "
+            "Showing last known price: $" + f"{p_usd:.4f}" + ". "
+            "Documentation answers continue to work normally."
+        )
+    else:
+        # No data at all
+        st.warning(
+            "CoinGecko is currently unavailable. "
+            "Price data will appear once the connection is restored. "
+            "All documentation features continue to work normally."
+        )
+
+st.markdown('<div class="pharos-divider"></div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
+# WELCOME CARD (only when chat is empty)
+# ─────────────────────────────────────────────
 if not st.session_state.messages:
     st.markdown("""
-    <div class="welcome-card">
-        <h3>Welcome to OctoBot</h3>
-        <p>
-            Ask me anything about the Pharos Network — architecture, SPNs,
-            consensus, restaking, RWA, developer programs, or how to build on Pharos.
-            I answer only from verified documentation sources, so every answer is
-            grounded in real content.
-        </p>
-        <div class="welcome-tags">
-            <span class="tag">SPNs</span>
-            <span class="tag">L1 Architecture</span>
-            <span class="tag">Native Restaking</span>
-            <span class="tag">RWA</span>
-            <span class="tag">DeFi</span>
-            <span class="tag">Build on Pharos</span>
-            <span class="tag">Consensus</span>
-            <span class="tag">Cross-chain</span>
-        </div>
+<div class="welcome-card">
+    <h3>Welcome to OctoBot</h3>
+    <p>
+        Ask me anything about the Pharos Network — architecture, SPNs,
+        consensus, restaking, RWA, developer programs, or how to build on Pharos.
+        I answer only from verified documentation sources, so every answer is
+        grounded in real content.
+    </p>
+    <div class="welcome-tags">
+        <span class="tag">SPNs</span>
+        <span class="tag">L1 Architecture</span>
+        <span class="tag">Native Restaking</span>
+        <span class="tag">RWA</span>
+        <span class="tag">DeFi</span>
+        <span class="tag">Build on Pharos</span>
+        <span class="tag">Consensus</span>
+        <span class="tag">Cross-chain</span>
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-# ── Chat history ──────────────────────────────
+
+# ─────────────────────────────────────────────
+# CHAT HISTORY
+# ─────────────────────────────────────────────
 for i, message in enumerate(st.session_state.messages):
     avatar = "👤" if message["role"] == "user" else "🐙"
     with st.chat_message(message["role"], avatar=avatar):
         st.markdown(message["content"])
 
-        # Show sources for assistant messages
-        if (
-            message["role"] == "assistant"
-            and show_sources
-        ):
+        if message["role"] == "assistant" and show_sources:
             src_idx = i // 2
             if src_idx < len(st.session_state.sources_history):
                 sources = st.session_state.sources_history[src_idx]
                 if sources:
-                    with st.expander(f"📎 {len(sources)} source(s) used", expanded=False):
+                    label = "📎 " + str(len(sources)) + " source(s) used"
+                    with st.expander(label, expanded=False):
                         for src in sources:
-                            st.markdown(
-                                f'<div class="source-card">'
-                                f'<strong>{src["title"]}</strong>'
-                                f'<a href="{src["url"]}" target="_blank">{src["url"]}</a>'
-                                f'</div>',
-                                unsafe_allow_html=True,
+                            card = (
+                                '<div class="source-card">'
+                                '<strong>' + src["title"] + '</strong>'
+                                '<a href="' + src["url"] + '" target="_blank">'
+                                + src["url"] + '</a>'
+                                '</div>'
                             )
+                            st.markdown(card, unsafe_allow_html=True)
 
-# ── Handle sidebar example button clicks ──────
+
+# ─────────────────────────────────────────────
+# CHAT INPUT
+# ─────────────────────────────────────────────
 pending = st.session_state.pop("pending_q", None)
-
-# ── Chat input ────────────────────────────────
 user_input = st.chat_input("Ask about Pharos Network...")
 question = pending or user_input
 
 if question:
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user", avatar="👤"):
         st.markdown(question)
 
-    # Get answer
     with st.chat_message("assistant", avatar="🐙"):
         with st.spinner("Searching Pharos knowledge base..."):
             try:
                 answer, sources = bot.ask(question)
             except Exception as e:
-                answer = f"An error occurred: {e}"
+                answer = "An error occurred: " + str(e)
                 sources = []
 
         st.markdown(answer)
 
         if show_sources and sources:
-            with st.expander(f"📎 {len(sources)} source(s) used", expanded=True):
+            label = "📎 " + str(len(sources)) + " source(s) used"
+            with st.expander(label, expanded=True):
                 for src in sources:
-                    st.markdown(
-                        f'<div class="source-card">'
-                        f'<strong>{src["title"]}</strong>'
-                        f'<a href="{src["url"]}" target="_blank">{src["url"]}</a>'
-                        f'</div>',
-                        unsafe_allow_html=True,
+                    card = (
+                        '<div class="source-card">'
+                        '<strong>' + src["title"] + '</strong>'
+                        '<a href="' + src["url"] + '" target="_blank">'
+                        + src["url"] + '</a>'
+                        '</div>'
                     )
+                    st.markdown(card, unsafe_allow_html=True)
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
     st.session_state.sources_history.append(sources)

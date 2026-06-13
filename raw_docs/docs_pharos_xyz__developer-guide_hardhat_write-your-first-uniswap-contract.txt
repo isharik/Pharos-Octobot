@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/developer-guide/hardhat/write-your-first-uniswap-contract
 TITLE: Write Your First Uniswap Contract | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide will walk you through the process of creating and deploying a simple Uniswap-like decentralized exchange (DEX) contract on the Pharos blockchain. By the end of this guide, you will have a basic understanding of how automated market makers (AMMs) work and how to implement a simple DEX.
 Prerequisites
 Before you begin, ensure you have the following:

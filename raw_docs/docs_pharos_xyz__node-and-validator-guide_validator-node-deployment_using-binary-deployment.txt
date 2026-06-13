@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-binary-deployment
 TITLE: Using Binary | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide describes how to deploy a Pharos node using pre-compiled binaries and the ops tool.
 📌 For the latest binary package, see
 Current Node Versions
@@ -33,10 +38,10 @@ cd
 $WORKSPACE
 Download the latest binary release from GitHub:
 wget
-https://github.com/PharosNetwork/resources/releases/latest/download/pharos-v0.12.2-f301031a.tar.gz
+https://github.com/PharosNetwork/resources/releases/latest/download/pharos-v0.13.1-6d82e95c.tar.gz
 tar
 -zxvf
-pharos-v0.12.2-f301031a.tar.gz
+pharos-v0.13.1-6d82e95c.tar.gz
 The extracted package contains:
 bin/pharos_light
 - Pharos node binary
@@ -157,5 +162,5 @@ Using Docker
 Next
 Node Configuration
 Last updated
-14 days ago
+7 hours ago
 Was this helpful?

@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/using-docker-deployment
 TITLE: Using Docker | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide describes how to deploy a Pharos node using Docker and Docker Compose.
 📌 For the latest Docker image tag, see
 Current Node Versions
@@ -51,7 +56,7 @@ For TraceDB Node:
 Create the Docker Compose configuration file:
 Note:
 The image uses a specific version tag (
-pharos_community_v0.12.2_f301031a_0422
+pharos_community_v0.13.1_6d82e95c_0612
 ).
 4. Set password in docker-compose.yml
 Edit
@@ -123,5 +128,5 @@ Validator Node Deployment
 Next
 Using Binary
 Last updated
-14 days ago
+12 hours ago
 Was this helpful?

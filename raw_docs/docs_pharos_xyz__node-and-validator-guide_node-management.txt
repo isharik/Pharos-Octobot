@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/node-management
 TITLE: Node Management | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Node Initialization
 Pharos Full Nodes automatically generate cryptographic keys on startup — no manual configuration is needed. To start a validator node, run the following command in your working directory:
 docker

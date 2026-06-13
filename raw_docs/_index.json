@@ -135,6 +135,11 @@
     "filename": "docs_pharos_xyz__tooling-and-infrastructure_wallets.txt"
   },
   {
+    "url": "https://docs.pharos.xyz/tooling-and-infrastructure/pharos-skill-engine-guide",
+    "title": "Pharos Skill Engine | docs.pharos.xyz",
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_pharos-skill-engine-guide.txt"
+  },
+  {
     "url": "https://docs.pharos.xyz/api-and-sdk/json-rpc-methods",
     "title": "JSON-RPC API Methods | docs.pharos.xyz",
     "filename": "docs_pharos_xyz__api-and-sdk_json-rpc-methods.txt"
@@ -293,6 +298,11 @@
     "url": "https://docs.pharos.xyz/tooling-and-infrastructure/wallets/fordefi",
     "title": "Fordefi | docs.pharos.xyz",
     "filename": "docs_pharos_xyz__tooling-and-infrastructure_wallets_fordefi.txt"
+  },
+  {
+    "url": "https://docs.pharos.xyz/tooling-and-infrastructure/pharos-skill-engine-guide/piggybank-skill-guide",
+    "title": "Piggy Bank Tutorial | docs.pharos.xyz",
+    "filename": "docs_pharos_xyz__tooling-and-infrastructure_pharos-skill-engine-guide_piggybank-skill-guide.txt"
   },
   {
     "url": "https://docs.pharos.xyz/api-and-sdk",

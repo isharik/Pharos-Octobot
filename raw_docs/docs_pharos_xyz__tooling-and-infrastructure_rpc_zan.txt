@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/zan
 TITLE: ZAN RPC | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 How to Access Pharos Testnet RPC from ZAN?
 Step 1: Create a ZAN account
 A ZAN account is required if you want to create an API key on the ZAN platform for configuring an RPC node service on Pharos. For more information, see

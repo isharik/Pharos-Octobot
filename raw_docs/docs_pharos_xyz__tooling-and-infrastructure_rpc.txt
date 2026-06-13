@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc
 TITLE: RPC Infrastructure | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 RPC endpoints are the primary way your application interacts with the Pharos Network. They allow you to send transactions, query on-chain data, and communicate with the network programmatically.
 As a developer, you’ll use RPCs to connect your frontend, backend, or scripts to the blockchain during development and in production.

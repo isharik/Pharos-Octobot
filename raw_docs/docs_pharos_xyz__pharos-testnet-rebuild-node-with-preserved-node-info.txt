@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/pharos-testnet-rebuild-node-with-preserved-node-info
 TITLE: Pharos Testnet: Rebuild Node with Preserved Node Info | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide helps you
 rebuild your Pharos Testnet node
 while preserving your

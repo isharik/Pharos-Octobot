@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/getting-started
 TITLE: Network | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Pharos provides two primary network environments to help you move from development to production smoothly.
 Whether you're experimenting with smart contracts or deploying a live application, each network is designed to support a specific stage of your workflow.

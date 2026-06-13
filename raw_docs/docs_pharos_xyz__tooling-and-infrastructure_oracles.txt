@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/oracles
 TITLE: Oracle | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Oracles provide access to off-chain data within smart contracts. They enable applications on Pharos to interact with real-world information such as asset prices, market data, and external events.
 For many use cases, especially in DeFi and real-world asset applications, oracles are a critical component for bringing reliable data on-chain.

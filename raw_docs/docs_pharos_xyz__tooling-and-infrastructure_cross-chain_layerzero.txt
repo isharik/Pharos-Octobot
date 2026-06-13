@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero
 TITLE: LayerZero | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 LayerZero provides omnichain messaging infrastructure that allows smart contracts to communicate across different blockchain networks.
 On Pharos, LayerZero enables developers to build applications that send messages and transfer assets across multiple chains, with configurable security through Decentralized Verifier Networks (DVNs).

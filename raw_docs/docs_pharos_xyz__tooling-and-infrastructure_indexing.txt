@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/indexing
 TITLE: Indexer | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Indexing allows developers to efficiently query and access on-chain data without directly relying on raw RPC calls.
 Instead of scanning the blockchain for every request, indexing services process and organize data in a way that makes it easier to retrieve, filter, and use within applications.

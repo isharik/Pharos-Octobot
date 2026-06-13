@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain
 TITLE: Cross Chain Infrastructure | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Cross-chain infrastructure enables applications on Pharos to interact with other blockchain networks. It allows developers to move assets, send messages, and build applications that operate across multiple ecosystems.
 For developers building multi-chain applications or integrating external liquidity and users, cross-chain infrastructure is a key component.

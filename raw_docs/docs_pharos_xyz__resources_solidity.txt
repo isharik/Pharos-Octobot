@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/resources/solidity
 TITLE: Solidity | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 The official Solidity documentation is the most comprehensive and up-to-date resource for learning about the Solidity language. It covers everything from basic syntax to advanced topics and provides detailed explanations, examples, and code snippets.
 Link
 :

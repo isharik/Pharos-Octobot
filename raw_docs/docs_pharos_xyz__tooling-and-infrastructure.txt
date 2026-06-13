@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure
 TITLE: Block Explorer | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 A block explorer is one of the most essential tools when building on Pharos. It gives you visibility into everything happening on-chain — from transactions and blocks to smart contracts and account activity.
 As a developer, you’ll frequently use a block explorer to verify deployments, debug issues, and track interactions with your contracts.

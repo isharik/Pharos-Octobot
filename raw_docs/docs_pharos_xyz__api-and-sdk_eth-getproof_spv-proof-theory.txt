@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/api-and-sdk/eth-getproof/spv-proof-theory
 TITLE: SPV Proof Theory Explanation | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 SPV Proof Theory Explanation
 SPV (in the context of this repository) refers to: On a Merkle state tree of a certain data version, for a key provided by the user, the server constructs proof data, allowing the verifier to independently verify "whether the key exists, and if so, what the value is" or "that the key does not exist", given that the verifier only knows the root hash (or equivalent commitment). In this implementation, the state is organized as a
 nibble Trie
@@ -237,5 +242,5 @@ eth_getProof — Storage State Verification (SPV)
 Next
 Foundry
 Last updated
-14 days ago
+22 days ago
 Was this helpful?

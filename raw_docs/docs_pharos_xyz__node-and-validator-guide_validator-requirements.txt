@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-requirements
 TITLE: Validator Requirements | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 To ensure a validator operates effectively and efficiently, the minimum recommended hardware specifications are:
 Component
 Specification
@@ -19,5 +24,5 @@ Validator Accountability
 Next
 Validator Node Deployment
 Last updated
-2 months ago
+3 months ago
 Was this helpful?

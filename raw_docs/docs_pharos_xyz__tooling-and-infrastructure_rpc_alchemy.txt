@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/rpc/alchemy
 TITLE: Alchemy RPC | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Alchemy provides scalable RPC infrastructure and developer tooling for interacting with blockchain networks.
 On Pharos, Alchemy can be used to access reliable RPC endpoints for both Pacific Mainnet and Atlantic Testnet, making it suitable for application development and production use.

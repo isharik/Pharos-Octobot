@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/enable-pruning-in-pharos-node
 TITLE: Enable AutoPruning in Pharos Node | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This guide describes how to enable automatic data pruning on your Pharos node to manage disk space.
 For v0.11+ Deployment (New Structure)
 If you deployed your node using the v0.11 deployment guide (Binary or Docker with the new structure), follow these steps.

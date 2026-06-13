@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/pharos-network-snapshots
 TITLE: Pharos Network Snapshots | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Welcome to the official snapshot page for Pharos Network. Here you can find regularly updated data snapshots for each network environment — Atlantic Testnet and Mainnet — to help you quickly synchronize and bootstrap your nodes without performing a full sync from genesis.
 Snapshots include the latest database state and can be used for fast setup, disaster recovery, or performance testing.
 💡 Notes & Best Practices
@@ -41,5 +46,5 @@ Rapid Node Initialization(Testnet)
 Next
 Node Debugging & Configuration
 Last updated
-4 days ago
+11 days ago
 Was this helpful?

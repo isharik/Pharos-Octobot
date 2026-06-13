@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/node-and-validator-guide/validator-node-deployment/node-configuration
 TITLE: Node Configuration | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 This document provides detailed configuration guidance for Pharos nodes, including node types, configuration files, RPC tuning, and node pool scheduling strategies.
 Node Types
 Pharos supports the following node types:
@@ -353,5 +358,5 @@ Using Binary
 Next
 Node Management
 Last updated
-1 month ago
+2 months ago
 Was this helpful?

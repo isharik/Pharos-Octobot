@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/developer-guide/x402
 TITLE: x402 | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 x402 is an open, internet-native payment protocol. The HTTP 402 status code was defined in the early HTTP/1.1 specification as “Payment Required.” However, for a long time, it served only as a reserved status code with few practical applications. With the maturation of blockchain and crypto-payment infrastructure, this status code has been reactivated, evolving into a lightweight, trustless mechanism for content payment.
 In this model, when a client requests protected resources (such as articles, API responses, or data streams), the server does not return the content directly. Instead, it returns an HTTP 402 response accompanied by payment instructions (e.g., recipient address, amount, supported payment networks, etc.). The client initiates a micro-payment—either on-chain or off-chain—via a wallet. Once the server verifies the validity of the transaction, it unlocks and delivers the requested content. In decentralized networks like Pharos, this process is typically implemented as follows: the user sends a micro-token transfer to a specified address → the network node or server-side listens for and verifies the transaction → the original requested resource is automatically returned upon successful verification. The entire process requires no registration, login, or traditional payment gateways, truly achieving “pay-as-you-go, instant access.”

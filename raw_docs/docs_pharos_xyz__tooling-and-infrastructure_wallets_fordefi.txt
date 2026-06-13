@@ -1,6 +1,11 @@
 SOURCE_URL: https://docs.pharos.xyz/tooling-and-infrastructure/wallets/fordefi
 TITLE: Fordefi | docs.pharos.xyz
 ============================================================
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
 Overview
 Fordefi provides institutional-grade wallet infrastructure for securely managing digital assets.
 It uses MPC (Multi-Party Computation) technology to eliminate single private keys, enabling secure transaction signing along with policy-based access control for teams and organizations.
@@ -30,7 +35,7 @@ Start managing assets and signing transactions securely
 Previous
 Safe MultiSig
 Next
-JSON-RPC API Methods
+Pharos Skill Engine
 Last updated
 1 month ago
 Was this helpful?

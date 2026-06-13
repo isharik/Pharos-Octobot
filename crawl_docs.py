@@ -1,5 +1,5 @@
 """
-crawl_docs.py  (UPDATED — 5 Verified Sources)
+crawl_docs.py  (UPDATED — 7 Sources)
 ----------------------------------------------
 Crawls 5 confirmed-accessible sources about Pharos Network.
 
@@ -9,6 +9,8 @@ SOURCES:
   3. github.com/PharosNetwork-> Targeted README pages (code + audit docs)
   4. Medium articles        -> 6 confirmed Pharos articles (targeted fetch)
   5. web3.bitget.com        -> Pharos academy/explainer page (targeted fetch)
+  6. mexc.com/learn          -> PROS token deep-dive article (targeted fetch)
+  7. tracxn.com              -> Company profile (manual paste — bot-blocked)
 
 NOTE on pharos.xyz/blog and pharos.xyz/resources:
   These are React apps that require JavaScript to render.
@@ -119,6 +121,36 @@ SOURCE_5_BITGET = {
         "https://web3.bitget.com/en/academy/what-is-pharos-network-pharos-a-high-throughput-evm-layer-1-for-real-world-asset-tokenization-and-defi-lLending",
         "https://web3.bitget.com/en/dapp/pharos-network-30127",
     ],
+}
+
+# ── SOURCE 6: MEXC Learn Article ────────────────────────────────
+# Confirmed accessible — rich content about tokenomics,
+# PROS token, staking model, SPNs, and RWA use cases.
+# Verified URL: April 2026 article on MEXC Learn platform
+SOURCE_6_MEXC = {
+    "enabled": True,
+    "name": "MEXC Learn",
+    "type": "targeted",
+    "delay": 1.5,
+    "urls": [
+        "https://www.mexc.com/learn/article/what-is-pharos-network-pros-coin-a-deep-dive-into-pharos-networks-realfi-layer-1-ecosystem/1",
+    ],
+}
+
+# ── SOURCE 7: Tracxn (MANUAL PASTE) ─────────────────────────────
+# Tracxn blocks all automated crawlers (robots.txt DISALLOWED).
+# To add this source:
+#   1. Open the URL below in your browser while logged in
+#   2. Scroll to load all content
+#   3. Ctrl+A then Ctrl+C to copy all text
+#   4. Delete the placeholder below and paste your content
+#   5. Save and re-run: python crawl_docs.py
+MANUAL_TRACXN = {
+    "enabled": True,
+    "name": "Tracxn",
+    "source_url": "https://tracxn.com/d/companies/pharosnetwork/__2M2SWin4-QDlMYdx-wvndYp8FvZeETBz02Q5MCCInrg",
+    "title": "Pharos Network — Tracxn Company Profile",
+    "content": "PASTE_TRACXN_CONTENT_HERE",
 }
 
 # ── MANUAL PASTE: pharos.xyz blog/resources ─────────────────────
@@ -382,6 +414,7 @@ def targeted_fetch(config: dict) -> list:
 PLACEHOLDER_MARKERS = [
     "PASTE_PHAROS_BLOG_CONTENT_HERE",
     "PASTE_PHAROS_RESOURCES_CONTENT_HERE",
+    "PASTE_TRACXN_CONTENT_HERE",
     "PASTE YOUR LINKEDIN CONTENT HERE",
 ]
 
@@ -441,7 +474,7 @@ def save_index(all_pages: list) -> None:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  OctoBot Multi-Source Crawler — 5 Sources")
+    print("  OctoBot Multi-Source Crawler — 7 Sources")
     print("=" * 60)
     print()
     print("  Source 1: Pharos Docs         (docs.pharos.xyz)")
@@ -449,8 +482,10 @@ if __name__ == "__main__":
     print("  Source 3: Pharos GitHub       (github.com/PharosNetwork)")
     print("  Source 4: Medium Articles     (7 confirmed articles)")
     print("  Source 5: Bitget Academy      (web3.bitget.com)")
+    print("  Source 6: MEXC Learn          (mexc.com/learn - tokenomics/PROS)")
+    print("  Source 7: Tracxn              (manual paste - company profile)")
     print()
-    print("  + Manual paste slots for pharos.xyz/blog and /resources")
+    print("  + Manual paste slots for pharos.xyz/blog, /resources, and Tracxn")
     print()
 
     results = {}
@@ -470,9 +505,13 @@ if __name__ == "__main__":
     # ── 5. Bitget Academy ─────────────────────────────────────────
     results["Bitget"] = targeted_fetch(SOURCE_5_BITGET)
 
+    # ── 6. MEXC Learn ─────────────────────────────────────────────
+    results["MEXC Learn"] = targeted_fetch(SOURCE_6_MEXC)
+
     # ── Manual paste sources (skipped until you fill them in) ─────
-    results["Pharos Blog"] = manual_paste(MANUAL_PHAROS_BLOG)
+    results["Pharos Blog"]      = manual_paste(MANUAL_PHAROS_BLOG)
     results["Pharos Resources"] = manual_paste(MANUAL_PHAROS_RESOURCES)
+    results["Tracxn"]           = manual_paste(MANUAL_TRACXN)
 
     # ── Combine and save ─────────────────────────────────────────
     all_pages = []
