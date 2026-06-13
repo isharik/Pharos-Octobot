@@ -220,6 +220,19 @@ streamlit run app.py
 ```
 Opens at: http://localhost:8501
 
+
+Check Price on Octobot Using terminal :
+
+Enter this command into the terminal 
+
+python -c "
+import requests
+r = requests.get('https://api.coingecko.com/api/v3/simple/price?ids=pharos-network&vs_currencies=usd&include_market_cap=true&include_24hr_change=true&include_24hr_vol=true')
+print(r.json())
+"
+
+Also on the streamlit app it shows the updated price via Coingecko's api which refreshes every 5 minutes :)
+
 ---
 
 ## Why This Skill Matters for the Pharos Ecosystem
