@@ -221,7 +221,8 @@ streamlit run app.py
 Opens at: http://localhost:8501
 
 
-Check Price on Octobot Using terminal :
+
+##Check Price on Octobot Using terminal :
 
 Enter this command into the terminal 
 
