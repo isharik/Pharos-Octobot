@@ -222,7 +222,7 @@ Opens at: http://localhost:8501
 
 
 
-##Check Price on Octobot Using terminal :
+## Check Price on Octobot Using terminal :
 
 Enter this command into the terminal 
 
@@ -280,11 +280,11 @@ __pycache__/
 MIT — free to use, fork, and build upon.
 
 
-🚧 WIP Update
+Update (DONE)
 
-Currently working on bringing live PROS token data to OctoBot through CoinGecko integration.
+Finishes working on bringing live PROS token data to OctoBot through CoinGecko integration.
 
-Upcoming features:
+Features:
 • Real-time PROS price and market cap tracking
 • Dedicated `/pros-price` API endpoint
 • Automatic token data responses inside OctoBot
