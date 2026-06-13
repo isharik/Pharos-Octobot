@@ -13,6 +13,7 @@ Run:
 """
 
 import os
+import requests
 from dotenv import load_dotenv
 
 # Gemini
@@ -151,6 +152,30 @@ class OctoBot:
             )
 
         return "\n\n---\n\n".join(parts)
+    
+    # ─────────────────────────────────────────
+    def _get_live_pros_data(self):
+        try:
+            url = (
+                "https://api.coingecko.com/api/v3/coins/pharos-network"
+            )
+            r = requests.get(
+                url,
+                timeout=5
+            )
+            data = r.json()
+
+            return {
+                "price": data["market_data"]["current_price"]["usd"],
+                "market_cap": data["market_data"]["market_cap"]["usd"]
+            }
+
+        except Exception as e:
+            print(f"Error fetching PROS data: {e}")
+            return None
+    
+    
+
 
     # ─────────────────────────────────────────
 
@@ -200,6 +225,18 @@ class OctoBot:
         context = self._format_docs(
             relevant_docs
         )
+        
+        question_lower = question.lower()
+        if ("price" in question_lower or
+            "market cap" in question_lower or
+            "pros" in question_lower):
+            live = self._get_live_pros_data()
+            if live:
+                context += (
+                    "\n\nLIVE TOKEN DATA:\n"
+                    f"Current Price: ${live['price']}\n"
+                    f"Market Cap: ${live['market_cap']}"
+                )
 
         chain = (
             PROMPT_TEMPLATE

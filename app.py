@@ -14,6 +14,7 @@ import os
 import time
 import base64
 import requests
+import pandas as pd
 import streamlit as st
 from datetime import datetime, timezone
 
@@ -532,6 +533,40 @@ def load_octobot():
     except Exception as e:
         return None, str(e)
 
+def get_price_chart():
+
+    try:
+
+        url = (
+            "https://api.coingecko.com/api/v3/"
+            "coins/pharos-network/"
+            "market_chart"
+            "?vs_currency=usd&days=1"
+        )
+
+        r = requests.get(
+            url,
+            timeout=5
+        )
+
+        prices = r.json()["prices"]
+
+        df = pd.DataFrame(
+            prices,
+            columns=["time", "price"]
+        )
+
+        df["time"] = pd.to_datetime(
+            df["time"],
+            unit="ms"
+        )
+
+        return df
+
+    except:
+
+        return None    
+
 
 # ─────────────────────────────────────────────
 # SESSION STATE
@@ -842,7 +877,52 @@ if question:
 
         st.markdown(answer)
 
-        if show_sources and sources:
+    try:
+
+       q = question.lower()
+
+       if (
+           "price" in q
+            or "market cap" in q
+            or "pros" in q
+        ):
+
+        url = (
+            "https://api.coingecko.com/api/v3/"
+            "coins/pharos-network/market_chart"
+            "?vs_currency=usd&days=1"
+        )
+
+        response = requests.get(
+            url,
+            timeout=5
+        )
+
+        prices = response.json()["prices"]
+
+        df = pd.DataFrame(
+            prices,
+            columns=["time", "price"]
+        )
+
+        df["time"] = pd.to_datetime(
+            df["time"],
+            unit="ms"
+        )
+
+        st.markdown("### 📈 PROS Live Price")
+
+        st.line_chart(
+            df.set_index("time")
+        )
+
+    except Exception as e:
+
+      st.warning(
+        f"Chart unavailable: {e}"
+    )   
+
+    if show_sources and sources:
             label = "Sources · " + str(len(sources))
             with st.expander(label, expanded=True):
                 for s in sources:
