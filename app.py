@@ -357,9 +357,9 @@ html, body, [class*="css"] {
 .ticker-value.green { color: var(--green); }
 .ticker-value.red   { color: var(--red); }
 .ticker-source {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--txt-3);
-    padding: 0.25rem 0.8rem;
+    padding: 0.3rem 0.9rem;
     background: var(--bg);
     border-top: 1px solid var(--border-1);
     letter-spacing: 0.04em;
@@ -737,7 +737,7 @@ if price_data.get("available") and price_data.get("price_usd") is not None:
         '</div>'
         '</div>'
         '<div class="ticker-source">'
-        'CoinGecko &nbsp;·&nbsp; Updated ' + upd + ' &nbsp;·&nbsp; Auto-refresh 5 min'
+        'Source: CoinGecko &nbsp;·&nbsp; Updated ' + upd + ' &nbsp;·&nbsp; Auto-refreshes in 5 min'
         '</div>'
         '<meta http-equiv="refresh" content="300">',
         unsafe_allow_html=True,
