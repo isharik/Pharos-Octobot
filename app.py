@@ -15,6 +15,7 @@ import time
 import base64
 import requests
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from datetime import datetime, timezone
 
@@ -109,22 +110,22 @@ st.markdown("""
 <style>
 :root {
     --p-blue:     #1A1AFF;
-    --p-blue2:    #3535F5;
-    --p-accent:   #5B6EFF;
-    --p-light:    #8899FF;
-    --p-glow:     rgba(26,26,255,0.22);
-    --p-subtle:   rgba(26,26,255,0.07);
-    --bg:         #08080F;
-    --bg-1:       #0D0D1A;
-    --bg-2:       #121224;
-    --bg-3:       #181830;
-    --border-1:   #1A1A30;
-    --border-2:   #252545;
-    --txt-1:      #F0F0FF;
-    --txt-2:      #9099CC;
-    --txt-3:      #52527A;
-    --green:      #22C97A;
-    --red:        #FF5555;
+    --p-blue2:    #2D2DE0;
+    --p-accent:   #1A1AFF;
+    --p-light:    #4F4FFF;
+    --p-glow:     rgba(26,26,255,0.18);
+    --p-subtle:   rgba(26,26,255,0.06);
+    --bg:         #F4F5F7;
+    --bg-1:       #FFFFFF;
+    --bg-2:       #F7F8FA;
+    --bg-3:       #ECEDF1;
+    --border-1:   #E3E5EA;
+    --border-2:   #D6D9E0;
+    --txt-1:      #14141F;
+    --txt-2:      #5B5F6E;
+    --txt-3:      #9499A8;
+    --green:      #1FA855;
+    --red:        #E5484D;
     --fn-d:       'Syne', sans-serif;
     --fn-b:       'DM Sans', sans-serif;
     --r-sm:       6px;
@@ -143,7 +144,7 @@ html, body, [class*="css"] {
 .stApp {
     background: var(--bg) !important;
     background-image:
-        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(26,26,255,0.1) 0%, transparent 55%) !important;
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(26,26,255,0.05) 0%, transparent 55%) !important;
 }
 
 #MainMenu, footer, header, .stDeployButton { display: none !important; }
@@ -171,7 +172,7 @@ html, body, [class*="css"] {
 .sb-logo img {
     width: 28px; height: 28px;
     border-radius: 50%;
-    filter: drop-shadow(0 0 6px rgba(26,26,255,0.6));
+    filter: drop-shadow(0 0 4px rgba(26,26,255,0.25));
     flex-shrink: 0;
 }
 .sb-logo-name {
@@ -284,7 +285,7 @@ html, body, [class*="css"] {
 .main-header img {
     width: 50px; height: 46px;
     border-radius: 60%;
-    filter: drop-shadow(0 0 8px rgba(26,26,255,0.55));
+    filter: drop-shadow(0 0 5px rgba(26,26,255,0.2));
     flex-shrink: 0;
 }
 .main-header-fallback {
@@ -314,15 +315,22 @@ html, body, [class*="css"] {
 .powered-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     font-size: 10px;
-    color: var(--txt-3);
-    background: var(--bg-2);
-    border: 1px solid var(--border-1);
+    font-weight: 600;
+    color: #FFFFFF;
+    background: #14141F;
+    border: none;
     border-radius: 20px;
-    padding: 2px 8px;
+    padding: 4px 12px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+}
+.powered-badge .dot-amber {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #FFB020;
+    flex-shrink: 0;
 }
 
 /* ── PRICE TICKER ───────────────────── */
@@ -335,6 +343,7 @@ html, body, [class*="css"] {
     border-radius: var(--r-md);
     overflow: hidden;
     margin-bottom: 0.75rem;
+    box-shadow: 0 1px 3px rgba(20,20,31,0.04);
 }
 .ticker-cell {
     flex: 1;
@@ -382,6 +391,7 @@ html, body, [class*="css"] {
     padding: 4px 11px;
     font-size: 12.5px;
     color: var(--txt-2);
+    box-shadow: 0 1px 2px rgba(20,20,31,0.03);
 }
 .stat-pill-dot {
     width: 5px; height: 5px;
@@ -392,6 +402,33 @@ html, body, [class*="css"] {
 .stat-pill strong {
     color: var(--txt-1);
     font-weight: 600;
+}
+
+/* ── BORDERED CONTAINER (chart card) ── */
+[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
+    background: var(--bg-1) !important;
+    border: 1px solid var(--border-1) !important;
+    border-radius: var(--r-md) !important;
+    padding: 0.7rem 0.9rem 0.3rem 0.9rem !important;
+    margin-bottom: 0.75rem !important;
+    box-shadow: 0 1px 3px rgba(20,20,31,0.04) !important;
+}
+
+/* ── CHART CARD ─────────────────────── */
+.chart-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: var(--r-md);
+    padding: 0.7rem 0.9rem 0.2rem 0.9rem;
+    margin-bottom: 0.75rem;
+}
+.chart-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--p-light);
+    margin-bottom: 0.3rem;
 }
 
 /* ── THIN DIVIDER ───────────────────── */
@@ -409,6 +446,7 @@ html, body, [class*="css"] {
     border-radius: var(--r-lg);
     padding: 1rem 1.2rem;
     margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(20,20,31,0.04);
 }
 .welcome-card h3 {
     font-family: var(--fn-d) !important;
@@ -442,27 +480,66 @@ html, body, [class*="css"] {
 [data-testid="stChatMessage"] {
     background: transparent !important;
     padding: 0.3rem 0 !important;
+    color: var(--txt-1) !important;
+}
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li,
+[data-testid="stChatMessage"] span {
+    color: var(--txt-1) !important;
+}
+[data-testid="stChatMessageAvatarUser"],
+[data-testid="stChatMessageAvatarAssistant"] {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border-1) !important;
 }
 
 /* ── CHAT INPUT ─────────────────────── */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div {
+    background: var(--bg) !important;
+}
+
 [data-testid="stChatInput"] {
     background: var(--bg-1) !important;
     border: 1px solid var(--border-2) !important;
     border-radius: var(--r-md) !important;
 }
+
 [data-testid="stChatInput"]:focus-within {
     border-color: var(--p-blue) !important;
     box-shadow: 0 0 0 2px var(--p-glow) !important;
 }
-[data-testid="stChatInput"] textarea {
-    background: transparent !important;
+
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInputTextArea"],
+textarea[data-testid="stChatInputTextArea"] {
+    background: var(--bg-1) !important;
+    background-color: var(--bg-1) !important;
     color: var(--txt-1) !important;
+    -webkit-text-fill-color: var(--txt-1) !important;
     font-family: var(--fn-b) !important;
     font-size: 13px !important;
+    caret-color: var(--p-blue) !important;
 }
-[data-testid="stChatInput"] textarea::placeholder {
-    color: var(--txt-3) !important;
+
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInputTextArea"]::placeholder {
+    color: var(--txt-2) !important;
+    -webkit-text-fill-color: var(--txt-2) !important;
     font-size: 13px !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stChatInput"] button {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border-1) !important;
+    border-radius: var(--r-sm) !important;
+}
+[data-testid="stChatInput"] button svg {
+    fill: var(--txt-1) !important;
 }
 
 /* ── EXPANDER (sources) ─────────────── */
@@ -533,39 +610,105 @@ def load_octobot():
     except Exception as e:
         return None, str(e)
 
-def get_price_chart():
+def get_price_chart_df():
+    """
+    Fetch 24h PROS price history from CoinGecko for the area chart.
+    Cached in session_state for 5 minutes alongside the price ticker.
+    Returns a DataFrame with columns [time, price] or None on failure.
+    """
+    now    = time.time()
+    cached = st.session_state.get("pros_chart_cache", {})
+
+    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < PRICE_CACHE_SECONDS:
+        return cached["df"]
 
     try:
-
         url = (
-            "https://api.coingecko.com/api/v3/"
-            "coins/pharos-network/"
-            "market_chart"
-            "?vs_currency=usd&days=1"
+            "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
+            "/market_chart?vs_currency=usd&days=1"
         )
+        r = requests.get(url, timeout=8, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        prices = r.json().get("prices", [])
+        if not prices:
+            raise ValueError("Empty chart data")
 
-        r = requests.get(
-            url,
-            timeout=5
-        )
+        df = pd.DataFrame(prices, columns=["time", "price"])
+        df["time"] = pd.to_datetime(df["time"], unit="ms")
 
-        prices = r.json()["prices"]
-
-        df = pd.DataFrame(
-            prices,
-            columns=["time", "price"]
-        )
-
-        df["time"] = pd.to_datetime(
-            df["time"],
-            unit="ms"
-        )
-
+        st.session_state["pros_chart_cache"] = {"df": df, "fetched_at": now}
         return df
 
-    except:
+    except Exception:
+        # Keep showing the last good chart if available
+        return cached.get("df")
 
-        return None    
+
+def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
+    """
+    Render a professional Pharos-themed area chart for $PROS 24h price.
+    White/blue color scheme, gradient fill, clean axes, no legend clutter.
+    """
+    if df is None or df.empty:
+        st.markdown(
+            '<div style="font-size:11px;color:#9499A8;padding:0.4rem 0;">'
+            'Chart unavailable — price history could not be loaded.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    line_color = "#1A1AFF"   # Pharos primary blue
+    fill_color = "rgba(26,26,255,0.10)"
+    grid_color = "rgba(20,20,31,0.06)"
+    text_color = "#5B5F6E"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df["time"],
+        y=df["price"],
+        mode="lines",
+        line=dict(color=line_color, width=2, shape="spline", smoothing=0.4),
+        fill="tozeroy",
+        fillcolor=fill_color,
+        hovertemplate="$%{y:.4f}<br>%{x|%H:%M}<extra></extra>",
+        name="PROS",
+    ))
+
+    fig.update_layout(
+        height=190,
+        margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        hovermode="x unified",
+        font=dict(family="DM Sans, sans-serif", color=text_color, size=11),
+        xaxis=dict(
+            showgrid=False,
+            showline=False,
+            tickfont=dict(color=text_color, size=10),
+            tickformat="%H:%M",
+            nticks=6,
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor=grid_color,
+            griddash="dot",
+            showline=False,
+            tickfont=dict(color=text_color, size=10),
+            tickprefix="$",
+            tickformat=".4f",
+            side="right",
+        ),
+        hoverlabel=dict(
+            bgcolor="#F7F8FA",
+            font_color="#14141F",
+            font_family="DM Sans, sans-serif",
+            bordercolor="#D6D9E0",
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=chart_key)
 
 
 # ─────────────────────────────────────────────
@@ -676,14 +819,14 @@ if price_data.get("available") and price_data.get("price_usd") is not None:
     c_cls   = "green" if chg >= 0 else "red"
     chg_sym = "▲" if chg >= 0 else "▼"
     badge   = (
-        '<span style="font-size:10px;color:#9099CC;">$PROS&nbsp;</span>'
+        '<span style="font-size:10px;color:#5B5F6E;">$PROS&nbsp;</span>'
         '<span style="font-family:Syne,sans-serif;font-size:12px;font-weight:600;'
-        'color:#F0F0FF;">' + f"${usd:.4f}" + '</span>'
+        'color:#14141F;">' + f"${usd:.4f}" + '</span>'
         '<span style="font-size:10px;color:' + ("var(--green)" if chg>=0 else "var(--red)") + ';margin-left:4px;">'
         + chg_sym + f"{abs(chg):.2f}%" + '</span>'
     )
 else:
-    badge = '<span style="font-size:10px;color:#52527A;">$PROS loading...</span>'
+    badge = '<span style="font-size:10px;color:#9499A8;">$PROS loading...</span>'
 
 header_html = (
     '<div class="main-header">'
@@ -693,7 +836,7 @@ header_html = (
     '<div class="main-subtitle">Pharos Network · AI Documentation Assistant</div>'
     '</div>'
     '<div class="main-header-right">'
-    '<div class="powered-badge">RAG · Gemini · ChromaDB</div>'
+    '<div class="powered-badge"><span class="dot-amber"></span>RAG · Gemini · ChromaDB</div>'
     '<div style="margin-top:4px;text-align:right;">' + badge + '</div>'
     '</div>'
     '</div>'
@@ -707,9 +850,9 @@ if load_error:
         'border-radius:10px;padding:1rem 1.2rem;margin:0.5rem 0;">'
         '<div style="font-size:13px;font-weight:600;color:#FF6B6B;margin-bottom:4px;">'
         '&#x26A0; OctoBot could not start</div>'
-        '<div style="font-size:12px;color:#9099CC;margin-bottom:8px;">' + str(load_error) + '</div>'
-        '<div style="font-size:11px;color:#52527A;">Run: '
-        '<code style="color:#8899FF;background:#121224;padding:1px 5px;border-radius:4px;">'
+        '<div style="font-size:12px;color:#5B5F6E;margin-bottom:8px;">' + str(load_error) + '</div>'
+        '<div style="font-size:11px;color:#9499A8;">Run: '
+        '<code style="color:#4F4FFF;background:#F7F8FA;padding:1px 5px;border-radius:4px;">'
         'python build_vectorstore.py</code> then refresh.</div>'
         '</div>',
         unsafe_allow_html=True,
@@ -777,10 +920,19 @@ if price_data.get("available") and price_data.get("price_usd") is not None:
         '<meta http-equiv="refresh" content="300">',
         unsafe_allow_html=True,
     )
+
+    # ── 24h price chart ────────────────────────────
+    chart_df = get_price_chart_df()
+    with st.container(border=True):
+        st.markdown(
+            '<div class="chart-card-label">$PROS · 24H PRICE (24H)</div>',
+            unsafe_allow_html=True,
+        )
+        render_price_chart(chart_df, chart_key="pros_chart_main")
 elif not price_data.get("available") and price_data.get("price_usd") is not None:
     p_usd = price_data["price_usd"]
     st.markdown(
-        '<div style="font-size:10px;color:#52527A;padding:0.3rem 0;">'
+        '<div style="font-size:10px;color:#9499A8;padding:0.3rem 0;">'
         '&#x26A0; CoinGecko unavailable — last known $PROS: $' + f"{p_usd:.4f}" +
         '</div>',
         unsafe_allow_html=True,
@@ -805,29 +957,29 @@ if not st.session_state.messages:
 '<span class="tag">Consensus</span>'
 '<span class="tag">$PROS Token</span>'
 '</div>'
-'<div style="margin-top:0.9rem;padding-top:0.8rem;border-top:1px solid #1A1A30;">'
+'<div style="margin-top:0.9rem;padding-top:0.8rem;border-top:1px solid #E3E5EA;">'
 '<div style="font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;'
-'color:#52527A;margin-bottom:0.6rem;">Coming Soon</div>'
+'color:#9499A8;margin-bottom:0.6rem;">Coming Soon</div>'
 '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
-'<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
-'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
+'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
+'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Multi-Language Support (Expected around 18th June)</span>'
+'<span style="font-size:11px;color:#9499A8;">Multi-Language Support (Expected around 18th June)</span>'
 '</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
-'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
+'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
+'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">CoinGecko News Feed on PROS (After 18th)</span>'
+'<span style="font-size:11px;color:#9499A8;">CoinGecko News Feed on PROS (After 18th)</span>'
 '</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
-'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
+'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
+'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Wallet Checker</span>'
+'<span style="font-size:11px;color:#9499A8;">Wallet Checker</span>'
 '</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#0D0D1A;'
-'border:1px dashed #252545;border-radius:6px;padding:3px 10px;">'
+'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
+'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#52527A;">Pharos Ecosystem Map (Will take time)</span>'
+'<span style="font-size:11px;color:#9499A8;">Pharos Ecosystem Map (Will take time)</span>'
 '</div>'
 '</div>'
 '</div>'
@@ -877,52 +1029,19 @@ if question:
 
         st.markdown(answer)
 
-    try:
+        # Show a mini price chart inline if the question was about
+        # price / market cap / the PROS token
+        q = question.lower()
+        if "price" in q or "market cap" in q or "pros" in q or "$pros" in q:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="chart-card-label">$PROS · 24H PRICE</div>',
+                    unsafe_allow_html=True,
+                )
+                chart_key = "pros_chart_msg_" + str(len(st.session_state.messages))
+                render_price_chart(get_price_chart_df(), chart_key=chart_key)
 
-       q = question.lower()
-
-       if (
-           "price" in q
-            or "market cap" in q
-            or "pros" in q
-        ):
-
-        url = (
-            "https://api.coingecko.com/api/v3/"
-            "coins/pharos-network/market_chart"
-            "?vs_currency=usd&days=1"
-        )
-
-        response = requests.get(
-            url,
-            timeout=5
-        )
-
-        prices = response.json()["prices"]
-
-        df = pd.DataFrame(
-            prices,
-            columns=["time", "price"]
-        )
-
-        df["time"] = pd.to_datetime(
-            df["time"],
-            unit="ms"
-        )
-
-        st.markdown("### 📈 PROS Live Price")
-
-        st.line_chart(
-            df.set_index("time")
-        )
-
-    except Exception as e:
-
-      st.warning(
-        f"Chart unavailable: {e}"
-    )   
-
-    if show_sources and sources:
+        if show_sources and sources:
             label = "Sources · " + str(len(sources))
             with st.expander(label, expanded=True):
                 for s in sources:
