@@ -22,7 +22,7 @@
 
 OctoBot is a **Pharos Knowledge Skill** — a reusable AI module built for the
 Pharos AI Agent Carnival. Any Agent deployed on Pharos can call it with a single
-POST request and receive a structured, source-cited answer about the Pharos Network.
+POST request and receive a structured, source-cited answer about the Pharos Network in almost any language.
 
 It is powered by a RAG (Retrieval Augmented Generation) pipeline that crawls
 5 verified Pharos sources, stores them as vector embeddings in ChromaDB, and uses
