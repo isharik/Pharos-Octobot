@@ -17,6 +17,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime, timezone
 
 # ─────────────────────────────────────────────
@@ -91,6 +92,108 @@ def get_logo_b64() -> str:
             with open(path,"rb") as f:
                 return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
     return ""
+
+
+# ─────────────────────────────────────────────
+# VOICE OUTPUT HELPER (Web Speech API speechSynthesis)
+# ─────────────────────────────────────────────
+def speak_text(text: str) -> None:
+    """
+    Render a tiny invisible component that speaks the given text
+    aloud using the browser's built-in speechSynthesis API.
+
+    Improvements for naturalness:
+    - Strips ALL markdown (tables, headers, lists, bold/italic, links)
+    - Picks the best-quality available voice for the language
+      (prefers "Natural"/"Neural"/"Premium"/"Google" voices over
+      robotic default ones)
+    - Slightly slower rate + natural pitch for clearer speech
+
+    Free, no extra packages, Chrome/Edge/Safari support.
+    """
+    import json
+    import re as _re
+
+    # ── Strip markdown so TTS doesn't read out symbols ──────────
+    clean = text
+
+    # Remove markdown table rows entirely (e.g. "| Price | $0.59 |")
+    clean = _re.sub(r"^\|.*\|\s*$", "", clean, flags=_re.MULTILINE)
+    # Remove table separator rows (e.g. "|---|---|")
+    clean = _re.sub(r"^[\s|:-]+$", "", clean, flags=_re.MULTILINE)
+    # Remove markdown headers (###, ##, #)
+    clean = _re.sub(r"^#{1,6}\s*", "", clean, flags=_re.MULTILINE)
+    # Remove bullet/list markers
+    clean = _re.sub(r"^\s*[-*•]\s+", "", clean, flags=_re.MULTILINE)
+    # Remove bold/italic/code markers
+    clean = _re.sub(r"[*_`]", "", clean)
+    # Remove markdown links but keep the link text: [text](url) -> text
+    clean = _re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
+    # Remove any remaining raw URLs
+    clean = _re.sub(r"https?://\S+", "", clean)
+    # Remove horizontal rule lines (---)
+    clean = _re.sub(r"^-{2,}\s*$", "", clean, flags=_re.MULTILINE)
+    # Collapse whitespace
+    clean = _re.sub(r"\s+", " ", clean).strip()
+
+    safe_text = json.dumps(clean)
+
+    components.html(
+        "<script>"
+        "(function() {"
+        "  try {"
+        "    const synth = window.parent.speechSynthesis;"
+        "    const text  = " + safe_text + ";"
+        "    const lang  = (navigator.language || 'en-US');"
+        ""
+        "    function pickVoice(voices) {"
+        "      const langPrefix = lang.split('-')[0].toLowerCase();"
+        "      const candidates = voices.filter(v =>"
+        "        v.lang.toLowerCase().startsWith(langPrefix)"
+        "      );"
+        "      const pool = candidates.length ? candidates : voices;"
+        ""
+        "      const qualityKeywords = ["
+        "        'natural', 'neural', 'premium', 'enhanced',"
+        "        'google', 'wavenet', 'studio'"
+        "      ];"
+        ""
+        "      for (const kw of qualityKeywords) {"
+        "        const match = pool.find(v =>"
+        "          v.name.toLowerCase().includes(kw)"
+        "        );"
+        "        if (match) return match;"
+        "      }"
+        "      return pool[0] || null;"
+        "    }"
+        ""
+        "    function speak() {"
+        "      const voices = synth.getVoices();"
+        "      const utter  = new SpeechSynthesisUtterance(text);"
+        "      const voice  = pickVoice(voices);"
+        "      if (voice) {"
+        "        utter.voice = voice;"
+        "        utter.lang  = voice.lang;"
+        "      } else {"
+        "        utter.lang  = lang;"
+        "      }"
+        "      utter.rate  = 0.95;"
+        "      utter.pitch = 1.0;"
+        "      utter.volume = 1.0;"
+        "      synth.cancel();"
+        "      synth.speak(utter);"
+        "    }"
+        ""
+        "    if (synth.getVoices().length === 0) {"
+        "      synth.onvoiceschanged = speak;"
+        "    } else {"
+        "      speak();"
+        "    }"
+        "  } catch (e) { console.log('TTS error', e); }"
+        "})();"
+        "</script>",
+        height=0,
+    )
 
 
 # ─────────────────────────────────────────────
@@ -494,6 +597,7 @@ html, body, [class*="css"] {
 }
 
 /* ── CHAT INPUT ─────────────────────── */
+.stChatInput,
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] > div,
 [data-testid="stBottomBlockContainer"],
@@ -507,12 +611,10 @@ html, body, [class*="css"] {
     border: 1px solid var(--border-2) !important;
     border-radius: var(--r-md) !important;
 }
-
 [data-testid="stChatInput"]:focus-within {
     border-color: var(--p-blue) !important;
     box-shadow: 0 0 0 2px var(--p-glow) !important;
 }
-
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInputTextArea"],
 textarea[data-testid="stChatInputTextArea"] {
@@ -524,7 +626,6 @@ textarea[data-testid="stChatInputTextArea"] {
     font-size: 13px !important;
     caret-color: var(--p-blue) !important;
 }
-
 [data-testid="stChatInput"] textarea::placeholder,
 [data-testid="stChatInputTextArea"]::placeholder {
     color: var(--txt-2) !important;
@@ -532,7 +633,6 @@ textarea[data-testid="stChatInputTextArea"] {
     font-size: 13px !important;
     opacity: 1 !important;
 }
-
 [data-testid="stChatInput"] button {
     background: var(--bg-2) !important;
     border: 1px solid var(--border-1) !important;
@@ -540,6 +640,51 @@ textarea[data-testid="stChatInputTextArea"] {
 }
 [data-testid="stChatInput"] button svg {
     fill: var(--txt-1) !important;
+}
+
+
+/* ── MIC / VOICE WIDGET ─────────────── */
+.mic-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.4rem;
+}
+.mic-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border-2);
+    background: var(--bg-1);
+    color: var(--p-blue);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.mic-btn:hover {
+    border-color: var(--p-blue);
+    background: var(--p-subtle);
+}
+.mic-btn.recording {
+    background: var(--p-blue);
+    border-color: var(--p-blue);
+    color: #fff;
+    animation: mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--p-glow); }
+    50%      { box-shadow: 0 0 0 6px var(--p-glow); }
+}
+.mic-status {
+    font-size: 11px;
+    color: var(--txt-2);
+}
+.mic-unsupported {
+    font-size: 10px;
+    color: var(--txt-3);
 }
 
 /* ── EXPANDER (sources) ─────────────── */
@@ -717,6 +862,14 @@ def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
 if "messages"        not in st.session_state: st.session_state.messages        = []
 if "sources_history" not in st.session_state: st.session_state.sources_history = []
 
+# ── Voice input: pick up transcript from URL query param ──────
+# The mic widget below sets ?voice_q=... via JS, then reloads.
+# We read it here once, then clear the param so it doesn't re-fire.
+_voice_q = st.query_params.get("voice_q", "")
+if _voice_q:
+    st.session_state["pending_q"] = _voice_q
+    st.query_params.clear()
+
 
 # ─────────────────────────────────────────────
 # SIDEBAR
@@ -749,6 +902,7 @@ with st.sidebar:
     # Settings
     st.markdown('<div class="sb-label">Settings</div>', unsafe_allow_html=True)
     show_sources = st.toggle("Show source citations", value=True)
+    voice_reply  = st.toggle("Read answers aloud", value=False)
 
     st.markdown('<div class="sb-div"></div>', unsafe_allow_html=True)
 
@@ -993,6 +1147,10 @@ for i, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"], avatar=avatar):
         st.markdown(message["content"])
 
+        if message["role"] == "assistant":
+            if st.button("🔊 Read aloud", key="replay_hist_" + str(i)):
+                speak_text(message["content"])
+
         if message["role"] == "assistant" and show_sources:
             src_idx = i // 2
             if src_idx < len(st.session_state.sources_history):
@@ -1008,6 +1166,161 @@ for i, message in enumerate(st.session_state.messages):
                                 + s["url"] + '</a></div>',
                                 unsafe_allow_html=True,
                             )
+
+# ── Voice input widget ─────────────────────────
+components.html(
+    """
+    <div style="font-family: 'DM Sans', sans-serif;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button id="octobot-mic-btn" title="Ask by voice"
+          style="display:flex;align-items:center;justify-content:center;
+                 width:32px;height:32px;border-radius:50%;
+                 border:1px solid #D6D9E0;background:#FFFFFF;color:#1A1AFF;
+                 cursor:pointer;font-size:15px;transition:all .15s ease;flex-shrink:0;">
+          &#127908;
+        </button>
+        <span id="octobot-mic-status" style="font-size:11px;color:#5B5F6E;">
+          Tap the mic and ask your question out loud
+        </span>
+        <button id="octobot-mic-send" title="Send transcribed question"
+          style="display:none;align-items:center;justify-content:center;
+                 padding:4px 12px;border-radius:6px;border:1px solid #1A1AFF;
+                 background:#1A1AFF;color:#FFFFFF;cursor:pointer;
+                 font-size:11px;font-weight:600;flex-shrink:0;">
+          Send &#8594;
+        </button>
+      </div>
+    </div>
+    <script>
+    (function() {
+        const btn       = document.getElementById('octobot-mic-btn');
+        const status    = document.getElementById('octobot-mic-status');
+        const sendBtn   = document.getElementById('octobot-mic-send');
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            status.innerText = 'Voice input needs Chrome or Edge browser';
+            btn.style.opacity = '0.4';
+            btn.style.cursor = 'not-allowed';
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous     = false;
+        recognition.interimResults = true;   // shows partial results -> more sensitive
+        recognition.maxAlternatives = 1;
+        recognition.lang = navigator.language || 'en-US';
+
+        let listening      = false;
+        let finalTranscript = '';
+
+        function sendToOctoBot(transcript) {
+            const text = encodeURIComponent(transcript);
+
+            // Try the most reliable targets in order.
+            // top-level navigation is needed because Streamlit's
+            // own JS reads query params from the real browser URL,
+            // not the iframe's URL.
+            const targets = [window.top, window.parent, window];
+
+            for (const target of targets) {
+                try {
+                    const url = new URL(target.location.href);
+                    url.searchParams.set('voice_q', transcript);
+                    target.location.href = url.toString();
+                    return true;
+                } catch (e) {
+                    // cross-origin or blocked - try next target
+                    continue;
+                }
+            }
+            return false;
+        }
+
+        btn.addEventListener('click', function() {
+            if (listening) {
+                recognition.stop();
+                return;
+            }
+            finalTranscript = '';
+            sendBtn.style.display = 'none';
+            try {
+                recognition.start();
+            } catch (e) {
+                status.innerText = 'Could not start microphone: ' + e.message;
+            }
+        });
+
+        sendBtn.addEventListener('click', function() {
+            if (!finalTranscript.trim()) return;
+            status.innerText = 'Sending "' + finalTranscript + '"...';
+            const ok = sendToOctoBot(finalTranscript.trim());
+            if (!ok) {
+                status.innerHTML = 'Could not auto-send. Copy this and paste it in the chat box: '
+                                  + '<strong>' + finalTranscript + '</strong>';
+            }
+        });
+
+        recognition.onstart = function() {
+            listening = true;
+            btn.style.background = '#1A1AFF';
+            btn.style.color = '#FFFFFF';
+            btn.style.borderColor = '#1A1AFF';
+            status.innerText = 'Listening... speak now (tap mic again to stop)';
+        };
+
+        recognition.onresult = function(event) {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interim += transcript;
+                }
+            }
+            const shown = (finalTranscript + interim).trim();
+            if (shown) {
+                status.innerText = 'Heard: "' + shown + '"';
+            }
+        };
+
+        recognition.onerror = function(event) {
+            if (event.error === 'no-speech') {
+                status.innerText = 'No speech detected — tap mic and try again, speak normally';
+            } else if (event.error === 'not-allowed') {
+                status.innerText = 'Microphone permission denied — allow mic access in browser settings';
+            } else {
+                status.innerText = 'Mic error: ' + event.error + ' — try again';
+            }
+            listening = false;
+            resetBtn();
+        };
+
+        recognition.onend = function() {
+            listening = false;
+            resetBtn();
+            const text = finalTranscript.trim();
+            if (text) {
+                status.innerText = 'Heard: "' + text + '" — click Send to ask';
+                sendBtn.style.display = 'inline-flex';
+            } else if (status.innerText.indexOf('No speech') === -1
+                       && status.innerText.indexOf('denied') === -1) {
+                status.innerText = 'Tap the mic and ask your question out loud';
+            }
+        };
+
+        function resetBtn() {
+            btn.style.background = '#FFFFFF';
+            btn.style.color = '#1A1AFF';
+            btn.style.borderColor = '#D6D9E0';
+        }
+    })();
+    </script>
+    """,
+    height=46,
+)
 
 # ── Chat input ────────────────────────────────
 pending    = st.session_state.pop("pending_q", None)
@@ -1028,6 +1341,14 @@ if question:
                 sources = []
 
         st.markdown(answer)
+
+        # ── Voice output: read the answer aloud if enabled ──────
+        if voice_reply:
+            speak_text(answer)
+
+        # Manual replay button (works even if auto-read is off)
+        if st.button("🔊 Read aloud", key="replay_" + str(len(st.session_state.messages))):
+            speak_text(answer)
 
         # Show a mini price chart inline if the question was about
         # price / market cap / the PROS token
