@@ -31,6 +31,13 @@ Gemini (Google AI) to answer questions strictly from that knowledge base.
 > **No hallucination. No guessing. If the answer isn't in the docs, OctoBot says so.**
 >
 > https://youtu.be/gIsav6XI6HE?si=wWhH1JpkjOefvJ20 (VIDEO GUIDE)
+>
+## Why Octobot ?
+
+While information about Pharos can technically be retrieved through general AI tools, OctoBot was designed with a different purpose in mind to act as a dedicated, context-aware AI layer for the Pharos ecosystem itself. Instead of returning broad or generic internet responses, OctoBot combines verified Pharos documentation with live ecosystem data and evolving capabilities to deliver focused, reliable, and ecosystem-native answers.
+
+The vision is for OctoBot to go beyond being a demo project and become an embedded AI assistant across Pharos experiences  helping first-time visitors understand the ecosystem instantly, guiding developers through documentation, surfacing live data when relevant, and eventually acting as an intelligent onchain companion. Development is ongoing, feedback-driven, and built with the goal of creating an AI experience that feels native to Pharos rather than external to it.
+
 
 ---
 
