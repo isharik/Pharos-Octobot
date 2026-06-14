@@ -8,6 +8,7 @@
 **using verified documentation. Zero hallucination. Built for the Pharos AI Agent Carnival.**
 
 ## Check it out here : https://pharos-octobot-by-echo.streamlit.app/
+( if it doesn’t work maybe the requests quota is expired , try importing the repo and use your own api key to test ) 😃
 
 [![Pharos](https://img.shields.io/badge/Built%20on-Pharos%20Network-1A1AFF?style=for-the-badge)](https://pharos.xyz)
 [![Hackathon](https://img.shields.io/badge/Pharos-AI%20Agent%20Carnival-blueviolet?style=for-the-badge)](https://dorahacks.io/hackathon/pharos-phase1)
