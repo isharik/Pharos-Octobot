@@ -247,7 +247,11 @@ html, body, [class*="css"] {
 .stApp {
     background: var(--bg) !important;
     background-image:
-        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(26,26,255,0.05) 0%, transparent 55%) !important;
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(26,26,255,0.05) 0%, transparent 55%),
+        repeating-linear-gradient(0deg,  rgba(20,20,31,0.045) 0px, rgba(20,20,31,0.045) 1px, transparent 1px, transparent 56px),
+        repeating-linear-gradient(90deg, rgba(20,20,31,0.045) 0px, rgba(20,20,31,0.045) 1px, transparent 1px, transparent 56px)
+        !important;
+    background-attachment: fixed !important;
 }
 
 #MainMenu, footer, header, .stDeployButton { display: none !important; }
@@ -534,6 +538,24 @@ html, body, [class*="css"] {
     margin-bottom: 0.3rem;
 }
 
+/* ── CHART RANGE SELECTOR BUTTONS ───── */
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border-1) !important;
+    border-radius: 14px !important;
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+    text-align: center !important;
+    color: var(--txt-2) !important;
+    min-height: 0 !important;
+    line-height: 1.6 !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover {
+    background: var(--p-subtle) !important;
+    border-color: var(--p-blue) !important;
+    color: var(--p-blue) !important;
+}
+
 /* ── THIN DIVIDER ───────────────────── */
 .thin-div {
     height: 1px;
@@ -642,6 +664,102 @@ textarea[data-testid="stChatInputTextArea"] {
     fill: var(--txt-1) !important;
 }
 
+/* ── CUSTOM LOADING SCREEN ──────────── */
+.octobot-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4.5rem 1rem 3.5rem 1rem;
+    min-height: 50vh;
+}
+.octobot-loading-logo-wrap {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+}
+.octobot-loading-logo-wrap img,
+.octobot-loading-logo-wrap .fallback-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    position: relative;
+    z-index: 3;
+    filter: drop-shadow(0 2px 10px rgba(26,26,255,0.25));
+}
+.octobot-loading-logo-wrap .fallback-icon {
+    font-size: 40px;
+    line-height: 56px;
+}
+.octobot-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid var(--p-blue);
+    opacity: 0;
+    animation: octobot-pulse 2.4s ease-out infinite;
+}
+.octobot-ring.r1 { width: 96px;  height: 96px;  animation-delay: 0s;   }
+.octobot-ring.r2 { width: 96px;  height: 96px;  animation-delay: 0.8s; }
+.octobot-ring.r3 { width: 96px;  height: 96px;  animation-delay: 1.6s; }
+@keyframes octobot-pulse {
+    0%   { transform: scale(0.55); opacity: 0.55; }
+    70%  { transform: scale(1.35); opacity: 0; }
+    100% { transform: scale(1.35); opacity: 0; }
+}
+.octobot-loading-title {
+    font-family: var(--fn-d);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--txt-1);
+    letter-spacing: -0.01em;
+    margin-bottom: 0.35rem;
+}
+.octobot-loading-sub {
+    font-size: 12px;
+    color: var(--txt-2);
+    margin-bottom: 1.1rem;
+}
+.octobot-loading-dots {
+    display: flex;
+    gap: 6px;
+}
+.octobot-loading-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--p-blue);
+    animation: octobot-dot 1.2s ease-in-out infinite;
+}
+.octobot-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+.octobot-loading-dots span:nth-child(3) { animation-delay: 0.30s; }
+@keyframes octobot-dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
+    40%           { transform: scale(1);   opacity: 1;    }
+}
+.octobot-loading-steps {
+    margin-top: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--txt-3);
+}
+.octobot-loading-steps .step-done::before {
+    content: "✓ ";
+    color: var(--green);
+    font-weight: 700;
+}
+.octobot-loading-steps .step-active::before {
+    content: "○ ";
+    color: var(--p-blue);
+    font-weight: 700;
+}
+
 
 /* ── MIC / VOICE WIDGET ─────────────── */
 .mic-row {
@@ -744,8 +862,10 @@ textarea[data-testid="stChatInputTextArea"] {
 
 # ─────────────────────────────────────────────
 # LOAD OCTOBOT (cached — runs once)
+# show_spinner=False because we render our own
+# branded full-page loading screen below instead
 # ─────────────────────────────────────────────
-@st.cache_resource(show_spinner="Loading OctoBot...")
+@st.cache_resource(show_spinner=False)
 def load_octobot():
     try:
         from octobot import OctoBot
@@ -755,14 +875,27 @@ def load_octobot():
     except Exception as e:
         return None, str(e)
 
-def get_price_chart_df():
+def get_price_chart_df(days: str = "1"):
     """
-    Fetch 24h PROS price history from CoinGecko for the area chart.
-    Cached in session_state for 5 minutes alongside the price ticker.
+    Fetch $PROS price history from CoinGecko for the area chart.
+
+    days: CoinGecko range parameter -
+          "1"   -> last 24 hours (high-resolution, ~5 min intervals)
+          "7"   -> last 7 days
+          "30"  -> last 30 days
+          "90"  -> last 90 days
+          "365" -> last 1 year
+          "max" -> entire available history since listing
+
+    Each range is cached separately in session_state for 5 minutes
+    so switching between ranges doesn't always hit the API, but each
+    range still refreshes independently.
+
     Returns a DataFrame with columns [time, price] or None on failure.
     """
-    now    = time.time()
-    cached = st.session_state.get("pros_chart_cache", {})
+    now        = time.time()
+    cache_all  = st.session_state.get("pros_chart_cache", {})
+    cached     = cache_all.get(days, {})
 
     if cached.get("df") is not None and now - cached.get("fetched_at", 0) < PRICE_CACHE_SECONDS:
         return cached["df"]
@@ -770,9 +903,9 @@ def get_price_chart_df():
     try:
         url = (
             "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
-            "/market_chart?vs_currency=usd&days=1"
+            "/market_chart?vs_currency=usd&days=" + days
         )
-        r = requests.get(url, timeout=8, headers={"Accept": "application/json"})
+        r = requests.get(url, timeout=10, headers={"Accept": "application/json"})
         r.raise_for_status()
         prices = r.json().get("prices", [])
         if not prices:
@@ -781,18 +914,24 @@ def get_price_chart_df():
         df = pd.DataFrame(prices, columns=["time", "price"])
         df["time"] = pd.to_datetime(df["time"], unit="ms")
 
-        st.session_state["pros_chart_cache"] = {"df": df, "fetched_at": now}
+        cache_all[days] = {"df": df, "fetched_at": now}
+        st.session_state["pros_chart_cache"] = cache_all
         return df
 
     except Exception:
-        # Keep showing the last good chart if available
+        # Keep showing the last good chart for this range if available
         return cached.get("df")
 
 
-def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
+def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart", days: str = "1") -> None:
     """
-    Render a professional Pharos-themed area chart for $PROS 24h price.
+    Render a professional Pharos-themed area chart for $PROS price history.
     White/blue color scheme, gradient fill, clean axes, no legend clutter.
+
+    Axis formatting adapts to the selected range:
+    - "1"  (24h)  -> hour:minute ticks, hover shows time
+    - "7"/"30"    -> day + month ticks, hover shows date + time
+    - "90"+/"max" -> month + year ticks, hover shows date
     """
     if df is None or df.empty:
         st.markdown(
@@ -808,6 +947,17 @@ def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
     grid_color = "rgba(20,20,31,0.06)"
     text_color = "#5B5F6E"
 
+    # Pick axis tick format and hover format based on range
+    if days == "1":
+        tick_format  = "%H:%M"
+        hover_format = "$%{y:.4f}<br>%{x|%H:%M}<extra></extra>"
+    elif days in ("7", "30"):
+        tick_format  = "%b %d"
+        hover_format = "$%{y:.4f}<br>%{x|%b %d, %H:%M}<extra></extra>"
+    else:
+        tick_format  = "%b %Y"
+        hover_format = "$%{y:.4f}<br>%{x|%b %d, %Y}<extra></extra>"
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df["time"],
@@ -816,7 +966,7 @@ def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
         line=dict(color=line_color, width=2, shape="spline", smoothing=0.4),
         fill="tozeroy",
         fillcolor=fill_color,
-        hovertemplate="$%{y:.4f}<br>%{x|%H:%M}<extra></extra>",
+        hovertemplate=hover_format,
         name="PROS",
     ))
 
@@ -832,7 +982,7 @@ def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart") -> None:
             showgrid=False,
             showline=False,
             tickfont=dict(color=text_color, size=10),
-            tickformat="%H:%M",
+            tickformat=tick_format,
             nticks=6,
         ),
         yaxis=dict(
@@ -957,9 +1107,45 @@ with st.sidebar:
 # MAIN AREA
 # ─────────────────────────────────────────────
 
+# ── Custom branded loading screen ─────────────
+# load_octobot() is cached, so this only shows real
+# loading time on the very first run (cold start).
+# On reruns the cached result returns instantly and
+# this placeholder is cleared right away.
+_loading_placeholder = st.empty()
+
+if logo_b64:
+    _loading_logo_html = '<img src="' + logo_b64 + '" alt="Pharos" />'
+else:
+    _loading_logo_html = '<span class="fallback-icon">&#x1F419;</span>'
+
+with _loading_placeholder.container():
+    st.markdown(
+        '<div class="octobot-loading">'
+        '  <div class="octobot-loading-logo-wrap">'
+        '    <div class="octobot-ring r1"></div>'
+        '    <div class="octobot-ring r2"></div>'
+        '    <div class="octobot-ring r3"></div>'
+        + _loading_logo_html +
+        '  </div>'
+        '  <div class="octobot-loading-title">Waking up OctoBot</div>'
+        '  <div class="octobot-loading-sub">Connecting to the Pharos knowledge base</div>'
+        '  <div class="octobot-loading-dots"><span></span><span></span><span></span></div>'
+        '  <div class="octobot-loading-steps">'
+        '    <div class="step-done">Loading embeddings model</div>'
+        '    <div class="step-done">Connecting to ChromaDB</div>'
+        '    <div class="step-active">Preparing chat session</div>'
+        '  </div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
 # ── Compact header row ────────────────────────
 price_data  = get_pros_price()
 bot, load_error = load_octobot()
+
+# Loading complete — remove the loading screen
+_loading_placeholder.empty()
 
 if logo_b64:
     header_icon = '<img src="' + logo_b64 + '" />'
@@ -1075,14 +1261,43 @@ if price_data.get("available") and price_data.get("price_usd") is not None:
         unsafe_allow_html=True,
     )
 
-    # ── 24h price chart ────────────────────────────
-    chart_df = get_price_chart_df()
+    # ── PROS price chart with selectable time range ──────────────
+    RANGE_OPTIONS = {
+        "1D":  "1",
+        "7D":  "7",
+        "30D": "30",
+        "90D": "90",
+        "1Y":  "365",
+        "All": "max",
+    }
+    RANGE_LABELS = {
+        "1": "24H", "7": "7D", "30": "30D",
+        "90": "90D", "365": "1Y", "max": "ALL-TIME",
+    }
+
+    if "pros_chart_range" not in st.session_state:
+        st.session_state["pros_chart_range"] = "1"
+
     with st.container(border=True):
-        st.markdown(
-            '<div class="chart-card-label">$PROS · 24H PRICE (24H)</div>',
-            unsafe_allow_html=True,
-        )
-        render_price_chart(chart_df, chart_key="pros_chart_main")
+        label_col, btns_col = st.columns([2, 4])
+        with label_col:
+            current_label = RANGE_LABELS.get(st.session_state["pros_chart_range"], "24H")
+            st.markdown(
+                '<div class="chart-card-label">$PROS · ' + current_label + ' PRICE</div>',
+                unsafe_allow_html=True,
+            )
+        with btns_col:
+            range_cols = st.columns(len(RANGE_OPTIONS))
+            for (label, days_val), col in zip(RANGE_OPTIONS.items(), range_cols):
+                is_active = st.session_state["pros_chart_range"] == days_val
+                btn_label = ("● " if is_active else "") + label
+                if col.button(btn_label, key="range_" + days_val, use_container_width=True):
+                    st.session_state["pros_chart_range"] = days_val
+                    st.rerun()
+
+        selected_days = st.session_state["pros_chart_range"]
+        chart_df = get_price_chart_df(days=selected_days)
+        render_price_chart(chart_df, chart_key="pros_chart_main_" + selected_days, days=selected_days)
 elif not price_data.get("available") and price_data.get("price_usd") is not None:
     p_usd = price_data["price_usd"]
     st.markdown(
@@ -1118,7 +1333,7 @@ if not st.session_state.messages:
 '<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
 'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
 '<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#9499A8;">Multi-Language Support (Expected around 18th June)</span>'
+'<span style="font-size:11px;color:#9499A8;">Voice Improvements (Expected Soon)</span>'
 '</div>'
 '<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
 'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
@@ -1190,12 +1405,24 @@ components.html(
           Send &#8594;
         </button>
       </div>
+      <div id="octobot-mic-fallback" style="display:none;margin-top:6px;">
+        <textarea id="octobot-mic-fallback-text" readonly
+          style="width:100%;min-height:40px;font-size:12px;padding:6px 8px;
+                 border:1px solid #D6D9E0;border-radius:6px;
+                 font-family:'DM Sans',sans-serif;color:#14141F;
+                 background:#F7F8FA;resize:vertical;"></textarea>
+        <div style="font-size:10px;color:#9499A8;margin-top:3px;">
+          Auto-send blocked by browser — copy this text and paste it in the chat box below.
+        </div>
+      </div>
     </div>
     <script>
     (function() {
         const btn       = document.getElementById('octobot-mic-btn');
         const status    = document.getElementById('octobot-mic-status');
         const sendBtn   = document.getElementById('octobot-mic-send');
+        const fallback  = document.getElementById('octobot-mic-fallback');
+        const fallbackTxt = document.getElementById('octobot-mic-fallback-text');
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1207,35 +1434,47 @@ components.html(
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous     = false;
-        recognition.interimResults = true;   // shows partial results -> more sensitive
+        // continuous=true + interimResults=true makes recognition keep
+        // listening across natural pauses instead of cutting off after
+        // the first short phrase, and pick up quieter speech better.
+        recognition.continuous      = true;
+        recognition.interimResults  = true;
         recognition.maxAlternatives = 1;
         recognition.lang = navigator.language || 'en-US';
 
-        let listening      = false;
+        let listening       = false;
         let finalTranscript = '';
+        let silenceTimer    = null;
+
+        function resetSilenceTimer() {
+            if (silenceTimer) clearTimeout(silenceTimer);
+            // Auto-stop after 3.5s of no new speech, so it doesn't
+            // listen forever but gives plenty of time for pauses.
+            silenceTimer = setTimeout(function() {
+                if (listening) recognition.stop();
+            }, 3500);
+        }
 
         function sendToOctoBot(transcript) {
-            const text = encodeURIComponent(transcript);
-
-            // Try the most reliable targets in order.
-            // top-level navigation is needed because Streamlit's
-            // own JS reads query params from the real browser URL,
-            // not the iframe's URL.
-            const targets = [window.top, window.parent, window];
-
-            for (const target of targets) {
+            // 1) Try direct same-origin navigation on the top window.
+            //    Streamlit components are same-origin by default, so
+            //    this usually works without being blocked.
+            try {
+                const url = new URL(window.top.location.href);
+                url.searchParams.set('voice_q', transcript);
+                window.top.location.assign(url.toString());
+                return true;
+            } catch (e1) {
+                // 2) Fall back to parent frame.
                 try {
-                    const url = new URL(target.location.href);
-                    url.searchParams.set('voice_q', transcript);
-                    target.location.href = url.toString();
+                    const url2 = new URL(window.parent.location.href);
+                    url2.searchParams.set('voice_q', transcript);
+                    window.parent.location.assign(url2.toString());
                     return true;
-                } catch (e) {
-                    // cross-origin or blocked - try next target
-                    continue;
+                } catch (e2) {
+                    return false;
                 }
             }
-            return false;
         }
 
         btn.addEventListener('click', function() {
@@ -1245,6 +1484,7 @@ components.html(
             }
             finalTranscript = '';
             sendBtn.style.display = 'none';
+            fallback.style.display = 'none';
             try {
                 recognition.start();
             } catch (e) {
@@ -1254,11 +1494,13 @@ components.html(
 
         sendBtn.addEventListener('click', function() {
             if (!finalTranscript.trim()) return;
-            status.innerText = 'Sending "' + finalTranscript + '"...';
+            status.innerText = 'Sending "' + finalTranscript.trim() + '"...';
             const ok = sendToOctoBot(finalTranscript.trim());
             if (!ok) {
-                status.innerHTML = 'Could not auto-send. Copy this and paste it in the chat box: '
-                                  + '<strong>' + finalTranscript + '</strong>';
+                fallbackTxt.value = finalTranscript.trim();
+                fallback.style.display = 'block';
+                status.innerText = 'Heard: "' + finalTranscript.trim() + '"';
+                fallbackTxt.select();
             }
         });
 
@@ -1268,6 +1510,7 @@ components.html(
             btn.style.color = '#FFFFFF';
             btn.style.borderColor = '#1A1AFF';
             status.innerText = 'Listening... speak now (tap mic again to stop)';
+            resetSilenceTimer();
         };
 
         recognition.onresult = function(event) {
@@ -1275,7 +1518,7 @@ components.html(
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
+                    finalTranscript += transcript + ' ';
                 } else {
                     interim += transcript;
                 }
@@ -1284,6 +1527,8 @@ components.html(
             if (shown) {
                 status.innerText = 'Heard: "' + shown + '"';
             }
+            // Got new speech -> reset the auto-stop timer
+            resetSilenceTimer();
         };
 
         recognition.onerror = function(event) {
@@ -1291,15 +1536,19 @@ components.html(
                 status.innerText = 'No speech detected — tap mic and try again, speak normally';
             } else if (event.error === 'not-allowed') {
                 status.innerText = 'Microphone permission denied — allow mic access in browser settings';
+            } else if (event.error === 'aborted') {
+                // happens on manual stop - ignore, onend handles it
             } else {
                 status.innerText = 'Mic error: ' + event.error + ' — try again';
             }
             listening = false;
+            if (silenceTimer) clearTimeout(silenceTimer);
             resetBtn();
         };
 
         recognition.onend = function() {
             listening = false;
+            if (silenceTimer) clearTimeout(silenceTimer);
             resetBtn();
             const text = finalTranscript.trim();
             if (text) {
@@ -1319,7 +1568,7 @@ components.html(
     })();
     </script>
     """,
-    height=46,
+    height=90,
 )
 
 # ── Chat input ────────────────────────────────
