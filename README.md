@@ -8,6 +8,7 @@
 **using verified documentation. Zero hallucination. Built for the Pharos AI Agent Carnival.**
 
 ## Check it out here : https://pharos-octobot-by-echo.streamlit.app/
+( if it doesn’t work maybe the requests quota is expired , try importing the repo and use your own api key to test ) 😃
 
 [![Pharos](https://img.shields.io/badge/Built%20on-Pharos%20Network-1A1AFF?style=for-the-badge)](https://pharos.xyz)
 [![Hackathon](https://img.shields.io/badge/Pharos-AI%20Agent%20Carnival-blueviolet?style=for-the-badge)](https://dorahacks.io/hackathon/pharos-phase1)
@@ -31,6 +32,13 @@ Gemini (Google AI) to answer questions strictly from that knowledge base.
 > **No hallucination. No guessing. If the answer isn't in the docs, OctoBot says so.**
 >
 > https://youtu.be/gIsav6XI6HE?si=wWhH1JpkjOefvJ20 (VIDEO GUIDE)
+>
+## Why Octobot ?
+
+While information about Pharos can technically be retrieved through general AI tools, OctoBot was designed with a different purpose in mind to act as a dedicated, context-aware AI layer for the Pharos ecosystem itself. Instead of returning broad or generic internet responses, OctoBot combines verified Pharos documentation with live ecosystem data and evolving capabilities to deliver focused, reliable, and ecosystem-native answers.
+
+The vision is for OctoBot to go beyond being a demo project and become an embedded AI assistant across Pharos experiences  helping first-time visitors understand the ecosystem instantly, guiding developers through documentation, surfacing live data when relevant, and eventually acting as an intelligent onchain companion. Development is ongoing, feedback-driven, and built with the goal of creating an AI experience that feels native to Pharos rather than external to it.
+
 
 ---
 
@@ -276,7 +284,52 @@ __pycache__/
 ```
 
 ---
+## UPDATES AS OF 8th June 2026 :
 
+SKILL TEST FEATURE for Phase 1
+https://x.com/isharik99/status/2063890265786417484?s=20
+
+
+Website Changes
+https://x.com/isharik99/status/2063638306823311561?s=20
+
+New Data Crawled in (Frequently to keep the model Updated)
+https://x.com/isharik99/status/2063145079808872720?s=20
+
+Early Video guide in first Stages (Do check it out )
+https://x.com/isharik99/status/2061857340744487276?s=20
+
+## Update As of 12th June 2026
+
+Update DONE
+Finished working on bringing live PROS token data to OctoBot through CoinGecko integration.
+
+Features: • Real-time PROS price and market cap tracking • Dedicated /pros-price API endpoint • Automatic token data responses inside OctoBot • Streamlit UI integration so users can check live token data directly from the web app
+
+The goal is to combine Pharos documentation with live ecosystem data in a single experience.
+
+Pushed on Github go check it out
+
+Video link : https://x.com/isharik99/status/2065704363528802411?s=20
+As always, the project remains under active development and community feedback is highly appreciated.
+
+## Update As of 13th JUNE
+
+Octobot can now provide real time $PROS price chart , MC , Vol and more with 5 min changes in form of a table
+
+## Update As of 14th June 2026:
+
+OctoBot just went multilingual with Voice Support🐙
+https://x.com/isharik99/status/2066173055475536262?s=20
+You can now ask about @pharos_network in any language and it replies in the same language you used
+The docs are in English. OctoBot translates on the fly while keeping technical terms (SPN, PROS, RWA, L1-Core) intact
+
+🧪 TRY IT YOURSELF
+ask in Hindi → "PROS ka price kya hai?"
+ask in Spanish → "¿Qué son las SPNs?"
+ask in Japanese → "Pharosとは何ですか？"
+ask in Arabic, French, Hinglish, whatever —
+OctoBot replies right back in that language with live data + sourced answers from the docs 🫡
 
 ## As always, the project remains under active development and community feedback is highly appreciated.
 
