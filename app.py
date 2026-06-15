@@ -43,6 +43,7 @@ COINGECKO_URL       = (
     "&include_24hr_vol=true"
 )
 PRICE_CACHE_SECONDS = 300
+CHART_CACHE_SECONDS = 900   # 15 minutes — charts don't need 5-min freshness
 
 
 def get_pros_price() -> dict:
@@ -897,7 +898,7 @@ def get_price_chart_df(days: str = "1"):
     cache_all  = st.session_state.get("pros_chart_cache", {})
     cached     = cache_all.get(days, {})
 
-    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < PRICE_CACHE_SECONDS:
+    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < CHART_CACHE_SECONDS:
         return cached["df"]
 
     try:
@@ -905,7 +906,7 @@ def get_price_chart_df(days: str = "1"):
             "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
             "/market_chart?vs_currency=usd&days=" + days
         )
-        r = requests.get(url, timeout=10, headers={"Accept": "application/json"})
+        r = requests.get(url, timeout=5, headers={"Accept": "application/json"})
         r.raise_for_status()
         prices = r.json().get("prices", [])
         if not prices:
@@ -1296,8 +1297,17 @@ if price_data.get("available") and price_data.get("price_usd") is not None:
                     st.rerun()
 
         selected_days = st.session_state["pros_chart_range"]
-        chart_df = get_price_chart_df(days=selected_days)
-        render_price_chart(chart_df, chart_key="pros_chart_main_" + selected_days, days=selected_days)
+        if "pros_chart_loaded" not in st.session_state:
+            st.session_state["pros_chart_loaded"] = False
+
+        if not st.session_state["pros_chart_loaded"]:
+            if st.button("📈 Load price chart", key="load_chart_btn"):
+                st.session_state["pros_chart_loaded"] = True
+                st.rerun()
+        else:
+            chart_df = get_price_chart_df(days=selected_days)
+            render_price_chart(chart_df, chart_key="pros_chart_main_" + selected_days, days=selected_days)
+            
 elif not price_data.get("available") and price_data.get("price_usd") is not None:
     p_usd = price_data["price_usd"]
     st.markdown(
