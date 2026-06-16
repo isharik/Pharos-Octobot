@@ -75,6 +75,12 @@ It combines:
 
 The long term goal is to become an **embedded AI layer across the Pharos ecosystem.**
 
+
+## What problem does this solve?
+
+Every Agent built on Pharos will eventually need to answer user questions about the protocol itself — what are SPNs, how does staking work, what is RWA, how do I build here, what is the consensus mechanism.
+Right now, every builder would have to build their own documentation reader from scratch. OctoBot solves this once, for everyone. It is a plug-and-play knowledge layer that any Agent can call instantly.
+
 ---
 
 # 🖥️ Website Experience (NEW)
@@ -162,7 +168,7 @@ GET /pros-price
 
 ---
 
-# 🔍 Knowledge Sources
+# 🔍 Knowledge Sources other than LLM responses
 
 OctoBot currently retrieves from verified sources:
 
@@ -192,6 +198,26 @@ More sources continue to be crawled and indexed.
 | Language   | Python 3.11+         |
 
 ---
+
+## My Pitch for Phase 1 :)
+
+# The hackathon asked for a Skill that solves a focused problem well and can be reused across the ecosystem instead of being tied to a single application.
+# OctoBot was built around that idea.
+
+Rather than every Agent rebuilding its own documentation search, retrieval logic, and answer validation layer, OctoBot provides a single reusable knowledge interface for Pharos.
+What OctoBot delivers:
+✅ Simple input — send a question string
+✅ Structured output — returns answer + sources + found_in_docs status
+✅ Agent friendly integration — callable through a standard HTTP POST request
+✅ Discoverable architecture — exposed through the /info metadata endpoint
+✅ Source grounded responses — answers include references for verification
+✅ Transparent behavior — clearly indicates when information is unavailable instead of pretending certainty
+✅ Built to reduce hallucinations — retrieval first, generation second
+✅ Composable by design — can plug into future Agents and workflows that require Pharos knowledge
+The goal was not to build another chatbot.
+The goal was to create a reusable knowledge layer that any future Pharos Agent can rely on.
+
+
 
 # 📌 Recent Updates
 
@@ -230,6 +256,8 @@ More sources continue to be crawled and indexed.
 * Cleaner layouts
 * Enhanced AI routing
 * More polished experience
+
+## FOR MORE UPDATES CHECK OUT THE CODE & DORA HACKS SITE 
 
 ---
 
