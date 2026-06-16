@@ -1185,7 +1185,12 @@ elif st.session_state.page == "chat":
             '<span class="tag">Native Restaking</span><span class="tag">RWA</span>'
             '<span class="tag">DeFi</span><span class="tag">Build on Pharos</span>'
             '<span class="tag">$PROS Token</span><span class="tag">🌐 Multilingual</span>'
-            '</div></div>',
+            '</div></div>'
+
+            '<p class="notice">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
+             'Run OctoBot locally with your own API key to continue.</p>'
+
+            '</div>',
             unsafe_allow_html=True,
         )
 
