@@ -11,6 +11,11 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 
 **Built for the Pharos AI Agent Carnival ⚓**
 
+
+## Demo before updates:
+
+https://www.youtube.com/watch?v=gIsav6XI6HE
+
 ## 🌐 New Live Demo after updates
 
 https://x.com/isharik99/status/2066777239627387353?s=20
