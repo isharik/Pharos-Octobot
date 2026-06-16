@@ -206,14 +206,23 @@ More sources continue to be crawled and indexed.
 
 Rather than every Agent rebuilding its own documentation search, retrieval logic, and answer validation layer, OctoBot provides a single reusable knowledge interface for Pharos.
 What OctoBot delivers:
+
 ✅ Simple input — send a question string
+
 ✅ Structured output — returns answer + sources + found_in_docs status
+
 ✅ Agent friendly integration — callable through a standard HTTP POST request
+
 ✅ Discoverable architecture — exposed through the /info metadata endpoint
+
 ✅ Source grounded responses — answers include references for verification
+
 ✅ Transparent behavior — clearly indicates when information is unavailable instead of pretending certainty
+
 ✅ Built to reduce hallucinations — retrieval first, generation second
+
 ✅ Composable by design — can plug into future Agents and workflows that require Pharos knowledge
+
 The goal was not to build another chatbot.
 The goal was to create a reusable knowledge layer that any future Pharos Agent can rely on.
 
