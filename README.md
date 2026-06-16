@@ -115,7 +115,7 @@ The app now includes a redesigned website experience while keeping the original 
 
 ## Documentation Intelligence
 
-Ask questions directly from verified Pharos sources.
+Ask questions directly from verified Pharos sources and LLM Models.
 
 ## Model Fallback
 
