@@ -1,91 +1,120 @@
 """
-app.py — OctoBot Pharos AI Assistant
---------------------------------------
-Redesigned UI: compact, professional, structured.
-- Smaller tighter hero section
-- Compact inline price ticker instead of large expander
-- Reduced sidebar element sizes
-- Cleaner chat bubbles
-- Better spacing and typography hierarchy
-- All CSS in plain strings (no f-prefix) to avoid syntax errors
+app.py — OctoBot · Pharos Network Hub
+======================================
+Full website experience with multiple sections:
+  Home       — animated welcome, live price, quick links
+  Chat       — OctoBot AI assistant (docs + fallback)
+  Campaigns  — Active Campaigns section (live data)
+  Updates    — Pharos News & active updates
+  Trade      — CEX trade links for PROS
+
+Architecture: single-page with st.session_state["page"] router.
+All CSS in plain triple-quoted strings (no f-prefix).
 """
 
-import os
-import time
-import base64
+import os, time, base64, json, re
 import requests
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime, timezone
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
 
 # ─────────────────────────────────────────────
-# PAGE CONFIG — must be first st. call
+# PAGE CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="OctoBot · Pharos AI",
+    page_title="OctoBot · Pharos Hub",
     page_icon="🐙",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────
-# COINGECKO — live $PROS price
+# CONSTANTS
 # ─────────────────────────────────────────────
 COINGECKO_ASSET_ID  = "pharos-network"
-COINGECKO_URL       = (
+COINGECKO_PRICE_URL = (
     "https://api.coingecko.com/api/v3/simple/price"
-    "?ids=pharos-network"
-    "&vs_currencies=usd"
-    "&include_24hr_change=true"
-    "&include_market_cap=true"
-    "&include_24hr_vol=true"
+    "?ids=pharos-network&vs_currencies=usd"
+    "&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true"
 )
-PRICE_CACHE_SECONDS = 300
-CHART_CACHE_SECONDS = 900   # 15 minutes — charts don't need 5-min freshness
+COINGECKO_NEWS_URL = (
+    "https://api.coingecko.com/api/v3/news"
+)
+PRICE_CACHE  = 300
+CHART_CACHE  = 900
+NEWS_CACHE   = 600
 
+PHAROS_DOCS_URL    = "https://docs.pharos.xyz"
+PHAROS_MAIN_URL    = "https://pharos.xyz"
+PHAROS_DISCORD_URL = "https://discord.com/invite/pharos"
+PHAROS_X_URL       = "https://x.com/pharos_network"
 
-def get_pros_price() -> dict:
-    now    = time.time()
-    cached = st.session_state.get("pros_price_cache", {})
-    if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE_SECONDS:
-        return cached
-    try:
-        r = requests.get(COINGECKO_URL, timeout=6,
-                         headers={"Accept": "application/json"})
-        r.raise_for_status()
-        data = r.json().get(COINGECKO_ASSET_ID, {})
-        if not data:
-            raise ValueError("Empty CoinGecko response")
-        result = {
-            "price_usd":      data.get("usd"),
-            "market_cap_usd": data.get("usd_market_cap"),
-            "volume_24h":     data.get("usd_24h_vol"),
-            "change_24h":     data.get("usd_24h_change"),
-            "last_updated":   datetime.now(timezone.utc).strftime("%H:%M UTC"),
-            "fetched_at":     now,
-            "available":      True,
-            "error":          None,
-        }
-    except Exception as e:
-        prev   = st.session_state.get("pros_price_cache", {})
-        result = {
-            "price_usd":      prev.get("price_usd"),
-            "market_cap_usd": prev.get("market_cap_usd"),
-            "volume_24h":     prev.get("volume_24h"),
-            "change_24h":     prev.get("change_24h"),
-            "last_updated":   prev.get("last_updated"),
-            "fetched_at":     now,
-            "available":      False,
-            "error":          str(e),
-        }
-    st.session_state["pros_price_cache"] = result
-    return result
+CEX_LINKS = [
+    {"name": "OKX",      "url": "https://www.okx.com/trade-spot/pros-usdt?channelid=35427002",                 "desc": "PROS/USDT · Highest Volume"},
+    {"name": "Bitget",   "url": "https://www.bitget.com/spot/PROSUSDT?channelCode=y53z&vipCode=s3t2",                     "desc": "PROS/USDT"},
+    {"name": "KuCoin",   "url": "https://www.kucoin.com/trade/PROS-USDT?rcode=rPH7VCS",                   "desc": "PROS/USDT"},
+    {"name": "Upbit",    "url": "https://www.upbit.com/exchange?code=CRIX.UPBIT.KRW-PROS",     "desc": "PROS/USDT · KRW · BTC"},
+    {"name": "Coinbase", "url": "https://exchange.coinbase.com/trade/PROS-USD",   "desc": "PROS/USDT"},
+]
 
+CAMPAIGNS = [
+    {
+        "title": "AI Agent Carnival — Phase 1",
+        "tag":   "LIVE · Skill Hackathon",
+        "desc":  "Build reusable Skill modules on Pharos and win from a 150,000 PROS prize pool. Phase 1 closes Jun 15.",
+        "link":  "https://dorahacks.io/hackathon/pharos-phase1",
+        "cta":   "Submit your Skill",
+        "color": "#1A1AFF",
+    },
+    {
+        "title": "Pharos Expedition Season 2",
+        "tag":   "LIVE · Testnet Tasks",
+        "desc":  "Complete daily on-chain tasks on the Pharos testnet to earn points and qualify for the Season 2 snapshot.",
+        "link":  "https://www.notion.so/Pharos-Expedition-Season-2-3578ec314f7580488f69ca722cc31cf9",
+        "cta":   "Join here",
+        "color": "#1A1AFF",
+    },
+    {
+        "title": "Storyteller Program 2.0",
+        "tag":   "LIVE · Content Creators",
+        "desc":  "Create impactful educational content about Pharos and earn perks. Open to writers, educators, meme creators.",
+        "link":  "https://silken-muskox-24e.notion.site/pharos-storyteller-program-2-0",
+        "cta":   "Apply now",
+        "color": "#1A1AFF",
+    },
+    {
+        "title": "Pharos Inner Circle ",
+        "tag":   "# Make a Million, Become a PRO",
+        "desc":  "Merit-based initiative designed to recognize and reward the most committed Pharos supporters",
+        "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
+        "cta":   "Grow with Us",
+        "color": "#1A1AFF",
+    },
+]
 
 # ─────────────────────────────────────────────
-# LOGO HELPER
+# SESSION STATE INIT
+# ─────────────────────────────────────────────
+if "page"            not in st.session_state: st.session_state.page            = "home"
+if "messages"        not in st.session_state: st.session_state.messages        = []
+if "sources_history" not in st.session_state: st.session_state.sources_history = []
+if "show_sources"    not in st.session_state: st.session_state.show_sources    = True
+if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
+if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "docs"
+
+# Voice query from mic widget
+_voice_q = st.query_params.get("voice_q", "")
+if _voice_q:
+    st.session_state["pending_q"] = _voice_q
+    st.session_state.page = "chat"
+    st.query_params.clear()
+
+# ─────────────────────────────────────────────
+# HELPERS
 # ─────────────────────────────────────────────
 def get_logo_b64() -> str:
     for path, mime in [("pharos_logo.jpg","image/jpeg"),("pharos_logo.png","image/png")]:
@@ -94,108 +123,149 @@ def get_logo_b64() -> str:
                 return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
     return ""
 
+def get_pros_price() -> dict:
+    now    = time.time()
+    cached = st.session_state.get("pros_price_cache", {})
+    if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE:
+        return cached
+    try:
+        r = requests.get(COINGECKO_PRICE_URL, timeout=5, headers={"Accept":"application/json"})
+        r.raise_for_status()
+        data = r.json().get(COINGECKO_ASSET_ID, {})
+        if not data: raise ValueError("Empty")
+        result = {
+            "price_usd": data.get("usd"), "market_cap_usd": data.get("usd_market_cap"),
+            "volume_24h": data.get("usd_24h_vol"), "change_24h": data.get("usd_24h_change"),
+            "last_updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
+            "fetched_at": now, "available": True, "error": None,
+        }
+    except Exception as e:
+        prev   = st.session_state.get("pros_price_cache", {})
+        result = {k: prev.get(k) for k in ["price_usd","market_cap_usd","volume_24h","change_24h","last_updated"]}
+        result.update({"fetched_at": now, "available": False, "error": str(e)})
+    st.session_state["pros_price_cache"] = result
+    return result
 
-# ─────────────────────────────────────────────
-# VOICE OUTPUT HELPER (Web Speech API speechSynthesis)
-# ─────────────────────────────────────────────
+def get_pharos_news() -> list:
+    now    = time.time()
+    cached = st.session_state.get("pharos_news_cache", {})
+    if cached.get("items") and now - cached.get("fetched_at", 0) < NEWS_CACHE:
+        return cached["items"]
+    items = []
+    try:
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/news",
+            params={"category": "pharos-network"},
+            timeout=6, headers={"Accept":"application/json"}
+        )
+        if r.status_code == 200:
+            data = r.json()
+            raw  = data if isinstance(data, list) else data.get("data", [])
+            for art in raw[:8]:
+                items.append({
+                    "title":       art.get("title", ""),
+                    "description": art.get("description", ""),
+                    "url":         art.get("url", "#"),
+                    "thumb":       art.get("thumb_2x", ""),
+                    "source":      art.get("news_site", ""),
+                    "date":        art.get("updated_at", ""),
+                })
+    except Exception:
+        pass
+    st.session_state["pharos_news_cache"] = {"items": items, "fetched_at": now}
+    return items
+
+def get_price_chart_df(days: str = "1"):
+    now       = time.time()
+    cache_all = st.session_state.get("pros_chart_cache", {})
+    cached    = cache_all.get(days, {})
+    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < CHART_CACHE:
+        return cached["df"]
+    try:
+        url = ("https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
+               "/market_chart?vs_currency=usd&days=" + days)
+        r = requests.get(url, timeout=5, headers={"Accept":"application/json"})
+        r.raise_for_status()
+        prices = r.json().get("prices", [])
+        if not prices: raise ValueError("Empty")
+        df = pd.DataFrame(prices, columns=["time","price"])
+        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        cache_all[days] = {"df": df, "fetched_at": now}
+        st.session_state["pros_chart_cache"] = cache_all
+        return df
+    except Exception:
+        return cached.get("df")
+
+def render_price_chart(df, chart_key="chart", days="1"):
+    if df is None or df.empty:
+        st.markdown('<div style="font-size:11px;color:#9499A8;padding:0.4rem 0;">Chart unavailable.</div>', unsafe_allow_html=True)
+        return
+    tick_format  = "%H:%M"     if days == "1" else ("%b %d" if days in ("7","30") else "%b %Y")
+    hover_format = "$%{y:.4f}<br>%{x|%H:%M}<extra></extra>" if days=="1" else "$%{y:.4f}<br>%{x|%b %d, %Y}<extra></extra>"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df["time"], y=df["price"], mode="lines",
+        line=dict(color="#1A1AFF", width=2, shape="spline", smoothing=0.4),
+        fill="tozeroy", fillcolor="rgba(26,26,255,0.10)",
+        hovertemplate=hover_format, name="PROS",
+    ))
+    fig.update_layout(
+        height=180, margin=dict(l=0,r=0,t=6,b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False, hovermode="x unified",
+        font=dict(family="DM Sans,sans-serif", color="#5B5F6E", size=10),
+        xaxis=dict(showgrid=False, showline=False, tickfont=dict(size=9,color="#9499A8"), tickformat=tick_format, nticks=5),
+        yaxis=dict(showgrid=True, gridcolor="rgba(20,20,31,0.05)", griddash="dot",
+                   showline=False, tickfont=dict(size=9,color="#9499A8"), tickprefix="$", tickformat=".4f", side="right"),
+        hoverlabel=dict(bgcolor="#F7F8FA", font_color="#14141F", bordercolor="#D6D9E0"),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False}, key=chart_key)
+
 def speak_text(text: str) -> None:
-    """
-    Render a tiny invisible component that speaks the given text
-    aloud using the browser's built-in speechSynthesis API.
-
-    Improvements for naturalness:
-    - Strips ALL markdown (tables, headers, lists, bold/italic, links)
-    - Picks the best-quality available voice for the language
-      (prefers "Natural"/"Neural"/"Premium"/"Google" voices over
-      robotic default ones)
-    - Slightly slower rate + natural pitch for clearer speech
-
-    Free, no extra packages, Chrome/Edge/Safari support.
-    """
-    import json
-    import re as _re
-
-    # ── Strip markdown so TTS doesn't read out symbols ──────────
+    import json as _json, re as _re
     clean = text
-
-    # Remove markdown table rows entirely (e.g. "| Price | $0.59 |")
-    clean = _re.sub(r"^\|.*\|\s*$", "", clean, flags=_re.MULTILINE)
-    # Remove table separator rows (e.g. "|---|---|")
-    clean = _re.sub(r"^[\s|:-]+$", "", clean, flags=_re.MULTILINE)
-    # Remove markdown headers (###, ##, #)
-    clean = _re.sub(r"^#{1,6}\s*", "", clean, flags=_re.MULTILINE)
-    # Remove bullet/list markers
-    clean = _re.sub(r"^\s*[-*•]\s+", "", clean, flags=_re.MULTILINE)
-    # Remove bold/italic/code markers
-    clean = _re.sub(r"[*_`]", "", clean)
-    # Remove markdown links but keep the link text: [text](url) -> text
-    clean = _re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
-    # Remove any remaining raw URLs
-    clean = _re.sub(r"https?://\S+", "", clean)
-    # Remove horizontal rule lines (---)
-    clean = _re.sub(r"^-{2,}\s*$", "", clean, flags=_re.MULTILINE)
-    # Collapse whitespace
-    clean = _re.sub(r"\s+", " ", clean).strip()
-
-    safe_text = json.dumps(clean)
-
+    clean = _re.sub(r"^\|.*\|\s*$","",clean,flags=_re.MULTILINE)
+    clean = _re.sub(r"^[\s|:-]+$","",clean,flags=_re.MULTILINE)
+    clean = _re.sub(r"^#{1,6}\s*","",clean,flags=_re.MULTILINE)
+    clean = _re.sub(r"^\s*[-*•]\s+","",clean,flags=_re.MULTILINE)
+    clean = _re.sub(r"[*_`]","",clean)
+    clean = _re.sub(r"\[([^\]]+)\]\([^)]+\)",r"\1",clean)
+    clean = _re.sub(r"https?://\S+","",clean)
+    clean = _re.sub(r"\s+"," ",clean).strip()
+    safe  = _json.dumps(clean)
     components.html(
-        "<script>"
-        "(function() {"
-        "  try {"
-        "    const synth = window.parent.speechSynthesis;"
-        "    const text  = " + safe_text + ";"
-        "    const lang  = (navigator.language || 'en-US');"
-        ""
-        "    function pickVoice(voices) {"
-        "      const langPrefix = lang.split('-')[0].toLowerCase();"
-        "      const candidates = voices.filter(v =>"
-        "        v.lang.toLowerCase().startsWith(langPrefix)"
-        "      );"
-        "      const pool = candidates.length ? candidates : voices;"
-        ""
-        "      const qualityKeywords = ["
-        "        'natural', 'neural', 'premium', 'enhanced',"
-        "        'google', 'wavenet', 'studio'"
-        "      ];"
-        ""
-        "      for (const kw of qualityKeywords) {"
-        "        const match = pool.find(v =>"
-        "          v.name.toLowerCase().includes(kw)"
-        "        );"
-        "        if (match) return match;"
-        "      }"
-        "      return pool[0] || null;"
-        "    }"
-        ""
-        "    function speak() {"
-        "      const voices = synth.getVoices();"
-        "      const utter  = new SpeechSynthesisUtterance(text);"
-        "      const voice  = pickVoice(voices);"
-        "      if (voice) {"
-        "        utter.voice = voice;"
-        "        utter.lang  = voice.lang;"
-        "      } else {"
-        "        utter.lang  = lang;"
-        "      }"
-        "      utter.rate  = 0.95;"
-        "      utter.pitch = 1.0;"
-        "      utter.volume = 1.0;"
-        "      synth.cancel();"
-        "      synth.speak(utter);"
-        "    }"
-        ""
-        "    if (synth.getVoices().length === 0) {"
-        "      synth.onvoiceschanged = speak;"
-        "    } else {"
-        "      speak();"
-        "    }"
-        "  } catch (e) { console.log('TTS error', e); }"
-        "})();"
-        "</script>",
+        "<script>(function(){"
+        "try{"
+        "const s=window.parent.speechSynthesis;"
+        "const t=" + safe + ";"
+        "const lang=navigator.language||'en-US';"
+        "function pick(vv){"
+        "const lp=lang.split('-')[0].toLowerCase();"
+        "const pool=vv.filter(v=>v.lang.toLowerCase().startsWith(lp));"
+        "const p=pool.length?pool:vv;"
+        "for(const kw of['natural','neural','premium','enhanced','google','wavenet','studio']){"
+        "const m=p.find(v=>v.name.toLowerCase().includes(kw));"
+        "if(m)return m;}"
+        "return p[0]||null;}"
+        "function speak(){"
+        "const vv=s.getVoices();"
+        "const u=new SpeechSynthesisUtterance(t);"
+        "const v=pick(vv);"
+        "if(v){u.voice=v;u.lang=v.lang;}else{u.lang=lang;}"
+        "u.rate=0.95;u.pitch=1.0;u.volume=1.0;"
+        "s.cancel();s.speak(u);}"
+        "if(s.getVoices().length===0){s.onvoiceschanged=speak;}else{speak();}"
+        "}catch(e){}})()</script>",
         height=0,
     )
 
+@st.cache_resource(show_spinner=False)
+def load_octobot():
+    try:
+        from octobot import OctoBot
+        return OctoBot(), None
+    except Exception as e:
+        return None, str(e)
 
 # ─────────────────────────────────────────────
 # FONTS
@@ -207,1431 +277,1102 @@ st.markdown(
 )
 
 # ─────────────────────────────────────────────
-# CSS — complete redesign
-# All curly braces here are CSS, not Python.
+# CSS — unified across all pages
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
 :root {
-    --p-blue:     #1A1AFF;
-    --p-blue2:    #2D2DE0;
-    --p-accent:   #1A1AFF;
-    --p-light:    #4F4FFF;
-    --p-glow:     rgba(26,26,255,0.18);
-    --p-subtle:   rgba(26,26,255,0.06);
-    --bg:         #F4F5F7;
-    --bg-1:       #FFFFFF;
-    --bg-2:       #F7F8FA;
-    --bg-3:       #ECEDF1;
-    --border-1:   #E3E5EA;
-    --border-2:   #D6D9E0;
-    --txt-1:      #14141F;
-    --txt-2:      #5B5F6E;
-    --txt-3:      #9499A8;
-    --green:      #1FA855;
-    --red:        #E5484D;
-    --fn-d:       'Syne', sans-serif;
-    --fn-b:       'DM Sans', sans-serif;
-    --r-sm:       6px;
-    --r-md:       10px;
-    --r-lg:       14px;
+    --blue:    #1A1AFF;
+    --blue2:   #2D2DE0;
+    --light:   #4F4FFF;
+    --glow:    rgba(26,26,255,0.18);
+    --subtle:  rgba(26,26,255,0.06);
+    --bg:      #F4F5F7;
+    --bg1:     #FFFFFF;
+    --bg2:     #F7F8FA;
+    --border:  #E3E5EA;
+    --border2: #D6D9E0;
+    --t1:      #14141F;
+    --t2:      #5B5F6E;
+    --t3:      #9499A8;
+    --green:   #1FA855;
+    --red:     #E5484D;
+    --fd:      'Syne', sans-serif;
+    --fb:      'DM Sans', sans-serif;
 }
-
-/* ── GLOBAL ─────────────────────────── */
-html, body, [class*="css"] {
-    font-family: var(--fn-b) !important;
-    background-color: var(--bg) !important;
-    color: var(--txt-1) !important;
-    font-size: 14px !important;
-}
-
-.stApp {
-    background: var(--bg) !important;
+html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
+.stApp{
+    background:var(--bg)!important;
     background-image:
-        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(26,26,255,0.05) 0%, transparent 55%),
-        repeating-linear-gradient(0deg,  rgba(20,20,31,0.045) 0px, rgba(20,20,31,0.045) 1px, transparent 1px, transparent 56px),
-        repeating-linear-gradient(90deg, rgba(20,20,31,0.045) 0px, rgba(20,20,31,0.045) 1px, transparent 1px, transparent 56px)
+        radial-gradient(ellipse 70% 50% at 50% 0%,rgba(26,26,255,0.06) 0%,transparent 55%),
+        repeating-linear-gradient(0deg,rgba(20,20,31,0.04) 0px,rgba(20,20,31,0.04) 1px,transparent 1px,transparent 56px),
+        repeating-linear-gradient(90deg,rgba(20,20,31,0.04) 0px,rgba(20,20,31,0.04) 1px,transparent 1px,transparent 56px)
         !important;
-    background-attachment: fixed !important;
+    background-attachment:fixed!important;
+}
+#MainMenu,footer,header,.stDeployButton{display:none!important;}
+[data-testid="stSidebar"]{display:none!important;}
+[data-testid="collapsedControl"]{display:none!important;}
+
+/* Force Streamlit main block to allow true centering */
+[data-testid="stMainBlockContainer"] {
+    max-width: 1200px !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    margin: 0 auto !important;
+}
+section[data-testid="stMain"] > div {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+/* Center markdown blocks that contain hero */
+[data-testid="stMarkdownContainer"] {
+    width: 100%;
 }
 
-#MainMenu, footer, header, .stDeployButton { display: none !important; }
+/* ── TOP NAV ─── */
+.octo-nav{
+    display:flex;align-items:center;gap:0;
+    background:rgba(255,255,255,0.92);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    padding:0 1.5rem;
+    height:52px;
+    position:sticky;top:0;z-index:100;
+    box-shadow:0 1px 4px rgba(20,20,31,0.05);
+}
+.octo-nav-logo{
+    display:flex;align-items:center;gap:8px;
+    font-family:var(--fd);font-size:15px;font-weight:700;color:var(--t1);
+    text-decoration:none;margin-right:2rem;flex-shrink:0;
+}
+.octo-nav-logo img{width:26px;height:26px;border-radius:50%;}
+.octo-nav-logo .orbit-wrap{
+    position:relative;width:26px;height:26px;flex-shrink:0;
+}
+.octo-nav-logo .orbit-ring{
+    position:absolute;inset:-5px;border-radius:50%;
+    border:1.5px solid rgba(26,26,255,0.35);
+    animation:orbit-spin 8s linear infinite;
+}
+.octo-nav-logo .orbit-dot{
+    position:absolute;width:5px;height:5px;border-radius:50%;
+    background:var(--blue);top:-2px;left:50%;transform:translateX(-50%);
+}
+@keyframes orbit-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.nav-links{display:flex;align-items:center;gap:2px;flex:1;}
+.nav-ml{margin-left:auto;display:flex;align-items:center;gap:6px;}
 
-/* ── SIDEBAR ────────────────────────── */
-[data-testid="stSidebar"] {
-    background: var(--bg-1) !important;
-    border-right: 1px solid var(--border-1) !important;
-    width: 248px !important;
+/* nav buttons handled via Streamlit — override to look inline */
+.nav-wrap .stButton>button{
+    background:transparent!important;
+    border:none!important;
+    border-radius:6px!important;
+    font-family:var(--fb)!important;
+    font-size:15px!important;
+    font-weight:600!important;
+    color:var(--t1)!important;
+    padding:0.3rem 0.8rem!important;
+    height:auto!important;
+    text-align:center!important;
+    transition:all 0.12s ease!important;
+    letter-spacing:-0.01em!important;
 }
-[data-testid="stSidebar"] > div:first-child {
-    padding: 1rem 0.9rem !important;
+.nav-wrap .stButton>button:hover{
+    background:var(--subtle)!important;
+    color:var(--blue)!important;
 }
-[data-testid="stSidebar"] * { color: var(--txt-1) !important; }
+.nav-wrap.active .stButton>button{
+    color:var(--blue)!important;
+    font-weight:700!important;
+    background:var(--subtle)!important;
+}
+.nav-cta .stButton>button{
+    background:var(--blue)!important;
+    color:#fff!important;
+    border-radius:20px!important;
+    font-size:13px!important;
+    font-weight:600!important;
+    padding:0.3rem 1rem!important;
+    letter-spacing:0.02em!important;
+}
+.nav-cta .stButton>button:hover{background:var(--blue2)!important;}
 
-/* ── SIDEBAR LOGO ROW ───────────────── */
-.sb-logo {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 0 0 0.9rem 0;
-    border-bottom: 1px solid var(--border-1);
-    margin-bottom: 0.9rem;
+/* ── HERO ─── */
+.hero{
+    padding:3rem 0 2rem 0;
+    text-align:center;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:100%;
 }
-.sb-logo img {
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    filter: drop-shadow(0 0 4px rgba(26,26,255,0.25));
-    flex-shrink: 0;
+.hero-logo-wrap{
+    position:relative;
+    width:90px;height:90px;
+    display:inline-flex;align-items:center;justify-content:center;
+    margin-bottom:1.2rem;
 }
-.sb-logo-name {
-    font-family: var(--fn-d);
-    font-size: 14.5px;
-    font-weight: 700;
-    color: var(--txt-1);
-    line-height: 1.1;
+.hero-logo-wrap img,.hero-logo-wrap .fi{
+    width:52px;height:52px;border-radius:50%;
+    position:relative;z-index:3;
+    filter:drop-shadow(0 2px 12px rgba(26,26,255,0.3));
 }
-.sb-logo-sub {
-    font-size: 11px;
-    color: var(--txt-3);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+.hero-logo-wrap .fi{font-size:36px;line-height:52px;}
+.hero-ring{
+    position:absolute;border-radius:50%;border:1.5px solid var(--blue);
+    opacity:0;animation:hr-pulse 2.8s ease-out infinite;
 }
+.hero-ring.r1{width:90px;height:90px;animation-delay:0s;}
+.hero-ring.r2{width:90px;height:90px;animation-delay:0.9s;}
+.hero-ring.r3{width:90px;height:90px;animation-delay:1.8s;}
+@keyframes hr-pulse{
+    0%{transform:scale(0.5);opacity:0.5;}
+    100%{transform:scale(1.6);opacity:0;}
+}
+.hero-orbit{
+    position:absolute;inset:-18px;border-radius:50%;
+    border:1px dashed rgba(26,26,255,0.18);
+    animation:orbit-spin 12s linear infinite;
+}
+.hero-orbit::before{
+    content:'';position:absolute;width:7px;height:7px;border-radius:50%;
+    background:var(--blue);top:-3px;left:50%;transform:translateX(-50%);
+    box-shadow:0 0 8px var(--blue);
+}
+.hero-eyebrow{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--blue);background:var(--subtle);border:1px solid rgba(26,26,255,0.18);
+    border-radius:20px;padding:3px 12px;margin-bottom:1rem;margin-top:0.8rem;
+    align-self:center;
+}
+.hero-eyebrow .live-dot{
+    width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 5px var(--green);animation:blink 2s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.hero-title{
+    font-family:var(--fd);font-size:2.4rem;font-weight:800;
+    color:var(--t1);letter-spacing:-0.03em;line-height:1.08;
+    margin:0 auto 0.6rem auto;
+    text-align:center;
+    width:100%;
+}
+.hero-title span{color:var(--blue);}
+.hero-sub{
+    font-size:1rem;color:var(--t2);line-height:1.6;
+    max-width:520px;margin:0 auto 1.8rem auto;
+    text-align:center;
+}
+.hero-actions{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
+.hbtn{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--fb);font-size:13px;font-weight:600;
+    padding:0.6rem 1.3rem;border-radius:8px;
+    text-decoration:none;cursor:pointer;transition:all 0.15s ease;border:none;
+}
+.hbtn-primary{background:var(--blue);color:#fff;}
+.hbtn-primary:hover{background:var(--blue2);color:#fff;text-decoration:none;}
+.hbtn-ghost{background:var(--bg1);color:var(--t1);border:1px solid var(--border);}
+.hbtn-ghost:hover{border-color:var(--blue);color:var(--blue);background:var(--subtle);}
 
-/* ── SIDEBAR SECTION LABEL ──────────── */
-.sb-label {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--txt-3);
-    margin: 0.8rem 0 0.4rem 0;
+/* ── DOCS BADGE BANNER ── */
+.docs-banner{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+    background:var(--t1);border-radius:10px;padding:0.65rem 1.1rem;margin-bottom:1rem;
 }
+.docs-banner-left{display:flex;align-items:center;gap:8px;}
+.docs-banner-icon{font-size:14px;color:#fff;}
+.docs-banner-text{font-size:12px;color:rgba(255,255,255,0.7);}
+.docs-banner-text strong{color:#fff;font-weight:600;}
+.docs-banner-link{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:11px;font-weight:600;letter-spacing:0.05em;
+    background:var(--blue);color:#fff;border-radius:20px;
+    padding:3px 12px;text-decoration:none;white-space:nowrap;
+}
+.docs-banner-link:hover{background:var(--blue2);color:#fff;}
 
-/* ── SIDEBAR DIVIDER ────────────────── */
-.sb-div {
-    height: 1px;
-    background: var(--border-1);
-    margin: 0.7rem 0;
+/* ── NAV QUICK PILLS ── */
+.quick-nav{
+    display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;
 }
+.qpill{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:12px;font-weight:500;
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:20px;padding:4px 12px;
+    text-decoration:none;color:var(--t2);
+    transition:all 0.12s ease;cursor:pointer;
+}
+.qpill:hover{border-color:var(--blue);color:var(--blue);background:var(--subtle);}
+.qpill .dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;}
 
-/* ── SIDEBAR STATUS DOT ─────────────── */
-.sb-status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--txt-3);
-    padding: 0.3rem 0;
+/* ── SECTION HEADER (Campaigns / Updates) ── */
+.section-dark{
+    background:linear-gradient(135deg,#0D0D1A 0%,#0A0A2E 60%,#0D1540 100%);
+    border-radius:14px;padding:2.5rem 2rem 2rem 2rem;
+    margin-bottom:1.2rem;text-align:center;position:relative;overflow:hidden;
 }
-.dot-live {
-    width: 8px; height: 8px;
-    border-radius: 60%;
-    background: var(--green);
-    box-shadow: 0 0 5px var(--green);
-    animation: blink 2.5s ease-in-out infinite;
-    flex-shrink: 0;
+.section-dark::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(26,26,255,0.3) 0%,transparent 60%);
+    pointer-events:none;
 }
-@keyframes blink {
-    0%,100%{opacity:1} 50%{opacity:0.25}
+.section-eyebrow{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;
+    color:#64BFFF;margin-bottom:0.6rem;
 }
+.section-eyebrow .drop{font-size:12px;}
+.section-h{
+    font-family:var(--fd);font-size:2rem;font-weight:800;
+    color:#FFFFFF;letter-spacing:-0.02em;margin:0 0 0.5rem 0;
+}
+.section-sub{font-size:0.9rem;color:rgba(255,255,255,0.55);line-height:1.5;}
+.section-sub a{color:#64BFFF;text-decoration:none;}
 
-/* ── SIDEBAR FOOTER NOTE ────────────── */
-.sb-note {
-    font-size: 12px;
-    color: var(--txt-3);
-    line-height: 1.6;
-    margin-top: 0.8rem;
+/* ── CAMPAIGN CARDS ── */
+.camp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:1.2rem;}
+.camp-card{
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:12px;padding:1.1rem 1.2rem;
+    transition:box-shadow 0.15s ease,border-color 0.15s ease;
+    box-shadow:0 1px 3px rgba(20,20,31,0.04);
+    display:flex;flex-direction:column;gap:8px;
 }
+.camp-card:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(26,26,255,0.08);}
+.camp-tag{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+    background:rgba(26,26,255,0.07);border:1px solid rgba(26,26,255,0.18);
+    color:var(--blue);border-radius:20px;padding:2px 8px;align-self:flex-start;
+}
+.camp-title{font-family:var(--fd);font-size:14px;font-weight:700;color:var(--t1);line-height:1.3;}
+.camp-desc{font-size:12px;color:var(--t2);line-height:1.6;flex:1;}
+.camp-link{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:11px;font-weight:600;color:var(--blue);
+    text-decoration:none;align-self:flex-start;margin-top:2px;
+}
+.camp-link:hover{text-decoration:underline;}
 
-/* ── SIDEBAR BUTTONS ────────────────── */
-.stButton > button {
-    background: transparent !important;
-    color: var(--txt-2) !important;
-    border: 1px solid var(--border-1) !important;
-    border-radius: var(--r-sm) !important;
-    font-family: var(--fn-b) !important;
-    font-size: 12px !important;
-    padding: 0.35rem 0.65rem !important;
-    height: auto !important;
-    text-align: left !important;
-    transition: all 0.15s ease !important;
-    line-height: 1.4 !important;
+/* ── NEWS CARDS ── */
+.news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:1.2rem;}
+.news-card{
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:12px;padding:1rem 1.1rem;
+    box-shadow:0 1px 3px rgba(20,20,31,0.04);
+    transition:box-shadow 0.15s ease;
+    display:flex;flex-direction:column;gap:6px;
 }
-.stButton > button:hover {
-    background: var(--p-subtle) !important;
-    border-color: var(--p-blue) !important;
-    color: var(--txt-1) !important;
-}
+.news-card:hover{box-shadow:0 4px 16px rgba(26,26,255,0.07);}
+.news-source{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);}
+.news-title{font-size:13px;font-weight:600;color:var(--t1);line-height:1.4;}
+.news-title a{color:var(--t1);text-decoration:none;}
+.news-title a:hover{color:var(--blue);}
+.news-desc{font-size:11px;color:var(--t2);line-height:1.55;}
+.news-date{font-size:10px;color:var(--t3);}
 
-.reset-btn > button {
-    background: rgba(26,26,255,0.09) !important;
-    border-color: var(--p-blue2) !important;
-    color: var(--p-light) !important;
-    font-size: 11px !important;
-    text-align: center !important;
+/* ── TRADE CEX ── */
+.cex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:1rem;}
+.cex-card{
+    background:var(--bg1);border:1px solid var(--border);border-radius:10px;
+    padding:0.9rem 1rem;text-align:center;
+    box-shadow:0 1px 2px rgba(20,20,31,0.04);
+    transition:all 0.12s ease;
 }
-.reset-btn > button:hover {
-    background: var(--p-blue) !important;
-    color: #fff !important;
+.cex-card:hover{border-color:var(--blue);box-shadow:0 4px 12px rgba(26,26,255,0.08);}
+.cex-name{font-family:var(--fd);font-size:15px;font-weight:700;color:var(--t1);margin-bottom:3px;}
+.cex-pair{font-size:10px;color:var(--t3);letter-spacing:0.05em;margin-bottom:8px;}
+.cex-btn{
+    display:inline-block;font-size:11px;font-weight:600;
+    background:var(--blue);color:#fff;border-radius:6px;
+    padding:4px 14px;text-decoration:none;
+    transition:background 0.12s ease;
 }
+.cex-btn:hover{background:var(--blue2);color:#fff;}
 
-/* ── TOGGLE ─────────────────────────── */
-[data-testid="stToggle"] label {
-    font-size: 13.5px !important;
-    color: var(--txt-2) !important;
+/* ── CHAT SHOWCASE ── */
+.chat-showcase{
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:14px;overflow:hidden;margin-bottom:1rem;
+    box-shadow:0 1px 6px rgba(20,20,31,0.05);
 }
-
-/* ── MAIN HEADER ────────────────────── */
-.main-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 1.2rem 0 1rem 0;
-    border-bottom: 1px solid var(--border-1);
-    margin-bottom: 0.9rem;
+.chat-showcase-header{
+    background:var(--t1);padding:0.7rem 1rem;
+    display:flex;align-items:center;gap:8px;
 }
-.main-header img {
-    width: 50px; height: 46px;
-    border-radius: 60%;
-    filter: drop-shadow(0 0 5px rgba(26,26,255,0.2));
-    flex-shrink: 0;
+.chat-showcase-title{font-family:var(--fd);font-size:13px;font-weight:700;color:#fff;}
+.chat-showcase-sub{font-size:10px;color:rgba(255,255,255,0.5);}
+.chat-demo-msg{padding:0.7rem 1rem;border-bottom:1px solid var(--border);}
+.chat-demo-msg:last-child{border-bottom:none;}
+.chat-demo-user{font-size:12px;color:var(--t2);text-align:right;}
+.chat-demo-bot{font-size:12px;color:var(--t1);}
+.chat-demo-q{
+    display:inline-block;background:var(--subtle);
+    border:1px solid rgba(26,26,255,0.12);border-radius:8px;
+    padding:5px 10px;font-size:12px;color:var(--blue);margin-top:3px;
 }
-.main-header-fallback {
-    font-size: 23px;
-    line-height: 1;
-    flex-shrink: 0;
-}
-.main-title {
-    font-family: var(--fn-d);
-    font-size: 23px;
-    font-weight: 700;
-    color: var(--txt-1);
-    line-height: 1.1;
-    letter-spacing: -0.01em;
-}
-.main-subtitle {
-    font-size: 13px;
-    color: var(--txt-3);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin-top: 1px;
-}
-.main-header-right {
-    margin-left: auto;
-    text-align: right;
-}
-.powered-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10px;
-    font-weight: 600;
-    color: #FFFFFF;
-    background: #14141F;
-    border: none;
-    border-radius: 20px;
-    padding: 4px 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-.powered-badge .dot-amber {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #FFB020;
-    flex-shrink: 0;
-}
-
-/* ── PRICE TICKER ───────────────────── */
-.price-ticker {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    background: var(--bg-1);
-    border: 1px solid var(--border-1);
-    border-radius: var(--r-md);
-    overflow: hidden;
-    margin-bottom: 0.75rem;
-    box-shadow: 0 1px 3px rgba(20,20,31,0.04);
-}
-.ticker-cell {
-    flex: 1;
-    padding: 0.85rem 1.1rem;
-    border-right: 1px solid var(--border-1);
-}
-.ticker-cell:last-child { border-right: none; }
-.ticker-label {
-    font-size: 12px;
-    color: var(--txt-3);
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin-bottom: 2px;
-}
-.ticker-value {
-    font-family: var(--fn-d);
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--txt-1);
-}
-.ticker-value.green { color: var(--green); }
-.ticker-value.red   { color: var(--red); }
-.ticker-source {
-    font-size: 12px;
-    color: var(--txt-3);
-    padding: 0.3rem 0.9rem;
-    background: var(--bg);
-    border-top: 1px solid var(--border-1);
-    letter-spacing: 0.04em;
-}
-
-/* ── STATS ROW ──────────────────────── */
-.stats-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 0.75rem;
-}
-.stat-pill {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--bg-1);
-    border: 1px solid var(--border-1);
-    border-radius: 20px;
-    padding: 4px 11px;
-    font-size: 12.5px;
-    color: var(--txt-2);
-    box-shadow: 0 1px 2px rgba(20,20,31,0.03);
-}
-.stat-pill-dot {
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: var(--p-accent);
-    flex-shrink: 0;
-}
-.stat-pill strong {
-    color: var(--txt-1);
-    font-weight: 600;
-}
-
-/* ── BORDERED CONTAINER (chart card) ── */
-[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
-    background: var(--bg-1) !important;
-    border: 1px solid var(--border-1) !important;
-    border-radius: var(--r-md) !important;
-    padding: 0.7rem 0.9rem 0.3rem 0.9rem !important;
-    margin-bottom: 0.75rem !important;
-    box-shadow: 0 1px 3px rgba(20,20,31,0.04) !important;
-}
-
-/* ── CHART CARD ─────────────────────── */
-.chart-card {
-    background: var(--bg-1);
-    border: 1px solid var(--border-1);
-    border-radius: var(--r-md);
-    padding: 0.7rem 0.9rem 0.2rem 0.9rem;
-    margin-bottom: 0.75rem;
-}
-.chart-card-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--p-light);
-    margin-bottom: 0.3rem;
-}
-
-/* ── CHART RANGE SELECTOR BUTTONS ───── */
-[data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
-    background: var(--bg-2) !important;
-    border: 1px solid var(--border-1) !important;
-    border-radius: 14px !important;
-    font-size: 11px !important;
-    padding: 2px 6px !important;
-    text-align: center !important;
-    color: var(--txt-2) !important;
-    min-height: 0 !important;
-    line-height: 1.6 !important;
-}
-[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover {
-    background: var(--p-subtle) !important;
-    border-color: var(--p-blue) !important;
-    color: var(--p-blue) !important;
+.chat-demo-a{
+    display:inline-block;background:var(--bg2);
+    border-radius:8px;padding:5px 10px;
+    font-size:12px;color:var(--t1);margin-top:3px;line-height:1.5;
 }
 
-/* ── THIN DIVIDER ───────────────────── */
-.thin-div {
-    height: 1px;
-    background: var(--border-1);
-    margin: 0.65rem 0;
+/* ── PRICE TICKER ── */
+.price-ticker{
+    display:flex;background:var(--bg1);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;margin-bottom:0.75rem;
+    box-shadow:0 1px 3px rgba(20,20,31,0.04);
 }
+.ticker-cell{flex:1;padding:0.8rem 1rem;border-right:1px solid var(--border);}
+.ticker-cell:last-child{border-right:none;}
+.ticker-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
+.ticker-value{font-family:var(--fd);font-size:16px;font-weight:600;color:var(--t1);}
+.ticker-value.green{color:var(--green);}
+.ticker-value.red{color:var(--red);}
+.ticker-source{font-size:10px;color:var(--t3);padding:0.25rem 1rem;background:var(--bg);border-top:1px solid var(--border);}
 
-/* ── WELCOME CARD ───────────────────── */
-.welcome-card {
-    background: var(--bg-1);
-    border: 1px solid var(--border-1);
-    border-left: 3px solid var(--p-blue);
-    border-radius: var(--r-lg);
-    padding: 1rem 1.2rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 3px rgba(20,20,31,0.04);
+/* ── STATS PILLS ── */
+.stats-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:0.7rem;}
+.stat-pill{
+    display:flex;align-items:center;gap:5px;
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:20px;padding:4px 12px;font-size:12px;color:var(--t2);
+    box-shadow:0 1px 2px rgba(20,20,31,0.03);
 }
-.welcome-card h3 {
-    font-family: var(--fn-d) !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    color: var(--txt-1) !important;
-    margin: 0 0 0.5rem 0 !important;
-}
-.welcome-card p {
-    font-size: 13px !important;
-    color: var(--txt-2) !important;
-    line-height: 1.65 !important;
-    margin: 0 !important;
-}
-.tag-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 0.7rem;
-}
-.tag {
-    background: var(--p-subtle);
-    border: 1px solid rgba(26,26,255,0.2);
-    border-radius: 20px;
-    padding: 2px 9px;
-    font-size: 10px;
-    color: var(--p-light);
-}
+.stat-pill-dot{width:5px;height:5px;border-radius:50%;background:var(--blue);flex-shrink:0;}
+.stat-pill strong{color:var(--t1);font-weight:600;}
 
-/* ── CHAT MESSAGES ──────────────────── */
-[data-testid="stChatMessage"] {
-    background: transparent !important;
-    padding: 0.3rem 0 !important;
-    color: var(--txt-1) !important;
-}
-[data-testid="stChatMessage"] p,
-[data-testid="stChatMessage"] li,
-[data-testid="stChatMessage"] span {
-    color: var(--txt-1) !important;
-}
-[data-testid="stChatMessageAvatarUser"],
-[data-testid="stChatMessageAvatarAssistant"] {
-    background: var(--bg-2) !important;
-    border: 1px solid var(--border-1) !important;
-}
+/* ── CHAT UI ELEMENTS ── */
+[data-testid="stChatMessage"]{background:transparent!important;padding:0.3rem 0!important;color:var(--t1)!important;}
+[data-testid="stChatMessage"] p,[data-testid="stChatMessage"] li,[data-testid="stChatMessage"] span{color:var(--t1)!important;}
+[data-testid="stChatMessageAvatarUser"],[data-testid="stChatMessageAvatarAssistant"]{background:var(--bg2)!important;border:1px solid var(--border)!important;}
+.stChatInput,[data-testid="stChatInput"],[data-testid="stChatInput"]>div,[data-testid="stBottomBlockContainer"],[data-testid="stBottom"],[data-testid="stBottom"]>div{background:var(--bg)!important;}
+[data-testid="stChatInput"]{background:var(--bg1)!important;border:1px solid var(--border2)!important;border-radius:10px!important;}
+[data-testid="stChatInput"]:focus-within{border-color:var(--blue)!important;box-shadow:0 0 0 2px var(--glow)!important;}
+[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],textarea[data-testid="stChatInputTextArea"]{background:var(--bg1)!important;background-color:var(--bg1)!important;color:var(--t1)!important;-webkit-text-fill-color:var(--t1)!important;font-family:var(--fb)!important;font-size:13px!important;caret-color:var(--blue)!important;}
+[data-testid="stChatInput"] textarea::placeholder,[data-testid="stChatInputTextArea"]::placeholder{color:var(--t2)!important;-webkit-text-fill-color:var(--t2)!important;font-size:13px!important;opacity:1!important;}
+[data-testid="stChatInput"] button{background:var(--bg2)!important;border:1px solid var(--border)!important;border-radius:6px!important;}
+[data-testid="stChatInput"] button svg{fill:var(--t1)!important;}
 
-/* ── CHAT INPUT ─────────────────────── */
-.stChatInput,
-[data-testid="stChatInput"],
-[data-testid="stChatInput"] > div,
-[data-testid="stBottomBlockContainer"],
-[data-testid="stBottom"],
-[data-testid="stBottom"] > div {
-    background: var(--bg) !important;
-}
+/* ── EXPANDER / SOURCE ── */
+[data-testid="stExpander"]{background:var(--bg1)!important;border:1px solid var(--border)!important;border-radius:10px!important;margin-top:0.4rem!important;}
+[data-testid="stExpander"] summary{font-size:11px!important;color:var(--t3)!important;padding:0.4rem 0.7rem!important;}
+[data-testid="stExpander"] summary:hover{color:var(--light)!important;}
+.source-card{background:var(--bg2);border-left:2px solid var(--blue);border-radius:0 6px 6px 0;padding:0.35rem 0.65rem;margin:0.2rem 0;}
+.source-card strong{display:block;font-size:11px;font-weight:500;color:var(--t1);margin-bottom:1px;}
+.source-card a{font-size:10px!important;color:var(--light)!important;text-decoration:none!important;word-break:break-all;}
+.source-card a:hover{text-decoration:underline!important;}
 
-[data-testid="stChatInput"] {
-    background: var(--bg-1) !important;
-    border: 1px solid var(--border-2) !important;
-    border-radius: var(--r-md) !important;
+/* ── GENERAL BUTTONS ── */
+.stButton>button{
+    background:transparent!important;color:var(--t2)!important;
+    border:1px solid var(--border)!important;border-radius:6px!important;
+    font-family:var(--fb)!important;font-size:12px!important;
+    padding:0.35rem 0.65rem!important;height:auto!important;
+    text-align:left!important;transition:all 0.12s ease!important;line-height:1.4!important;
 }
-[data-testid="stChatInput"]:focus-within {
-    border-color: var(--p-blue) !important;
-    box-shadow: 0 0 0 2px var(--p-glow) !important;
-}
-[data-testid="stChatInput"] textarea,
-[data-testid="stChatInputTextArea"],
-textarea[data-testid="stChatInputTextArea"] {
-    background: var(--bg-1) !important;
-    background-color: var(--bg-1) !important;
-    color: var(--txt-1) !important;
-    -webkit-text-fill-color: var(--txt-1) !important;
-    font-family: var(--fn-b) !important;
-    font-size: 13px !important;
-    caret-color: var(--p-blue) !important;
-}
-[data-testid="stChatInput"] textarea::placeholder,
-[data-testid="stChatInputTextArea"]::placeholder {
-    color: var(--txt-2) !important;
-    -webkit-text-fill-color: var(--txt-2) !important;
-    font-size: 13px !important;
-    opacity: 1 !important;
-}
-[data-testid="stChatInput"] button {
-    background: var(--bg-2) !important;
-    border: 1px solid var(--border-1) !important;
-    border-radius: var(--r-sm) !important;
-}
-[data-testid="stChatInput"] button svg {
-    fill: var(--txt-1) !important;
-}
+.stButton>button:hover{background:var(--subtle)!important;border-color:var(--blue)!important;color:var(--t1)!important;}
+.reset-btn>.stButton>button{background:rgba(26,26,255,0.08)!important;border-color:var(--blue2)!important;color:var(--light)!important;font-size:11px!important;text-align:center!important;}
+.reset-btn>.stButton>button:hover{background:var(--blue)!important;color:#fff!important;}
+[data-testid="stToggle"] label{font-size:13px!important;color:var(--t2)!important;}
 
-/* ── CUSTOM LOADING SCREEN ──────────── */
-.octobot-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 4.5rem 1rem 3.5rem 1rem;
-    min-height: 50vh;
+/* ── CHART RANGE BUTTONS inside border container ── */
+[data-testid="stVerticalBlockBorderWrapper"] .stButton>button{
+    background:var(--bg2)!important;border:1px solid var(--border)!important;
+    border-radius:14px!important;font-size:10px!important;
+    padding:2px 6px!important;text-align:center!important;color:var(--t2)!important;
+    min-height:0!important;line-height:1.6!important;
 }
-.octobot-loading-logo-wrap {
-    position: relative;
-    width: 96px;
-    height: 96px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 1.5rem;
+[data-testid="stVerticalBlockBorderWrapper"] .stButton>button:hover{
+    background:var(--subtle)!important;border-color:var(--blue)!important;color:var(--blue)!important;
 }
-.octobot-loading-logo-wrap img,
-.octobot-loading-logo-wrap .fallback-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    position: relative;
-    z-index: 3;
-    filter: drop-shadow(0 2px 10px rgba(26,26,255,0.25));
+[data-testid="stVerticalBlockBorderWrapper"]>div>div[data-testid="stVerticalBlock"]{
+    background:var(--bg1)!important;border:1px solid var(--border)!important;
+    border-radius:10px!important;padding:0.65rem 0.85rem 0.3rem 0.85rem!important;
+    margin-bottom:0.7rem!important;box-shadow:0 1px 3px rgba(20,20,31,0.04)!important;
 }
-.octobot-loading-logo-wrap .fallback-icon {
-    font-size: 40px;
-    line-height: 56px;
-}
-.octobot-ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 1.5px solid var(--p-blue);
-    opacity: 0;
-    animation: octobot-pulse 2.4s ease-out infinite;
-}
-.octobot-ring.r1 { width: 96px;  height: 96px;  animation-delay: 0s;   }
-.octobot-ring.r2 { width: 96px;  height: 96px;  animation-delay: 0.8s; }
-.octobot-ring.r3 { width: 96px;  height: 96px;  animation-delay: 1.6s; }
-@keyframes octobot-pulse {
-    0%   { transform: scale(0.55); opacity: 0.55; }
-    70%  { transform: scale(1.35); opacity: 0; }
-    100% { transform: scale(1.35); opacity: 0; }
-}
-.octobot-loading-title {
-    font-family: var(--fn-d);
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--txt-1);
-    letter-spacing: -0.01em;
-    margin-bottom: 0.35rem;
-}
-.octobot-loading-sub {
-    font-size: 12px;
-    color: var(--txt-2);
-    margin-bottom: 1.1rem;
-}
-.octobot-loading-dots {
-    display: flex;
-    gap: 6px;
-}
-.octobot-loading-dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--p-blue);
-    animation: octobot-dot 1.2s ease-in-out infinite;
-}
-.octobot-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
-.octobot-loading-dots span:nth-child(3) { animation-delay: 0.30s; }
-@keyframes octobot-dot {
-    0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
-    40%           { transform: scale(1);   opacity: 1;    }
-}
-.octobot-loading-steps {
-    margin-top: 1.6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--txt-3);
-}
-.octobot-loading-steps .step-done::before {
-    content: "✓ ";
-    color: var(--green);
-    font-weight: 700;
-}
-.octobot-loading-steps .step-active::before {
-    content: "○ ";
-    color: var(--p-blue);
-    font-weight: 700;
-}
+.chart-card-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--light);margin-bottom:0.25rem;}
 
+/* ── LOADING SCREEN ── */
+.octo-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4rem 1rem;min-height:55vh;}
+.octo-loading-wrap{position:relative;width:90px;height:90px;display:flex;align-items:center;justify-content:center;margin-bottom:1.3rem;}
+.octo-loading-wrap img,.octo-loading-wrap .fi{width:50px;height:50px;border-radius:50%;position:relative;z-index:3;filter:drop-shadow(0 2px 10px rgba(26,26,255,0.3));}
+.octo-loading-wrap .fi{font-size:34px;line-height:50px;}
+.octo-lr{position:absolute;border-radius:50%;border:1.5px solid var(--blue);opacity:0;animation:lr-pulse 2.4s ease-out infinite;}
+.octo-lr.r1{width:90px;height:90px;animation-delay:0s;}
+.octo-lr.r2{width:90px;height:90px;animation-delay:0.8s;}
+.octo-lr.r3{width:90px;height:90px;animation-delay:1.6s;}
+@keyframes lr-pulse{0%{transform:scale(0.5);opacity:0.5;}100%{transform:scale(1.6);opacity:0;}}
+.octo-loading-title{font-family:var(--fd);font-size:16px;font-weight:700;color:var(--t1);margin-bottom:0.3rem;}
+.octo-loading-sub{font-size:11px;color:var(--t2);margin-bottom:1rem;}
+.octo-loading-dots{display:flex;gap:5px;}
+.octo-loading-dots span{width:5px;height:5px;border-radius:50%;background:var(--blue);animation:ld 1.2s ease-in-out infinite;}
+.octo-loading-dots span:nth-child(2){animation-delay:0.15s;}
+.octo-loading-dots span:nth-child(3){animation-delay:0.3s;}
+@keyframes ld{0%,80%,100%{transform:scale(0.6);opacity:0.3;}40%{transform:scale(1);opacity:1;}}
 
-/* ── MIC / VOICE WIDGET ─────────────── */
-.mic-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 0.4rem;
-}
-.mic-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 1px solid var(--border-2);
-    background: var(--bg-1);
-    color: var(--p-blue);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
-}
-.mic-btn:hover {
-    border-color: var(--p-blue);
-    background: var(--p-subtle);
-}
-.mic-btn.recording {
-    background: var(--p-blue);
-    border-color: var(--p-blue);
-    color: #fff;
-    animation: mic-pulse 1.2s ease-in-out infinite;
-}
-@keyframes mic-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 var(--p-glow); }
-    50%      { box-shadow: 0 0 0 6px var(--p-glow); }
-}
-.mic-status {
-    font-size: 11px;
-    color: var(--txt-2);
-}
-.mic-unsupported {
-    font-size: 10px;
-    color: var(--txt-3);
-}
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:var(--blue);}
 
-/* ── EXPANDER (sources) ─────────────── */
-[data-testid="stExpander"] {
-    background: var(--bg-1) !important;
-    border: 1px solid var(--border-1) !important;
-    border-radius: var(--r-md) !important;
-    margin-top: 0.4rem !important;
-}
-[data-testid="stExpander"] summary {
-    font-size: 11px !important;
-    color: var(--txt-3) !important;
-    padding: 0.4rem 0.7rem !important;
-}
-[data-testid="stExpander"] summary:hover {
-    color: var(--p-light) !important;
-}
-[data-testid="stExpander"] summary svg {
-    width: 14px !important;
-    height: 14px !important;
-}
+/* ── WELCOME CARD (chat page) ── */
+.welcome-card{background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:12px;padding:0.9rem 1.1rem;margin-bottom:0.9rem;box-shadow:0 1px 3px rgba(20,20,31,0.04);}
+.welcome-card h3{font-family:var(--fd)!important;font-size:14px!important;font-weight:700!important;color:var(--t1)!important;margin:0 0 0.4rem 0!important;}
+.welcome-card p{font-size:12px!important;color:var(--t2)!important;line-height:1.6!important;margin:0!important;}
+.tag-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:0.6rem;}
+.tag{background:var(--subtle);border:1px solid rgba(26,26,255,0.18);border-radius:20px;padding:2px 8px;font-size:10px;color:var(--light);}
 
-/* ── SOURCE CARD ────────────────────── */
-.source-card {
-    background: var(--bg-2);
-    border-left: 2px solid var(--p-blue);
-    border-radius: 0 var(--r-sm) var(--r-sm) 0;
-    padding: 0.4rem 0.7rem;
-    margin: 0.25rem 0;
-}
-.source-card strong {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--txt-1);
-    margin-bottom: 1px;
-}
-.source-card a {
-    font-size: 10px !important;
-    color: var(--p-light) !important;
-    text-decoration: none !important;
-    word-break: break-all;
-}
-.source-card a:hover { text-decoration: underline !important; }
-
-/* ── SPINNER ────────────────────────── */
-[data-testid="stSpinner"] { color: var(--p-light) !important; }
-
-/* ── SCROLLBAR ──────────────────────── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--p-blue); }
+/* ── MODE TOGGLE (docs / general) ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:0.8rem;align-items:center;}
+.mode-label{font-size:11px;color:var(--t3);flex-shrink:0;}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# LOAD OCTOBOT (cached — runs once)
-# show_spinner=False because we render our own
-# branded full-page loading screen below instead
+# NAV BAR (rendered on every page)
 # ─────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
-def load_octobot():
-    try:
-        from octobot import OctoBot
-        return OctoBot(), None
-    except FileNotFoundError as e:
-        return None, str(e)
-    except Exception as e:
-        return None, str(e)
+logo_b64   = get_logo_b64()
+price_data = get_pros_price()
 
-def get_price_chart_df(days: str = "1"):
-    """
-    Fetch $PROS price history from CoinGecko for the area chart.
+NAV_PAGES = [
+    ("🏠", "Home",      "home"),
+    ("💬", "Chat",      "chat"),
+    ("🚀", "Campaigns", "campaigns"),
+    ("📰", "Updates",   "updates"),
+    ("📊", "Trade",     "trade"),
+]
 
-    days: CoinGecko range parameter -
-          "1"   -> last 24 hours (high-resolution, ~5 min intervals)
-          "7"   -> last 7 days
-          "30"  -> last 30 days
-          "90"  -> last 90 days
-          "365" -> last 1 year
-          "max" -> entire available history since listing
+nav_cols = st.columns([1.2, 1, 1, 1, 1, 1, 0.1, 1.2])
 
-    Each range is cached separately in session_state for 5 minutes
-    so switching between ranges doesn't always hit the API, but each
-    range still refreshes independently.
-
-    Returns a DataFrame with columns [time, price] or None on failure.
-    """
-    now        = time.time()
-    cache_all  = st.session_state.get("pros_chart_cache", {})
-    cached     = cache_all.get(days, {})
-
-    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < CHART_CACHE_SECONDS:
-        return cached["df"]
-
-    try:
-        url = (
-            "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
-            "/market_chart?vs_currency=usd&days=" + days
+with nav_cols[0]:
+    if logo_b64:
+        logo_html = (
+            '<div style="display:flex;align-items:center;gap:7px;padding:8px 0;">'
+            '<div style="position:relative;width:26px;height:26px;flex-shrink:0;">'
+            '<img src="' + logo_b64 + '" style="width:26px;height:26px;border-radius:50%;position:relative;z-index:2;" />'
+            '<div style="position:absolute;inset:-5px;border-radius:50%;border:1.5px solid rgba(26,26,255,0.3);animation:orbit-spin 8s linear infinite;">'
+            '<div style="position:absolute;width:5px;height:5px;border-radius:50%;background:#1A1AFF;top:-2px;left:50%;transform:translateX(-50%);"></div>'
+            '</div></div>'
+            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
+            '</div>'
         )
-        r = requests.get(url, timeout=5, headers={"Accept": "application/json"})
-        r.raise_for_status()
-        prices = r.json().get("prices", [])
-        if not prices:
-            raise ValueError("Empty chart data")
+    else:
+        logo_html = (
+            '<div style="display:flex;align-items:center;gap:6px;padding:8px 0;">'
+            '<span style="font-size:20px;">🐙</span>'
+            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
+            '</div>'
+        )
+    st.markdown(logo_html, unsafe_allow_html=True)
 
-        df = pd.DataFrame(prices, columns=["time", "price"])
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
+for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
+    with nav_cols[col_idx + 1]:
+        is_active = st.session_state.page == page_key
+        prefix    = "● " if is_active else ""
+        st.markdown('<div class="nav-wrap' + (" active" if is_active else "") + '">', unsafe_allow_html=True)
+        if st.button(prefix + icon + " " + label, key="nav_" + page_key, use_container_width=True):
+            st.session_state.page = page_key
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        cache_all[days] = {"df": df, "fetched_at": now}
-        st.session_state["pros_chart_cache"] = cache_all
-        return df
+with nav_cols[7]:
+    st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
+    st.link_button("↗ Pharos Docs", PHAROS_DOCS_URL, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    except Exception:
-        # Keep showing the last good chart for this range if available
-        return cached.get("df")
+st.markdown('<hr style="border:none;border-top:1px solid #E3E5EA;margin:0 0 1rem 0;">', unsafe_allow_html=True)
 
+# ═════════════════════════════════════════════
+# PAGE: HOME
+# ═════════════════════════════════════════════
+if st.session_state.page == "home":
 
-def render_price_chart(df: pd.DataFrame, chart_key: str = "pros_chart", days: str = "1") -> None:
-    """
-    Render a professional Pharos-themed area chart for $PROS price history.
-    White/blue color scheme, gradient fill, clean axes, no legend clutter.
+    # ── Hero ──────────────────────────────────
+    if logo_b64:
+        hero_logo = (
+            '<div class="hero-logo-wrap">'
+            '<div class="hero-ring r1"></div>'
+            '<div class="hero-ring r2"></div>'
+            '<div class="hero-ring r3"></div>'
+            '<div class="hero-orbit"></div>'
+            '<img src="' + logo_b64 + '" />'
+            '</div>'
+        )
+    else:
+        hero_logo = (
+            '<div class="hero-logo-wrap">'
+            '<div class="hero-ring r1"></div><div class="hero-ring r2"></div><div class="hero-ring r3"></div>'
+            '<div class="hero-orbit"></div>'
+            '<span class="fi">🐙</span>'
+            '</div>'
+        )
 
-    Axis formatting adapts to the selected range:
-    - "1"  (24h)  -> hour:minute ticks, hover shows time
-    - "7"/"30"    -> day + month ticks, hover shows date + time
-    - "90"+/"max" -> month + year ticks, hover shows date
-    """
-    if df is None or df.empty:
+    p = price_data
+    if p.get("available") and p.get("price_usd"):
+        chg    = p["change_24h"] or 0
+        sym    = "▲" if chg >= 0 else "▼"
+        cc     = "#1FA855" if chg >= 0 else "#E5484D"
+        price_pill = (
+            f'<span style="font-size:11px;color:#9499A8;">$PROS&nbsp;</span>'
+            f'<span style="font-size:13px;font-weight:700;color:#14141F;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
+            f'<span style="font-size:11px;color:{cc};margin-left:4px;">{sym}{abs(chg):.2f}%</span>'
+        )
+    else:
+        price_pill = '<span style="font-size:11px;color:#9499A8;">$PROS loading…</span>'
+
+    st.markdown(
+        '<div class="hero">'
+        + hero_logo +
+        '<div class="hero-eyebrow"><div class="live-dot"></div>Live · Pharos Network AI Hub</div>'
+        '<h1 class="hero-title">Your <span>Pharos</span> Command Center</h1>'
+        '<p class="hero-sub">Ask OctoBot anything about Pharos, track live $PROS price, explore active campaigns, read the latest updates, and trade — all in one place.</p>'
+        '<div style="margin-bottom:1.2rem;">' + price_pill + '</div>'
+        '<div class="hero-actions">'
+        '<a class="hbtn hbtn-primary" href="?nav=chat" onclick="void(0)">💬 Chat with OctoBot</a>'
+        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DOCS_URL + '" target="_blank">📄 Pharos Docs ↗</a>'
+        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DISCORD_URL + '" target="_blank">Discord ↗</a>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # hero button handlers (JS links don't trigger Streamlit reruns — use pills below)
+    hcol1, hcol2, hcol3 = st.columns(3)
+    with hcol1:
+        if st.button("💬 Chat with OctoBot", key="home_chat", use_container_width=True):
+            st.session_state.page = "chat"; st.rerun()
+    with hcol2:
+        if st.button("🚀 Active Campaigns", key="home_camp", use_container_width=True):
+            st.session_state.page = "campaigns"; st.rerun()
+    with hcol3:
+        if st.button("📊 Trade $PROS", key="home_trade", use_container_width=True):
+            st.session_state.page = "trade"; st.rerun()
+
+    st.markdown('<div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
+
+    # ── Docs badge banner ─────────────────────
+    st.markdown(
+        '<div class="docs-banner">'
+        '<div class="docs-banner-left">'
+        '<span class="docs-banner-icon">📄</span>'
+        '<span class="docs-banner-text"><strong>Pharos Documentation</strong> — Full technical docs, API reference, guides, and tutorials</span>'
+        '</div>'
+        '<a class="docs-banner-link" href="' + PHAROS_DOCS_URL + '" target="_blank">Visit docs ↗</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Live price ticker ─────────────────────
+    if p.get("available") and p.get("price_usd"):
+        chg     = p["change_24h"] or 0
+        chg_cls = "green" if chg >= 0 else "red"
+        chg_sym = "▲" if chg >= 0 else "▼"
+        mcap    = p.get("market_cap_usd")
+        vol     = p.get("volume_24h")
         st.markdown(
-            '<div style="font-size:11px;color:#9499A8;padding:0.4rem 0;">'
-            'Chart unavailable — price history could not be loaded.'
+            '<div class="price-ticker">'
+            '<div class="ticker-cell"><div class="ticker-label">$PROS Price</div>'
+            '<div class="ticker-value">$' + f'{p["price_usd"]:.4f}' + '</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">24h Change</div>'
+            '<div class="ticker-value ' + chg_cls + '">' + chg_sym + f'{abs(chg):.2f}%</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">Market Cap</div>'
+            '<div class="ticker-value">' + ("$" + f"{mcap:,.0f}" if mcap else "—") + '</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">24h Volume</div>'
+            '<div class="ticker-value">' + ("$" + f"{vol:,.0f}" if vol else "—") + '</div></div>'
+            '</div>'
+            '<div class="ticker-source">CoinGecko · Updated ' + (p.get("last_updated","—")) + '</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Chat showcase ──────────────────────────
+    st.markdown(
+        '<div class="chat-showcase">'
+        '<div class="chat-showcase-header">'
+        '<div>'
+        '<div class="chat-showcase-title">🐙 OctoBot — Pharos AI Assistant</div>'
+        '<div class="chat-showcase-sub">Answers from verified documentation · Zero hallucination</div>'
+        '</div></div>'
+        '<div class="chat-demo-msg">'
+        '<div class="chat-demo-user"><div class="chat-demo-q">What are SPNs in Pharos?</div></div>'
+        '</div>'
+        '<div class="chat-demo-msg">'
+        '<div class="chat-demo-bot"><div class="chat-demo-a">'
+        'SPNs (Special Processing Networks) are specialized execution environments within Pharos '
+        'that handle specific computation types — from DeFi calculations to compliance checks and '
+        'AI inference. Each SPN runs in parallel, enabling Pharos to achieve 30,000+ TPS while '
+        'remaining EVM compatible. Builders can deploy to specific SPNs based on their app\'s needs.'
+        '</div></div>'
+        '</div>'
+        '<div style="padding:0.8rem 1rem;border-top:1px solid #E3E5EA;">'
+        '<span style="font-size:11px;color:#9499A8;">Ask OctoBot anything about Pharos → </span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Open Chat with OctoBot →", key="home_open_chat"):
+        st.session_state.page = "chat"; st.rerun()
+
+    # ── Active Campaigns mini preview ─────────
+    st.markdown(
+        '<div class="section-dark">'
+        '<div style="position:relative;z-index:1;">'
+        '<div class="section-eyebrow"><span class="drop">◆</span> LIVE</div>'
+        '<h2 class="section-h">Active Campaigns</h2>'
+        '<p class="section-sub">Real-time opportunities in the Pharos ecosystem.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+    camp_cols = st.columns(2)
+    for i, c in enumerate(CAMPAIGNS[:2]):
+        with camp_cols[i % 2]:
+            st.markdown(
+                '<div class="camp-card">'
+                '<div class="camp-tag">' + c["tag"] + '</div>'
+                '<div class="camp-title">' + c["title"] + '</div>'
+                '<div class="camp-desc">' + c["desc"] + '</div>'
+                '<a class="camp-link" href="' + c["link"] + '" target="_blank">' + c["cta"] + ' ↗</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+    if st.button("View all campaigns →", key="home_all_camp"):
+        st.session_state.page = "campaigns"; st.rerun()
+
+
+# ═════════════════════════════════════════════
+# PAGE: CHAT
+# ═════════════════════════════════════════════
+elif st.session_state.page == "chat":
+
+    # ── Loading screen ─────────────────────────
+    _lp = st.empty()
+    _ll = ('<img src="' + logo_b64 + '" />' if logo_b64 else '<span class="fi">🐙</span>')
+    with _lp.container():
+        st.markdown(
+            '<div class="octo-loading">'
+            '<div class="octo-loading-wrap">'
+            '<div class="octo-lr r1"></div><div class="octo-lr r2"></div><div class="octo-lr r3"></div>'
+            + _ll +
+            '</div>'
+            '<div class="octo-loading-title">Loading OctoBot</div>'
+            '<div class="octo-loading-sub">Connecting to knowledge base…</div>'
+            '<div class="octo-loading-dots"><span></span><span></span><span></span></div>'
             '</div>',
             unsafe_allow_html=True,
         )
-        return
 
-    line_color = "#1A1AFF"   # Pharos primary blue
-    fill_color = "rgba(26,26,255,0.10)"
-    grid_color = "rgba(20,20,31,0.06)"
-    text_color = "#5B5F6E"
+    bot, load_error = load_octobot()
+    _lp.empty()
 
-    # Pick axis tick format and hover format based on range
-    if days == "1":
-        tick_format  = "%H:%M"
-        hover_format = "$%{y:.4f}<br>%{x|%H:%M}<extra></extra>"
-    elif days in ("7", "30"):
-        tick_format  = "%b %d"
-        hover_format = "$%{y:.4f}<br>%{x|%b %d, %H:%M}<extra></extra>"
-    else:
-        tick_format  = "%b %Y"
-        hover_format = "$%{y:.4f}<br>%{x|%b %d, %Y}<extra></extra>"
+    if load_error:
+        st.error("OctoBot could not start: " + load_error + " — Run `python build_vectorstore.py` then refresh.")
+        st.stop()
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df["time"],
-        y=df["price"],
-        mode="lines",
-        line=dict(color=line_color, width=2, shape="spline", smoothing=0.4),
-        fill="tozeroy",
-        fillcolor=fill_color,
-        hovertemplate=hover_format,
-        name="PROS",
-    ))
-
-    fig.update_layout(
-        height=190,
-        margin=dict(l=0, r=0, t=8, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False,
-        hovermode="x unified",
-        font=dict(family="DM Sans, sans-serif", color=text_color, size=11),
-        xaxis=dict(
-            showgrid=False,
-            showline=False,
-            tickfont=dict(color=text_color, size=10),
-            tickformat=tick_format,
-            nticks=6,
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor=grid_color,
-            griddash="dot",
-            showline=False,
-            tickfont=dict(color=text_color, size=10),
-            tickprefix="$",
-            tickformat=".4f",
-            side="right",
-        ),
-        hoverlabel=dict(
-            bgcolor="#F7F8FA",
-            font_color="#14141F",
-            font_family="DM Sans, sans-serif",
-            bordercolor="#D6D9E0",
-        ),
-    )
-
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=chart_key)
-
-
-# ─────────────────────────────────────────────
-# SESSION STATE
-# ─────────────────────────────────────────────
-if "messages"        not in st.session_state: st.session_state.messages        = []
-if "sources_history" not in st.session_state: st.session_state.sources_history = []
-
-# ── Voice input: pick up transcript from URL query param ──────
-# The mic widget below sets ?voice_q=... via JS, then reloads.
-# We read it here once, then clear the param so it doesn't re-fire.
-_voice_q = st.query_params.get("voice_q", "")
-if _voice_q:
-    st.session_state["pending_q"] = _voice_q
-    st.query_params.clear()
-
-
-# ─────────────────────────────────────────────
-# SIDEBAR
-# ─────────────────────────────────────────────
-logo_b64 = get_logo_b64()
-
-with st.sidebar:
-
-    # Logo row
-    if logo_b64:
-        sb_logo = (
-            '<div class="sb-logo">'
-            '<img src="' + logo_b64 + '" />'
-            '<div>'
-            '<div class="sb-logo-name">OctoBot</div>'
-            '<div class="sb-logo-sub">Pharos AI Assistant</div>'
-            '</div></div>'
-        )
-    else:
-        sb_logo = (
-            '<div class="sb-logo">'
-            '<span style="font-size:18px;">&#x1F419;</span>'
-            '<div>'
-            '<div class="sb-logo-name">OctoBot</div>'
-            '<div class="sb-logo-sub">Pharos AI Assistant</div>'
-            '</div></div>'
-        )
-    st.markdown(sb_logo, unsafe_allow_html=True)
-
-    # Settings
-    st.markdown('<div class="sb-label">Settings</div>', unsafe_allow_html=True)
-    show_sources = st.toggle("Show source citations", value=True)
-    voice_reply  = st.toggle("Read answers aloud", value=False)
-
-    st.markdown('<div class="sb-div"></div>', unsafe_allow_html=True)
-
-    # Reset
-    st.markdown('<div class="reset-btn">', unsafe_allow_html=True)
-    if st.button("↺  New Conversation", use_container_width=True):
-        st.session_state.messages        = []
-        st.session_state.sources_history = []
-        b, _ = load_octobot()
-        if b: b.reset_memory()
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="sb-div"></div>', unsafe_allow_html=True)
-
-    # Example questions
-    st.markdown('<div class="sb-label">Ask OctoBot</div>', unsafe_allow_html=True)
-    examples = [
-        "What is Pharos Network?",
-        "What are SPNs?",
-        "How does Native Restaking work?",
-        "What is L1-Core?",
-        "How do I build on Pharos?",
-        "What is the consensus mechanism?",
-        "What are RWA use cases?",
-        "What is the PROS token?",
-    ]
-    for q in examples:
-        if st.button(q, use_container_width=True, key="ex_" + q):
-            st.session_state["pending_q"] = q
+    # ── Settings row ───────────────────────────
+    s1, s2, s3 = st.columns([1, 1, 2])
+    with s1:
+        st.session_state.show_sources = st.toggle("Show sources", value=st.session_state.show_sources)
+    with s2:
+        st.session_state.voice_reply = st.toggle("Read aloud", value=st.session_state.voice_reply)
+    with s3:
+        current_mode = st.session_state.chat_mode
+        mode_label   = "📚 Docs only" if current_mode == "docs" else "🌐 Docs + General"
+        st.markdown('<div class="mode-bar"><span class="mode-label">Mode:</span></div>', unsafe_allow_html=True)
+        if st.button(mode_label, key="toggle_mode"):
+            st.session_state.chat_mode = "general" if current_mode == "docs" else "docs"
             st.rerun()
 
-    st.markdown('<div class="sb-div"></div>', unsafe_allow_html=True)
+    # ── Reset + stats row ──────────────────────
+    r1, r2 = st.columns([1, 3])
+    with r1:
+        st.markdown('<div class="reset-btn">', unsafe_allow_html=True)
+        if st.button("↺  New Chat", use_container_width=True, key="reset_chat"):
+            st.session_state.messages        = []
+            st.session_state.sources_history = []
+            bot.reset_memory()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    with r2:
+        chunk_count = bot.vectorstore._collection.count()
+        p           = price_data
+        mcap        = p.get("market_cap_usd")
+        st.markdown(
+            '<div class="stats-row">'
+            '<div class="stat-pill"><div class="stat-pill-dot"></div><strong>' + str(chunk_count) + '</strong>&nbsp;chunks</div>'
+            + ('<div class="stat-pill"><div class="stat-pill-dot"></div>$PROS&nbsp;<strong>$' + f'{p["price_usd"]:.4f}' + '</strong></div>' if p.get("price_usd") else '')
+            + '<div class="stat-pill"><div class="stat-pill-dot"></div>Mode&nbsp;<strong>' + ("Docs+General" if st.session_state.chat_mode=="general" else "Docs only") + '</strong></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
-    # Status + note
-    st.markdown(
-        '<div class="sb-status">'
-        '<div class="dot-live"></div>'
-        'Knowledge base online'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="sb-note">'
-        'Answers only from verified<br>Pharos sources. No hallucination.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    # ── Sidebar example prompts ─────────────────
+    with st.sidebar:
+        st.markdown("**Ask OctoBot**")
+        for q in ["What is Pharos?","What are SPNs?","How does Native Restaking work?",
+                  "What is the PROS token?","How do I build on Pharos?","What is RWA?"]:
+            if st.button(q, key="sb_" + q, use_container_width=True):
+                st.session_state["pending_q"] = q; st.rerun()
 
+    # ── Welcome card ───────────────────────────
+    if not st.session_state.messages:
+        mode_note = ("Docs + General mode: OctoBot answers from docs first, then uses Gemini for anything not in documentation."
+                     if st.session_state.chat_mode == "general"
+                     else "Docs only mode: OctoBot answers strictly from verified Pharos documentation.")
+        st.markdown(
+            '<div class="welcome-card">'
+            '<h3>Welcome to OctoBot</h3>'
+            '<p>Ask me anything about Pharos Network — SPNs, Native Restaking, RWA, consensus, '
+            'building on Pharos, or the $PROS token. <em>' + mode_note + '</em></p>'
+            '<div class="tag-row">'
+            '<span class="tag">SPNs</span><span class="tag">L1 Architecture</span>'
+            '<span class="tag">Native Restaking</span><span class="tag">RWA</span>'
+            '<span class="tag">DeFi</span><span class="tag">Build on Pharos</span>'
+            '<span class="tag">$PROS Token</span><span class="tag">🌐 Multilingual</span>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
 
-# ─────────────────────────────────────────────
-# MAIN AREA
-# ─────────────────────────────────────────────
+    # ── Chat history ───────────────────────────
+    for i, msg in enumerate(st.session_state.messages):
+        av = "👤" if msg["role"] == "user" else "🐙"
+        with st.chat_message(msg["role"], avatar=av):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant":
+                if st.button("🔊", key="rh_" + str(i), help="Read aloud"):
+                    speak_text(msg["content"])
+                if st.session_state.show_sources:
+                    src_idx = i // 2
+                    if src_idx < len(st.session_state.sources_history):
+                        srcs = st.session_state.sources_history[src_idx]
+                        if srcs:
+                            with st.expander("Sources · " + str(len(srcs)), expanded=False):
+                                for s in srcs:
+                                    st.markdown(
+                                        '<div class="source-card"><strong>' + s["title"] + '</strong>'
+                                        '<a href="' + s["url"] + '" target="_blank">' + s["url"] + '</a></div>',
+                                        unsafe_allow_html=True,
+                                    )
 
-# ── Custom branded loading screen ─────────────
-# load_octobot() is cached, so this only shows real
-# loading time on the very first run (cold start).
-# On reruns the cached result returns instantly and
-# this placeholder is cleared right away.
-_loading_placeholder = st.empty()
-
-if logo_b64:
-    _loading_logo_html = '<img src="' + logo_b64 + '" alt="Pharos" />'
-else:
-    _loading_logo_html = '<span class="fallback-icon">&#x1F419;</span>'
-
-with _loading_placeholder.container():
-    st.markdown(
-        '<div class="octobot-loading">'
-        '  <div class="octobot-loading-logo-wrap">'
-        '    <div class="octobot-ring r1"></div>'
-        '    <div class="octobot-ring r2"></div>'
-        '    <div class="octobot-ring r3"></div>'
-        + _loading_logo_html +
-        '  </div>'
-        '  <div class="octobot-loading-title">Waking up OctoBot</div>'
-        '  <div class="octobot-loading-sub">Connecting to the Pharos knowledge base</div>'
-        '  <div class="octobot-loading-dots"><span></span><span></span><span></span></div>'
-        '  <div class="octobot-loading-steps">'
-        '    <div class="step-done">Loading embeddings model</div>'
-        '    <div class="step-done">Connecting to ChromaDB</div>'
-        '    <div class="step-active">Preparing chat session</div>'
-        '  </div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-# ── Compact header row ────────────────────────
-price_data  = get_pros_price()
-bot, load_error = load_octobot()
-
-# Loading complete — remove the loading screen
-_loading_placeholder.empty()
-
-if logo_b64:
-    header_icon = '<img src="' + logo_b64 + '" />'
-else:
-    header_icon = '<span class="main-header-fallback">&#x1F419;</span>'
-
-# Build price badge for header right side
-if price_data.get("available") and price_data.get("price_usd") is not None:
-    usd     = price_data["price_usd"]
-    chg     = price_data.get("change_24h") or 0
-    c_cls   = "green" if chg >= 0 else "red"
-    chg_sym = "▲" if chg >= 0 else "▼"
-    badge   = (
-        '<span style="font-size:10px;color:#5B5F6E;">$PROS&nbsp;</span>'
-        '<span style="font-family:Syne,sans-serif;font-size:12px;font-weight:600;'
-        'color:#14141F;">' + f"${usd:.4f}" + '</span>'
-        '<span style="font-size:10px;color:' + ("var(--green)" if chg>=0 else "var(--red)") + ';margin-left:4px;">'
-        + chg_sym + f"{abs(chg):.2f}%" + '</span>'
-    )
-else:
-    badge = '<span style="font-size:10px;color:#9499A8;">$PROS loading...</span>'
-
-header_html = (
-    '<div class="main-header">'
-    + header_icon +
-    '<div>'
-    '<div class="main-title">OctoBot</div>'
-    '<div class="main-subtitle">Pharos Network · AI Documentation Assistant</div>'
-    '</div>'
-    '<div class="main-header-right">'
-    '<div class="powered-badge"><span class="dot-amber"></span>RAG · Gemini · ChromaDB</div>'
-    '<div style="margin-top:4px;text-align:right;">' + badge + '</div>'
-    '</div>'
-    '</div>'
-)
-st.markdown(header_html, unsafe_allow_html=True)
-
-# ── Error state ───────────────────────────────
-if load_error:
-    st.markdown(
-        '<div style="background:rgba(255,50,50,0.07);border:1px solid rgba(255,80,80,0.25);'
-        'border-radius:10px;padding:1rem 1.2rem;margin:0.5rem 0;">'
-        '<div style="font-size:13px;font-weight:600;color:#FF6B6B;margin-bottom:4px;">'
-        '&#x26A0; OctoBot could not start</div>'
-        '<div style="font-size:12px;color:#5B5F6E;margin-bottom:8px;">' + str(load_error) + '</div>'
-        '<div style="font-size:11px;color:#9499A8;">Run: '
-        '<code style="color:#4F4FFF;background:#F7F8FA;padding:1px 5px;border-radius:4px;">'
-        'python build_vectorstore.py</code> then refresh.</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.stop()
-
-# ── Stats pill row ────────────────────────────
-chunk_count = bot.vectorstore._collection.count()
-
-mcap = price_data.get("market_cap_usd")
-vol  = price_data.get("volume_24h")
-mcap_str = ("$" + f"{mcap/1e6:.1f}M") if mcap else "—"
-vol_str  = ("$" + f"{vol/1e6:.1f}M")  if vol  else "—"
-
-st.markdown(
-    '<div class="stats-row">'
-    '<div class="stat-pill"><div class="stat-pill-dot"></div>'
-    '<strong>' + str(chunk_count) + '</strong>&nbsp;knowledge chunks</div>'
-    '<div class="stat-pill"><div class="stat-pill-dot"></div>'
-    'Market Cap&nbsp;<strong>' + mcap_str + '</strong></div>'
-    '<div class="stat-pill"><div class="stat-pill-dot"></div>'
-    '24h Vol&nbsp;<strong>' + vol_str + '</strong></div>'
-    '<div class="stat-pill"><div class="stat-pill-dot"></div>'
-    'Model&nbsp;<strong>Gemini</strong></div>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-# ── Compact price ticker ──────────────────────
-if price_data.get("available") and price_data.get("price_usd") is not None:
-    p_usd = price_data["price_usd"]
-    chg   = price_data.get("change_24h") or 0
-    mcap  = price_data.get("market_cap_usd")
-    vol   = price_data.get("volume_24h")
-    upd   = price_data.get("last_updated","—")
-
-    chg_cls  = "green" if chg >= 0 else "red"
-    chg_sym  = "▲" if chg >= 0 else "▼"
-    chg_str  = chg_sym + f"{abs(chg):.2f}%"
-    mcap_str = ("$" + f"{mcap:,.0f}") if mcap else "—"
-    vol_str  = ("$" + f"{vol:,.0f}")  if vol  else "—"
-
-    st.markdown(
-        '<div class="price-ticker">'
-        '<div class="ticker-cell">'
-        '<div class="ticker-label">$PROS Price</div>'
-        '<div class="ticker-value">$' + f"{p_usd:.4f}" + '</div>'
-        '</div>'
-        '<div class="ticker-cell">'
-        '<div class="ticker-label">24h Change</div>'
-        '<div class="ticker-value ' + chg_cls + '">' + chg_str + '</div>'
-        '</div>'
-        '<div class="ticker-cell">'
-        '<div class="ticker-label">Market Cap</div>'
-        '<div class="ticker-value">' + mcap_str + '</div>'
-        '</div>'
-        '<div class="ticker-cell">'
-        '<div class="ticker-label">24h Volume</div>'
-        '<div class="ticker-value">' + vol_str + '</div>'
-        '</div>'
-        '</div>'
-        '<div class="ticker-source">'
-        'Source: CoinGecko &nbsp;·&nbsp; Updated ' + upd + ' &nbsp;·&nbsp; Auto-refreshes in 5 min'
-        '</div>'
-        '<meta http-equiv="refresh" content="300">',
-        unsafe_allow_html=True,
-    )
-
-    # ── PROS price chart with selectable time range ──────────────
-    RANGE_OPTIONS = {
-        "1D":  "1",
-        "7D":  "7",
-        "30D": "30",
-        "90D": "90",
-        "1Y":  "365",
-        "All": "max",
-    }
-    RANGE_LABELS = {
-        "1": "24H", "7": "7D", "30": "30D",
-        "90": "90D", "365": "1Y", "max": "ALL-TIME",
-    }
-
-    if "pros_chart_range" not in st.session_state:
-        st.session_state["pros_chart_range"] = "1"
-
-    with st.container(border=True):
-        label_col, btns_col = st.columns([2, 4])
-        with label_col:
-            current_label = RANGE_LABELS.get(st.session_state["pros_chart_range"], "24H")
-            st.markdown(
-                '<div class="chart-card-label">$PROS · ' + current_label + ' PRICE</div>',
-                unsafe_allow_html=True,
-            )
-        with btns_col:
-            range_cols = st.columns(len(RANGE_OPTIONS))
-            for (label, days_val), col in zip(RANGE_OPTIONS.items(), range_cols):
-                is_active = st.session_state["pros_chart_range"] == days_val
-                btn_label = ("● " if is_active else "") + label
-                if col.button(btn_label, key="range_" + days_val, use_container_width=True):
-                    st.session_state["pros_chart_range"] = days_val
-                    st.rerun()
-
-        selected_days = st.session_state["pros_chart_range"]
-        if "pros_chart_loaded" not in st.session_state:
-            st.session_state["pros_chart_loaded"] = False
-
-        if not st.session_state["pros_chart_loaded"]:
-            if st.button("📈 Load price chart", key="load_chart_btn"):
-                st.session_state["pros_chart_loaded"] = True
-                st.rerun()
-        else:
-            chart_df = get_price_chart_df(days=selected_days)
-            render_price_chart(chart_df, chart_key="pros_chart_main_" + selected_days, days=selected_days)
-            
-elif not price_data.get("available") and price_data.get("price_usd") is not None:
-    p_usd = price_data["price_usd"]
-    st.markdown(
-        '<div style="font-size:10px;color:#9499A8;padding:0.3rem 0;">'
-        '&#x26A0; CoinGecko unavailable — last known $PROS: $' + f"{p_usd:.4f}" +
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-st.markdown('<div class="thin-div"></div>', unsafe_allow_html=True)
-
-# ── Welcome card (only when no messages) ──────
-if not st.session_state.messages:
-    st.markdown(
-        '<div class="welcome-card">'
-        '<h3>Welcome to OctoBot</h3>'
-        '<p>Ask me anything about Pharos Network. Answers come only from verified '
-'documentation sources.</p>'
-'<div class="tag-row">'
-'<span class="tag">SPNs</span>'
-'<span class="tag">L1 Architecture</span>'
-'<span class="tag">Native Restaking</span>'
-'<span class="tag">RWA</span>'
-'<span class="tag">DeFi</span>'
-'<span class="tag">Build on Pharos</span>'
-'<span class="tag">Consensus</span>'
-'<span class="tag">$PROS Token</span>'
-'</div>'
-'<div style="margin-top:0.9rem;padding-top:0.8rem;border-top:1px solid #E3E5EA;">'
-'<div style="font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;'
-'color:#9499A8;margin-bottom:0.6rem;">Coming Soon</div>'
-'<div style="display:flex;flex-wrap:wrap;gap:6px;">'
-'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
-'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
-'<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#9499A8;">Voice Improvements (Expected Soon)</span>'
-'</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
-'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
-'<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#9499A8;">CoinGecko News Feed on PROS (After 18th)</span>'
-'</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
-'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
-'<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#9499A8;">Wallet Checker</span>'
-'</div>'
-'<div style="display:flex;align-items:center;gap:5px;background:#F7F8FA;'
-'border:1px dashed #D6D9E0;border-radius:6px;padding:3px 10px;">'
-'<span style="font-size:8px;color:#1A1AFF;">●</span>'
-'<span style="font-size:11px;color:#9499A8;">Pharos Ecosystem Map (Will take time)</span>'
-'</div>'
-'</div>'
-'</div>'
-'</div>',
-        unsafe_allow_html=True,
-    )
-
-# ── Chat history ──────────────────────────────
-for i, message in enumerate(st.session_state.messages):
-    avatar = "👤" if message["role"] == "user" else "🐙"
-    with st.chat_message(message["role"], avatar=avatar):
-        st.markdown(message["content"])
-
-        if message["role"] == "assistant":
-            if st.button("🔊 Read aloud", key="replay_hist_" + str(i)):
-                speak_text(message["content"])
-
-        if message["role"] == "assistant" and show_sources:
-            src_idx = i // 2
-            if src_idx < len(st.session_state.sources_history):
-                srcs = st.session_state.sources_history[src_idx]
-                if srcs:
-                    label = "Sources · " + str(len(srcs))
-                    with st.expander(label, expanded=False):
-                        for s in srcs:
-                            st.markdown(
-                                '<div class="source-card">'
-                                '<strong>' + s["title"] + '</strong>'
-                                '<a href="' + s["url"] + '" target="_blank">'
-                                + s["url"] + '</a></div>',
-                                unsafe_allow_html=True,
-                            )
-
-# ── Voice input widget ─────────────────────────
-components.html(
-    """
-    <div style="font-family: 'DM Sans', sans-serif;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button id="octobot-mic-btn" title="Ask by voice"
-          style="display:flex;align-items:center;justify-content:center;
-                 width:32px;height:32px;border-radius:50%;
-                 border:1px solid #D6D9E0;background:#FFFFFF;color:#1A1AFF;
-                 cursor:pointer;font-size:15px;transition:all .15s ease;flex-shrink:0;">
-          &#127908;
-        </button>
-        <span id="octobot-mic-status" style="font-size:11px;color:#5B5F6E;">
-          Tap the mic and ask your question out loud
-        </span>
-        <button id="octobot-mic-send" title="Send transcribed question"
-          style="display:none;align-items:center;justify-content:center;
-                 padding:4px 12px;border-radius:6px;border:1px solid #1A1AFF;
-                 background:#1A1AFF;color:#FFFFFF;cursor:pointer;
-                 font-size:11px;font-weight:600;flex-shrink:0;">
-          Send &#8594;
-        </button>
-      </div>
-      <div id="octobot-mic-fallback" style="display:none;margin-top:6px;">
-        <textarea id="octobot-mic-fallback-text" readonly
-          style="width:100%;min-height:40px;font-size:12px;padding:6px 8px;
-                 border:1px solid #D6D9E0;border-radius:6px;
-                 font-family:'DM Sans',sans-serif;color:#14141F;
-                 background:#F7F8FA;resize:vertical;"></textarea>
-        <div style="font-size:10px;color:#9499A8;margin-top:3px;">
-          Auto-send blocked by browser — copy this text and paste it in the chat box below.
+    # ── Voice input widget ─────────────────────
+    if False:  # disabled until mic works reliably — remove "if False:" to re-enable
+        components.html("""
+        <div style="font-family:'DM Sans',sans-serif;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button id="m" style="width:28px;height:28px;border-radius:50%;border:1px solid #D6D9E0;background:#fff;color:#1A1AFF;cursor:pointer;font-size:13px;flex-shrink:0;">🎙</button>
+            <span id="ms" style="font-size:11px;color:#5B5F6E;">Tap to speak</span>
+            <button id="ms2" style="display:none;padding:3px 10px;border-radius:6px;border:1px solid #1A1AFF;background:#1A1AFF;color:#fff;cursor:pointer;font-size:11px;font-weight:600;">Send →</button>
+          </div>
         </div>
-      </div>
-    </div>
-    <script>
-    (function() {
-        const btn       = document.getElementById('octobot-mic-btn');
-        const status    = document.getElementById('octobot-mic-status');
-        const sendBtn   = document.getElementById('octobot-mic-send');
-        const fallback  = document.getElementById('octobot-mic-fallback');
-        const fallbackTxt = document.getElementById('octobot-mic-fallback-text');
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        if (!SpeechRecognition) {
-            status.innerText = 'Voice input needs Chrome or Edge browser';
-            btn.style.opacity = '0.4';
-            btn.style.cursor = 'not-allowed';
-            return;
-        }
-
-        const recognition = new SpeechRecognition();
-        // continuous=true + interimResults=true makes recognition keep
-        // listening across natural pauses instead of cutting off after
-        // the first short phrase, and pick up quieter speech better.
-        recognition.continuous      = true;
-        recognition.interimResults  = true;
-        recognition.maxAlternatives = 1;
-        recognition.lang = navigator.language || 'en-US';
-
-        let listening       = false;
-        let finalTranscript = '';
-        let silenceTimer    = null;
-
-        function resetSilenceTimer() {
-            if (silenceTimer) clearTimeout(silenceTimer);
-            // Auto-stop after 3.5s of no new speech, so it doesn't
-            // listen forever but gives plenty of time for pauses.
-            silenceTimer = setTimeout(function() {
-                if (listening) recognition.stop();
-            }, 3500);
-        }
-
-        function sendToOctoBot(transcript) {
-            // 1) Try direct same-origin navigation on the top window.
-            //    Streamlit components are same-origin by default, so
-            //    this usually works without being blocked.
-            try {
-                const url = new URL(window.top.location.href);
-                url.searchParams.set('voice_q', transcript);
-                window.top.location.assign(url.toString());
-                return true;
-            } catch (e1) {
-                // 2) Fall back to parent frame.
-                try {
-                    const url2 = new URL(window.parent.location.href);
-                    url2.searchParams.set('voice_q', transcript);
-                    window.parent.location.assign(url2.toString());
-                    return true;
-                } catch (e2) {
-                    return false;
-                }
-            }
-        }
-
-        btn.addEventListener('click', function() {
-            if (listening) {
-                recognition.stop();
-                return;
-            }
-            finalTranscript = '';
-            sendBtn.style.display = 'none';
-            fallback.style.display = 'none';
-            try {
-                recognition.start();
-            } catch (e) {
-                status.innerText = 'Could not start microphone: ' + e.message;
-            }
-        });
-
-        sendBtn.addEventListener('click', function() {
-            if (!finalTranscript.trim()) return;
-            status.innerText = 'Sending "' + finalTranscript.trim() + '"...';
-            const ok = sendToOctoBot(finalTranscript.trim());
-            if (!ok) {
-                fallbackTxt.value = finalTranscript.trim();
-                fallback.style.display = 'block';
-                status.innerText = 'Heard: "' + finalTranscript.trim() + '"';
-                fallbackTxt.select();
-            }
-        });
-
-        recognition.onstart = function() {
-            listening = true;
-            btn.style.background = '#1A1AFF';
-            btn.style.color = '#FFFFFF';
-            btn.style.borderColor = '#1A1AFF';
-            status.innerText = 'Listening... speak now (tap mic again to stop)';
-            resetSilenceTimer();
+        <script>(function(){
+        const btn=document.getElementById('m'),st=document.getElementById('ms'),sb=document.getElementById('ms2');
+        const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+        if(!SR){st.innerText='Voice needs Chrome/Edge';btn.style.opacity='0.4';return;}
+        const r=new SR();r.continuous=true;r.interimResults=true;r.maxAlternatives=1;r.lang=navigator.language||'en-US';
+        let on=false,ft='',timer=null;
+        function rst(){if(timer)clearTimeout(timer);timer=setTimeout(()=>{if(on)r.stop();},3500);}
+        btn.onclick=()=>{if(on){r.stop();}else{ft='';sb.style.display='none';r.start();}};
+        sb.onclick=()=>{if(!ft.trim())return;
+          try{const u=new URL(window.top.location.href);u.searchParams.set('voice_q',ft.trim());window.top.location.assign(u.toString());}
+          catch(e){try{const u2=new URL(window.parent.location.href);u2.searchParams.set('voice_q',ft.trim());window.parent.location.assign(u2.toString());}catch(e2){st.innerText='Copy: '+ft;}}
         };
+        r.onstart=()=>{on=true;btn.style.background='#1A1AFF';btn.style.color='#fff';st.innerText='Listening…';rst();};
+        r.onresult=(e)=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal){ft+=t+' ';}else{it+=t;}}if((ft+it).trim())st.innerText='"'+(ft+it).trim()+'"';rst();};
+        r.onerror=(e)=>{on=false;btn.style.background='#fff';btn.style.color='#1A1AFF';st.innerText=e.error==='not-allowed'?'Mic blocked':e.error;};
+        r.onend=()=>{on=false;btn.style.background='#fff';btn.style.color='#1A1AFF';if(ft.trim()){st.innerText='"'+ft.trim()+'" — click Send';sb.style.display='inline-flex';}else if(st.innerText.indexOf('Listening')>-1){st.innerText='Tap to speak';}};
+        })();</script>""", height=44)
 
-        recognition.onresult = function(event) {
-            let interim = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript + ' ';
-                } else {
-                    interim += transcript;
-                }
-            }
-            const shown = (finalTranscript + interim).trim();
-            if (shown) {
-                status.innerText = 'Heard: "' + shown + '"';
-            }
-            // Got new speech -> reset the auto-stop timer
-            resetSilenceTimer();
-        };
+    # ── Chat input + answer ────────────────────
+    pending    = st.session_state.pop("pending_q", None)
+    user_input = st.chat_input("Ask OctoBot about Pharos…")
+    question   = pending or user_input
 
-        recognition.onerror = function(event) {
-            if (event.error === 'no-speech') {
-                status.innerText = 'No speech detected — tap mic and try again, speak normally';
-            } else if (event.error === 'not-allowed') {
-                status.innerText = 'Microphone permission denied — allow mic access in browser settings';
-            } else if (event.error === 'aborted') {
-                // happens on manual stop - ignore, onend handles it
-            } else {
-                status.innerText = 'Mic error: ' + event.error + ' — try again';
-            }
-            listening = false;
-            if (silenceTimer) clearTimeout(silenceTimer);
-            resetBtn();
-        };
+    if question:
+        st.session_state.messages.append({"role":"user","content":question})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(question)
 
-        recognition.onend = function() {
-            listening = false;
-            if (silenceTimer) clearTimeout(silenceTimer);
-            resetBtn();
-            const text = finalTranscript.trim();
-            if (text) {
-                status.innerText = 'Heard: "' + text + '" — click Send to ask';
-                sendBtn.style.display = 'inline-flex';
-            } else if (status.innerText.indexOf('No speech') === -1
-                       && status.innerText.indexOf('denied') === -1) {
-                status.innerText = 'Tap the mic and ask your question out loud';
-            }
-        };
+        with st.chat_message("assistant", avatar="🐙"):
+            with st.spinner("Searching…"):
+                try:
+                    # General mode: try docs first, fall back to Gemini if not found
+                    answer, sources = bot.ask(question)
+                    if (st.session_state.chat_mode == "general"
+                            and "I could not find that information" in answer):
+                        fallback_llm = ChatGoogleGenerativeAI(
+                            model="gemini-2.5-flash", temperature=0.5,
+                            google_api_key=os.getenv("GEMINI_API_KEY"),
+                        )
+                        fb_answer = fallback_llm.invoke([
+                            HumanMessage(content=
+                                "You are OctoBot, a helpful AI assistant for the Pharos blockchain community. "
+                                "Answer this question helpfully and accurately. If relevant, note that Pharos is a "
+                                "Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n\n"
+                                "Question: " + question
+                            )
+                        ])
+                        answer  = fb_answer.content
+                        sources = []
+                except Exception as e:
+                    answer  = "An error occurred: " + str(e)
+                    sources = []
 
-        function resetBtn() {
-            btn.style.background = '#FFFFFF';
-            btn.style.color = '#1A1AFF';
-            btn.style.borderColor = '#D6D9E0';
-        }
-    })();
-    </script>
-    """,
-    height=90,
-)
+            st.markdown(answer)
 
-# ── Chat input ────────────────────────────────
-pending    = st.session_state.pop("pending_q", None)
-user_input = st.chat_input("Ask about Pharos Network...")
-question   = pending or user_input
+            if st.session_state.voice_reply:
+                speak_text(answer)
 
-if question:
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(question)
+            if st.button("🔊", key="replay_" + str(len(st.session_state.messages)), help="Read aloud"):
+                speak_text(answer)
 
-    with st.chat_message("assistant", avatar="🐙"):
-        with st.spinner("Searching..."):
-            try:
-                answer, sources = bot.ask(question)
-            except Exception as e:
-                answer  = "An error occurred: " + str(e)
-                sources = []
-
-        st.markdown(answer)
-
-        # ── Voice output: read the answer aloud if enabled ──────
-        if voice_reply:
-            speak_text(answer)
-
-        # Manual replay button (works even if auto-read is off)
-        if st.button("🔊 Read aloud", key="replay_" + str(len(st.session_state.messages))):
-            speak_text(answer)
-
-        # Show a mini price chart inline if the question was about
-        # price / market cap / the PROS token
-        q = question.lower()
-        if "price" in q or "market cap" in q or "pros" in q or "$pros" in q:
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="chart-card-label">$PROS · 24H PRICE</div>',
-                    unsafe_allow_html=True,
-                )
-                chart_key = "pros_chart_msg_" + str(len(st.session_state.messages))
-                render_price_chart(get_price_chart_df(), chart_key=chart_key)
-
-        if show_sources and sources:
-            label = "Sources · " + str(len(sources))
-            with st.expander(label, expanded=True):
-                for s in sources:
-                    st.markdown(
-                        '<div class="source-card">'
-                        '<strong>' + s["title"] + '</strong>'
-                        '<a href="' + s["url"] + '" target="_blank">'
-                        + s["url"] + '</a></div>',
-                        unsafe_allow_html=True,
+            q_lower = question.lower()
+            if any(kw in q_lower for kw in ["price","market cap","pros","$pros","token"]):
+                with st.container(border=True):
+                    st.markdown('<div class="chart-card-label">$PROS · 24H</div>', unsafe_allow_html=True)
+                    render_price_chart(
+                        get_price_chart_df(),
+                        chart_key="chat_chart_" + str(len(st.session_state.messages))
                     )
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
-    st.session_state.sources_history.append(sources)
+            if st.session_state.show_sources and sources:
+                with st.expander("Sources · " + str(len(sources)), expanded=True):
+                    for s in sources:
+                        st.markdown(
+                            '<div class="source-card"><strong>' + s["title"] + '</strong>'
+                            '<a href="' + s["url"] + '" target="_blank">' + s["url"] + '</a></div>',
+                            unsafe_allow_html=True,
+                        )
+
+        st.session_state.messages.append({"role":"assistant","content":answer})
+        st.session_state.sources_history.append(sources)
+
+
+# ═════════════════════════════════════════════
+# PAGE: CAMPAIGNS
+# ═════════════════════════════════════════════
+elif st.session_state.page == "campaigns":
+
+    st.markdown(
+        '<div class="section-dark">'
+        '<div style="position:relative;z-index:1;">'
+        '<div class="section-eyebrow"><span class="drop">◆</span> LIVE</div>'
+        '<h2 class="section-h">Active Campaigns</h2>'
+        '<p class="section-sub">Real-time opportunities in the Pharos ecosystem. Join, build, and earn.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="camp-grid">', unsafe_allow_html=True)
+    for c in CAMPAIGNS:
+        st.markdown(
+            '<div class="camp-card">'
+            '<div class="camp-tag">' + c["tag"] + '</div>'
+            '<div class="camp-title">' + c["title"] + '</div>'
+            '<div class="camp-desc">' + c["desc"] + '</div>'
+            '<a class="camp-link" href="' + c["link"] + '" target="_blank">' + c["cta"] + ' ↗</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Hackathon timeline
+    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;">'
+        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">AI Agent Carnival — Phase Timeline</div>'
+        '<div style="display:flex;flex-direction:column;gap:8px;">'
+        '<div style="display:flex;align-items:flex-start;gap:10px;">'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">Pre-Season</div>'
+        '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
+        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">May 25 – Jun 8</div>'
+        '<div style="font-size:11px;color:#5B5F6E;">Discord Skill building warm-up · 5,000 PROS for 10 winners</div></div>'
+        '</div>'
+        '<div style="display:flex;align-items:flex-start;gap:10px;">'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:700;padding-top:1px;">Phase 1 ✓</div>'
+        '<div style="width:2px;background:#1A1AFF;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
+        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">Jun 8 – 22</div>'
+        '<div style="font-size:11px;color:#5B5F6E;">Skill Hackathon · 20,000 PROS · Submit by Jun 15 · Judging Jun 16–22</div></div>'
+        '</div>'
+        '<div style="display:flex;align-items:flex-start;gap:10px;">'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">Phase 2</div>'
+        '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
+        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">Jun 22 – Jul 24</div>'
+        '<div style="font-size:11px;color:#5B5F6E;">Agent Arena · 25,000 PROS · Phase 1 winners only · Submit by Jul 6</div></div>'
+        '</div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.link_button("Submit on DoraHacks ↗", "https://dorahacks.io/hackathon/pharos-phase1", use_container_width=True)
+    with col2:
+        st.link_button("Join Pharos Discord ↗", PHAROS_DISCORD_URL, use_container_width=True)
+
+
+# ═════════════════════════════════════════════
+# PAGE: UPDATES (Pharos News)
+# ═════════════════════════════════════════════
+elif st.session_state.page == "updates":
+
+    st.markdown(
+        '<div class="section-dark">'
+        '<div style="position:relative;z-index:1;">'
+        '<div class="section-eyebrow"><span style="font-size:12px;">📋</span>&nbsp;PHAROS NEWS</div>'
+        '<h2 class="section-h">Active Updates</h2>'
+        '<p class="section-sub">Direct from <a href="' + PHAROS_X_URL + '" target="_blank">@pharos_network</a>. '
+        'Only ongoing campaigns and initiatives — hackathons, stake events, and more.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Live news from CoinGecko ───────────────
+    with st.spinner("Loading latest Pharos news…"):
+        news_items = get_pharos_news()
+
+    if news_items:
+        st.markdown('<div class="news-grid">', unsafe_allow_html=True)
+        for item in news_items:
+            date_str = ""
+            if item.get("date"):
+                try:
+                    dt = datetime.fromisoformat(str(item["date"]).replace("Z",""))
+                    date_str = dt.strftime("%b %d, %Y")
+                except Exception:
+                    date_str = str(item["date"])[:10]
+
+            st.markdown(
+                '<div class="news-card">'
+                '<div class="news-source">' + (item.get("source","") or "") + '</div>'
+                '<div class="news-title"><a href="' + item.get("url","#") + '" target="_blank">' + item.get("title","") + '</a></div>'
+                + ('<div class="news-desc">' + item["description"][:160] + '…</div>' if item.get("description") else '')
+                + ('<div class="news-date">' + date_str + '</div>' if date_str else '')
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        # Fallback curated updates if CoinGecko news returns nothing
+        st.markdown(
+            '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:10px;padding:1rem 1.2rem;margin-bottom:0.8rem;">'
+            '<div style="font-size:11px;color:#9499A8;margin-bottom:0.4rem;">News could not be loaded from CoinGecko. Latest known updates:</div>',
+            unsafe_allow_html=True,
+        )
+        fallback_updates = [
+            {"title": "AI Agent Carnival Phase 1 is LIVE", "desc": "150,000 PROS prize pool · Submit Skills by June 15 on DoraHacks", "link": "https://dorahacks.io/hackathon/pharos-phase1"},
+            {"title": "Pharos raises $44M Series A", "desc": "Led by top-tier VCs. Building institutional-grade RWA infrastructure on-chain.", "link": PHAROS_MAIN_URL},
+            {"title": "USDC + CCTP integration live", "desc": "Pharos integrates Circle's USDC and CCTP for real-time RealFi settlement.", "link": PHAROS_MAIN_URL},
+            {"title": "Expedition Season 2 ongoing", "desc": "Complete daily testnet tasks to earn points toward the Season 2 snapshot.", "link": "https://testnet.pharosnetwork.xyz"},
+        ]
+        for u in fallback_updates:
+            st.markdown(
+                '<div class="news-card" style="margin-bottom:8px;">'
+                '<div class="news-title"><a href="' + u["link"] + '" target="_blank">' + u["title"] + '</a></div>'
+                '<div class="news-desc">' + u["desc"] + '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
+    with col2:
+        if st.button("🔄 Refresh news", key="refresh_news"):
+            if "pharos_news_cache" in st.session_state:
+                del st.session_state["pharos_news_cache"]
+            st.rerun()
+
+
+# ═════════════════════════════════════════════
+# PAGE: TRADE
+# ═════════════════════════════════════════════
+elif st.session_state.page == "trade":
+
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#14141F;margin-bottom:0.3rem;">📊 Trade $PROS</div>'
+        '<div style="font-size:13px;color:#5B5F6E;margin-bottom:1.2rem;">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Live price bar
+    p = price_data
+    if p.get("available") and p.get("price_usd"):
+        chg     = p["change_24h"] or 0
+        chg_cls = "green" if chg >= 0 else "red"
+        st.markdown(
+            '<div class="price-ticker" style="margin-bottom:1.2rem;">'
+            '<div class="ticker-cell"><div class="ticker-label">$PROS Price</div>'
+            '<div class="ticker-value">$' + f'{p["price_usd"]:.4f}' + '</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">24h Change</div>'
+            '<div class="ticker-value ' + chg_cls + '">' + ("▲" if chg>=0 else "▼") + f'{abs(chg):.2f}%</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">Market Cap</div>'
+            '<div class="ticker-value">' + ("$" + f'{p["market_cap_usd"]:,.0f}' if p.get("market_cap_usd") else "—") + '</div></div>'
+            '<div class="ticker-cell"><div class="ticker-label">24h Volume</div>'
+            '<div class="ticker-value">' + ("$" + f'{p["volume_24h"]:,.0f}' if p.get("volume_24h") else "—") + '</div></div>'
+            '</div>'
+            '<div class="ticker-source">CoinGecko · Updated ' + (p.get("last_updated","—")) + '</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Chart
+    with st.container(border=True):
+        RANGE_OPTIONS = {"1D":"1","7D":"7","30D":"30","90D":"90","1Y":"365","All":"max"}
+        RANGE_LABELS  = {"1":"24H","7":"7D","30":"30D","90":"90D","365":"1Y","max":"ALL"}
+        if "trade_chart_range" not in st.session_state:
+            st.session_state["trade_chart_range"] = "1"
+
+        lc, bc = st.columns([2, 4])
+        with lc:
+            st.markdown(
+                '<div class="chart-card-label">$PROS · ' + RANGE_LABELS.get(st.session_state["trade_chart_range"],"24H") + ' PRICE</div>',
+                unsafe_allow_html=True,
+            )
+        with bc:
+            rcols = st.columns(len(RANGE_OPTIONS))
+            for (rl, dv), rc in zip(RANGE_OPTIONS.items(), rcols):
+                is_a = st.session_state["trade_chart_range"] == dv
+                if rc.button(("● " if is_a else "") + rl, key="tr_rng_" + dv, use_container_width=True):
+                    st.session_state["trade_chart_range"] = dv; st.rerun()
+
+        sd = st.session_state["trade_chart_range"]
+        if "trade_chart_loaded" not in st.session_state:
+            st.session_state["trade_chart_loaded"] = False
+        if not st.session_state["trade_chart_loaded"]:
+            if st.button("📈 Load chart", key="tr_load"):
+                st.session_state["trade_chart_loaded"] = True; st.rerun()
+        else:
+            render_price_chart(get_price_chart_df(days=sd), chart_key="trade_chart_" + sd, days=sd)
+
+    # CEX grid
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#14141F;margin:1rem 0 0.6rem 0;">Trade on CEX</div>',
+        unsafe_allow_html=True,
+    )
+    cex_cols = st.columns(len(CEX_LINKS))
+    for i, cex in enumerate(CEX_LINKS):
+        with cex_cols[i]:
+            st.markdown(
+                '<div class="cex-card">'
+                '<div class="cex-name">' + cex["name"] + '</div>'
+                '<div class="cex-pair">' + cex["desc"] + '</div>'
+                '<a class="cex-btn" href="' + cex["url"] + '" target="_blank">Trade ↗</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        '<div style="font-size:11px;color:#9499A8;margin-top:0.8rem;padding:0.6rem 0.8rem;'
+        'background:#FFFFFF;border-radius:8px;border:1px solid #E3E5EA;">'
+        '⚠ Trading involves risk. Prices are indicative. Always verify on the exchange before trading. '
+        'OctoBot is not a financial advisor.</div>',
+        unsafe_allow_html=True,
+    )

@@ -1,231 +1,123 @@
 """
 build_vectorstore.py
 --------------------
-Build ChromaDB vector database from crawled Pharos docs.
+Builds the ChromaDB vector store from crawled docs.
 
-Run:
-python build_vectorstore.py
+Uses HuggingFace sentence-transformers embeddings —
+MUST match exactly what octobot.py uses or retrieval breaks.
+
+How to run:
+    python build_vectorstore.py
+
+Expected output:
+    Loading documents from 'raw_docs'...
+    Loaded 161 documents
+    Splitting into chunks...
+    Created XXX chunks
+    Generating embeddings (this may take several minutes)...
+    Vector store built! XXX chunks in 'chroma_db/'
 """
 
 import os
 import glob
 import shutil
-
 from dotenv import load_dotenv
-
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
-
 load_dotenv()
 
-RAW_DOCS_DIR = "raw_docs"
-CHROMA_DB_DIR = "chroma_db"
-
+RAW_DOCS_DIR    = "raw_docs"
+CHROMA_DB_DIR   = "chroma_db"
 COLLECTION_NAME = "pharos_docs"
+CHUNK_SIZE      = 1000
+CHUNK_OVERLAP   = 150
 
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
+# ── MUST match octobot.py exactly ──────────────────────────────
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 def load_documents():
-
-    print(f"📂 Loading documents from '{RAW_DOCS_DIR}'...")
-
-    txt_files = glob.glob(
-        os.path.join(
-            RAW_DOCS_DIR,
-            "*.txt"
-        )
-    )
-
-    txt_files = [
-        f for f in txt_files
-        if "_index" not in f
-    ]
+    print(f"Loading documents from '{RAW_DOCS_DIR}'...")
+    txt_files = glob.glob(os.path.join(RAW_DOCS_DIR, "*.txt"))
+    txt_files = [f for f in txt_files if "_index" not in f]
 
     if not txt_files:
-        raise Exception(
-            "No documents found. Run crawl_docs.py first."
-        )
+        print(f"No .txt files found in '{RAW_DOCS_DIR}'.")
+        print("Run crawl_docs.py first.")
+        exit(1)
 
-    docs = []
+    documents = []
+    for filepath in txt_files:
+        try:
+            loader = TextLoader(filepath, encoding="utf-8")
+            docs   = loader.load()
 
-    for file in txt_files:
-
-        loader = TextLoader(
-            file,
-            encoding="utf-8"
-        )
-
-        loaded = loader.load()
-
-        docs.extend(loaded)
-
-    # Here is where you print the debug info
-    print(f"DEBUG: Loaded {len(docs)} documents from '{RAW_DOCS_DIR}'")
-    for doc in docs[:3]:  # Log first three documents for inspection
-        print(f" - Title: {doc.metadata.get('title')}, Source: {doc.metadata.get('source')}")
-
-
-        for doc in loaded:
-
-            source = "unknown"
-            title = file
-
-            with open(
-                file,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
+            source_url = "unknown"
+            title      = filepath
+            with open(filepath, "r", encoding="utf-8") as f:
                 for line in f:
-
-                    if line.startswith(
-                        "SOURCE_URL:"
-                    ):
-                        source = (
-                            line
-                            .replace(
-                                "SOURCE_URL:",
-                                ""
-                            )
-                            .strip()
-                        )
-
-                    elif line.startswith(
-                        "TITLE:"
-                    ):
-                        title = (
-                            line
-                            .replace(
-                                "TITLE:",
-                                ""
-                            )
-                            .strip()
-                        )
-
+                    if line.startswith("SOURCE_URL:"):
+                        source_url = line.replace("SOURCE_URL:", "").strip()
+                    elif line.startswith("TITLE:"):
+                        title = line.replace("TITLE:", "").strip()
                     elif line.startswith("="):
                         break
 
-            doc.metadata["source"] = source
-            doc.metadata["title"] = title
+            for doc in docs:
+                doc.metadata["source"]   = source_url
+                doc.metadata["title"]    = title
+                doc.metadata["filename"] = os.path.basename(filepath)
 
-        docs.extend(loaded)
+            documents.extend(docs)
+        except Exception as e:
+            print(f"Could not load {filepath}: {e}")
 
-    print(f"📄 Loaded {len(docs)} documents")
-    for doc in docs[:3]:print(f" - Title: {doc.metadata.get('title')}, Source: {doc.metadata.get('source')}")
-
-    return docs
+    print(f"Loaded {len(documents)} documents")
+    return documents
 
 
 def split_documents(documents):
-
-    print(
-        f"\n✂️ Splitting into chunks "
-        f"(size={CHUNK_SIZE})"
+    print(f"\nSplitting into chunks (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""],
     )
-
-    splitter = (
-        RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-        )
-    )
-
-    chunks = (
-        splitter
-        .split_documents(
-            documents
-        )
-    )
-
-    print(
-        f"📊 Created "
-        f"{len(chunks)} chunks"
-    )
-
+    chunks = splitter.split_documents(documents)
+    print(f"Created {len(chunks)} chunks from {len(documents)} documents")
     return chunks
 
 
 def build_vectorstore(chunks):
+    print(f"\nGenerating embeddings using: {EMBEDDING_MODEL}")
+    print("This may take several minutes for large doc sets...\n")
 
-    print(
-        "\n🧠 Generating embeddings..."
+    embeddings = HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL
     )
 
-    embeddings = (
-        HuggingFaceEmbeddings(
-            model_name=(
-                "sentence-transformers/"
-                "all-MiniLM-L6-v2"
-            )
-        )
+    if os.path.exists(CHROMA_DB_DIR):
+        print(f"Removing old vector store at '{CHROMA_DB_DIR}'...")
+        shutil.rmtree(CHROMA_DB_DIR)
+
+    vectorstore = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        collection_name=COLLECTION_NAME,
+        persist_directory=CHROMA_DB_DIR,
     )
 
-    if os.path.exists(
-        CHROMA_DB_DIR
-    ):
-
-        print(
-            "🗑 Removing old DB..."
-        )
-
-        shutil.rmtree(
-            CHROMA_DB_DIR
-        )
-
-    vectorstore = (
-        Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            collection_name=(
-                COLLECTION_NAME
-            ),
-            persist_directory=(
-                CHROMA_DB_DIR
-            ),
-        )
-    )
-
-    count = (
-        vectorstore
-        ._collection
-        .count()
-    )
-
-    print(
-        f"\n✅ Stored "
-        f"{count} chunks"
-    )
-
+    count = vectorstore._collection.count()
+    print(f"\nVector store built! {count} chunks stored in '{CHROMA_DB_DIR}/'")
     return vectorstore
 
 
 if __name__ == "__main__":
-
-    docs = (
-        load_documents()
-    )
-
-    chunks = (
-        split_documents(
-            docs
-        )
-    )
-
-    build_vectorstore(
-        chunks
-    )
-
-    print(
-        "\n🎉 Done!"
-    )
-
-    print(
-        "Next → python test_retrieval.py"
-    )
-
+    documents   = load_documents()
+    chunks      = split_documents(documents)
+    vectorstore = build_vectorstore(chunks)
+    print("\nDone! Run: streamlit run app.py")

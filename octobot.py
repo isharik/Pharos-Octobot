@@ -1,333 +1,409 @@
 """
-octobot.py
-----------
-Phase 5: OctoBot — the core RAG chatbot engine.
+skill_api.py
+------------
+OctoBot Skill API — Pharos AI Agent Carnival submission.
 
-Now powered by:
-- Gemini (LLM)
-- HuggingFace embeddings
-- ChromaDB
+FEATURES:
+  1. Answers any Pharos question from verified documentation
+  2. Live $PROS price from CoinGecko (verified ID: pharos)
+     - Cached 5 minutes
+     - Injected into answers when question is token-related
+     - Graceful fallback if CoinGecko is unavailable
+  3. GET /pros-price endpoint returns full market data
 
-Run:
-    python octobot.py
+ENDPOINTS:
+  GET  /            health check
+  POST /query       main Skill — ask any Pharos question
+  GET  /pros-price  live $PROS price + market cap
+  GET  /info        Skill metadata
+  GET  /docs        interactive Swagger UI
+
+HOW TO RUN:
+    uvicorn skill_api:app --host 0.0.0.0 --port 8000
+
+.env must contain:
+    GEMINI_API_KEY=your-gemini-key-here
+
+chroma_db/ must exist:
+    python build_vectorstore.py
 """
 
 import os
-import requests
+import time
+import requests as http_requests
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-
-# Gemini
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-# Local embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-
-# Vector DB
-from langchain_chroma import Chroma
-
-# LangChain
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.output_parsers import StrOutputParser
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 load_dotenv()
 
 # ─────────────────────────────────────────────
-# CHECK API KEY
+# STARTUP CHECKS
 # ─────────────────────────────────────────────
 if not os.getenv("GEMINI_API_KEY"):
-    raise ValueError(
-        "❌ GEMINI_API_KEY not found in .env"
+    raise RuntimeError(
+        "GEMINI_API_KEY not found in .env file. "
+        "Add: GEMINI_API_KEY=your-key"
+    )
+
+if not os.path.exists("chroma_db"):
+    raise RuntimeError(
+        "chroma_db/ not found. Run: python build_vectorstore.py"
     )
 
 # ─────────────────────────────────────────────
-# CONFIG
+# LOAD OCTOBOT
 # ─────────────────────────────────────────────
-CHROMA_DB_DIR = "chroma_db"
-COLLECTION_NAME = "pharos_docs"
+from octobot import OctoBot
 
-TOP_K = 5
-
-GEMINI_MODEL = "gemini-2.5-flash"
-
-# ─────────────────────────────────────────────
-SYSTEM_PROMPT = """You are OctoBot, a helpful and accurate documentation assistant \
-for the Pharos blockchain network.
-
-Your job is to answer questions ONLY using the documentation excerpts provided \
-below in the <context> section.
-
-RULES YOU MUST FOLLOW:
-1. ONLY answer based on what is in the provided context.
-2. If the answer is not in the context, respond EXACTLY with this sentence, \
-translated into the language the user wrote in:
-   "I could not find that information in the Pharos documentation."
-3. Do NOT guess, invent, or hallucinate any information.
-4. Keep your answers clear, concise, and accurate.
-5. When possible, structure your answer with bullet points for clarity.
-6. Always be professional and helpful.
-7. If the user asks in English, answer ONLY in English.
-8. Do not translate unless explicitly requested.
-9. ALWAYS respond in the SAME language the user used in their question, \
-regardless of what language the documentation context below is written in. \
-The documentation is in English, but you must translate your answer into \
-the user's language while keeping technical terms (like "SPN", "PROS", \
-"RWA", "L1-Core") in their original form.
-
-<context>
-{context}
-</context>
-
-Remember: You are OctoBot. Only answer from the documentation above, \
-and respond in the same language as the user's question.
-"""
-
-PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM_PROMPT),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{question}")
-])
-
+print("Loading OctoBot knowledge base...")
+bot = OctoBot()
+print("OctoBot ready — Skill API starting.")
 
 # ─────────────────────────────────────────────
-# OCTOBOT
+# COINGECKO INTEGRATION
+#
+# Verified CoinGecko asset ID: "pharos"
+# Confirmed from: coingecko.com/en/coins/pharos
+# Free API — no key required
+# Rate limit: 100 calls/min (we cache 5 min so ~1 call/5min)
 # ─────────────────────────────────────────────
-class OctoBot:
+COINGECKO_ASSET_ID    = "pharos-network"
+COINGECKO_URL         = (
+    "https://api.coingecko.com/api/v3/simple/price"
+    "?ids=" + COINGECKO_ASSET_ID +
+    "&vs_currencies=usd"
+    "&include_24hr_change=true"
+    "&include_market_cap=true"
+    "&include_24hr_vol=true"
+)
+PRICE_CACHE_SECONDS   = 300   # 5 minutes
 
-    def __init__(self):
+# Single shared cache dict — updated by fetch_pros_price()
+_price_cache: dict = {
+    "price_usd":      None,
+    "market_cap_usd": None,
+    "volume_24h":     None,
+    "change_24h":     None,
+    "last_updated":   None,   # ISO string shown to users
+    "fetched_at":     0.0,    # Unix timestamp for cache logic
+    "available":      False,  # False if CoinGecko unreachable
+    "error":          None,
+}
 
-        print("🐙 Initializing OctoBot...")
 
-        if not os.path.exists(CHROMA_DB_DIR):
-            raise FileNotFoundError(
-                f"Vector store missing: {CHROMA_DB_DIR}\n"
-                "Run build_vectorstore.py first"
-            )
+def fetch_pros_price() -> dict:
+    """
+    Fetch live $PROS price from CoinGecko.
 
-        # SAME embeddings used during vector creation
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+    Returns cached result if fetched less than 5 minutes ago.
+    On any failure sets available=False and preserves last
+    known values — app never crashes because of this.
+    """
+    now = time.time()
+    if now - _price_cache["fetched_at"] < PRICE_CACHE_SECONDS:
+        return _price_cache
+
+    try:
+        resp = http_requests.get(
+            COINGECKO_URL,
+            timeout=8,
+            headers={"Accept": "application/json"},
         )
+        resp.raise_for_status()
+        data = resp.json().get(COINGECKO_ASSET_ID, {})
 
-        self.vectorstore = Chroma(
-            collection_name=COLLECTION_NAME,
-            embedding_function=self.embeddings,
-            persist_directory=CHROMA_DB_DIR,
-        )
-
-        self.retriever = self.vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": TOP_K},
-        )
-
-        # Gemini
-        self.llm = ChatGoogleGenerativeAI(
-            model=GEMINI_MODEL,
-            temperature=0,
-            google_api_key=os.getenv("GEMINI_API_KEY"),
-        )
-
-        self.chat_history = []
-
-        count = self.vectorstore._collection.count()
-
-        print(
-            f"✅ OctoBot ready! "
-            f"({count} chunks loaded)"
-        )
-
-    # ─────────────────────────────────────────
-
-    def _format_docs(self, docs):
-
-        parts = []
-
-        for i, doc in enumerate(docs, 1):
-
-            source = doc.metadata.get(
-                "source",
-                "unknown"
+        if not data:
+            raise ValueError(
+                "CoinGecko returned empty data for ID: " + COINGECKO_ASSET_ID
             )
 
-            title = doc.metadata.get(
-                "title",
-                "untitled"
-            )
-
-            parts.append(
-                f"[Excerpt {i}] "
-                f"{title}\n"
-                f"Source: {source}\n\n"
-                f"{doc.page_content}"
-            )
-
-        return "\n\n---\n\n".join(parts)
-    
-    # ─────────────────────────────────────────
-    def _get_live_pros_data(self):
-        try:
-            url = (
-                "https://api.coingecko.com/api/v3/coins/pharos-network"
-            )
-            r = requests.get(
-                url,
-                timeout=5
-            )
-            data = r.json()
-
-            return {
-                "price": data["market_data"]["current_price"]["usd"],
-                "market_cap": data["market_data"]["market_cap"]["usd"]
-            }
-
-        except Exception as e:
-            print(f"Error fetching PROS data: {e}")
-            return None
-    
-    
-
-
-    # ─────────────────────────────────────────
-
-    def _extract_sources(self, docs):
-
-        sources = []
-        seen = set()
-
-        for doc in docs:
-
-            url = doc.metadata.get(
-                "source",
-                ""
-            )
-
-            title = doc.metadata.get(
-                "title",
-                "Untitled"
-            )
-
-            if url and url not in seen:
-
-                seen.add(url)
-
-                sources.append({
-                    "url": url,
-                    "title": title
-                })
-
-        return sources
-
-    # ─────────────────────────────────────────
-
-    def ask(self, question):
-
-        relevant_docs = self.retriever.invoke(
-            question
-        )
-
-        if not relevant_docs:
-
-            return (
-                "I could not find that information in the Pharos documentation.",
-                []
-            )
-
-        context = self._format_docs(
-            relevant_docs
-        )
-        
-        question_lower = question.lower()
-        if ("price" in question_lower or
-            "market cap" in question_lower or
-            "pros" in question_lower):
-            live = self._get_live_pros_data()
-            if live:
-                context += (
-                    "\n\nLIVE TOKEN DATA:\n"
-                    f"Current Price: ${live['price']}\n"
-                    f"Market Cap: ${live['market_cap']}"
-                )
-
-        chain = (
-            PROMPT_TEMPLATE
-            | self.llm
-            | StrOutputParser()
-        )
-
-        answer = chain.invoke({
-            "context": context,
-            "chat_history": self.chat_history,
-            "question": question
+        _price_cache.update({
+            "price_usd":      data.get("usd"),
+            "market_cap_usd": data.get("usd_market_cap"),
+            "volume_24h":     data.get("usd_24h_vol"),
+            "change_24h":     data.get("usd_24h_change"),
+            "last_updated":   datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "fetched_at":     now,
+            "available":      True,
+            "error":          None,
         })
 
-        self.chat_history.append(
-            HumanMessage(
-                content=question
-            )
-        )
+    except Exception as e:
+        _price_cache.update({
+            "available":  False,
+            "fetched_at": now,   # don't retry immediately
+            "error":      str(e),
+        })
 
-        self.chat_history.append(
-            AIMessage(
-                content=answer
-            )
-        )
+    return _price_cache
 
-        sources = self._extract_sources(
-            relevant_docs
-        )
 
-        return answer, sources
+def build_price_snippet(price: dict) -> str:
+    """
+    Build a short markdown string appended to doc answers
+    when the question is about the token/price/market.
+    Returns empty string if price data is unavailable.
+    """
+    if not price.get("available") or price.get("price_usd") is None:
+        return ""
 
-    # ─────────────────────────────────────────
+    usd      = price["price_usd"]
+    mcap     = price.get("market_cap_usd")
+    chg      = price.get("change_24h")
+    updated  = price.get("last_updated", "N/A")
 
-    def reset_memory(self):
+    chg_str  = f"{chg:+.2f}%" if chg  is not None else "N/A"
+    mcap_str = f"${mcap:,.0f}" if mcap is not None else "N/A"
 
-        self.chat_history = []
+    return (
+        "\n\n---\n"
+        "**Live $PROS Market Data** *(via CoinGecko)*\n\n"
+        f"| Price (USD) | Market Cap | 24h Change | Updated |\n"
+        f"|---|---|---|---|\n"
+        f"| **${usd:.4f}** | {mcap_str} | {chg_str} | {updated} |"
+    )
 
-        print(
-            "🔄 Memory cleared"
-        )
+
+# Keywords that trigger price injection into documentation answers
+PRICE_KEYWORDS = [
+    "pros", "$pros", "price", "token", "coin",
+    "market cap", "market", "worth", "value",
+    "cost", "trading", "buy", "sell",
+    "usd", "dollar", "volume", "statistics",
+    "tokenomics", "circulating", "supply",
+]
+
+
+def is_price_question(question: str) -> bool:
+    """Return True if the question is about token/price/market data."""
+    q = question.lower()
+    return any(kw in q for kw in PRICE_KEYWORDS)
 
 
 # ─────────────────────────────────────────────
-# TERMINAL TEST
+# FASTAPI APP
 # ─────────────────────────────────────────────
-if __name__ == "__main__":
+app = FastAPI(
+    title="Pharos Knowledge Skill",
+    description=(
+        "Reusable AI Skill — Pharos AI Agent Carnival Phase 1.\n\n"
+        "Answers questions about Pharos Network from verified documentation. "
+        "Returns live $PROS market data from CoinGecko when relevant. "
+        "Zero hallucination — only answers from real sources."
+    ),
+    version="1.1.0",
+)
 
-    bot = OctoBot()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    print("\n🐙 OctoBot Ready\n")
 
-    while True:
+# ─────────────────────────────────────────────
+# REQUEST / RESPONSE MODELS
+# ─────────────────────────────────────────────
+class SkillRequest(BaseModel):
+    question: str
 
-        q = input("You: ").strip()
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "question": "What is the PROS token used for?"
+            }
+        }
 
-        if q.lower() in [
-            "quit",
-            "exit"
-        ]:
-            break
 
-        if q.lower() == "reset":
-            bot.reset_memory()
-            continue
+class SourceItem(BaseModel):
+    url:   str
+    title: str
 
-        answer, sources = bot.ask(q)
 
-        print("\n🐙", answer)
+class SkillResponse(BaseModel):
+    answer:        str
+    sources:       list[SourceItem]
+    found_in_docs: bool
+    pros_price:    dict | None = None
 
-        if sources:
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "answer": "The PROS token is used for...\n\n---\n**Live $PROS Market Data**...",
+                "sources": [
+                    {"url": "https://docs.pharos.xyz", "title": "Pharos Docs"}
+                ],
+                "found_in_docs": True,
+                "pros_price": {
+                    "price_usd":      0.5828,
+                    "market_cap_usd": 75000000,
+                    "change_24h":     7.39,
+                    "available":      True,
+                    "source":         "CoinGecko",
+                }
+            }
+        }
 
-            print("\n📚 Sources:")
 
-            for s in sources:
+class PriceResponse(BaseModel):
+    price_usd:      float | None
+    market_cap_usd: float | None
+    volume_24h:     float | None
+    change_24h:     float | None
+    last_updated:   str | None
+    available:      bool
+    source:         str = "CoinGecko"
+    asset_id:       str = COINGECKO_ASSET_ID
+    warning:        str | None = None
 
-                print(
-                    f"- {s['title']}"
-                )
 
-                print(
-                    f"  {s['url']}"
-                )
+# ─────────────────────────────────────────────
+# ENDPOINTS
+# ─────────────────────────────────────────────
 
-        print()
+@app.get("/", tags=["Health"])
+def health_check():
+    """
+    Health check.
+    Returns Skill status, knowledge base size, and current PROS price.
+    """
+    price  = fetch_pros_price()
+    chunks = bot.vectorstore._collection.count()
+    return {
+        "skill":             "pharos-knowledge",
+        "version":           "1.1.0",
+        "status":            "online",
+        "knowledge_chunks":  chunks,
+        "model":             "gemini",
+        "pros_price_usd":    price.get("price_usd"),
+        "coingecko_status":  "ok" if price.get("available") else "unavailable",
+    }
+
+
+@app.post("/query", response_model=SkillResponse, tags=["Skill"])
+def query_pharos_docs(request: SkillRequest):
+    """
+    Main Skill endpoint.
+
+    - Retrieves answer from Pharos documentation (RAG pipeline)
+    - Preserves the full documentation answer unchanged
+    - Appends live $PROS market data when question is token-related
+    - If CoinGecko is down: documentation answer still returned, price omitted
+    - Returns found_in_docs=False when answer is not in documentation
+    """
+    if not request.question or not request.question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="question field cannot be empty."
+        )
+
+    question = request.question.strip()
+
+    # ── Step 1: Get documentation answer from OctoBot ──
+    try:
+        answer, raw_sources = bot.ask(question)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="OctoBot RAG error: " + str(e)
+        )
+
+    not_found = "I could not find that information" in answer
+    found     = not not_found
+
+    # ── Step 2: Optionally append live price ──────────
+    price_payload = None
+    if is_price_question(question):
+        price = fetch_pros_price()
+        if price.get("available"):
+            snippet = build_price_snippet(price)
+            if snippet:
+                answer += snippet      # append after doc answer, never replace
+                price_payload = {
+                    "price_usd":      price.get("price_usd"),
+                    "market_cap_usd": price.get("market_cap_usd"),
+                    "change_24h":     price.get("change_24h"),
+                    "last_updated":   price.get("last_updated"),
+                    "available":      True,
+                    "source":         "CoinGecko",
+                }
+        # If CoinGecko unavailable — silently skip, doc answer still returned
+
+    # ── Step 3: Build response ────────────────────────
+    sources = [
+        SourceItem(url=s.get("url", ""), title=s.get("title", ""))
+        for s in raw_sources
+    ]
+
+    return SkillResponse(
+        answer=answer,
+        sources=sources,
+        found_in_docs=found,
+        pros_price=price_payload,
+    )
+
+
+@app.get("/pros-price", response_model=PriceResponse, tags=["Live Data"])
+def get_pros_price():
+    """
+    Live $PROS token price and market data from CoinGecko.
+
+    - Cached for 5 minutes
+    - Returns warning if CoinGecko is unavailable
+    - Never returns 500 — always returns a valid response
+    - asset_id field confirms which CoinGecko ID is being used
+    """
+    price = fetch_pros_price()
+
+    warning = None
+    if not price.get("available"):
+        warning = (
+            "CoinGecko data temporarily unavailable. "
+            "Error: " + str(price.get("error", "unknown"))
+        )
+
+    return PriceResponse(
+        price_usd=      price.get("price_usd"),
+        market_cap_usd= price.get("market_cap_usd"),
+        volume_24h=     price.get("volume_24h"),
+        change_24h=     price.get("change_24h"),
+        last_updated=   price.get("last_updated"),
+        available=      price.get("available", False),
+        warning=        warning,
+    )
+
+
+@app.get("/info", tags=["Skill"])
+def skill_info():
+    """Skill metadata for Agent discovery and integration."""
+    return {
+        "skill_name":    "pharos-knowledge",
+        "version":       "1.1.0",
+        "description":   (
+            "Answers questions about Pharos Network from verified documentation. "
+            "Appends live $PROS market data for token-related questions."
+        ),
+        "category":      "data-fetch",
+        "input": {
+            "question": "string — any question about Pharos Network"
+        },
+        "output": {
+            "answer":        "string — documentation answer + optional price data",
+            "sources":       "array of {url, title}",
+            "found_in_docs": "boolean",
+            "pros_price":    "object (present only for token-related questions)",
+        },
+        "live_data": {
+            "provider":   "CoinGecko",
+            "asset_id":   COINGECKO_ASSET_ID,
+            "cache_mins": PRICE_CACHE_SECONDS // 60,
+        },
+        "tags": [
+            "pharos", "documentation", "RAG",
+            "knowledge-base", "live-price", "AI"
+        ],
+    }

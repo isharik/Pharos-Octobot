@@ -22,7 +22,7 @@ HOW TO RUN:
     uvicorn skill_api:app --host 0.0.0.0 --port 8000
 
 .env must contain:
-    GEMINI_API_KEY=your-gemini-api-key
+    GEMINI_API_KEY=your-gemini-key-here
 
 chroma_db/ must exist:
     python build_vectorstore.py
