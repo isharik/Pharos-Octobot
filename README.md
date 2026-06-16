@@ -20,6 +20,10 @@ https://www.youtube.com/watch?v=gIsav6XI6HE
 
 https://x.com/isharik99/status/2066777239627387353?s=20
 
+## Check out the Dora Hacks page for more details on updates :
+
+https://dorahacks.io/buidl/44453
+
 ## Public Link (Always under Development)
 https://pharos-octobot-by-echo.streamlit.app/
 
