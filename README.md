@@ -11,9 +11,12 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 
 **Built for the Pharos AI Agent Carnival ⚓**
 
-## 🌐 Live Demo
+## 🌐 New Live Demo after updates
 
-### https://pharos-octobot-by-echo.streamlit.app/
+https://x.com/isharik99/status/2066777239627387353?s=20
+
+## Public Link (Always under Development)
+https://pharos-octobot-by-echo.streamlit.app/
 
 *(If unavailable, the request quota may have expired. You can clone the repo and run locally with your own API key.)*
 
