@@ -287,9 +287,9 @@ st.markdown("""
     --light:   #6B8CFF;
     --glow:    rgba(26,26,255,0.22);
     --subtle:  rgba(26,26,255,0.08);
-    --bg:   #B5C2FF;
-    --bg1:  #CCD5FF;
-    --bg2:  #C0CBFF;
+  --bg:   #D5D8DE;
+  --bg1:  #F2F3F5;
+  --bg2:  #E4E7EC;
     --border:  #D0D3E0;
     --border2: #C4C8D8;
     --t1:      #0C0C1A;
