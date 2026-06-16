@@ -862,7 +862,7 @@ for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
 
 with nav_cols[7]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
-    st.link_button("↗ Pharos Docs", PHAROS_DOCS_URL, use_container_width=True)
+    st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<hr style="border:none;border-top:1px solid #E3E5EA;margin:0 0 1rem 0;">', unsafe_allow_html=True)
@@ -924,14 +924,14 @@ if st.session_state.page == "home":
     # hero button handlers (JS links don't trigger Streamlit reruns — use pills below)
     hcol1, hcol2, hcol3 = st.columns(3)
     with hcol1:
-        if st.button("💬 Chat with OctoBot", key="home_chat", use_container_width=True):
-            st.session_state.page = "chat"; st.rerun()
+        if st.button("💬 Multilingual", key="home_chat", use_container_width=True):
+            st.session_state.page = "None"; st.rerun()
     with hcol2:
-        if st.button("🚀 Active Campaigns", key="home_camp", use_container_width=True):
-            st.session_state.page = "campaigns"; st.rerun()
+        if st.button("🚀 50+ Languages", key="home_camp", use_container_width=True):
+            st.session_state.page = "None"; st.rerun()
     with hcol3:
-        if st.button("📊 Trade $PROS", key="home_trade", use_container_width=True):
-            st.session_state.page = "trade"; st.rerun()
+        if st.button("📊 Real time Markets", key="home_trade", use_container_width=True):
+            st.session_state.page = "https://github.com/isharik/Pharos-Octobot"; st.rerun()
 
     st.markdown('<div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
 
@@ -978,7 +978,7 @@ if st.session_state.page == "home":
         '<div class="chat-showcase-sub">Answers from verified documentation · Zero hallucination</div>'
         '</div></div>'
         '<div class="chat-demo-msg">'
-        '<div class="chat-demo-user"><div class="chat-demo-q">What are SPNs in Pharos?</div></div>'
+        '<div class="chat-demo-user"><div class="chat-demo-q">For Example : What are SPNs in Pharos?</div></div>'
         '</div>'
         '<div class="chat-demo-msg">'
         '<div class="chat-demo-bot"><div class="chat-demo-a">'
@@ -1537,9 +1537,11 @@ elif st.session_state.page == "trade":
         unsafe_allow_html=True,
         
     )
+    
     # ── Footer ────────────────────────────────────────────────────
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
 st.markdown(
+    
     '<div style="text-align:center;padding:1rem 0 0.5rem 0;'
     'border-top:1px solid #D0D3E0;margin-top:1rem;">'
     '<span style="font-size:12px;color:#7A7F96;">Built by&nbsp;</span>'
@@ -1550,6 +1552,10 @@ st.markdown(
     '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
     '<a href="https://x.com/isharik99" target="_blank" '
     'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">@isharik99 on X ↗</a>'
+    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
+    '<a href="https://github.com/isharik/Pharos-Octobot" target="_blank" '
+    'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">'
+    'GitHub ↗</a>'
     '</div>',
     unsafe_allow_html=True,
 )
