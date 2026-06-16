@@ -72,8 +72,8 @@ CAMPAIGNS = [
     },
     {
         "title": "Pharos Expedition Season 2",
-        "tag":   "LIVE · Testnet Tasks",
-        "desc":  "Complete daily on-chain tasks on the Pharos testnet to earn points and qualify for the Season 2 snapshot.",
+        "tag":   "LIVE · Post Mainnet Voyage",
+        "desc":  "Showcase your skills and support on X and Discord to participate.",
         "link":  "https://www.notion.so/Pharos-Expedition-Season-2-3578ec314f7580488f69ca722cc31cf9",
         "cta":   "Join here",
         "color": "#1A1AFF",
