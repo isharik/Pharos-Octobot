@@ -319,11 +319,13 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
     max-width: 1200px !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
+    padding-top: 0 !important;
     margin: 0 auto !important;
 }
 section[data-testid="stMain"] > div {
     padding-left: 2rem !important;
     padding-right: 2rem !important;
+    padding-top: 0 !important;
 }
 /* Center markdown blocks that contain hero */
 [data-testid="stMarkdownContainer"] {
@@ -369,14 +371,15 @@ section[data-testid="stMain"] > div {
     border:none!important;
     border-radius:6px!important;
     font-family:var(--fb)!important;
-    font-size:15px!important;
-    font-weight:600!important;
-    color:var(--t1)!important;
+    font-size:18px!important;
+    font-weight:800!important;
+    color:#000000!important;
+    opacity:1!important;
+    letter-spacing:-0.01em!important;
     padding:0.3rem 0.8rem!important;
     height:auto!important;
     text-align:center!important;
     transition:all 0.12s ease!important;
-    letter-spacing:-0.01em!important;
 }
 .nav-wrap .stButton>button:hover{
     background:var(--subtle)!important;
