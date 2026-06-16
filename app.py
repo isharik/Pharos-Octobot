@@ -29,7 +29,7 @@ st.set_page_config(
     page_title="OctoBot · Pharos Hub",
     page_icon="🐙",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="auto",
 )
 
 # ─────────────────────────────────────────────
@@ -284,17 +284,17 @@ st.markdown("""
 :root {
     --blue:    #1A1AFF;
     --blue2:   #2D2DE0;
-    --light:   #4F4FFF;
-    --glow:    rgba(26,26,255,0.18);
-    --subtle:  rgba(26,26,255,0.06);
-    --bg:      #F4F5F7;
-    --bg1:     #FFFFFF;
-    --bg2:     #F7F8FA;
-    --border:  #E3E5EA;
-    --border2: #D6D9E0;
-    --t1:      #14141F;
-    --t2:      #5B5F6E;
-    --t3:      #9499A8;
+    --light:   #6B8CFF;
+    --glow:    rgba(26,26,255,0.22);
+    --subtle:  rgba(26,26,255,0.08);
+    --bg:      #D6DCFF;
+    --bg1:     #E8ECFF;
+    --bg2:     #DDE2FF;
+    --border:  #D0D3E0;
+    --border2: #C4C8D8;
+    --t1:      #0C0C1A;
+    --t2:      #42475A;
+    --t3:      #7A7F96;
     --green:   #1FA855;
     --red:     #E5484D;
     --fd:      'Syne', sans-serif;
@@ -304,14 +304,39 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
 .stApp{
     background:var(--bg)!important;
     background-image:
-        radial-gradient(ellipse 70% 50% at 50% 0%,rgba(26,26,255,0.06) 0%,transparent 55%),
-        repeating-linear-gradient(0deg,rgba(20,20,31,0.04) 0px,rgba(20,20,31,0.04) 1px,transparent 1px,transparent 56px),
-        repeating-linear-gradient(90deg,rgba(20,20,31,0.04) 0px,rgba(20,20,31,0.04) 1px,transparent 1px,transparent 56px)
+        radial-gradient(ellipse 80% 60% at 50% -5%,rgba(26,26,255,0.10) 0%,transparent 50%),
+        radial-gradient(ellipse 40% 30% at 85% 70%,rgba(26,26,255,0.05) 0%,transparent 50%),
+        radial-gradient(ellipse 30% 25% at 10% 80%,rgba(107,140,255,0.06) 0%,transparent 50%),
+        radial-gradient(circle 2.5px at 0 0,rgba(26,26,255,0.2) 0%,transparent 100%),
+        repeating-linear-gradient(0deg,  rgba(26,26,255,0.05) 0px,rgba(26,26,255,0.05) 1px,transparent 1px,transparent 60px),
+        repeating-linear-gradient(90deg, rgba(26,26,255,0.05) 0px,rgba(26,26,255,0.05) 1px,transparent 1px,transparent 60px)
         !important;
+    background-size:auto,auto,auto,60px 60px,100% 100%,100% 100%!important;
     background-attachment:fixed!important;
 }
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
-[data-testid="stSidebar"]{display:none!important;}
+[data-testid="stSidebar"]{
+    background:#F2F3F8!important;
+    border-right:1px solid #D0D3E0!important;
+    min-width:240px!important;
+    max-width:260px!important;
+}
+[data-testid="stSidebar"] .stButton>button{
+    font-size:13px!important;font-weight:600!important;
+    color:#0C0C1A!important;text-align:left!important;
+    border:1px solid #D0D3E0!important;
+    background:#EAECF4!important;
+}
+[data-testid="stSidebar"] .stButton>button:hover{
+    background:rgba(26,26,255,0.08)!important;
+    border-color:#1A1AFF!important;color:#1A1AFF!important;
+}
+[data-testid="stSidebar"] label{
+    font-size:13px!important;font-weight:600!important;color:#0C0C1A!important;
+}
+[data-testid="stSidebar"] p,[data-testid="stSidebar"] div{
+    color:#0C0C1A!important;
+}
 [data-testid="collapsedControl"]{display:none!important;}
 
 /* Force Streamlit main block to allow true centering */
@@ -464,7 +489,7 @@ section[data-testid="stMain"] > div {
     text-align:center;
     width:100%;
 }
-.hero-title span{color:var(--blue);}
+.hero-title span{background:linear-gradient(90deg,#1A1AFF,#6B6BFF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .hero-sub{
     font-size:1rem;color:var(--t2);line-height:1.6;
     max-width:520px;margin:0 auto 1.8rem auto;
@@ -635,7 +660,7 @@ section[data-testid="stMain"] > div {
 .ticker-cell{flex:1;padding:0.8rem 1rem;border-right:1px solid var(--border);}
 .ticker-cell:last-child{border-right:none;}
 .ticker-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
-.ticker-value{font-family:var(--fd);font-size:16px;font-weight:600;color:var(--t1);}
+.ticker-value{font-family:var(--fd);font-size:18px;font-weight:700;color:var(--t1);}
 .ticker-value.green{color:var(--green);}
 .ticker-value.red{color:var(--red);}
 .ticker-source{font-size:10px;color:var(--t3);padding:0.25rem 1rem;background:var(--bg);border-top:1px solid var(--border);}
@@ -643,33 +668,81 @@ section[data-testid="stMain"] > div {
 /* ── STATS PILLS ── */
 .stats-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:0.7rem;}
 .stat-pill{
-    display:flex;align-items:center;gap:5px;
+    display:flex;align-items:center;gap:6px;
     background:var(--bg1);border:1px solid var(--border);
-    border-radius:20px;padding:4px 12px;font-size:12px;color:var(--t2);
-    box-shadow:0 1px 2px rgba(20,20,31,0.03);
+    border-radius:20px;padding:5px 14px;font-size:13px;font-weight:500;color:var(--t2);
+    box-shadow:0 2px 6px rgba(26,26,255,0.06);
 }
-.stat-pill-dot{width:5px;height:5px;border-radius:50%;background:var(--blue);flex-shrink:0;}
+.stat-pill-dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;box-shadow:0 0 4px var(--green);animation:blink 2.5s ease-in-out infinite;}
 .stat-pill strong{color:var(--t1);font-weight:600;}
 
 /* ── CHAT UI ELEMENTS ── */
-[data-testid="stChatMessage"]{background:transparent!important;padding:0.3rem 0!important;color:var(--t1)!important;}
-[data-testid="stChatMessage"] p,[data-testid="stChatMessage"] li,[data-testid="stChatMessage"] span{color:var(--t1)!important;}
-[data-testid="stChatMessageAvatarUser"],[data-testid="stChatMessageAvatarAssistant"]{background:var(--bg2)!important;border:1px solid var(--border)!important;}
+[data-testid="stChatMessage"]{
+    background:transparent!important;
+    padding:0.5rem 0!important;
+    color:var(--t1)!important;
+}
+[data-testid="stChatMessage"] p{
+    font-size:14px!important;
+    line-height:1.7!important;
+    color:var(--t1)!important;
+    font-weight:450!important;
+}
+[data-testid="stChatMessage"] li{
+    font-size:14px!important;
+    line-height:1.7!important;
+    color:var(--t1)!important;
+}
+[data-testid="stChatMessage"] span{color:var(--t1)!important;}
+[data-testid="stChatMessage"] strong{
+    color:var(--blue)!important;
+    font-weight:700!important;
+}
+[data-testid="stChatMessageAvatarUser"]{
+    background:linear-gradient(135deg,#1A1AFF,#4F4FFF)!important;
+    border:none!important;
+    box-shadow:0 2px 8px rgba(26,26,255,0.3)!important;
+}
+[data-testid="stChatMessageAvatarAssistant"]{
+    background:linear-gradient(135deg,#0C0C1A,#1A1A3A)!important;
+    border:1px solid rgba(26,26,255,0.3)!important;
+    box-shadow:0 2px 8px rgba(26,26,255,0.15)!important;
+}
 .stChatInput,[data-testid="stChatInput"],[data-testid="stChatInput"]>div,[data-testid="stBottomBlockContainer"],[data-testid="stBottom"],[data-testid="stBottom"]>div{background:var(--bg)!important;}
-[data-testid="stChatInput"]{background:var(--bg1)!important;border:1px solid var(--border2)!important;border-radius:10px!important;}
-[data-testid="stChatInput"]:focus-within{border-color:var(--blue)!important;box-shadow:0 0 0 2px var(--glow)!important;}
-[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],textarea[data-testid="stChatInputTextArea"]{background:var(--bg1)!important;background-color:var(--bg1)!important;color:var(--t1)!important;-webkit-text-fill-color:var(--t1)!important;font-family:var(--fb)!important;font-size:13px!important;caret-color:var(--blue)!important;}
-[data-testid="stChatInput"] textarea::placeholder,[data-testid="stChatInputTextArea"]::placeholder{color:var(--t2)!important;-webkit-text-fill-color:var(--t2)!important;font-size:13px!important;opacity:1!important;}
-[data-testid="stChatInput"] button{background:var(--bg2)!important;border:1px solid var(--border)!important;border-radius:6px!important;}
-[data-testid="stChatInput"] button svg{fill:var(--t1)!important;}
+[data-testid="stChatInput"]{
+    background:var(--bg1)!important;
+    border:1.5px solid var(--border2)!important;
+    border-radius:12px!important;
+    box-shadow:0 2px 8px rgba(26,26,255,0.06)!important;
+}
+[data-testid="stChatInput"]:focus-within{
+    border-color:var(--blue)!important;
+    box-shadow:0 0 0 3px var(--glow),0 2px 8px rgba(26,26,255,0.1)!important;
+}
+[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],textarea[data-testid="stChatInputTextArea"]{
+    background:var(--bg1)!important;background-color:var(--bg1)!important;
+    color:var(--t1)!important;-webkit-text-fill-color:var(--t1)!important;
+    font-family:var(--fb)!important;font-size:14px!important;
+    caret-color:var(--blue)!important;font-weight:500!important;
+}
+[data-testid="stChatInput"] textarea::placeholder,[data-testid="stChatInputTextArea"]::placeholder{
+    color:var(--t3)!important;-webkit-text-fill-color:var(--t3)!important;
+    font-size:13px!important;opacity:1!important;
+}
+[data-testid="stChatInput"] button{
+    background:var(--blue)!important;border:none!important;
+    border-radius:8px!important;
+    box-shadow:0 2px 6px rgba(26,26,255,0.3)!important;
+}
+[data-testid="stChatInput"] button svg{fill:#fff!important;}
 
 /* ── EXPANDER / SOURCE ── */
-[data-testid="stExpander"]{background:var(--bg1)!important;border:1px solid var(--border)!important;border-radius:10px!important;margin-top:0.4rem!important;}
-[data-testid="stExpander"] summary{font-size:11px!important;color:var(--t3)!important;padding:0.4rem 0.7rem!important;}
+[data-testid="stExpander"]{background:var(--bg1)!important;border:1.5px solid var(--border)!important;border-radius:10px!important;margin-top:0.5rem!important;box-shadow:0 2px 8px rgba(26,26,255,0.05)!important;}
+[data-testid="stExpander"] summary{font-size:12px!important;font-weight:600!important;color:var(--t2)!important;padding:0.5rem 0.8rem!important;letter-spacing:0.01em!important;}
 [data-testid="stExpander"] summary:hover{color:var(--light)!important;}
-.source-card{background:var(--bg2);border-left:2px solid var(--blue);border-radius:0 6px 6px 0;padding:0.35rem 0.65rem;margin:0.2rem 0;}
-.source-card strong{display:block;font-size:11px;font-weight:500;color:var(--t1);margin-bottom:1px;}
-.source-card a{font-size:10px!important;color:var(--light)!important;text-decoration:none!important;word-break:break-all;}
+.source-card{background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:4px 8px 8px 4px;padding:0.5rem 0.8rem;margin:0.3rem 0;box-shadow:0 1px 4px rgba(26,26,255,0.06);}
+.source-card strong{display:block;font-size:12px;font-weight:700;color:var(--t1);margin-bottom:2px;}
+.source-card a{font-size:11px!important;color:var(--blue)!important;text-decoration:none!important;word-break:break-all;font-weight:500!important;}
 .source-card a:hover{text-decoration:underline!important;}
 
 /* ── GENERAL BUTTONS ── */
@@ -681,7 +754,7 @@ section[data-testid="stMain"] > div {
     text-align:left!important;transition:all 0.12s ease!important;line-height:1.4!important;
 }
 .stButton>button:hover{background:var(--subtle)!important;border-color:var(--blue)!important;color:var(--t1)!important;}
-.reset-btn>.stButton>button{background:rgba(26,26,255,0.08)!important;border-color:var(--blue2)!important;color:var(--light)!important;font-size:11px!important;text-align:center!important;}
+.reset-btn>.stButton>button{background:rgba(26,26,255,0.1)!important;border-color:var(--blue2)!important;color:var(--blue)!important;font-size:12px!important;font-weight:600!important;text-align:center!important;}
 .reset-btn>.stButton>button:hover{background:var(--blue)!important;color:#fff!important;}
 [data-testid="stToggle"] label{font-size:13px!important;color:var(--t2)!important;}
 
@@ -727,11 +800,11 @@ section[data-testid="stMain"] > div {
 ::-webkit-scrollbar-thumb:hover{background:var(--blue);}
 
 /* ── WELCOME CARD (chat page) ── */
-.welcome-card{background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:12px;padding:0.9rem 1.1rem;margin-bottom:0.9rem;box-shadow:0 1px 3px rgba(20,20,31,0.04);}
-.welcome-card h3{font-family:var(--fd)!important;font-size:14px!important;font-weight:700!important;color:var(--t1)!important;margin:0 0 0.4rem 0!important;}
-.welcome-card p{font-size:12px!important;color:var(--t2)!important;line-height:1.6!important;margin:0!important;}
+.welcome-card{background:linear-gradient(135deg,#F0F1F8 0%,#EAEDF8 100%);border:1px solid var(--border);border-left:4px solid var(--blue);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem;box-shadow:0 4px 16px rgba(26,26,255,0.1);}
+.welcome-card h3{font-family:var(--fd)!important;font-size:17px!important;font-weight:800!important;color:var(--t1)!important;margin:0 0 0.5rem 0!important;letter-spacing:-0.01em!important;}
+.welcome-card p{font-size:13px!important;color:var(--t2)!important;line-height:1.65!important;margin:0!important;}
 .tag-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:0.6rem;}
-.tag{background:var(--subtle);border:1px solid rgba(26,26,255,0.18);border-radius:20px;padding:2px 8px;font-size:10px;color:var(--light);}
+.tag{background:var(--subtle);border:1px solid rgba(26,26,255,0.22);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;color:var(--blue);}
 
 /* ── MODE TOGGLE (docs / general) ── */
 .mode-bar{display:flex;gap:6px;margin-bottom:0.8rem;align-items:center;}
@@ -979,50 +1052,123 @@ elif st.session_state.page == "chat":
         st.error("OctoBot could not start: " + load_error + " — Run `python build_vectorstore.py` then refresh.")
         st.stop()
 
-    # ── Settings row ───────────────────────────
-    s1, s2, s3 = st.columns([1, 1, 2])
-    with s1:
-        st.session_state.show_sources = st.toggle("Show sources", value=st.session_state.show_sources)
-    with s2:
-        st.session_state.voice_reply = st.toggle("Read aloud", value=st.session_state.voice_reply)
-    with s3:
-        current_mode = st.session_state.chat_mode
-        mode_label   = "📚 Docs only" if current_mode == "docs" else "🌐 Docs + General"
-        st.markdown('<div class="mode-bar"><span class="mode-label">Mode:</span></div>', unsafe_allow_html=True)
-        if st.button(mode_label, key="toggle_mode"):
-            st.session_state.chat_mode = "general" if current_mode == "docs" else "docs"
-            st.rerun()
+    # ── Settings moved to sidebar — just get chunk count here ──
+    chunk_count = bot.vectorstore._collection.count()
 
-    # ── Reset + stats row ──────────────────────
-    r1, r2 = st.columns([1, 3])
-    with r1:
+    # ── Sidebar — price + controls + examples ──────────────────
+    with st.sidebar:
+
+        # Live $PROS price card
+        p = price_data
+        # OctoBot branding — text only, no image dependency
+        st.markdown(
+            '<div style="display:flex;align-items:center;gap:8px;padding:0.3rem 0 0.8rem 0;'
+            'border-bottom:1px solid #D0D3E0;margin-bottom:0.8rem;">'
+            '<span style="font-size:20px;">🐙</span>'
+            '<div>'
+            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;">OctoBot</div>'
+            '<div style="font-size:10px;color:#7A7F96;letter-spacing:0.05em;">Pharos AI Hub</div>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        # Live price card
+        p = price_data
+        if p.get("price_usd"):
+            chg     = p.get("change_24h") or 0
+            chg_col = "#1FA855" if chg >= 0 else "#E5484D"
+            chg_sym = "▲" if chg >= 0 else "▼"
+            st.markdown(
+                '<div style="background:#0C0C1A;border-radius:10px;padding:0.8rem 1rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:9px;font-weight:700;letter-spacing:0.12em;'
+                'text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:5px;">$PROS Live Price</div>'
+                '<div style="font-size:22px;font-weight:800;font-family:Syne,sans-serif;'
+                'color:#FFFFFF;line-height:1.1;letter-spacing:-0.02em;">$' + f'{p["price_usd"]:.4f}' + '</div>'
+                '<div style="font-size:12px;font-weight:600;color:' + chg_col + ';margin-top:3px;">'
+                + chg_sym + f' {abs(chg):.2f}% 24h</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div style="background:#0C0C1A;border-radius:10px;padding:0.7rem 0.9rem;'
+                'margin-bottom:0.9rem;font-size:11px;color:rgba(255,255,255,0.4);">$PROS loading…</div>',
+                unsafe_allow_html=True,
+            )    
+
+        # New conversation
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Conversation</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown('<div class="reset-btn">', unsafe_allow_html=True)
-        if st.button("↺  New Chat", use_container_width=True, key="reset_chat"):
+        if st.button("↺  New Conversation", use_container_width=True, key="reset_chat"):
             st.session_state.messages        = []
             st.session_state.sources_history = []
             bot.reset_memory()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-    with r2:
-        chunk_count = bot.vectorstore._collection.count()
-        p           = price_data
-        mcap        = p.get("market_cap_usd")
+
+        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+
+        # Settings toggles
         st.markdown(
-            '<div class="stats-row">'
-            '<div class="stat-pill"><div class="stat-pill-dot"></div><strong>' + str(chunk_count) + '</strong>&nbsp;chunks</div>'
-            + ('<div class="stat-pill"><div class="stat-pill-dot"></div>$PROS&nbsp;<strong>$' + f'{p["price_usd"]:.4f}' + '</strong></div>' if p.get("price_usd") else '')
-            + '<div class="stat-pill"><div class="stat-pill-dot"></div>Mode&nbsp;<strong>' + ("Docs+General" if st.session_state.chat_mode=="general" else "Docs only") + '</strong></div>'
-            '</div>',
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Settings</div>',
+            unsafe_allow_html=True,
+        )
+        st.session_state.show_sources = st.toggle("📎 Show sources", value=st.session_state.show_sources)
+        st.session_state.voice_reply  = st.toggle("🔊 Read aloud",   value=st.session_state.voice_reply)
+
+        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+
+        # Knowledge base stats
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Knowledge Base</div>'
+            '<div style="font-size:13px;color:#42475A;margin-bottom:0.6rem;">'
+            '<strong style="color:#0C0C1A;">' + str(chunk_count) + '</strong> document chunks</div>',
             unsafe_allow_html=True,
         )
 
-    # ── Sidebar example prompts ─────────────────
-    with st.sidebar:
-        st.markdown("**Ask OctoBot**")
-        for q in ["What is Pharos?","What are SPNs?","How does Native Restaking work?",
-                  "What is the PROS token?","How do I build on Pharos?","What is RWA?"]:
+        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+
+        # Example prompts
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Ask OctoBot</div>',
+            unsafe_allow_html=True,
+        )
+        for q in ["What is Pharos?", "What are SPNs?", "How does Native Restaking work?",
+                  "What is the PROS token?", "How do I build on Pharos?", "What is RWA?"]:
             if st.button(q, key="sb_" + q, use_container_width=True):
-                st.session_state["pending_q"] = q; st.rerun()
+                st.session_state["pending_q"] = q
+                st.rerun()
+
+    # ── Mode toggle — big, visible, above chat ──────────────────
+    current_mode = st.session_state.chat_mode
+    is_general   = current_mode == "general"
+    mode_desc    = (
+        "🌐 Docs + General — answers from docs, falls back to Gemini for anything else"
+        if is_general else
+        "📚 Docs Only — answers strictly from verified Pharos documentation"
+    )
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;'
+        'background:#F0F1F8;border:1.5px solid #D0D3E0;border-radius:10px;padding:0.65rem 1rem;">'
+        '<span style="font-size:13px;font-weight:800;color:#0C0C1A;white-space:nowrap;">Mode:</span>'
+        '<span style="font-size:12px;font-weight:500;color:#42475A;">' + mode_desc + '</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    mc1, mc2, mc3 = st.columns([1, 1, 4])
+    with mc1:
+        if st.button("📚 Docs Only",      key="mode_docs",    use_container_width=True):
+            st.session_state.chat_mode = "docs";    st.rerun()
+    with mc2:
+        if st.button("🌐 Docs + General", key="mode_general", use_container_width=True):
+            st.session_state.chat_mode = "general"; st.rerun()
 
     # ── Welcome card ───────────────────────────
     if not st.session_state.messages:
@@ -1094,7 +1240,7 @@ elif st.session_state.page == "chat":
 
     # ── Chat input + answer ────────────────────
     pending    = st.session_state.pop("pending_q", None)
-    user_input = st.chat_input("Ask OctoBot about Pharos…")
+    user_input = st.chat_input("Ask anything about Pharos — any language 🌐")
     question   = pending or user_input
 
     if question:
@@ -1116,8 +1262,12 @@ elif st.session_state.page == "chat":
                         fb_answer = fallback_llm.invoke([
                             HumanMessage(content=
                                 "You are OctoBot, a helpful AI assistant for the Pharos blockchain community. "
-                                "Answer this question helpfully and accurately. If relevant, note that Pharos is a "
-                                "Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n\n"
+                                "Answer this question helpfully and accurately. "
+                                "If relevant, mention that Pharos is a Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n"
+                                "CRITICAL: Always respond in the SAME language the user used. "
+                                "If they wrote in Hindi, respond in Hindi. "
+                                "If they wrote in Hinglish (mixed Hindi-English), respond in Hinglish. "
+                                "Keep technical terms (PROS, SPN, RWA, L1, EVM) in their original English form.\n\n"
                                 "Question: " + question
                             )
                         ])
@@ -1378,4 +1528,21 @@ elif st.session_state.page == "trade":
         '⚠ Trading involves risk. Prices are indicative. Always verify on the exchange before trading. '
         'OctoBot is not a financial advisor.</div>',
         unsafe_allow_html=True,
+        
     )
+    # ── Footer ────────────────────────────────────────────────────
+st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
+st.markdown(
+    '<div style="text-align:center;padding:1rem 0 0.5rem 0;'
+    'border-top:1px solid #D0D3E0;margin-top:1rem;">'
+    '<span style="font-size:12px;color:#7A7F96;">Built by&nbsp;</span>'
+    '<strong style="font-size:12px;color:#0C0C1A;">Echo</strong>'
+    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
+    '<span style="font-size:12px;color:#7A7F96;">Discord:&nbsp;</span>'
+    '<strong style="font-size:12px;color:#0C0C1A;">@echoplex99</strong>'
+    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
+    '<a href="https://x.com/isharik99" target="_blank" '
+    'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">@isharik99 on X ↗</a>'
+    '</div>',
+    unsafe_allow_html=True,
+)
