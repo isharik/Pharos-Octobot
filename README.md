@@ -1,358 +1,300 @@
+
 <div align="center">
 
-<img src="pharos_logo.jpg" width="80" alt="Pharos Logo" />
+<img src="pharos_logo.jpg" width="90" alt="Pharos Logo" />
 
-# 🐙 OctoBot — Pharos Knowledge Skill
+# 🐙 OctoBot — The AI Knowledge & Experience Layer for Pharos
 
-**A reusable AI Skill that answers any question about the Pharos Network**
-**using verified documentation. Zero hallucination. Built for the Pharos AI Agent Carnival.**
+### Your AI companion for the Pharos ecosystem
 
-## Check it out here : https://pharos-octobot-by-echo.streamlit.app/
-( if it doesn’t work maybe the requests quota is expired , try importing the repo and use your own api key to test ) 😃
+Documentation • Live Data • Voice • Multilingual • Web Experience
+
+**Built for the Pharos AI Agent Carnival ⚓**
+
+
+## Demo before updates:
+
+https://www.youtube.com/watch?v=gIsav6XI6HE
+
+## 🌐 New Live Demo after updates
+
+https://x.com/isharik99/status/2066777239627387353?s=20
+
+## Check out the Dora Hacks page for more details on updates :
+
+https://dorahacks.io/buidl/44453
+
+## Public Link (Always under Development)
+https://pharos-octobot-by-echo.streamlit.app/
+
+*(If unavailable, the request quota may have expired. You can clone the repo and run locally with your own API key.)*
 
 [![Pharos](https://img.shields.io/badge/Built%20on-Pharos%20Network-1A1AFF?style=for-the-badge)](https://pharos.xyz)
 [![Hackathon](https://img.shields.io/badge/Pharos-AI%20Agent%20Carnival-blueviolet?style=for-the-badge)](https://dorahacks.io/hackathon/pharos-phase1)
-[![FastAPI](https://img.shields.io/badge/Skill%20API-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
 [![LangChain](https://img.shields.io/badge/RAG-LangChain-1C3C3C?style=for-the-badge)](https://langchain.com)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red?style=for-the-badge)](https://streamlit.io)
 
 </div>
 
 ---
 
-## What is OctoBot?
+# ✨ What is OctoBot?
 
-OctoBot is a **Pharos Knowledge Skill** — a reusable AI module built for the
-Pharos AI Agent Carnival. Any Agent deployed on Pharos can call it with a single
-POST request and receive a structured, source-cited answer about the Pharos Network in almost any language.
+OctoBot started as a **Pharos Knowledge Skill** and evolved into a **complete AI experience for the Pharos ecosystem**.
 
-It is powered by a RAG (Retrieval Augmented Generation) pipeline that crawls
-5 verified Pharos sources, stores them as vector embeddings in ChromaDB, and uses
-Gemini (Google AI) to answer questions strictly from that knowledge base.
+Instead of acting like a traditional docs chatbot, OctoBot combines:
 
-> **No hallucination. No guessing. If the answer isn't in the docs, OctoBot says so.**
->
-> https://youtu.be/gIsav6XI6HE?si=wWhH1JpkjOefvJ20 (VIDEO GUIDE)
->
-## Why Octobot ?
+📚 Verified documentation retrieval
+🌐 Live ecosystem information
+💹 Real time token data
+🗣️ Voice interactions
+🌎 Multilingual conversations
+🧠 Intelligent model fallback
+🎨 Modern website experience
+⚡ Agent-ready APIs
 
-While information about Pharos can technically be retrieved through general AI tools, OctoBot was designed with a different purpose in mind to act as a dedicated, context-aware AI layer for the Pharos ecosystem itself. Instead of returning broad or generic internet responses, OctoBot combines verified Pharos documentation with live ecosystem data and evolving capabilities to deliver focused, reliable, and ecosystem-native answers.
-
-The vision is for OctoBot to go beyond being a demo project and become an embedded AI assistant across Pharos experiences  helping first-time visitors understand the ecosystem instantly, guiding developers through documentation, surfacing live data when relevant, and eventually acting as an intelligent onchain companion. Development is ongoing, feedback-driven, and built with the goal of creating an AI experience that feels native to Pharos rather than external to it.
-
+Any AI Agent deployed on Pharos can integrate OctoBot using a single API request and receive structured, context-aware responses.
 
 ---
 
-## Live Demo
+# 🚀 Why OctoBot?
 
-| Interface | URL | Description |
-|---|---|---|
-| 💬 Chat UI | Streamlit app | Full visual chat interface |
-| ⚡ Skill API | `POST /query` | For Agents to call programmatically |
-| 📖 Swagger UI | `/docs` | Interactive API tester in browser |
-| ❤️ Health Check | `GET /` | Confirms Skill is online |
+General AI can answer questions.
+
+OctoBot was designed to answer **Pharos questions with Pharos context.**
+
+It combines:
+
+* Verified documentation
+* Real ecosystem updates
+* Dynamic market information
+* AI powered assistance
+* Better onboarding for new users
+* Developer friendly integrations
+
+The long term goal is to become an **embedded AI layer across the Pharos ecosystem.**
 
 ---
 
-## How any Agent uses this Skill
+# 🖥️ Website Experience (NEW)
 
-**One POST request. Structured response. That's it.**
+OctoBot is no longer just chat.
 
+The app now includes a redesigned website experience while keeping the original Pharos identity.
+
+### Homepage
+
+* Minimal welcome experience
+* Cleaner structure
+* Better onboarding
+* Animated live UI feeling
+* Improved hero section
+
+### Added Sections
+
+* 💬 Chat with OctoBot
+* 📖 Direct Docs Access
+* 📢 Campaigns Section
+* 📰 Updates Section
+* 💹 Trade Pharos Area
+* ⚡ Featured Actions
+* 📊 Live Token Dashboard
+
+### UI Improvements
+
+* Improved visual hierarchy
+* Better spacing and layouts
+* Cleaner cards
+* Responsive structure
+* More polished interactions
+
+---
+
+# 🧠 AI Features
+
+## Documentation Intelligence
+
+Ask questions directly from verified Pharos sources.
+
+## Model Fallback
+
+If information isn't available in documentation, OctoBot intelligently responds instead of failing.
+
+## Multilingual + Voice Support
+
+Ask in your own language.
+
+Examples:
+
+```text
+Hindi → PROS ka price kya hai
+Spanish → ¿Qué son las SPNs?
+Japanese → Pharosとは何ですか？
+Arabic → ما هو فاروس؟
 ```
-POST /query
-Content-Type: application/json
 
-{
-  "question": "What are Special Processing Networks?"
-}
-```
-
-**Response:**
-```json
-{
-  "answer": "SPNs (Special Processing Networks) are specialized execution environments within Pharos that handle specific computation types...",
-  "sources": [
-    {
-      "url": "https://docs.pharos.xyz/spns",
-      "title": "Special Processing Networks — Pharos Docs"
-    }
-  ],
-  "found_in_docs": true
-}
-```
-
-If the answer is not in the documentation:
-```json
-{
-  "answer": "I could not find that information in the Pharos documentation.",
-  "sources": [],
-  "found_in_docs": false
-}
-```
+Replies preserve technical terms while adapting language naturally.
 
 ---
 
-## Skill API Endpoints
+# 📈 Live Ecosystem Data
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Health check — returns status and chunk count |
-| `POST` | `/query` | Main Skill endpoint — ask any Pharos question |
-| `GET` | `/info` | Skill metadata for Agent discovery |
-| `GET` | `/docs` | Interactive Swagger UI to test live |
+## PROS Token Integration
 
----
+Powered via CoinGecko.
 
-## Knowledge Sources
+Features:
 
-OctoBot is trained on **5 verified Pharos sources. More sources will be added as developments are made**:
+* Live Price
+* Market Cap
+* Volume
+* Auto refresh (5 min)
+* Dedicated API endpoint
+* Table visualization in Streamlit
+* Token responses directly inside chat
 
-| # | Source | Type | Coverage |
-|---|---|---|---|
-| 1 | [docs.pharos.xyz](https://docs.pharos.xyz) | Full site crawl | Official documentation |
-| 2 | [buildonpharos.com](https://www.buildonpharos.com) | Full site crawl | Developer hub, grants, hackathons |
-| 3 | [github.com/PharosNetwork](https://github.com/PharosNetwork) | Targeted fetch | READMEs, technical specs |
-| 4 | Medium — 7 articles | Targeted fetch | Deep-dive technical analysis |
-| 5 | Bitget Academy | Targeted fetch | Architecture and token explainers |
+Example:
 
----
-
-## Tech Stack
-
-| Layer | Technology | Purpose |
-|---|---|---|
-| LLM | Gemini (Google AI Studio) | Generates answers from retrieved context |
-| Embeddings | Google Generative AI Embeddings | Converts text to vectors |
-| Vector DB | ChromaDB | Stores and searches document embeddings |
-| RAG Framework | LangChain | Orchestrates retrieval + generation pipeline |
-| Skill API | FastAPI | Exposes OctoBot as a callable Skill |
-| Chat UI | Streamlit | Pharos-branded visual chat interface |
-| Crawler | Python + BeautifulSoup | Crawls 5 documentation sources |
-| Language | Python 3.11+ | Core language |
-
----
-
-## Project Structure
-
-```
-octobot/
-│
-├── skill_api.py          ← Skill API (hackathon submission entry point)
-├── skill.json            ← Skill metadata for Agent discovery
-├── octobot.py            ← Core RAG engine (retrieval + generation)
-├── app.py                ← Streamlit chat UI (Pharos-branded)
-│
-├── crawl_docs.py         ← Multi-source documentation crawler (5 sources)
-├── build_vectorstore.py  ← Generates embeddings + builds ChromaDB
-│
-├── test_connection.py    ← Tests Gemini API connection
-├── test_retrieval.py     ← Tests ChromaDB retrieval pipeline
-│
-├── requirements.txt      ← All Python dependencies
-├── skill.json            ← Skill metadata
-├── .env                  ← API keys (never commit this file)
-│
-├── raw_docs/             ← Crawled documentation text files (auto-generated)
-├── chroma_db/            ← ChromaDB vector store (auto-generated)
-└── pharos_logo.jpg       ← Pharos logo (used in the UI hero section)
+```bash
+GET /pros-price
 ```
 
 ---
 
-## Run it Yourself — Step by Step
+# 🔍 Knowledge Sources
 
-### Prerequisites
-- Python 3.11 or higher installed
-- A Google AI Studio API key (free at [aistudio.google.com](https://aistudio.google.com))
-- Git installed
+OctoBot currently retrieves from verified sources:
+
+| Source            | Coverage               |
+| ----------------- | ---------------------- |
+| docs.pharos.xyz   | Official Documentation |
+| buildonpharos.com | Developer Resources    |
+| Pharos GitHub     | Technical References   |
+| Medium Articles   | Deep Technical Content |
+| Bitget Academy    | Ecosystem Explanations |
+
+More sources continue to be crawled and indexed.
 
 ---
 
-### Step 1 — Clone the repo
+# ⚙️ Tech Stack
+
+| Layer      | Technology           |
+| ---------- | -------------------- |
+| LLM        | Gemini               |
+| Embeddings | Google Generative AI |
+| Vector DB  | ChromaDB             |
+| Framework  | LangChain            |
+| Backend    | FastAPI              |
+| Frontend   | Streamlit            |
+| Crawling   | BeautifulSoup        |
+| Language   | Python 3.11+         |
+
+---
+
+# 📌 Recent Updates
+
+## ✅ 8 June 2026
+
+* Added Skill Test feature
+* Expanded data crawling
+* Website improvements
+
+## ✅ 12 June 2026
+
+* Added live PROS integration
+* Added dedicated token endpoint
+* Added Streamlit token support
+
+## ✅ 13 June 2026
+
+* Added real time price tables
+* Added market data visualization
+
+## ✅ 14 June 2026
+
+* Added multilingual support
+* Added voice interactions
+* Added automatic response translation
+
+## ✅ Latest Update
+
+* Full homepage redesign
+* New website sections
+* Campaigns integration
+* Updates center
+* Trade Pharos section
+* Better navigation
+* Improved responsiveness
+* Cleaner layouts
+* Enhanced AI routing
+* More polished experience
+
+---
+
+# 🧩 API Endpoints
+
+| Method | Endpoint      | Purpose        |
+| ------ | ------------- | -------------- |
+| GET    | `/`           | Health Check   |
+| POST   | `/query`      | Ask OctoBot    |
+| GET    | `/info`       | Skill Metadata |
+| GET    | `/docs`       | Swagger UI     |
+| GET    | `/pros-price` | Live PROS Data |
+
+---
+
+# 🛠️ Run Locally
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/octobot.git
-cd octobot
-```
 
-### Step 2 — Create a virtual environment
-```bash
+cd octobot
+
 python -m venv venv
 
-# Windows:
+# Windows
 venv\Scripts\activate
 
-# Mac/Linux:
+# Mac/Linux
 source venv/bin/activate
-```
 
-### Step 3 — Install all dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### Step 4 — Add your API key
-Create a `.env` file in the `octobot` folder:
-```
-GOOGLE_API_KEY=your-google-ai-studio-key-here
+Create `.env`
+
+```env
+GOOGLE_API_KEY=your_key_here
 ```
 
-### Step 5 — Crawl the Pharos documentation
+Run:
+
 ```bash
 python crawl_docs.py
-```
-Expected output: 40+ pages collected from 5 sources, saved to `raw_docs/`
 
-### Step 6 — Build the vector store
-```bash
 python build_vectorstore.py
-```
-Expected output: 300+ chunks embedded and stored in `chroma_db/`
 
-### Step 7A — Start the Skill API
-```bash
-uvicorn skill_api:app --host 0.0.0.0 --port 8000
-```
+uvicorn skill_api:app --reload
 
-Then open in your browser:
-- **Interactive tester:** http://localhost:8000/docs
-- **Health check:** http://localhost:8000/
-- **Skill info:** http://localhost:8000/info
-
-**Test the Skill from terminal:**
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d "{\"question\": \"What is Pharos Network?\"}"
-```
-
-### Step 7B — Start the Chat UI (optional)
-```bash
 streamlit run app.py
 ```
-Opens at: http://localhost:8501
-
-
-
-## Check Price on Octobot Using terminal :
-
-Enter this command into the terminal 
-
-python -c "
-import requests
-r = requests.get('https://api.coingecko.com/api/v3/simple/price?ids=pharos-network&vs_currencies=usd&include_market_cap=true&include_24hr_change=true&include_24hr_vol=true')
-print(r.json())
-"
-
-Also on the streamlit app it shows the updated price via Coingecko's api which refreshes every 5 minutes :)
 
 ---
 
-## Why This Skill Matters for the Pharos Ecosystem
+# 🎯 Vision
 
-Every Agent built on Pharos will eventually need to answer user questions about
-the protocol — SPNs, staking, RWA, consensus, how to build on Pharos.
+OctoBot is becoming more than a knowledge skill.
 
-Instead of every Agent building its own documentation reader from scratch, they
-call this one reusable Skill. It becomes the **foundational knowledge layer** for
-the entire Pharos Agent ecosystem — exactly what the hackathon is asking for.
-
-> *"Skills become infrastructure that lives on-chain permanently."*
-> — Pharos AI Agent Carnival
+The goal is to create the **AI front page of Pharos** where users can explore documentation, discover updates, access live data, and interact with the ecosystem in one place.
 
 ---
-
-## Hackathon Submission
-
-| Field | Detail |
-|---|---|
-| Event | Pharos AI Agent Carnival — Phase 1 Skill Hackathon |
-| Category | Data Fetch / Knowledge Base |
-| Submission deadline | June 15, 2025 |
-| Platform | [DoraHacks](https://dorahacks.io/hackathon/pharos-phase1) |
-| Check out my submission and do Upvote :)| https://dorahacks.io/buidl/44453 |
----
-
-## .gitignore
-
-Make sure these are in your `.gitignore` before pushing to GitHub:
-```
-.env
-chroma_db/
-raw_docs/
-venv/
-__pycache__/
-*.pyc
-```
-
----
-## UPDATES AS OF 8th June 2026 :
-
-SKILL TEST FEATURE for Phase 1
-https://x.com/isharik99/status/2063890265786417484?s=20
-
-
-Website Changes
-https://x.com/isharik99/status/2063638306823311561?s=20
-
-New Data Crawled in (Frequently to keep the model Updated)
-https://x.com/isharik99/status/2063145079808872720?s=20
-
-Early Video guide in first Stages (Do check it out )
-https://x.com/isharik99/status/2061857340744487276?s=20
-
-## Update As of 12th June 2026
-
-Update DONE
-Finished working on bringing live PROS token data to OctoBot through CoinGecko integration.
-
-Features: • Real-time PROS price and market cap tracking • Dedicated /pros-price API endpoint • Automatic token data responses inside OctoBot • Streamlit UI integration so users can check live token data directly from the web app
-
-The goal is to combine Pharos documentation with live ecosystem data in a single experience.
-
-Pushed on Github go check it out
-
-Video link : https://x.com/isharik99/status/2065704363528802411?s=20
-As always, the project remains under active development and community feedback is highly appreciated.
-
-## Update As of 13th JUNE
-
-Octobot can now provide real time $PROS price chart , MC , Vol and more with 5 min changes in form of a table
-
-## Update As of 14th June 2026:
-
-OctoBot just went multilingual with Voice Support🐙
-https://x.com/isharik99/status/2066173055475536262?s=20
-You can now ask about @pharos_network in any language and it replies in the same language you used
-The docs are in English. OctoBot translates on the fly while keeping technical terms (SPN, PROS, RWA, L1-Core) intact
-
-🧪 TRY IT YOURSELF
-ask in Hindi → "PROS ka price kya hai?"
-ask in Spanish → "¿Qué son las SPNs?"
-ask in Japanese → "Pharosとは何ですか？"
-ask in Arabic, French, Hinglish, whatever —
-OctoBot replies right back in that language with live data + sourced answers from the docs 🫡
-
-## As always, the project remains under active development and community feedback is highly appreciated.
-
-
----
-
-## Upcoming Features :
-1-Planning to implement Fetching the latest Pharos news from CoinGecko's free news endpoint and show a "latest updates" panel in the sidebar. Users see what's happening with Pharos right now, not just static docs.
-CoinGecko has a free /news endpoint filtered by coin ID. No API key. One fetch call. Adds live context that makes OctoBot feel like a real-time assistant.
-
-2- A visual interactive diagram in Streamlit showing the full Pharos ecosystem like L1-Core, SPNs, Native Restaking, RWA layer, DeFi protocols with clickable nodes that trigger OctoBot questions about each component.
-Turns OctoBot from a text chatbot into a visual knowledge explorer. It is the kind of thing that gets screenshots shared on X and noticed by the Pharos team.
-Planning to Develop if selected for Phase 2
-
----
-
-## License
-
-MIT — free to use, fork, and build upon.
 
 <div align="center">
-Built with 🐙 for the Pharos community<br>
-<a href="https://pharos.xyz">pharos.xyz</a> ·
-<a href="https://docs.pharos.xyz">docs.pharos.xyz</a> ·
-<a href="https://dorahacks.io/hackathon/pharos-phase1">DoraHacks</a>
+
+Built with 🐙 for the Pharos community
+
+⭐ Star the repo if you enjoyed it
+
 </div>
