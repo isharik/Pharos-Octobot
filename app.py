@@ -1425,9 +1425,11 @@ elif st.session_state.page == "updates":
         )
         fallback_updates = [
             {"title": "AI Agent Carnival Phase 1 is LIVE", "desc": "150,000 PROS prize pool · Submit Skills by June 15 on DoraHacks", "link": "https://dorahacks.io/hackathon/pharos-phase1"},
-            {"title": "Pharos raises $44M Series A", "desc": "Led by top-tier VCs. Building institutional-grade RWA infrastructure on-chain.", "link": PHAROS_MAIN_URL},
+            {"title": "The Builders Harbor on Pharos has been upgraded ", "desc": "new tools, templates, and technical resources .", "link": "https://www.pharos.xyz/devhub"},
             {"title": "USDC + CCTP integration live", "desc": "Pharos integrates Circle's USDC and CCTP for real-time RealFi settlement.", "link": PHAROS_MAIN_URL},
-            {"title": "Expedition Season 2 ongoing", "desc": "Complete daily testnet tasks to earn points toward the Season 2 snapshot.", "link": "https://testnet.pharosnetwork.xyz"},
+            {"title": "Expedition Season 2 ongoing", "desc": "Particpate in the Ecosystem.", "link": "https://discord.gg/pharos"},
+            {"title": "$PROS now powers AI payments","desc": "Use $PROS and USDC to access premier AI models.", "link": "https://x.com/pharos_network/status/2066517384928834003"},
+            {"title": "Pharos x XLayer & OKX ","desc": "Fellow partners in bringing World Cup outcomes onchain.", "link": "https://x.com/pharos_network/status/2065362220851335650"},
         ]
         for u in fallback_updates:
             st.markdown(
