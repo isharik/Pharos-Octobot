@@ -127,9 +127,12 @@ Ask questions directly from verified Pharos sources and LLM Models.
 
 If information isn't available in documentation, OctoBot intelligently responds instead of failing.
 
-## Multilingual + Voice Support
+## Multilingual + Read answers Support
 
 Ask in your own language.
+
+Chat input placeholder updates too  when Hindi is selected it shows "Ask OctoBot in Hindi 🌐" so users know the language is active.
+English stays clean when English is selected, no prefix is added and the fallback prompt uses standard English instructions, so there's zero overhead for the default case.
 
 Examples:
 
@@ -167,6 +170,15 @@ GET /pros-price
 ```
 
 ---
+
+## Ecosystem Tab for Easy Access to Dapps :
+
+# Ecosystem DApps page  new nav tab
+ "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
+      Each with category, description, emoji, and direct link. Category filter pills at the top.
+
+
+
 
 # 🔍 Knowledge Sources other than LLM responses
 
