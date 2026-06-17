@@ -183,6 +183,83 @@ Features:
  <img width="1158" height="678" alt="image" src="https://github.com/user-attachments/assets/f91fd1a4-5170-4dec-a882-bfd210be9e00" />
 
 
+## How to Test it ?
+
+Option 1 — Interactive Swagger UI (easiest, no code needed)
+Start the Skill API:
+uvicorn skill_api:app --host 0.0.0.0 --port 8000
+Open in your browser:
+http://localhost:8000/docs
+
+Click POST /query → Try it out → Execute
+Type any question about Pharos in the request body:
+{
+  "question": "What are Special Processing Networks?"
+}
+Hit Execute and see the full structured response instantly.
+Option 2 — Call the Skill from Terminal
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"What is Native Restaking on Pharos?\"}"
+Response:
+
+{
+  "answer": "Native Restaking on Pharos allows validators to...",
+  "sources": [
+    {
+      "url": "https://docs.pharos.xyz/restaking",
+      "title": "Native Restaking — Pharos Docs"
+    }
+  ],
+  "found_in_docs": true
+}
+
+# Option 3 — Use the Chat UI (Recommended)
+streamlit run app.py
+
+Opens a full Pharos-branded chat interface at http://localhost:8501 with:
+
+Logo hero section with animated glow effects
+Dark Pharos blue theme matching the brand
+Source citations shown for every answer
+Example questions in the sidebar
+Conversation memory
+
+# Option 4 — Test the Health Check
+GET http://localhost:8000/
+Returns:
+
+{
+  "skill": "pharos-knowledge",
+  "status": "online",
+  "knowledge_chunks": 350,
+  "model": "gemini"
+}
+
+# Option 5 — Discover Skill Metadata
+
+GET http://localhost:8000/info
+Returns the full Skill spec — input/output schema, tags, category — for Agent discovery and integration.
+
+Skill API Reference
+MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answerGET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
+
+Request body for POST /query
+{
+  "question": "string — any question about Pharos Network"
+}
+Response schema
+{
+  "answer": "string — answer extracted from documentation",
+  "sources": [
+    {
+      "url": "string — source page URL",
+      "title": "string — source page title"
+    }
+  ],
+  "found_in_docs": "boolean — true if answer was found"
+}
+
 Example:
 
 ```bash
