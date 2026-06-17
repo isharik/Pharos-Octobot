@@ -118,16 +118,16 @@ PHAROS_DAPPS = [
         "name":  "AquaFlux",
         "cat":   ["RWAfi"],
         "desc":  "RWA liquidity protocol with a Tri-Token model (P/C/S) — unlock structured real-world asset derivatives on-chain.",
-        "url":   "https://aquaflux.io",
-        "logo":  "https://www.google.com/s2/favicons?domain=aquaflux.io&sz=64",
+        "url":   "https://www.aquaflux.pro/",
+        "logo":  "https://www.google.com/s2/favicons?domain=aquaflux.pro&sz=64",
         "bg":    "#E8F8FF",
     },
     {
         "name":  "Asseto",
         "cat":   ["RWA", "RWAfi"],
         "desc":  "Top-tier RWA tokenization technology service platform, bridging traditional finance and DeFi for on-chain asset issuance.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "url":   "https://www.asseto.finance/",
+        "logo":  "https://www.google.com/s2/favicons?domain=asseto.finance&sz=64",
         "bg":    "#FFF4E8",
     },
     {
@@ -142,42 +142,43 @@ PHAROS_DAPPS = [
         "name":  "Brokex",
         "cat":   ["Trade", "CFD"],
         "desc":  "First fully on-chain CFD exchange (CLOB) on Pharos. Trade forex, gold, and derivatives powered by Supra Oracle.",
-        "url":   "https://www.brokex.io",
-        "logo":  "https://www.google.com/s2/favicons?domain=brokex.io&sz=64",
+        "url":   "https://brokex.trade/",
+        "logo":  "https://www.google.com/s2/favicons?domain=brokex.trade&sz=64",
+        "bg":    "#F8E8FF",
+    },
+    {
+        "name":  "ZAN",
+        "cat":   ["RPC", "Infra", "Tools"],
+        "desc":  "A Suite of Plug-And-Play Tools and Services for Web3 Endeavors.",
+        "url":   "https://zan.top/",
+        "logo":  "https://www.google.com/s2/favicons?domain=zan.top&sz=64",
         "bg":    "#F8E8FF",
     },
     {
         "name":  "OpenFi",
         "cat":   ["Lend & Borrow"],
         "desc":  "RWA-backed lending protocol supporting tokenized US stocks, gold, and money market funds as collateral for stablecoin liquidity.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "url":   "https://app.open-fi.xyz/",
+        "logo":  "https://www.google.com/s2/favicons?domain=app.open-fi.xyz&sz=64",
         "bg":    "#E8FFF4",
     },
     {
         "name":  "Zenith",
         "cat":   ["Lend & Borrow"],
         "desc":  "Yield-optimized lending and borrowing platform with institutional-grade risk management built natively on Pharos.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "url":   "https://testnet.zenithfinance.xyz/home",
+        "logo":  "https://www.google.com/s2/favicons?domain=zenithfinance.xyz&sz=64",
         "bg":    "#FFFAE8",
     },
     {
         "name":  "Fiamma",
         "cat":   ["Bridge"],
         "desc":  "Trust-minimised Bitcoin bridge leveraging BitVM2 and zero-knowledge proofs. Move BTC onto Pharos securely on-chain.",
-        "url":   "https://www.fiamma.network",
-        "logo":  "https://www.google.com/s2/favicons?domain=fiamma.network&sz=64",
+        "url":   "https://www.fiammalabs.io/",
+        "logo":  "https://www.google.com/s2/favicons?domain=fiammalabs.io&sz=64",
         "bg":    "#FFE8E8",
     },
-    {
-        "name":  "Gotchipus",
-        "cat":   ["NFT", "GameFi"],
-        "desc":  "NFT gaming platform on Pharos. Collect limited-edition NFTs, complete tasks, and earn early adopter badges.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
-        "bg":    "#F0E8FF",
-    },
+    
     {
         "name":  "Buzzing Club",
         "cat":   ["Prediction Market"],
@@ -190,24 +191,24 @@ PHAROS_DAPPS = [
         "name":  "PNS",
         "cat":   ["Identity", "Wallet"],
         "desc":  "Pharos Name Service — register human-readable wallet identities (yourname.pharos) on the Pharos network.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "url":   "https://test.pharosname.com/",
+        "logo":  "https://www.google.com/s2/favicons?domain=test.pharosname.com&sz=64",
         "bg":    "#E8F8F0",
     },
     {
         "name":  "Spout Finance",
         "cat":   ["RWAfi"],
         "desc":  "Transforms collateral in DeFi using predictable real-world yield-bearing assets with seamless redemption mechanisms.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "url":   "https://www.spout.finance/",
+        "logo":  "https://www.google.com/s2/favicons?domain=spout.finance&sz=64",
         "bg":    "#E8F0F8",
     },
     {
-        "name":  "Grandline",
-        "cat":   ["DeFi"],
-        "desc":  "Multi-protocol DeFi suite built natively for the Pharos ecosystem — swaps, liquidity, and yield in one platform.",
-        "url":   "https://testnet.pharosnetwork.xyz",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "name":  "TopNod",
+        "cat":   ["RWAfi"],
+        "desc":  "A simple, secure self-custody wallet for managing RWA and other digital assets.",
+        "url":   "https://topnod.com/",
+        "logo":  "https://www.google.com/s2/favicons?domain=topnod.com&sz=64",
         "bg":    "#F8F0E8",
     },
 ]
@@ -663,9 +664,9 @@ st.markdown("""
     --light:   #6B8CFF;
     --glow:    rgba(26,26,255,0.15);
     --subtle:  rgba(26,26,255,0.06);
-    --bg:      #D8DADE;
-    --bg1:     #F4F5F8;
-    --bg2:     #ECEEF4;
+    --bg:   #D7DCE6;
+    --bg1:  #F1F4F9;
+    --bg2:  #E7ECF5;
     --glass:   rgba(244,245,248,0.82);
     --border:  #D0D3E0;
     --border2: #C4C8D8;
@@ -1796,7 +1797,7 @@ elif st.session_state.page == "chat":
             '<span class="tag">$PROS Token</span><span class="tag">🌐 Multilingual</span>'
             '</div></div>'
 
-            '<p class="notice">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
+            '<p class="notice" style="color:#000000; font-weight:700;">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
              'Run OctoBot locally with your own API key to continue.</p>'
 
             '</div>',
@@ -2267,7 +2268,7 @@ elif st.session_state.page == "ecosystem":
     for dapp in filtered_dapps:
         tags_html = "".join(
             f'<span style="display:inline-block;font-size:11px;font-weight:500;color:#42475A;'
-            f'background:#F2F3F8;border:1px solid #E3E5EA;border-radius:6px;'
+            f'background:#E9EEFF;border:1px solid #E9EEFF;border-radius:6px;'
             f'padding:3px 9px;margin-right:4px;">{t}</span>'
             for t in dapp["cat"]
         )
