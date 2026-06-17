@@ -1957,9 +1957,20 @@ elif st.session_state.page == "chat":
                         chart_key="chat_chart_" + msg_idx
                     )
 
-            # ── Sources as slide-in sidebar ───────────
+            # ── Sources ───────────────────────────────
             if sources:
-                render_source_sidebar(sources, key=msg_idx)
+                with st.expander(f"📚 Sources · {len(sources)}", expanded=False):
+                    for s in sources:
+                        st.markdown(
+                            f'<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
+                            f'border-radius:0 8px 8px 0;padding:0.6rem 0.9rem;margin-bottom:0.5rem;">'
+                            f'<div style="font-size:13px;font-weight:600;color:#0C0C1A;margin-bottom:3px;">{s["title"]}</div>'
+                            f'<a href="{s["url"]}" target="_blank" '
+                            f'style="font-size:11px;color:#1A1AFF;text-decoration:none;word-break:break-all;">'
+                            f'{s["url"]}</a>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
             # ── Follow-up questions ───────────────────
             if "fups_" + msg_idx not in st.session_state:
