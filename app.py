@@ -2225,10 +2225,10 @@ elif st.session_state.page == "trade":
             )
 
     st.markdown(
-        '<div style="font-size:11px;color:#9499A8;margin-top:0.8rem;padding:0.6rem 0.8rem;'
-        'background:#FFFFFF;border-radius:8px;border:1px solid #E3E5EA;">'
-        '⚠ Trading involves risk. Prices are indicative. Always verify on the exchange before trading. '
-        'OctoBot is not a financial advisor.</div>',
+        '<div style="font-size:13px;font-weight:600;color:#B94A48;margin-top:0.8rem;padding:0.6rem 0.8rem;'
+'background:#FFF6F6;border-radius:8px;border:1px solid #E8CACA;">'
+'⚠ Trading involves risk. Prices are indicative. Always verify on the exchange before trading. '
+'OctoBot is not a financial advisor.</div>',
         unsafe_allow_html=True,
         
     )
