@@ -85,7 +85,12 @@ Right now, every builder would have to build their own documentation reader from
 
 # 🖥️ Website Experience (NEW)
 
+
+
+
 OctoBot is no longer just chat.
+
+<img width="1400" height="811" alt="image" src="https://github.com/user-attachments/assets/cf7898a4-ed04-4dec-bc8e-c4033db33faa" />
 
 The app now includes a redesigned website experience while keeping the original Pharos identity.
 
@@ -100,7 +105,7 @@ The app now includes a redesigned website experience while keeping the original 
 ### Added Sections
 
 * 💬 Chat with OctoBot
-* 📖 Direct Docs Access
+* 📖 Ecosystem Dapps
 * 📢 Campaigns Section
 * 📰 Updates Section
 * 💹 Trade Pharos Area
@@ -125,7 +130,10 @@ Ask questions directly from verified Pharos sources and LLM Models.
 
 ## Model Fallback
 
-If information isn't available in documentation, OctoBot intelligently responds instead of failing.
+If information isn't available in documentation, OctoBot intelligently responds instead of failing. 
+
+<img width="1147" height="218" alt="image" src="https://github.com/user-attachments/assets/f7357531-eea0-4819-b364-5f98c30387ca" />
+
 
 ## Multilingual + Read answers Support
 
@@ -146,6 +154,15 @@ Arabic → ما هو فاروس؟
 Replies preserve technical terms while adapting language naturally.
 
 ---
+## Build Path Generator
+
+It:
+First tries the RAG pipeline with a relevant question about that goal
+Feeds the RAG context (if found) into a Gemini prompt asking for structured JSON: goal label, 4-5 numbered steps (title + description), 2-3 doc links, 2-3 action links
+Returns the parsed dict or falls back to the RAG text answer
+<img width="1195" height="300" alt="image" src="https://github.com/user-attachments/assets/167d961a-9a69-4559-b884-ce9403bc90a0" />
+
+
 
 # 📈 Live Ecosystem Data
 
@@ -163,6 +180,9 @@ Features:
 * Table visualization in Streamlit
 * Token responses directly inside chat
 
+ <img width="1158" height="678" alt="image" src="https://github.com/user-attachments/assets/f91fd1a4-5170-4dec-a882-bfd210be9e00" />
+
+
 Example:
 
 ```bash
@@ -177,6 +197,7 @@ GET /pros-price
  "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
       Each with category, description, emoji, and direct link. Category filter pills at the top.
 
+      <img width="1210" height="906" alt="image" src="https://github.com/user-attachments/assets/1f96b9ea-2232-41b6-beda-881dd19ae130" />
 
 
 
