@@ -12,13 +12,10 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 **Built for the Pharos AI Agent Carnival ⚓**
 
 
-## Demo before updates:
+## Updated Demo:
 
-https://www.youtube.com/watch?v=gIsav6XI6HE
 
-## 🌐 New Live Demo after updates
 
-https://x.com/isharik99/status/2066777239627387353?s=20
 
 ## Check out the Dora Hacks page for more details on updates :
 
@@ -188,19 +185,25 @@ Features:
 Option 1 — Interactive Swagger UI (easiest, no code needed)
 Start the Skill API:
 uvicorn skill_api:app --host 0.0.0.0 --port 8000
+
 Open in your browser:
 http://localhost:8000/docs
 
 Click POST /query → Try it out → Execute
 Type any question about Pharos in the request body:
+
 {
   "question": "What are Special Processing Networks?"
 }
+
 Hit Execute and see the full structured response instantly.
-Option 2 — Call the Skill from Terminal
+
+# Option 2 — Call the Skill from Terminal
+
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d "{\"question\": \"What is Native Restaking on Pharos?\"}"
+  
 Response:
 
 {
@@ -226,7 +229,9 @@ Example questions in the sidebar
 Conversation memory
 
 # Option 4 — Test the Health Check
+
 GET http://localhost:8000/
+
 Returns:
 
 {
@@ -239,10 +244,13 @@ Returns:
 # Option 5 — Discover Skill Metadata
 
 GET http://localhost:8000/info
+
 Returns the full Skill spec — input/output schema, tags, category — for Agent discovery and integration.
 
 Skill API Reference
-MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answerGET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
+MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answer
+
+GET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
 
 Request body for POST /query
 {
