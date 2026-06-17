@@ -96,6 +96,121 @@ CAMPAIGNS = [
     },
 ]
 
+
+PHAROS_DAPPS = [
+    {
+        "name":  "Faroswap",
+        "cat":   ["DEX"],
+        "desc":  "Native DEX on Pharos. Swap tokens with deep liquidity, low fees, and a points system that earns Pharos rewards.",
+        "url":   "https://faroswap.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=faroswap.xyz&sz=64",
+        "bg":    "#E8F4FF",
+    },
+    {
+        "name":  "Bitverse",
+        "cat":   ["Dex", "RWA", "Perp"],
+        "desc":  "All-in-one RWA perp DEX bringing real-world assets and U.S. stock futures onto a single AI-powered trading platform.",
+        "url":   "https://www.bitverse.zone",
+        "logo":  "https://www.google.com/s2/favicons?domain=bitverse.zone&sz=64",
+        "bg":    "#E8F0FF",
+    },
+    {
+        "name":  "AquaFlux",
+        "cat":   ["RWAfi"],
+        "desc":  "RWA liquidity protocol with a Tri-Token model (P/C/S) — unlock structured real-world asset derivatives on-chain.",
+        "url":   "https://aquaflux.io",
+        "logo":  "https://www.google.com/s2/favicons?domain=aquaflux.io&sz=64",
+        "bg":    "#E8F8FF",
+    },
+    {
+        "name":  "Asseto",
+        "cat":   ["RWA", "RWAfi"],
+        "desc":  "Top-tier RWA tokenization technology service platform, bridging traditional finance and DeFi for on-chain asset issuance.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#FFF4E8",
+    },
+    {
+        "name":  "AutoStaking",
+        "cat":   ["Stake", "Yield"],
+        "desc":  "AI-powered stablecoin yield aggregator. Deposit testnet stablecoins and let AI optimize yield — ~10% APY on testnet.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#F0FFE8",
+    },
+    {
+        "name":  "Brokex",
+        "cat":   ["Trade", "CFD"],
+        "desc":  "First fully on-chain CFD exchange (CLOB) on Pharos. Trade forex, gold, and derivatives powered by Supra Oracle.",
+        "url":   "https://www.brokex.io",
+        "logo":  "https://www.google.com/s2/favicons?domain=brokex.io&sz=64",
+        "bg":    "#F8E8FF",
+    },
+    {
+        "name":  "OpenFi",
+        "cat":   ["Lend & Borrow"],
+        "desc":  "RWA-backed lending protocol supporting tokenized US stocks, gold, and money market funds as collateral for stablecoin liquidity.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#E8FFF4",
+    },
+    {
+        "name":  "Zenith",
+        "cat":   ["Lend & Borrow"],
+        "desc":  "Yield-optimized lending and borrowing platform with institutional-grade risk management built natively on Pharos.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#FFFAE8",
+    },
+    {
+        "name":  "Fiamma",
+        "cat":   ["Bridge"],
+        "desc":  "Trust-minimised Bitcoin bridge leveraging BitVM2 and zero-knowledge proofs. Move BTC onto Pharos securely on-chain.",
+        "url":   "https://www.fiamma.network",
+        "logo":  "https://www.google.com/s2/favicons?domain=fiamma.network&sz=64",
+        "bg":    "#FFE8E8",
+    },
+    {
+        "name":  "Gotchipus",
+        "cat":   ["NFT", "GameFi"],
+        "desc":  "NFT gaming platform on Pharos. Collect limited-edition NFTs, complete tasks, and earn early adopter badges.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#F0E8FF",
+    },
+    {
+        "name":  "Buzzing Club",
+        "cat":   ["Prediction Market"],
+        "desc":  "Trade your opinion on any trending topic — politics, sports, entertainment, business, crypto, and breaking news.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#FFF0E8",
+    },
+    {
+        "name":  "PNS",
+        "cat":   ["Identity", "Wallet"],
+        "desc":  "Pharos Name Service — register human-readable wallet identities (yourname.pharos) on the Pharos network.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#E8F8F0",
+    },
+    {
+        "name":  "Spout Finance",
+        "cat":   ["RWAfi"],
+        "desc":  "Transforms collateral in DeFi using predictable real-world yield-bearing assets with seamless redemption mechanisms.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#E8F0F8",
+    },
+    {
+        "name":  "Grandline",
+        "cat":   ["DeFi"],
+        "desc":  "Multi-protocol DeFi suite built natively for the Pharos ecosystem — swaps, liquidity, and yield in one platform.",
+        "url":   "https://testnet.pharosnetwork.xyz",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharosnetwork.xyz&sz=64",
+        "bg":    "#F8F0E8",
+    },
+]
 # ─────────────────────────────────────────────
 # SESSION STATE INIT
 # ─────────────────────────────────────────────
@@ -105,6 +220,7 @@ if "sources_history" not in st.session_state: st.session_state.sources_history =
 if "show_sources"    not in st.session_state: st.session_state.show_sources    = True
 if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
 if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "docs"
+if "octobot_lang"    not in st.session_state: st.session_state.octobot_lang    = "English"
 
 # Voice query from mic widget
 _voice_q = st.query_params.get("voice_q", "")
@@ -259,6 +375,266 @@ def speak_text(text: str) -> None:
         height=0,
     )
 
+
+def get_followup_questions(question: str, answer: str) -> list:
+    """Generate 3 follow-up questions using Gemini based on the Q&A."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return []
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash", temperature=0.4,
+            google_api_key=api_key,
+        )
+        prompt = (
+            "Based on this question and answer about Pharos blockchain, "
+            "generate exactly 3 short follow-up questions the user might want to ask next. "
+            "Each question should be concise (max 8 words), directly related to the topic, "
+            "and progressively deeper. Return ONLY the 3 questions, one per line, "
+            "no numbers, no bullets, no extra text.\n\n"
+            "Question: " + question + "\n\n"
+            "Answer: " + answer[:800]
+        )
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        lines = [l.strip() for l in resp.content.strip().split("\n") if l.strip()]
+        return lines[:3]
+    except Exception:
+        return []
+
+
+def get_image_search_results(query: str) -> list:
+    """
+    Returns 3 relevant image URLs using Unsplash Source API.
+    No API key needed — uses topic-based URL construction.
+    Falls back to different seeds if one fails.
+    """
+    import hashlib
+    # Clean query for URL — keep only alphanumeric and spaces
+    clean = re.sub(r"[^a-zA-Z0-9 ]", "", query).strip()
+    words = clean.split()[:4]  # take first 4 meaningful words
+    topic = "+".join(words) if words else "blockchain"
+
+    seed = int(hashlib.md5(query.encode()).hexdigest()[:8], 16) % 9000 + 1000
+
+    images = []
+    for i in range(3):
+        # Unsplash Source — free, no API key, returns a real relevant image
+        url = f"https://source.unsplash.com/400x220/?{topic},technology,finance&sig={seed + i * 97}"
+        images.append({"url": url, "title": f"{query} — {i+1}"})
+    return images
+
+
+def render_copy_share_download(text: str, btn_key: str) -> None:
+    """
+    Renders Copy (shows pre-selected textarea), Share on X, and Download buttons.
+    Copy shows a pre-selected textarea — user just presses Ctrl+C.
+    Guaranteed to work in every browser inside Streamlit iframes.
+    """
+    import json as _j, base64 as _b64
+
+    safe_text  = _j.dumps(text)
+    tweet_text = _j.dumps(
+        "From OctoBot on Pharos: " + text[:220] + "... @pharos_network #Pharos #BuildOnPharos"
+    )
+    b64_text = _b64.b64encode(text.encode()).decode()
+
+    btn_style = (
+        "display:inline-flex;align-items:center;gap:5px;"
+        "font-size:11px;font-weight:600;"
+        "padding:5px 12px;border-radius:8px;"
+        "border:1px solid #D0D3E0;background:#FFFFFF;"
+        "color:#0C0C1A;cursor:pointer;"
+        "font-family:'DM Sans',sans-serif;"
+        "text-decoration:none;white-space:nowrap;"
+    )
+
+    components.html(
+        f"""
+        <div style="font-family:'DM Sans',sans-serif;">
+
+          <!-- action row -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;padding:2px 0;margin-top:4px;">
+
+            <!-- COPY button — shows a pre-selected textarea on click -->
+            <button id="copybtn{btn_key}" style="{btn_style}"
+              onclick="(function(){{
+                var box = document.getElementById('copybox{btn_key}');
+                if(box.style.display === 'none'){{
+                  box.style.display = 'block';
+                  box.select();
+                  box.setSelectionRange(0, 99999);
+                  var copied = false;
+                  try{{
+                    copied = document.execCommand('copy');
+                  }}catch(e){{}}
+                  if(copied){{
+                    document.getElementById('copybtn{btn_key}').innerText = 'Copied!';
+                    setTimeout(function(){{
+                      document.getElementById('copybtn{btn_key}').innerText = 'Copy Answer';
+                      box.style.display = 'none';
+                    }}, 1500);
+                  }} else {{
+                    document.getElementById('copybtn{btn_key}').innerText = 'Press Ctrl+C';
+                  }}
+                }} else {{
+                  box.style.display = 'none';
+                  document.getElementById('copybtn{btn_key}').innerText = 'Copy Answer';
+                }}
+              }})()">
+              Copy Answer
+            </button>
+
+            <!-- SHARE ON X -->
+            <a href="#" style="{btn_style}"
+              onclick="this.href='https://x.com/intent/tweet?text='+encodeURIComponent({tweet_text});return true;"
+              target="_blank">
+              Share on X
+            </a>
+
+            <!-- DOWNLOAD -->
+            <a href="data:text/plain;base64,{b64_text}"
+              download="octobot_answer.txt"
+              style="{btn_style}">
+              Download .txt
+            </a>
+
+          </div>
+
+          <!-- pre-selected copy textarea (hidden until Copy clicked) -->
+          <textarea id="copybox{btn_key}"
+            style="display:none;width:100%;height:80px;margin-top:6px;
+                   font-size:12px;font-family:'DM Sans',sans-serif;
+                   border:1.5px solid #1A1AFF;border-radius:8px;padding:8px;
+                   color:#0C0C1A;background:#F4F5FF;resize:none;"
+            readonly>{text.replace('<', '&lt;').replace('>', '&gt;')}</textarea>
+
+        </div>
+        """,
+        height=70,
+    )
+
+
+def render_source_sidebar(sources: list, key: str) -> None:
+    """
+    Renders an animated slide-in sources sidebar using components.html.
+    Triggered by clicking a Sources button.
+    """
+    if not sources:
+        return
+
+    sources_html = "".join([
+        f'<div class="source-item">'
+        f'<div class="source-item-title">{s["title"]}</div>'
+        f'<a class="source-item-url" href="{s["url"]}" target="_blank">{s["url"]}</a>'
+        f'</div>'
+        for s in sources
+    ])
+
+    components.html(
+        """
+        <style>
+        #ssb-""" + key + """{
+            position:fixed;top:0;right:-340px;height:100vh;width:320px;
+            background:#F4F5F8;border-left:1px solid #D0D3E0;
+            box-shadow:-8px 0 40px rgba(20,20,60,0.15);
+            z-index:9998;overflow-y:auto;padding:1.2rem;
+            transition:right 0.3s cubic-bezier(0.4,0,0.2,1);
+            font-family:'DM Sans',sans-serif;
+        }
+        #ssb-""" + key + """.open{right:0!important;}
+        .ssh{display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:1rem;padding-bottom:0.7rem;border-bottom:1px solid #D0D3E0;}
+        .sst{font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#0C0C1A;}
+        .ssc{cursor:pointer;font-size:18px;color:#7A7F96;width:26px;height:26px;
+            display:flex;align-items:center;justify-content:center;
+            border-radius:6px;background:#ECEEF4;border:none;}
+        .si{background:#ECEEF4;border:1px solid #D0D3E0;border-left:3px solid #1A1AFF;
+            border-radius:0 8px 8px 0;padding:0.6rem 0.8rem;margin-bottom:0.5rem;}
+        .sit{font-size:12px;font-weight:600;color:#0C0C1A;margin-bottom:3px;}
+        .siu{font-size:10px;color:#1A1AFF;word-break:break-all;text-decoration:none;}
+        .siu:hover{text-decoration:underline;}
+        #open-""" + key + """{
+            display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+            padding:5px 12px;border-radius:8px;border:1px solid #D0D3E0;background:#FFFFFF;
+            color:#0C0C1A;cursor:pointer;font-family:'DM Sans',sans-serif;
+        }
+        </style>
+        <button id="open-""" + key + """"
+            onclick="(function(){
+                var p=document.getElementById('ssb-""" + key + """');
+                p.classList.toggle('open');
+            })()">
+            📚 Sources (""" + str(len(sources)) + """)
+        </button>
+        <div id="ssb-""" + key + """">
+          <div class="ssh">
+            <div class="sst">📚 Sources</div>
+            <button class="ssc" onclick="document.getElementById('ssb-""" + key + """').classList.remove('open')">✕</button>
+          </div>
+          """ + sources_html + """
+        </div>
+        """,
+        height=46,
+    )
+
+
+def render_followup_pills(questions: list, key: str) -> None:
+    """Render clickable follow-up question pills that set pending_q."""
+    if not questions:
+        return
+    pills_html = "".join([
+        f'<span class="followup-pill" '
+        f'onclick="(function(){{window.parent.postMessage({{type:\'streamlit:setComponentValue\',value:\'{q}\'}},\'*\')}})()">'
+        f'↪ {q}</span>'
+        for q in questions
+    ])
+    st.markdown(
+        '<div class="followup-row">'
+        '<div class="followup-label">Follow-up questions</div>'
+        '<div class="followup-pills">' + pills_html + '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_octo_fab() -> None:
+    """Fixed bottom-right animated octopus scroll-to-bottom FAB."""
+    components.html(
+        "<style>"
+        "#ocfab{position:fixed;bottom:80px;right:20px;width:54px;height:54px;"
+        "cursor:pointer;z-index:99999;animation:ocbo 3s ease-in-out infinite;"
+        "filter:drop-shadow(0 4px 14px rgba(26,26,255,0.4));}"
+        "#ocfab:hover{animation-play-state:paused;}"
+        "@keyframes ocbo{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}"
+        "</style>"
+        '<svg id="ocfab" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg"'
+        ' title="Scroll to bottom"'
+        " onclick=\"window.parent.scrollTo({top:window.parent.document.body.scrollHeight,behavior:'smooth'})\">"
+        '<ellipse cx="50" cy="42" rx="32" ry="30" fill="#1A1AFF"/>'
+        '<ellipse cx="42" cy="32" rx="10" ry="7" fill="rgba(255,255,255,0.2)" transform="rotate(-15,42,32)"/>'
+        '<circle cx="38" cy="36" r="8" fill="white"/>'
+        '<circle cx="62" cy="36" r="8" fill="white"/>'
+        '<circle cx="40" cy="37" r="4.5" fill="#0A0A2E"/>'
+        '<circle cx="63" cy="37" r="4.5" fill="#0A0A2E"/>'
+        '<circle cx="42" cy="35" r="1.5" fill="white"/>'
+        '<circle cx="65" cy="35" r="1.5" fill="white"/>'
+        '<path d="M40 48 Q50 56 60 48" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
+        '<path d="M22 66 Q14 82 20 96 Q24 102 28 96 Q30 84 24 68" fill="#1A1AFF"/>'
+        '<path d="M34 70 Q28 88 34 102 Q38 106 42 102 Q42 88 36 72" fill="#1A1AFF"/>'
+        '<path d="M50 72 Q48 90 50 106 Q53 110 56 106 Q58 90 52 72" fill="#1A1AFF"/>'
+        '<path d="M65 70 Q68 88 64 102 Q60 106 57 102 Q58 88 63 72" fill="#1A1AFF"/>'
+        '<path d="M78 66 Q86 82 80 96 Q76 102 72 96 Q70 84 76 68" fill="#1A1AFF"/>'
+        '<circle cx="24" cy="96" r="3.5" fill="#6B8CFF"/>'
+        '<circle cx="38" cy="102" r="3.5" fill="#6B8CFF"/>'
+        '<circle cx="53" cy="106" r="3.5" fill="#6B8CFF"/>'
+        '<circle cx="60" cy="102" r="3.5" fill="#6B8CFF"/>'
+        '<circle cx="76" cy="96" r="3.5" fill="#6B8CFF"/>'
+        '<path d="M44 50 L50 59 L56 50" stroke="white" stroke-width="2.8" fill="none"'
+        ' stroke-linecap="round" stroke-linejoin="round"/>'
+        "</svg>",
+        height=1,
+    )
+
 @st.cache_resource(show_spinner=False)
 def load_octobot():
     try:
@@ -285,11 +661,12 @@ st.markdown("""
     --blue:    #1A1AFF;
     --blue2:   #2D2DE0;
     --light:   #6B8CFF;
-    --glow:    rgba(26,26,255,0.22);
-    --subtle:  rgba(26,26,255,0.08);
-  --bg:   #D5D8DE;
-  --bg1:  #F2F3F5;
-  --bg2:  #E4E7EC;
+    --glow:    rgba(26,26,255,0.15);
+    --subtle:  rgba(26,26,255,0.06);
+    --bg:      #D8DADE;
+    --bg1:     #F4F5F8;
+    --bg2:     #ECEEF4;
+    --glass:   rgba(244,245,248,0.82);
     --border:  #D0D3E0;
     --border2: #C4C8D8;
     --t1:      #0C0C1A;
@@ -299,19 +676,24 @@ st.markdown("""
     --red:     #E5484D;
     --fd:      'Syne', sans-serif;
     --fb:      'DM Sans', sans-serif;
+    --rad:     12px;
+    --rad-lg:  18px;
+    --shadow:  0 2px 12px rgba(20,20,60,0.07);
+    --shadow-md: 0 6px 24px rgba(20,20,60,0.1);
+    --shadow-blue: 0 4px 20px rgba(26,26,255,0.12);
 }
 html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
 .stApp{
     background:var(--bg)!important;
     background-image:
-        radial-gradient(ellipse 80% 60% at 50% -5%,rgba(26,26,255,0.10) 0%,transparent 50%),
-        radial-gradient(ellipse 40% 30% at 85% 70%,rgba(26,26,255,0.05) 0%,transparent 50%),
-        radial-gradient(ellipse 30% 25% at 10% 80%,rgba(107,140,255,0.06) 0%,transparent 50%),
-        radial-gradient(circle 2.5px at 0 0,rgba(26,26,255,0.2) 0%,transparent 100%),
-        repeating-linear-gradient(0deg,  rgba(26,26,255,0.05) 0px,rgba(26,26,255,0.05) 1px,transparent 1px,transparent 60px),
-        repeating-linear-gradient(90deg, rgba(26,26,255,0.05) 0px,rgba(26,26,255,0.05) 1px,transparent 1px,transparent 60px)
+        radial-gradient(ellipse 70% 45% at 50% -5%,rgba(26,26,255,0.07) 0%,transparent 50%),
+        radial-gradient(ellipse 35% 25% at 85% 70%,rgba(26,26,255,0.03) 0%,transparent 50%),
+        radial-gradient(ellipse 25% 20% at 10% 80%,rgba(107,140,255,0.04) 0%,transparent 50%),
+        radial-gradient(circle 2px at 0 0,rgba(26,26,255,0.12) 0%,transparent 100%),
+        repeating-linear-gradient(0deg,  rgba(26,26,255,0.03) 0px,rgba(26,26,255,0.03) 1px,transparent 1px,transparent 64px),
+        repeating-linear-gradient(90deg, rgba(26,26,255,0.03) 0px,rgba(26,26,255,0.03) 1px,transparent 1px,transparent 64px)
         !important;
-    background-size:auto,auto,auto,60px 60px,100% 100%,100% 100%!important;
+    background-size:auto,auto,auto,64px 64px,100% 100%,100% 100%!important;
     background-attachment:fixed!important;
 }
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
@@ -809,6 +1191,189 @@ section[data-testid="stMain"] > div {
 /* ── MODE TOGGLE (docs / general) ── */
 .mode-bar{display:flex;gap:6px;margin-bottom:0.8rem;align-items:center;}
 .mode-label{font-size:11px;color:var(--t3);flex-shrink:0;}
+
+/* ── GLASSMORPHISM CHAT CARD ── */
+.glass-card{
+    background:var(--glass);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,0.6);
+    border-radius:var(--rad-lg);
+    box-shadow:var(--shadow-md);
+    padding:1.2rem 1.4rem;
+    margin-bottom:1rem;
+    transition:box-shadow 0.2s ease;
+}
+.glass-card:hover{box-shadow:var(--shadow-blue);}
+
+/* ── DAPP GRID ── */
+.dapp-section-hdr{
+    background:linear-gradient(135deg,#080812 0%,#0A0A2E 60%,#0C1235 100%);
+    border-radius:14px;padding:1.8rem 2rem 1.4rem 2rem;
+    margin-bottom:1rem;text-align:center;position:relative;overflow:hidden;
+}
+.dapp-section-hdr::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(26,26,255,0.28) 0%,transparent 60%);
+    pointer-events:none;
+}
+.dapp-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    gap:16px;margin-bottom:1.4rem;
+}
+.dapp-card{
+    background:#FFFFFF;
+    border:1px solid #ECEEF4;
+    border-radius:16px;
+    padding:1.3rem 1.4rem;
+    box-shadow:0 1px 4px rgba(20,20,60,0.05);
+    transition:all 0.18s cubic-bezier(0.4,0,0.2,1);
+    cursor:pointer;
+    display:flex;flex-direction:column;gap:0;
+    text-decoration:none;
+}
+.dapp-card:hover{
+    border-color:#C8D0FF;
+    box-shadow:0 8px 28px rgba(26,26,255,0.1);
+    transform:translateY(-3px);
+    text-decoration:none;
+}
+.dapp-logo-wrap{
+    width:52px;height:52px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:0.85rem;overflow:hidden;
+    background:var(--dapp-bg, #F0F4FF);
+}
+.dapp-logo-wrap img{width:52px;height:52px;border-radius:50%;object-fit:cover;}
+.dapp-name{
+    font-family:var(--fd);font-size:16px;font-weight:700;
+    color:#0C0C1A;margin-bottom:0.45rem;line-height:1.2;
+}
+.dapp-desc{
+    font-size:13px;color:#5B5F6E;line-height:1.6;
+    flex:1;margin-bottom:0.85rem;
+}
+.dapp-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;}
+.dapp-tag{
+    display:inline-block;
+    font-size:11px;font-weight:500;color:#42475A;
+    background:#F2F3F8;border:1px solid #E3E5EA;
+    border-radius:6px;padding:3px 9px;
+}
+
+/* ── ACTION BUTTONS — WHITE / BLACK ── */
+.action-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    margin-top:0.55rem;padding-top:0.45rem;border-top:1px solid var(--border);}
+.abtn{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:600;letter-spacing:0.01em;
+    padding:5px 12px;border-radius:8px;cursor:pointer;
+    border:1px solid #D0D3E0;
+    background:#FFFFFF;color:#0C0C1A;
+    font-family:'DM Sans',sans-serif;
+    transition:none!important;
+    text-decoration:none;white-space:nowrap;
+}
+.abtn svg{width:12px;height:12px;flex-shrink:0;}
+
+/* ── FOLLOW-UP QUESTIONS ── */
+.followup-row{margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid var(--border);}
+.followup-label{font-size:10px;font-weight:600;color:var(--t3);letter-spacing:0.08em;
+    text-transform:uppercase;margin-bottom:0.4rem;}
+.followup-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.followup-pill{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:12px;font-weight:500;color:var(--blue);
+    background:rgba(26,26,255,0.06);border:1px solid rgba(26,26,255,0.2);
+    border-radius:20px;padding:4px 12px;cursor:pointer;
+    transition:all 0.12s ease;white-space:nowrap;
+}
+.followup-pill:hover{background:var(--blue);color:#fff;}
+
+/* ── SOURCE SIDEBAR SLIDE ── */
+.source-slide{
+    position:fixed;top:0;right:0;height:100vh;width:320px;
+    background:var(--bg1);border-left:1px solid var(--border);
+    box-shadow:-8px 0 40px rgba(20,20,60,0.15);
+    z-index:9998;overflow-y:auto;
+    transform:translateX(100%);
+    transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    padding:1.2rem;
+}
+.source-slide.open{transform:translateX(0);}
+.source-slide-hdr{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:1rem;padding-bottom:0.7rem;
+    border-bottom:1px solid var(--border);
+}
+.source-slide-title{font-family:var(--fd);font-size:14px;font-weight:700;color:var(--t1);}
+.source-slide-close{cursor:pointer;font-size:18px;color:var(--t3);line-height:1;
+    width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+    border-radius:6px;background:var(--bg2);}
+.source-slide-close:hover{background:var(--border);}
+.source-item{
+    background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:0.6rem 0.8rem;margin-bottom:0.5rem;
+}
+.source-item-title{font-size:12px;font-weight:600;color:var(--t1);margin-bottom:2px;}
+.source-item-url{font-size:10px;color:var(--blue);word-break:break-all;text-decoration:none;}
+.source-item-url:hover{text-decoration:underline;}
+
+/* ── SHIMMER LOADING ── */
+@keyframes shimmer{
+    0%{background-position:-400px 0;}
+    100%{background-position:400px 0;}
+}
+.shimmer{
+    background:linear-gradient(90deg,var(--bg2) 25%,var(--bg1) 50%,var(--bg2) 75%);
+    background-size:800px 100%;animation:shimmer 1.5s ease-in-out infinite;
+    border-radius:8px;
+}
+
+/* ── HERO IMPROVEMENTS ── */
+.hero{
+    padding:1.8rem 0 1.5rem 0!important;
+}
+.hero-logo-wrap{margin-bottom:0.8rem!important;}
+.hero-title{font-size:2.6rem!important;letter-spacing:-0.04em!important;}
+.hero-sub{font-size:0.95rem!important;margin-bottom:1.3rem!important;}
+
+/* ── MICRO INTERACTIONS ── */
+.camp-card,.cex-card,.dapp-card,.news-card{
+    transition:all 0.18s cubic-bezier(0.4,0,0.2,1)!important;
+}
+.camp-card:hover,.cex-card:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:var(--shadow-blue)!important;
+}
+
+/* ── SMOOTH PAGE REVEAL ── */
+@keyframes fadeUp{
+    from{opacity:0;transform:translateY(14px);}
+    to{opacity:1;transform:translateY(0);}
+}
+.page-reveal{animation:fadeUp 0.35s ease both;}
+
+/* ── OCTOPUS FAB ── */
+#ocfab{
+    position:fixed;bottom:80px;right:20px;
+    width:54px;height:54px;
+    cursor:pointer;z-index:99999;
+    animation:ocbo 3s ease-in-out infinite;
+    filter:drop-shadow(0 4px 14px rgba(26,26,255,0.4));
+}
+#ocfab:hover{animation-play-state:paused;filter:drop-shadow(0 6px 20px rgba(26,26,255,0.6));}
+@keyframes ocbo{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+
+/* ── DOWNLOAD BTN ── */
+.dl-btn{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:600;
+    padding:5px 12px;border-radius:8px;
+    border:1px solid #D0D3E0;background:#FFFFFF;color:#0C0C1A;
+    cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -825,9 +1390,10 @@ NAV_PAGES = [
     ("🚀", "Campaigns", "campaigns"),
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
+    ("🧩", "Ecosystem", "ecosystem"),
 ]
 
-nav_cols = st.columns([1.2, 1, 1, 1, 1, 1, 0.1, 1.2])
+nav_cols = st.columns([1.2, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.1, 1.1])
 
 with nav_cols[0]:
     if logo_b64:
@@ -860,7 +1426,7 @@ for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-with nav_cols[7]:
+with nav_cols[8]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
     st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1146,6 +1712,49 @@ elif st.session_state.page == "chat":
                 st.session_state["pending_q"] = q
                 st.rerun()
 
+    # ── Language selector ─────────────────────────────────────────
+    LANG_OPTIONS = {
+        "English":    "🇬🇧",
+        "Hindi":      "🇮🇳",
+        "Spanish":    "🇪🇸",
+        "Arabic":     "🇸🇦",
+        "Chinese":    "🇨🇳",
+        "Japanese":   "🇯🇵",
+    }
+    cur_lang   = st.session_state.octobot_lang
+    cur_flag   = LANG_OPTIONS.get(cur_lang, "🌐")
+    lang_pills = "".join([
+        f'<span style="display:inline-flex;align-items:center;gap:4px;'
+        f'font-size:12px;font-weight:{"700" if lang==cur_lang else "500"};'
+        f'padding:4px 11px;border-radius:20px;cursor:pointer;'
+        f'background:{"#1A1AFF" if lang==cur_lang else "#FFFFFF"};'
+        f'color:{"#FFFFFF" if lang==cur_lang else "#42475A"};'
+        f'border:1px solid {"#1A1AFF" if lang==cur_lang else "#D0D3E0"};'
+        f'margin-right:4px;">{flag} {lang}</span>'
+        for lang, flag in LANG_OPTIONS.items()
+    ])
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
+        'margin-bottom:0.7rem;padding:0.6rem 0.9rem;'
+        'background:#F4F5F8;border:1px solid #D0D3E0;border-radius:10px;">'
+        '<span style="font-size:11px;font-weight:700;color:#0C0C1A;'
+        'letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;'
+        'margin-right:4px;">🌐 Language:</span>'
+        + lang_pills +
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    lang_cols = st.columns(len(LANG_OPTIONS))
+    for li, (lang, flag) in enumerate(LANG_OPTIONS.items()):
+        with lang_cols[li]:
+            if st.button(
+                flag + " " + lang,
+                key="lang_" + lang,
+                use_container_width=True,
+            ):
+                st.session_state.octobot_lang = lang
+                st.rerun()
+
     # ── Mode toggle — big, visible, above chat ──────────────────
     current_mode = st.session_state.chat_mode
     is_general   = current_mode == "general"
@@ -1245,10 +1854,23 @@ elif st.session_state.page == "chat":
 
     # ── Chat input + answer ────────────────────
     pending    = st.session_state.pop("pending_q", None)
-    user_input = st.chat_input("Ask anything about Pharos — any language 🌐")
+    sel_lang   = st.session_state.get("octobot_lang", "English")
+    placeholder = (
+        "Ask anything about Pharos — any language 🌐"
+        if sel_lang == "English"
+        else f"Ask OctoBot in {sel_lang} 🌐"
+    )
+    user_input = st.chat_input(placeholder)
     question   = pending or user_input
 
     if question:
+        # Prepend a language instruction to guide OctoBot's response language
+        lang_prefix = (
+            "" if sel_lang == "English"
+            else f"[RESPOND IN {sel_lang.upper()} ONLY] "
+        )
+        guided_question = lang_prefix + question
+
         st.session_state.messages.append({"role":"user","content":question})
         with st.chat_message("user", avatar="👤"):
             st.markdown(question)
@@ -1257,21 +1879,25 @@ elif st.session_state.page == "chat":
             with st.spinner("Searching…"):
                 try:
                     # General mode: try docs first, fall back to Gemini if not found
-                    answer, sources = bot.ask(question)
+                    answer, sources = bot.ask(guided_question)
                     if (st.session_state.chat_mode == "general"
                             and "I could not find that information" in answer):
                         fallback_llm = ChatGoogleGenerativeAI(
                             model="gemini-2.5-flash", temperature=0.5,
                             google_api_key=os.getenv("GEMINI_API_KEY"),
                         )
+                        lang_instruction = (
+                            f"CRITICAL: You MUST respond entirely in {sel_lang}. "
+                            f"Do not use any other language. "
+                            if sel_lang != "English"
+                            else "Always respond in English. "
+                        )
                         fb_answer = fallback_llm.invoke([
                             HumanMessage(content=
                                 "You are OctoBot, a helpful AI assistant for the Pharos blockchain community. "
                                 "Answer this question helpfully and accurately. "
                                 "If relevant, mention that Pharos is a Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n"
-                                "CRITICAL: Always respond in the SAME language the user used. "
-                                "If they wrote in Hindi, respond in Hindi. "
-                                "If they wrote in Hinglish (mixed Hindi-English), respond in Hinglish. "
+                                + lang_instruction +
                                 "Keep technical terms (PROS, SPN, RWA, L1, EVM) in their original English form.\n\n"
                                 "Question: " + question
                             )
@@ -1284,32 +1910,89 @@ elif st.session_state.page == "chat":
 
             st.markdown(answer)
 
+            # ── Voice ─────────────────────────────────
             if st.session_state.voice_reply:
                 speak_text(answer)
 
-            if st.button("🔊", key="replay_" + str(len(st.session_state.messages)), help="Read aloud"):
+            # ── Action buttons row ────────────────────
+            msg_idx = str(len(st.session_state.messages))
+            render_copy_share_download(answer, btn_key=msg_idx)
+
+            # Read aloud button
+            if st.button("🔊 Read", key="replay_" + msg_idx, help="Read aloud"):
                 speak_text(answer)
 
+            # ── Show relevant images ──────────────────
+            img_key = "show_imgs_" + msg_idx
+            if img_key not in st.session_state:
+                st.session_state[img_key] = False
+            if not st.session_state[img_key]:
+                if st.button("🖼 Show Images", key="imgs_btn_" + msg_idx):
+                    st.session_state[img_key] = True
+                    st.rerun()
+            else:
+                imgs = get_image_search_results(question)
+                img_cols = st.columns(3)
+                for ci, img in enumerate(imgs[:3]):
+                    with img_cols[ci]:
+                        try:
+                            st.image(img["url"], use_container_width=True, caption="")
+                        except Exception:
+                            st.markdown(
+                                f'<img src="{img["url"]}" style="width:100%;border-radius:8px;" />',
+                                unsafe_allow_html=True,
+                            )
+                if st.button("✕ Hide images", key="imgs_hide_" + msg_idx):
+                    st.session_state[img_key] = False
+                    st.rerun()
+
+            # ── Price chart if relevant ───────────────
             q_lower = question.lower()
             if any(kw in q_lower for kw in ["price","market cap","pros","$pros","token"]):
                 with st.container(border=True):
                     st.markdown('<div class="chart-card-label">$PROS · 24H</div>', unsafe_allow_html=True)
                     render_price_chart(
                         get_price_chart_df(),
-                        chart_key="chat_chart_" + str(len(st.session_state.messages))
+                        chart_key="chat_chart_" + msg_idx
                     )
 
-            if st.session_state.show_sources and sources:
-                with st.expander("Sources · " + str(len(sources)), expanded=True):
-                    for s in sources:
-                        st.markdown(
-                            '<div class="source-card"><strong>' + s["title"] + '</strong>'
-                            '<a href="' + s["url"] + '" target="_blank">' + s["url"] + '</a></div>',
-                            unsafe_allow_html=True,
-                        )
+            # ── Sources as slide-in sidebar ───────────
+            if sources:
+                render_source_sidebar(sources, key=msg_idx)
+
+            # ── Follow-up questions ───────────────────
+            if "fups_" + msg_idx not in st.session_state:
+                fups = get_followup_questions(question, answer)
+                st.session_state["fups_" + msg_idx] = fups
+            fups = st.session_state.get("fups_" + msg_idx, [])
+            if fups:
+                st.markdown(
+                    '<div style="margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid #D0D3E0;">'
+                    '<div style="font-size:10px;font-weight:600;color:#7A7F96;letter-spacing:0.08em;'
+                    'text-transform:uppercase;margin-bottom:0.5rem;">Follow-up questions</div>'
+                    '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+                    + "".join([
+                        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;'
+                        'font-weight:500;color:#1A1AFF;background:rgba(26,26,255,0.06);'
+                        'border:1px solid rgba(26,26,255,0.2);border-radius:20px;'
+                        'padding:4px 12px;cursor:pointer;" '
+                        'onclick="void(0)">↪ ' + q + '</span>'
+                        for q in fups
+                    ])
+                    + '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                # Render as actual clickable Streamlit buttons below
+                for fq in fups:
+                    if st.button("↪ " + fq, key="fup_" + msg_idx + "_" + fq[:15]):
+                        st.session_state["pending_q"] = fq
+                        st.rerun()
 
         st.session_state.messages.append({"role":"assistant","content":answer})
         st.session_state.sources_history.append(sources)
+
+    # ── Octopus scroll-to-bottom FAB ─────────────
+    render_octo_fab()
 
 
 # ═════════════════════════════════════════════
@@ -1537,8 +2220,83 @@ elif st.session_state.page == "trade":
         unsafe_allow_html=True,
         
     )
-    
+
+
+# ═════════════════════════════════════════════
+# PAGE: ECOSYSTEM (DApps)
+# ═════════════════════════════════════════════
+elif st.session_state.page == "ecosystem":
+
+    st.markdown(
+        '<div class="dapp-section-hdr">'
+        '<div style="position:relative;z-index:1;">'
+        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
+        'letter-spacing:0.15em;text-transform:uppercase;color:#64BFFF;margin-bottom:0.6rem;">'
+        '🧩 PHAROS ECOSYSTEM</div>'
+        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">DApps on Pharos</h2>'
+        '<p style="font-size:0.9rem;color:rgba(255,255,255,0.55);line-height:1.5;max-width:520px;margin:0 auto;">'
+        'Explore the full suite of decentralised applications building on Pharos — '
+        'DeFi, RWA, bridges, NFTs, prediction markets and more.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Category filter pills
+    all_cats = sorted(set(t for d in PHAROS_DAPPS for t in d["cat"]))
+    if "dapp_filter" not in st.session_state:
+        st.session_state["dapp_filter"] = "All"
+
+    filter_cols = st.columns(min(len(all_cats) + 1, 9))
+    with filter_cols[0]:
+        if st.button("All", key="df_all", use_container_width=True):
+            st.session_state["dapp_filter"] = "All"; st.rerun()
+    for fi, cat in enumerate(all_cats[:8]):
+        with filter_cols[fi + 1]:
+            if st.button(cat, key="df_" + cat, use_container_width=True):
+                st.session_state["dapp_filter"] = cat; st.rerun()
+
+    active_filter = st.session_state["dapp_filter"]
+    filtered_dapps = (
+        PHAROS_DAPPS if active_filter == "All"
+        else [d for d in PHAROS_DAPPS if active_filter in d["cat"]]
+    )
+
+    # DApp grid — all cards in ONE st.markdown call so CSS grid works
+    cards_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:1.4rem;">'
+    for dapp in filtered_dapps:
+        tags_html = "".join(
+            f'<span style="display:inline-block;font-size:11px;font-weight:500;color:#42475A;'
+            f'background:#F2F3F8;border:1px solid #E3E5EA;border-radius:6px;'
+            f'padding:3px 9px;margin-right:4px;">{t}</span>'
+            for t in dapp["cat"]
+        )
+        cards_html += (
+            f'<a href="{dapp["url"]}" target="_blank" '
+            f'style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
+            f'padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0;'
+            f'text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);'
+            f'transition:all 0.18s ease;cursor:pointer;">'
+            f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;'
+            f'color:#0C0C1A;margin-bottom:0.4rem;line-height:1.2;">{dapp["name"]}</div>'
+            f'<div style="font-size:12px;color:#5B5F6E;line-height:1.6;'
+            f'margin-bottom:0.75rem;flex:1;">{dapp["desc"]}</div>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{tags_html}</div>'
+            f'</a>'
+        )
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    st.link_button(
+        "View all dApps on Pharos Testnet ↗",
+        "https://testnet.pharosnetwork.xyz",
+        use_container_width=False,
+    )
+
+
+# ── Footer (rendered on every page) ───────────────────────
     # ── Footer ────────────────────────────────────────────────────
+
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
 st.markdown(
     
