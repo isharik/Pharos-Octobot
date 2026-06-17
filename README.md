@@ -12,13 +12,8 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 **Built for the Pharos AI Agent Carnival ⚓**
 
 
-## Demo before updates:
-
-https://www.youtube.com/watch?v=gIsav6XI6HE
-
-## 🌐 New Live Demo after updates
-
-https://x.com/isharik99/status/2066777239627387353?s=20
+## Updated Demo:
+https://youtu.be/PeoMUNVTvGg
 
 ## Check out the Dora Hacks page for more details on updates :
 
@@ -188,19 +183,25 @@ Features:
 Option 1 — Interactive Swagger UI (easiest, no code needed)
 Start the Skill API:
 uvicorn skill_api:app --host 0.0.0.0 --port 8000
+
 Open in your browser:
 http://localhost:8000/docs
 
 Click POST /query → Try it out → Execute
 Type any question about Pharos in the request body:
+
 {
   "question": "What are Special Processing Networks?"
 }
+
 Hit Execute and see the full structured response instantly.
-Option 2 — Call the Skill from Terminal
+
+# Option 2 — Call the Skill from Terminal
+
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d "{\"question\": \"What is Native Restaking on Pharos?\"}"
+  
 Response:
 
 {
@@ -226,7 +227,9 @@ Example questions in the sidebar
 Conversation memory
 
 # Option 4 — Test the Health Check
+
 GET http://localhost:8000/
+
 Returns:
 
 {
@@ -239,10 +242,13 @@ Returns:
 # Option 5 — Discover Skill Metadata
 
 GET http://localhost:8000/info
+
 Returns the full Skill spec — input/output schema, tags, category — for Agent discovery and integration.
 
 Skill API Reference
-MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answerGET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
+MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answer
+
+GET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
 
 Request body for POST /query
 {
@@ -274,10 +280,7 @@ GET /pros-price
  "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
       Each with category, description, emoji, and direct link. Category filter pills at the top.
 
-      <img width="1210" height="906" alt="image" src="https://github.com/user-attachments/assets/1f96b9ea-2232-41b6-beda-881dd19ae130" />
-
-
-
+    
 # 🔍 Knowledge Sources other than LLM responses
 
 OctoBot currently retrieves from verified sources:
