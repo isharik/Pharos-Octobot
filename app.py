@@ -779,102 +779,284 @@ def render_thinking_orb(state: str = "idle") -> None:
 
 def render_interactive_logo(logo_b64: str) -> None:
     """
-    Renders the hero logo as an interactive element.
-    Click opens an assistant bubble with a link to chat.
+    Neural Pulse Animation System.
+    - Canvas-based: particles, aura, pulse waves, breathing glow
+    - Hover: stronger glow
+    - Click: opens assistant bubble
+    - All motion is Apple/Linear quality — subtle, premium, 60fps
+    - Zero CSS conflicts with Streamlit layout
     """
-    img_html = (
-        f'<img src="{logo_b64}" width="58" height="58" '
-        f'style="border-radius:50%;display:block;" />'
-        if logo_b64 else
-        '<div style="width:58px;height:58px;border-radius:50%;background:#1A1AFF;'
-        'display:flex;align-items:center;justify-content:center;font-size:28px;">🐙</div>'
-    )
+    img_src = logo_b64 if logo_b64 else ""
+
     components.html(
         """
-        <style>
-        .ilogo{position:relative;display:inline-block;cursor:pointer;}
-        .ilogo-img{
-            border-radius:50%;
-            transition:transform 0.25s ease,box-shadow 0.25s ease,filter 0.25s ease;
-            filter:drop-shadow(0 2px 10px rgba(26,26,255,0.25));
-        }
-        .ilogo:hover .ilogo-img{
-            transform:scale(1.08);
-            filter:drop-shadow(0 4px 20px rgba(26,26,255,0.5));
-        }
-        .ilogo-pulse{
-            position:absolute;inset:-8px;border-radius:50%;
-            border:1.5px solid rgba(26,26,255,0.25);
-            animation:ip 2.8s ease-in-out infinite;
-        }
-        @keyframes ip{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.18);opacity:0.12;}}
-        .ibubble{
-            position:absolute;top:calc(100% + 12px);left:50%;
-            transform:translateX(-50%) scale(0.9);
-            background:#fff;border:1.5px solid #C8D0FF;
-            border-radius:14px;box-shadow:0 8px 32px rgba(26,26,255,0.14);
-            padding:12px 14px;width:210px;z-index:200;
-            opacity:0;pointer-events:none;
-            transition:opacity 0.2s ease,transform 0.2s ease;
-            font-family:'DM Sans',sans-serif;
-        }
-        .ibubble::before{
-            content:'';position:absolute;top:-7px;left:50%;
-            transform:translateX(-50%);
-            width:12px;height:12px;background:#fff;
-            border-left:1.5px solid #C8D0FF;border-top:1.5px solid #C8D0FF;
-            transform:translateX(-50%) rotate(45deg);
-        }
-        .ibubble.vis{opacity:1;pointer-events:all;transform:translateX(-50%) scale(1);}
-        .ibubble-q{font-size:12px;color:#0C0C1A;font-weight:500;line-height:1.5;margin-bottom:8px;}
-        .ibubble-cta{
-            display:inline-flex;align-items:center;gap:4px;
-            font-size:11px;font-weight:700;color:#fff;
-            background:#1A1AFF;border-radius:8px;
-            padding:5px 12px;cursor:pointer;border:none;
-            font-family:'DM Sans',sans-serif;width:100%;
-            justify-content:center;
-        }
-        .wrap{position:relative;display:inline-flex;justify-content:center;}
-        </style>
-        <div style="display:flex;justify-content:center;">
-        <div class="wrap">
-          <div class="ilogo" id="ilogoBtn" onclick="toggleBubble()">
-            <div class="ilogo-pulse"></div>
-            <div class="ilogo-img">""" + img_html + """</div>
-          </div>
-          <div class="ibubble" id="ibubble">
-            <div class="ibubble-q">👋 Hi! I'm OctoBot.<br>Ask me anything about Pharos.</div>
-            <button class="ibubble-cta" onclick="goChat()">💬 Open Chat →</button>
-          </div>
-        </div>
-        </div>
-        <script>
-        function toggleBubble(){
-            var b = document.getElementById('ibubble');
-            b.classList.toggle('vis');
-        }
-        function goChat(){
-            // Navigate parent Streamlit app to chat page via query param
-            try{
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set('goto','chat');
-                window.parent.location.href = url.toString();
-            }catch(e){
-                document.getElementById('ibubble').classList.remove('vis');
-            }
-        }
-        // Close bubble when clicking outside
-        document.addEventListener('click', function(e){
-            var btn = document.getElementById('ilogoBtn');
-            var bbl = document.getElementById('ibubble');
-            if(btn && !btn.contains(e.target)){
-                if(bbl) bbl.classList.remove('vis');
-            }
-        });
-        </script>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:transparent;overflow:hidden;font-family:'DM Sans',sans-serif;}
+.wrap{
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    width:100%;height:220px;position:relative;
+}
+canvas{
+    position:absolute;top:0;left:0;
+    width:100%;height:100%;
+    pointer-events:none;
+}
+.logo-btn{
+    position:relative;z-index:10;
+    width:80px;height:80px;border-radius:50%;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+.logo-btn:hover{transform:scale(1.06);}
+.logo-img{
+    width:80px;height:80px;border-radius:50%;
+    display:block;
+    transition:filter 0.4s cubic-bezier(0.4,0,0.2,1);
+    filter:drop-shadow(0 2px 14px rgba(26,26,255,0.35));
+}
+.logo-btn:hover .logo-img{
+    filter:drop-shadow(0 4px 24px rgba(26,26,255,0.65));
+}
+.logo-emoji{
+    width:80px;height:80px;border-radius:50%;
+    background:#1A1AFF;
+    display:flex;align-items:center;justify-content:center;
+    font-size:32px;line-height:1;
+    filter:drop-shadow(0 2px 14px rgba(26,26,255,0.35));
+    transition:filter 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+.logo-btn:hover .logo-emoji{
+    filter:drop-shadow(0 4px 24px rgba(26,26,255,0.65));
+}
+/* Assistant bubble */
+.bubble{
+    position:absolute;
+    top:calc(50% + 52px);
+    left:50%;transform:translateX(-50%) scale(0.92);
+    background:#fff;border:1.5px solid #C8D0FF;
+    border-radius:14px;
+    box-shadow:0 8px 32px rgba(26,26,255,0.14);
+    padding:12px 14px;width:210px;z-index:200;
+    opacity:0;pointer-events:none;
+    transition:opacity 0.22s cubic-bezier(0.4,0,0.2,1),
+                transform 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+.bubble.vis{
+    opacity:1;pointer-events:all;
+    transform:translateX(-50%) scale(1);
+}
+.bubble::before{
+    content:'';position:absolute;top:-7px;left:50%;
+    width:12px;height:12px;background:#fff;
+    border-left:1.5px solid #C8D0FF;border-top:1.5px solid #C8D0FF;
+    transform:translateX(-50%) rotate(45deg);
+}
+.bubble-q{font-size:12px;color:#0C0C1A;font-weight:500;line-height:1.5;margin-bottom:8px;}
+.bubble-cta{
+    display:flex;align-items:center;justify-content:center;gap:4px;
+    font-size:11px;font-weight:700;color:#fff;background:#1A1AFF;
+    border-radius:8px;padding:6px 12px;cursor:pointer;border:none;
+    width:100%;font-family:'DM Sans',sans-serif;
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <canvas id="np"></canvas>
+  <div class="logo-btn" id="logoBtn" onclick="toggleBubble()">
+    """ + (
+        f'<img class="logo-img" src="{img_src}" alt="Pharos" />'
+        if img_src else
+        '<div class="logo-emoji">🐙</div>'
+    ) + """
+  </div>
+  <div class="bubble" id="bubble">
+    <div class="bubble-q">👋 Hi! I'm OctoBot.<br>Ask me anything about Pharos.</div>
+    <button class="bubble-cta" onclick="goChat()">💬 Open Chat →</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('np');
+  const ctx    = canvas.getContext('2d');
+  const wrap   = document.getElementById('wrap');
+  const btn    = document.getElementById('logoBtn');
+
+  // ── Canvas sizing ───────────────────────────
+  function resize(){
+    canvas.width  = wrap.offsetWidth;
+    canvas.height = wrap.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ── State ───────────────────────────────────
+  let cx = 0, cy = 0;            // logo center
+  let hovered   = false;
+  let t         = 0;             // frame counter
+  let pulseWaves= [];            // active pulse waves
+  let lastPulse = 0;             // timestamp of last pulse
+
+  function getCenter(){
+    const r = btn.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    return {
+      x: r.left - w.left + r.width  * 0.5,
+      y: r.top  - w.top  + r.height * 0.5,
+    };
+  }
+
+  btn.addEventListener('mouseenter', ()=>{ hovered=true;  emitPulse(); });
+  btn.addEventListener('mouseleave', ()=>{ hovered=false; });
+
+  // ── Particles ──────────────────────────────
+  const N = 12;
+  const particles = Array.from({length:N}, (_,i)=>{
+    const angle  = (i/N)*Math.PI*2;
+    const radius = 52 + Math.random()*28;
+    return {
+      angle,
+      baseRadius: radius,
+      r:          radius,
+      speed:      0.0006 + Math.random()*0.0008,   // very slow organic drift
+      dr:         (Math.random()-0.5)*0.04,         // radius oscillation speed
+      pr:         0,                                 // phase for radius osc
+      prS:        0.008 + Math.random()*0.006,
+      size:       1.2 + Math.random()*1.4,
+      opacity:    0.25 + Math.random()*0.35,
+      opSpeed:    0.004 + Math.random()*0.004,
+      opPhase:    Math.random()*Math.PI*2,
+    };
+  });
+
+  // ── Pulse wave emitter ─────────────────────
+  function emitPulse(){
+    pulseWaves.push({ r:44, opacity:0.55, max:190 });
+  }
+
+  // ── Main draw loop ─────────────────────────
+  function draw(){
+    requestAnimationFrame(draw);
+    t++;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    const c = getCenter();
+    cx = c.x; cy = c.y;
+
+    // ─ 1. Ambient aura ─
+    const auraSize  = hovered ? 110 : 90;
+    const auraAlpha = hovered ? 0.13 : 0.08;
+    const auraGrad  = ctx.createRadialGradient(cx,cy,20, cx,cy,auraSize);
+    auraGrad.addColorStop(0, `rgba(26,26,255,${auraAlpha})`);
+    auraGrad.addColorStop(0.5,`rgba(26,26,255,${auraAlpha*0.4})`);
+    auraGrad.addColorStop(1, 'rgba(26,26,255,0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(cx,cy,auraSize,0,Math.PI*2);
+    ctx.fill();
+
+    // ─ 2. Breathing ring ─
+    const breathe  = Math.sin(t*0.018)*0.5+0.5;  // 0→1 slow cycle
+    const ringR    = 50 + breathe*8;
+    const ringAlpha= hovered ? 0.22 : 0.10 + breathe*0.07;
+    ctx.beginPath();
+    ctx.arc(cx,cy,ringR,0,Math.PI*2);
+    ctx.strokeStyle = `rgba(26,26,255,${ringAlpha})`;
+    ctx.lineWidth   = hovered ? 1.5 : 1;
+    ctx.stroke();
+
+    // ─ 3. Pulse waves (auto every 7s + hover) ─
+    const now = performance.now();
+    if(now - lastPulse > 7000){ emitPulse(); lastPulse=now; }
+
+    pulseWaves = pulseWaves.filter(w=>{
+      const progress = (w.r - 44) / (w.max - 44);
+      w.opacity = 0.55 * (1 - progress) * (1 - progress);
+      ctx.beginPath();
+      ctx.arc(cx,cy,w.r,0,Math.PI*2);
+      ctx.strokeStyle = `rgba(26,26,255,${w.opacity})`;
+      ctx.lineWidth   = 1.2 * (1 - progress*0.5);
+      ctx.stroke();
+      w.r += 1.1 + progress*1.8;  // accelerates as it expands
+      return w.r < w.max;
+    });
+
+    // ─ 4. Particles ─
+    particles.forEach(p=>{
+      p.angle  += p.speed;
+      p.pr     += p.prS;
+      p.r       = p.baseRadius + Math.sin(p.pr)*10;
+      const px  = cx + Math.cos(p.angle)*p.r;
+      const py  = cy + Math.sin(p.angle)*p.r;
+      const op  = p.opacity * (0.5 + 0.5*Math.sin(t*p.opSpeed + p.opPhase))
+                  * (hovered ? 1.4 : 1.0);
+      const sz  = p.size * (0.8 + 0.4*Math.sin(p.pr*0.7));
+
+      // Particle glow
+      const pg = ctx.createRadialGradient(px,py,0, px,py,sz*3);
+      pg.addColorStop(0, `rgba(26,26,255,${Math.min(op,0.85)})`);
+      pg.addColorStop(1, 'rgba(26,26,255,0)');
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.arc(px,py,sz*3,0,Math.PI*2);
+      ctx.fill();
+
+      // Particle core
+      ctx.fillStyle = `rgba(100,130,255,${Math.min(op*1.8,1)})`;
+      ctx.beginPath();
+      ctx.arc(px,py,sz,0,Math.PI*2);
+      ctx.fill();
+    });
+
+    // ─ 5. Logo inner glow ring ─
+    const innerAlpha = hovered ? 0.35 : 0.15 + breathe*0.1;
+    const ig = ctx.createRadialGradient(cx,cy,34, cx,cy,48);
+    ig.addColorStop(0, 'rgba(26,26,255,0)');
+    ig.addColorStop(0.7, `rgba(26,26,255,${innerAlpha*0.4})`);
+    ig.addColorStop(1, `rgba(26,26,255,${innerAlpha})`);
+    ctx.fillStyle = ig;
+    ctx.beginPath();
+    ctx.arc(cx,cy,48,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Start after a short delay so DOM is ready
+  setTimeout(()=>{ lastPulse=performance.now(); draw(); }, 100);
+
+  // ── Bubble logic ─────────────────────────────
+  window.toggleBubble = function(){
+    document.getElementById('bubble').classList.toggle('vis');
+  };
+  window.goChat = function(){
+    try{
+      var url = new URL(window.parent.location.href);
+      url.searchParams.set('goto','chat');
+      window.parent.location.href = url.toString();
+    }catch(e){
+      document.getElementById('bubble').classList.remove('vis');
+    }
+  };
+  document.addEventListener('click',function(e){
+    var b=document.getElementById('logoBtn');
+    var p=document.getElementById('bubble');
+    if(b&&p&&!b.contains(e.target)) p.classList.remove('vis');
+  });
+
+})();
+</script>
+</body>
+</html>
         """,
-        height=90,
+        height=220,
+        scrolling=False,
     )
 
 
@@ -976,6 +1158,7 @@ section[data-testid="stMain"] > div {
     padding-left: 2rem !important;
     padding-right: 2rem !important;
     padding-top: 0 !important;
+    margin-top: -2rem !important;
 }
 /* Center markdown blocks that contain hero */
 [data-testid="stMarkdownContainer"] {
@@ -1019,26 +1202,32 @@ section[data-testid="stMain"] > div {
 .nav-wrap .stButton>button{
     background:transparent!important;
     border:none!important;
-    border-radius:6px!important;
+    border-radius:30px!important;
     font-family:var(--fb)!important;
-    font-size:18px!important;
-    font-weight:800!important;
-    color:#000000!important;
+    font-size:13px!important;
+    font-weight:700!important;
+    color:#0C0C1A!important;
     opacity:1!important;
     letter-spacing:-0.01em!important;
-    padding:0.3rem 0.8rem!important;
+    padding:0.3rem 0.85rem!important;
     height:auto!important;
     text-align:center!important;
-    transition:all 0.12s ease!important;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08)!important;
+    transition:all 0.14s cubic-bezier(0.4,0,0.2,1)!important;
 }
 .nav-wrap .stButton>button:hover{
-    background:var(--subtle)!important;
-    color:var(--blue)!important;
+    background:#0C0C1A!important;
+    color:#FFFFFF!important;
+    border-color:#0C0C1A!important;
+    box-shadow:0 3px 10px rgba(0,0,0,0.2)!important;
+    transform:translateY(-1px)!important;
 }
 .nav-wrap.active .stButton>button{
-    color:var(--blue)!important;
+    background:#0C0C1A!important;
+    color:#FFFFFF!important;
+    border-color:#0C0C1A!important;
     font-weight:700!important;
-    background:var(--subtle)!important;
+    box-shadow:0 2px 8px rgba(0,0,0,0.18)!important;
 }
 .nav-cta .stButton>button{
     background:var(--blue)!important;
@@ -1064,44 +1253,16 @@ section[data-testid="stMain"] > div {
 }
 .hero-logo-wrap{
     position:relative;
-    width:140px;height:140px;
+    width:200px;height:200px;
     display:inline-flex;align-items:center;justify-content:center;
     margin-bottom:0.7rem;
 }
 .hero-logo-wrap img,.hero-logo-wrap .fi{
-    width:140px;height:140px;border-radius:50%;
+    width:80px;height:80px;border-radius:50%;
     position:relative;z-index:3;
-    filter:drop-shadow(0 0 18px rgba(10,20,120,.65))
-        drop-shadow(0 0 40px rgba(10,20,120,.35));
 }
-.hero-logo-wrap .fi{font-size:36px;line-height:52px;}
-.hero-ring{
-    position:absolute;border-radius:60%;border:2px solid var(--blue);
-    opacity:1;animation:hr-pulse 2.8s ease-out infinite;
-}
-.hero-ring.r1{width:100px;height:90px;animation-delay:0s;}
-.hero-ring.r2{width:100px;height:90px;animation-delay:0.9s;}
-.hero-ring.r3{width:100px;height:90px;animation-delay:1.8s;}
-.hero-ring.r4{width:130px;height:130px;animation-delay:0.3s;opacity:0.4;border-color:rgba(26,26,255,0.15);}
-.hero-ring.r5{width:170px;height:170px;animation-delay:1.1s;opacity:0.25;border-color:rgba(26,26,255,0.1);}
-.hero-ring.r6{width:215px;height:215px;animation-delay:1.9s;opacity:0.15;border-color:rgba(26,26,255,0.07);}
-@keyframes hr-pulse{
-    0%{transform:scale(0.4);opacity:0.6;}
-    60%{opacity:0.1;}
-    100%{transform:scale(1.9);opacity:0;}
-}
-.hero-orbit{
-    position:absolute;inset:-65px; /* bigger */
-    border-radius:50%;
-    border:3px dashed rgba(5,10,55,0.72);
-    box-shadow:0 0 35px rgba(8,18,90,.35),inset 0 0 18px rgba(5,10,55,.45);
-    animation:orbit-spin 12s linear infinite;
-}
-.hero-orbit::before{
-    content:'';position:absolute;width:18px;height:18px;border-radius:60%;
-    background:#0A18FF;top:-9px;left:50%;transform:translateX(-50%);
-     box-shadow:0 0 18px rgba(10,24,255,.9),0 0 50px rgba(10,24,255,.65);
-}
+.hero-logo-wrap .fi{font-size:36px;line-height:80px;}
+/* hero-ring and hero-orbit removed — replaced by Neural Pulse canvas */
 .hero-eyebrow{
     display:inline-flex;align-items:center;gap:6px;
     font-size:11.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
@@ -1583,7 +1744,8 @@ section[data-testid="stMain"] > div {
 
 /* ── HERO IMPROVEMENTS ── */
 .hero{
-    padding:1.8rem 0 1.5rem 0!important;
+    padding:2rem 0 1.5rem 0!important;
+    margin-top: -4.8rem !important;
 }
 .hero-logo-wrap{margin-bottom:0.7rem!important;}
 .hero-title{font-size:2.6rem!important;letter-spacing:-0.04em!important;}
@@ -1817,6 +1979,297 @@ section[data-testid="stMain"] > div {
     text-transform:uppercase;color:rgba(255,255,255,0.4);
     margin-top:3px;
 }
+
+/* ════════════════════════════════════════════════════════════
+   MICRO ANIMATIONS — Apple / Linear quality
+   Rules:
+   • No layout changes • No color changes • No repositioning
+   • Only transform, opacity, box-shadow, filter, transition
+   • All easing: cubic-bezier(0.4, 0, 0.2, 1) — Material/Apple standard
+   • Max animation duration: 600ms for interactions, 4s for ambients
+════════════════════════════════════════════════════════════ */
+
+/* ── 1. PAGE LOAD — staged fade-up reveal ── */
+@keyframes page-fadein{
+    from{opacity:0;transform:translateY(12px);}
+    to{opacity:1;transform:translateY(0);}
+}
+[data-testid="stMainBlockContainer"]{
+    animation:page-fadein 0.45s cubic-bezier(0.4,0,0.2,1) both;
+}
+/* Progressive stagger for direct block children */
+[data-testid="stMainBlockContainer"] > div > div:nth-child(1){animation-delay:0ms;}
+[data-testid="stMainBlockContainer"] > div > div:nth-child(2){animation-delay:40ms;}
+[data-testid="stMainBlockContainer"] > div > div:nth-child(3){animation-delay:80ms;}
+[data-testid="stMainBlockContainer"] > div > div:nth-child(4){animation-delay:120ms;}
+[data-testid="stMainBlockContainer"] > div > div:nth-child(5){animation-delay:160ms;}
+
+
+/* ── 2. HERO — handled by Neural Pulse canvas component ── */
+/* Hero title smooth fade */
+.hero-title{
+    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.1s both;
+}
+.hero-sub{
+    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.18s both;
+}
+.hero-eyebrow{
+    animation:page-fadein 0.5s cubic-bezier(0.4,0,0.2,1) 0.06s both;
+}
+.hero-actions{
+    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.24s both;
+}
+
+
+/* ── 3. BUTTONS — elevation + compression ── */
+.stButton > button,
+.hbtn,
+.abtn,
+.build-action-btn,
+.nav-cta .stButton > button{
+    transition:
+        transform 140ms cubic-bezier(0.4,0,0.2,1),
+        box-shadow 140ms cubic-bezier(0.4,0,0.2,1),
+        background 160ms cubic-bezier(0.4,0,0.2,1),
+        border-color 160ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+    will-change:transform,box-shadow;
+}
+.stButton > button:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:0 4px 14px rgba(26,26,255,0.13)!important;
+}
+.stButton > button:active{
+    transform:scale(0.97) translateY(0)!important;
+    box-shadow:0 1px 4px rgba(26,26,255,0.08)!important;
+    transition-duration:80ms!important;
+}
+.nav-cta .stButton > button:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:0 6px 20px rgba(26,26,255,0.3)!important;
+}
+.nav-cta .stButton > button:active{
+    transform:scale(0.96)!important;
+}
+.hbtn{
+    transition:transform 140ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 140ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+.hbtn:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:0 6px 20px rgba(26,26,255,0.18)!important;
+}
+.hbtn:active{transform:scale(0.97)!important;}
+
+
+/* ── 4. CARDS — micro lift + depth shadow ── */
+.camp-card,.cex-card,.dapp-card,.news-card,
+.welcome-card,.build-path-card,.glass-card,
+.chat-showcase{
+    transition:
+        transform 200ms cubic-bezier(0.4,0,0.2,1),
+        box-shadow 200ms cubic-bezier(0.4,0,0.2,1),
+        border-color 200ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+    will-change:transform;
+}
+.camp-card:hover,.cex-card:hover,.news-card:hover,
+.chat-showcase:hover{
+    transform:translateY(-3px)!important;
+    box-shadow:0 8px 28px rgba(26,26,255,0.1)!important;
+}
+.dapp-card:hover{
+    transform:translateY(-3px)!important;
+    box-shadow:0 10px 32px rgba(26,26,255,0.12)!important;
+}
+/* Stat pills subtle pop */
+.stat-pill{
+    transition:transform 140ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 140ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+.stat-pill:hover{
+    transform:translateY(-1px)!important;
+    box-shadow:0 3px 10px rgba(26,26,255,0.1)!important;
+}
+
+
+/* ── 5. CHAT — message reveal + input focus ── */
+/* Each new chat message slides in */
+[data-testid="stChatMessage"]{
+    animation:chat-msg-in 0.32s cubic-bezier(0.4,0,0.2,1) both;
+    will-change:opacity,transform;
+}
+@keyframes chat-msg-in{
+    from{opacity:0;transform:translateY(8px);}
+    to{opacity:1;transform:translateY(0);}
+}
+/* Stagger user vs assistant messages */
+[data-testid="stChatMessage"]:nth-child(odd){animation-delay:0ms;}
+[data-testid="stChatMessage"]:nth-child(even){animation-delay:60ms;}
+
+/* Chat input — smooth focus ring expand */
+[data-testid="stChatInput"]{
+    transition:
+        box-shadow 220ms cubic-bezier(0.4,0,0.2,1),
+        border-color 220ms cubic-bezier(0.4,0,0.2,1),
+        transform 220ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+}
+[data-testid="stChatInput"]:focus-within{
+    transform:translateY(-1px)!important;
+    box-shadow:0 0 0 3px rgba(26,26,255,0.12),
+               0 4px 16px rgba(26,26,255,0.08)!important;
+}
+
+
+/* ── 6. LOADING — premium shimmer skeleton ── */
+@keyframes shimmer-sweep{
+    0%{background-position:-600px 0;}
+    100%{background-position:600px 0;}
+}
+.shimmer,.stSpinner > div{
+    background:linear-gradient(
+        90deg,
+        var(--bg2) 0%,
+        var(--bg1) 40%,
+        var(--bg2) 80%
+    )!important;
+    background-size:1200px 100%!important;
+    animation:shimmer-sweep 1.6s ease-in-out infinite!important;
+    border-radius:8px!important;
+}
+/* Spinner text smooth fade */
+[data-testid="stSpinner"] p{
+    animation:page-fadein 0.3s ease both;
+    font-size:13px!important;
+    color:var(--t3)!important;
+}
+
+
+/* ── 7. EXPANDERS ── */
+[data-testid="stExpander"]{
+    transition:box-shadow 200ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+[data-testid="stExpander"]:hover{
+    box-shadow:0 4px 14px rgba(26,26,255,0.07)!important;
+}
+[data-testid="stExpander"] summary{
+    transition:color 150ms ease!important;
+}
+
+
+/* ── 8. HOVER INTERACTIONS — every element responsive ── */
+/* Nav buttons — handled above, ensure animation transitions are smooth */
+.nav-wrap .stButton > button{
+    transition:
+        background 150ms cubic-bezier(0.4,0,0.2,1),
+        color 150ms cubic-bezier(0.4,0,0.2,1),
+        transform 140ms cubic-bezier(0.4,0,0.2,1),
+        box-shadow 150ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+}
+.nav-wrap .stButton > button:hover{
+    transform:translateY(-1px)!important;
+}
+.nav-wrap .stButton > button:active{
+    transform:scale(0.97)!important;
+}
+/* Toggle */
+[data-testid="stToggle"]{
+    transition:opacity 150ms ease!important;
+}
+[data-testid="stToggle"]:hover{
+    opacity:0.85!important;
+}
+/* Links */
+.camp-link,.source-item-url,.dapp-arrow,a{
+    transition:opacity 150ms ease,color 150ms ease!important;
+}
+/* Marquee pause on hover already in marquee-track */
+
+
+/* ── 9. BACKGROUND — ultra subtle ambient drift ── */
+@keyframes bg-drift{
+    0%,100%{background-position:0% 0%,100% 100%,0% 100%,0 0,0 0;}
+    33%{background-position:1% 1%,99% 99%,1% 99%,0 0,0 0;}
+    66%{background-position:0.5% 0.5%,99.5% 99.5%,0.5% 99.5%,0 0,0 0;}
+}
+.stApp{
+    animation:bg-drift 18s ease-in-out infinite!important;
+    will-change:background-position!important;
+}
+
+
+/* ── 10. NAV / STATE CHANGES — crossfade ── */
+/* Page content crossfade on navigation */
+[data-testid="stMainBlockContainer"] > div{
+    animation:page-fadein 0.35s cubic-bezier(0.4,0,0.2,1) both;
+}
+/* Section dark cards animate in */
+.section-dark{
+    animation:page-fadein 0.4s cubic-bezier(0.4,0,0.2,1) both;
+}
+/* Follow-up pills */
+.followup-pill{
+    transition:
+        background 150ms cubic-bezier(0.4,0,0.2,1),
+        color 150ms cubic-bezier(0.4,0,0.2,1),
+        transform 150ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+}
+.followup-pill:hover{
+    transform:translateY(-1px)!important;
+}
+/* Docs banner link */
+.docs-banner-link{
+    transition:background 150ms ease,transform 140ms ease!important;
+}
+.docs-banner-link:hover{
+    transform:translateY(-1px)!important;
+}
+/* DApp filter buttons */
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button{
+    transition:
+        background 140ms cubic-bezier(0.4,0,0.2,1),
+        border-color 140ms cubic-bezier(0.4,0,0.2,1),
+        transform 140ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover{
+    transform:translateY(-1px)!important;
+}
+/* Link buttons */
+.stLinkButton a{
+    transition:transform 140ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 140ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+.stLinkButton a:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:0 4px 14px rgba(26,26,255,0.14)!important;
+}
+/* Source sidebar slide */
+.source-item{
+    transition:transform 160ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 160ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+.source-item:hover{
+    transform:translateX(2px)!important;
+    box-shadow:0 2px 8px rgba(26,26,255,0.08)!important;
+}
+/* Sidebar example question buttons */
+[data-testid="stSidebar"] .stButton > button{
+    transition:
+        background 130ms cubic-bezier(0.4,0,0.2,1),
+        border-color 130ms cubic-bezier(0.4,0,0.2,1),
+        transform 130ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover{
+    transform:translateX(2px)!important;
+}
+/* Smooth scrollbar */
+html{scroll-behavior:smooth!important;}
+*{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1836,8 +2289,17 @@ NAV_PAGES = [
     ("🧩", "Ecosystem", "ecosystem"),
 ]
 
+st.markdown('<div style="display:flex;justify-content:center;margin-bottom:0.5rem;">', unsafe_allow_html=True)
 nav_cols = st.columns([1.2, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.1, 1.1])
 
+st.markdown(
+    '<div style="display:flex;justify-content:center;margin-bottom:0.6rem;">'
+    '<div style="display:inline-flex;align-items:center;gap:2px;'
+    'background:#0C0C1A;border-radius:40px;padding:5px 6px;'
+    'box-shadow:0 2px 12px rgba(0,0,0,0.15);">'
+    '</div></div>',
+    unsafe_allow_html=True,
+)
 with nav_cols[0]:
     if logo_b64:
         logo_html = (
@@ -1873,7 +2335,7 @@ with nav_cols[8]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
     st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
+st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<hr style="border:none;border-top:1px solid #E3E5EA;margin:0 0 1rem 0;">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════
@@ -1911,19 +2373,43 @@ if st.session_state.page == "home":
         unsafe_allow_html=True,
     )
 
-    # hero button handlers (JS links don't trigger Streamlit reruns — use pills below)
-    hcol1, hcol2, hcol3 = st.columns(3)
-    with hcol1:
-        if st.button("💬 Multilingual", key="home_chat", use_container_width=True):
-            st.session_state.page = "None"; st.rerun()
-    with hcol2:
-        if st.button("🚀 50+ Languages", key="home_camp", use_container_width=True):
-            st.session_state.page = "None"; st.rerun()
-    with hcol3:
-        if st.button("📊 Real time Markets", key="home_trade", use_container_width=True):
-            st.session_state.page = "https://github.com/isharik/Pharos-Octobot"; st.rerun()
+    # Feature badges — polished static display, not clickable buttons
+    st.markdown(
+        '<div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:1.2rem;">'
 
-    st.markdown('<div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
+        '<div style="display:inline-flex;align-items:center;gap:9px;'
+        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
+        'border-radius:12px;padding:0.55rem 1.1rem;'
+        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+        '<span style="font-size:16px;line-height:1;">💬</span>'
+        '<div>'
+        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">Multilingual</div>'
+        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Ask in any language</div>'
+        '</div></div>'
+
+        '<div style="display:inline-flex;align-items:center;gap:9px;'
+        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
+        'border-radius:12px;padding:0.55rem 1.1rem;'
+        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+        '<span style="font-size:16px;line-height:1;">🌐</span>'
+        '<div>'
+        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">50+ Languages</div>'
+        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Hindi, Arabic, Chinese & more</div>'
+        '</div></div>'
+
+        '<div style="display:inline-flex;align-items:center;gap:9px;'
+        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
+        'border-radius:12px;padding:0.55rem 1.1rem;'
+        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+        '<span style="font-size:16px;line-height:1;">📊</span>'
+        '<div>'
+        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">Real-time Markets</div>'
+        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Live $PROS price & chart</div>'
+        '</div></div>'
+
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── Docs badge banner ─────────────────────
     st.markdown(
