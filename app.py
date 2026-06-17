@@ -69,6 +69,9 @@ CAMPAIGNS = [
         "link":  "https://dorahacks.io/hackathon/pharos-phase1",
         "cta":   "Submit your Skill",
         "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=dorahacks.io&sz=64",
+        "icon":  "🏆",
+        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
     {
         "title": "Pharos Expedition Season 2",
@@ -77,6 +80,9 @@ CAMPAIGNS = [
         "link":  "https://www.notion.so/Pharos-Expedition-Season-2-3578ec314f7580488f69ca722cc31cf9",
         "cta":   "Join here",
         "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
+        "icon":  "🚀",
+        "bg":    "linear-gradient(135deg,#E8F4FF,#DCEEff)",
     },
     {
         "title": "Storyteller Program 2.0",
@@ -85,14 +91,20 @@ CAMPAIGNS = [
         "link":  "https://silken-muskox-24e.notion.site/pharos-storyteller-program-2-0",
         "cta":   "Apply now",
         "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
+        "icon":  "✍️",
+        "bg":    "linear-gradient(135deg,#F0FFF4,#E0F8E8)",
     },
     {
-        "title": "Pharos Inner Circle ",
+        "title": "Pharos Inner Circle",
         "tag":   "# Make a Million, Become a PRO",
         "desc":  "Merit-based initiative designed to recognize and reward the most committed Pharos supporters",
         "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
         "cta":   "Grow with Us",
         "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
+        "icon":  "👑",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
 ]
 
@@ -222,6 +234,14 @@ if "show_sources"    not in st.session_state: st.session_state.show_sources    =
 if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
 if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "docs"
 if "octobot_lang"    not in st.session_state: st.session_state.octobot_lang    = "English"
+if "build_path_goal" not in st.session_state: st.session_state.build_path_goal = None
+if "build_path_data" not in st.session_state: st.session_state.build_path_data = None
+
+# Logo assistant bubble → navigate to chat
+_goto = st.query_params.get("goto", "")
+if _goto == "chat":
+    st.session_state.page = "chat"
+    st.query_params.clear()
 
 # Voice query from mic widget
 _voice_q = st.query_params.get("voice_q", "")
@@ -636,6 +656,228 @@ def render_octo_fab() -> None:
         height=1,
     )
 
+def build_path_generator(goal: str, bot) -> str:
+    """
+    Generates a structured Pharos build roadmap for the given goal.
+    Uses the existing RAG bot first, falls back to Gemini directly.
+    Returns a dict with keys: steps, docs, actions.
+    """
+    BUILD_GOALS = {
+        "Agent":          ("AI Agent",          "building an AI Agent or Skill on Pharos"),
+        "dApp":           ("dApp",               "building a decentralised application on Pharos"),
+        "Learning":       ("Learning Pharos",    "learning and understanding the Pharos ecosystem"),
+        "Infrastructure": ("Infrastructure",     "building core infrastructure or tooling on Pharos"),
+    }
+    label, context = BUILD_GOALS.get(goal, ("Builder", "building on Pharos"))
+
+    # Try RAG first
+    rag_q = f"How do I start {context}? What are the steps, documentation, and resources?"
+    try:
+        rag_answer, _ = bot.ask(rag_q)
+        has_rag = "I could not find" not in rag_answer
+    except Exception:
+        rag_answer = ""
+        has_rag = False
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return rag_answer or "Could not generate roadmap — GEMINI_API_KEY missing."
+
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", temperature=0.3,
+        google_api_key=api_key,
+    )
+    context_block = ("\n\nContext from Pharos documentation:\n" + rag_answer[:1200]) if has_rag else ""
+    prompt = (
+        f"You are an expert Pharos blockchain developer guide. "
+        f"Generate a concise, structured build roadmap for someone who wants to: {context}.\n"
+        f"Return EXACTLY this JSON format (no other text):\n"
+        f'{{"goal":"{label}",'
+        f'"steps":[{{"num":1,"title":"Step title","desc":"1-2 sentence description"}},...],'
+        f'"docs":[{{"title":"Doc name","url":"https://docs.pharos.xyz/..."}}],'
+        f'"actions":[{{"label":"Action name","url":"https://..."}}]}}\n'
+        f"Steps: 4-5 steps. Docs: 2-3 relevant links. Actions: 2-3 next steps."
+        f"{context_block}"
+    )
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        raw  = resp.content.strip()
+        raw  = re.sub(r"^```(?:json)?\n?", "", raw, flags=re.IGNORECASE)
+        raw  = re.sub(r"\n?```$", "", raw)
+        return json.loads(raw)
+    except Exception:
+        return rag_answer or "Could not generate roadmap at this time."
+
+
+def render_thinking_orb(state: str = "idle") -> None:
+    """
+    Renders the AI thinking orb via components.html.
+    state: 'idle' | 'thinking' | 'done'
+    """
+    label = (
+        "OctoBot is thinking..." if state == "thinking" else
+        "Response ready ✓"       if state == "done"     else
+        "OctoBot ready"
+    )
+    spin_style = (
+        "animation:orb-think 0.8s ease-in-out infinite!important;"
+        "box-shadow:0 0 35px rgba(26,26,255,0.6),0 0 70px rgba(26,26,255,0.2)!important;"
+        if state == "thinking" else
+        "animation:orb-settle 0.5s ease both!important;"
+        if state == "done" else
+        ""
+    )
+    components.html(
+        f"""
+        <style>
+        body{{margin:0;padding:0;background:transparent;overflow:hidden;}}
+        .ow{{display:flex;align-items:center;gap:10px;padding:6px 2px;}}
+        .orb{{
+            width:38px;height:38px;border-radius:50%;position:relative;flex-shrink:0;
+            background:radial-gradient(circle at 35% 30%,#8BAAFF 0%,#1A1AFF 55%,#050525 100%);
+            box-shadow:0 0 18px rgba(26,26,255,0.35);
+            animation:orb-breathe 3s ease-in-out infinite;
+            {spin_style}
+        }}
+        .orb::after{{
+            content:'';position:absolute;inset:3px;border-radius:50%;
+            background:radial-gradient(circle at 30% 25%,rgba(255,255,255,0.38),transparent 58%);
+        }}
+        .orb-ring{{
+            position:absolute;inset:-5px;border-radius:50%;
+            border:1px solid rgba(26,26,255,0.22);
+            animation:orb-ring 2.8s ease-in-out infinite;
+        }}
+        @keyframes orb-breathe{{
+            0%,100%{{transform:scale(1);box-shadow:0 0 18px rgba(26,26,255,0.3);}}
+            50%{{transform:scale(1.06);box-shadow:0 0 28px rgba(26,26,255,0.5);}}
+        }}
+        @keyframes orb-think{{
+            0%{{transform:scale(0.94) rotate(0deg);}}
+            50%{{transform:scale(1.1) rotate(180deg);}}
+            100%{{transform:scale(0.94) rotate(360deg);}}
+        }}
+        @keyframes orb-settle{{
+            0%{{transform:scale(1.12);box-shadow:0 0 40px rgba(26,26,255,0.6);}}
+            100%{{transform:scale(1);box-shadow:0 0 18px rgba(26,26,255,0.3);}}
+        }}
+        @keyframes orb-ring{{
+            0%,100%{{transform:scale(1);opacity:0.5;}}
+            50%{{transform:scale(1.18);opacity:0.1;}}
+        }}
+        .ol{{font-size:12px;color:#5B5F6E;font-family:'DM Sans',sans-serif;
+            font-weight:{"600" if state=="thinking" else "400"};}}
+        </style>
+        <div class="ow">
+          <div class="orb"><div class="orb-ring"></div></div>
+          <span class="ol">{label}</span>
+        </div>
+        """,
+        height=52,
+    )
+
+
+def render_interactive_logo(logo_b64: str) -> None:
+    """
+    Renders the hero logo as an interactive element.
+    Click opens an assistant bubble with a link to chat.
+    """
+    img_html = (
+        f'<img src="{logo_b64}" width="58" height="58" '
+        f'style="border-radius:50%;display:block;" />'
+        if logo_b64 else
+        '<div style="width:58px;height:58px;border-radius:50%;background:#1A1AFF;'
+        'display:flex;align-items:center;justify-content:center;font-size:28px;">🐙</div>'
+    )
+    components.html(
+        """
+        <style>
+        .ilogo{position:relative;display:inline-block;cursor:pointer;}
+        .ilogo-img{
+            border-radius:50%;
+            transition:transform 0.25s ease,box-shadow 0.25s ease,filter 0.25s ease;
+            filter:drop-shadow(0 2px 10px rgba(26,26,255,0.25));
+        }
+        .ilogo:hover .ilogo-img{
+            transform:scale(1.08);
+            filter:drop-shadow(0 4px 20px rgba(26,26,255,0.5));
+        }
+        .ilogo-pulse{
+            position:absolute;inset:-8px;border-radius:50%;
+            border:1.5px solid rgba(26,26,255,0.25);
+            animation:ip 2.8s ease-in-out infinite;
+        }
+        @keyframes ip{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.18);opacity:0.12;}}
+        .ibubble{
+            position:absolute;top:calc(100% + 12px);left:50%;
+            transform:translateX(-50%) scale(0.9);
+            background:#fff;border:1.5px solid #C8D0FF;
+            border-radius:14px;box-shadow:0 8px 32px rgba(26,26,255,0.14);
+            padding:12px 14px;width:210px;z-index:200;
+            opacity:0;pointer-events:none;
+            transition:opacity 0.2s ease,transform 0.2s ease;
+            font-family:'DM Sans',sans-serif;
+        }
+        .ibubble::before{
+            content:'';position:absolute;top:-7px;left:50%;
+            transform:translateX(-50%);
+            width:12px;height:12px;background:#fff;
+            border-left:1.5px solid #C8D0FF;border-top:1.5px solid #C8D0FF;
+            transform:translateX(-50%) rotate(45deg);
+        }
+        .ibubble.vis{opacity:1;pointer-events:all;transform:translateX(-50%) scale(1);}
+        .ibubble-q{font-size:12px;color:#0C0C1A;font-weight:500;line-height:1.5;margin-bottom:8px;}
+        .ibubble-cta{
+            display:inline-flex;align-items:center;gap:4px;
+            font-size:11px;font-weight:700;color:#fff;
+            background:#1A1AFF;border-radius:8px;
+            padding:5px 12px;cursor:pointer;border:none;
+            font-family:'DM Sans',sans-serif;width:100%;
+            justify-content:center;
+        }
+        .wrap{position:relative;display:inline-flex;justify-content:center;}
+        </style>
+        <div style="display:flex;justify-content:center;">
+        <div class="wrap">
+          <div class="ilogo" id="ilogoBtn" onclick="toggleBubble()">
+            <div class="ilogo-pulse"></div>
+            <div class="ilogo-img">""" + img_html + """</div>
+          </div>
+          <div class="ibubble" id="ibubble">
+            <div class="ibubble-q">👋 Hi! I'm OctoBot.<br>Ask me anything about Pharos.</div>
+            <button class="ibubble-cta" onclick="goChat()">💬 Open Chat →</button>
+          </div>
+        </div>
+        </div>
+        <script>
+        function toggleBubble(){
+            var b = document.getElementById('ibubble');
+            b.classList.toggle('vis');
+        }
+        function goChat(){
+            // Navigate parent Streamlit app to chat page via query param
+            try{
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set('goto','chat');
+                window.parent.location.href = url.toString();
+            }catch(e){
+                document.getElementById('ibubble').classList.remove('vis');
+            }
+        }
+        // Close bubble when clicking outside
+        document.addEventListener('click', function(e){
+            var btn = document.getElementById('ilogoBtn');
+            var bbl = document.getElementById('ibubble');
+            if(btn && !btn.contains(e.target)){
+                if(bbl) bbl.classList.remove('vis');
+            }
+        });
+        </script>
+        """,
+        height=90,
+    )
+
+
 @st.cache_resource(show_spinner=False)
 def load_octobot():
     try:
@@ -664,9 +906,9 @@ st.markdown("""
     --light:   #6B8CFF;
     --glow:    rgba(26,26,255,0.15);
     --subtle:  rgba(26,26,255,0.06);
-    --bg:   #D7DCE6;
-    --bg1:  #F1F4F9;
-    --bg2:  #E7ECF5;
+    --bg:   #C9D4E8;
+--bg1:  #D9E2F0;
+--bg2:  #D0DBEB;
     --glass:   rgba(244,245,248,0.82);
     --border:  #D0D3E0;
     --border2: #C4C8D8;
@@ -822,40 +1064,47 @@ section[data-testid="stMain"] > div {
 }
 .hero-logo-wrap{
     position:relative;
-    width:90px;height:90px;
+    width:140px;height:140px;
     display:inline-flex;align-items:center;justify-content:center;
-    margin-bottom:1.2rem;
+    margin-bottom:0.7rem;
 }
 .hero-logo-wrap img,.hero-logo-wrap .fi{
-    width:52px;height:52px;border-radius:50%;
+    width:140px;height:140px;border-radius:50%;
     position:relative;z-index:3;
-    filter:drop-shadow(0 2px 12px rgba(26,26,255,0.3));
+    filter:drop-shadow(0 0 18px rgba(10,20,120,.65))
+        drop-shadow(0 0 40px rgba(10,20,120,.35));
 }
 .hero-logo-wrap .fi{font-size:36px;line-height:52px;}
 .hero-ring{
-    position:absolute;border-radius:50%;border:1.5px solid var(--blue);
-    opacity:0;animation:hr-pulse 2.8s ease-out infinite;
+    position:absolute;border-radius:60%;border:2px solid var(--blue);
+    opacity:1;animation:hr-pulse 2.8s ease-out infinite;
 }
-.hero-ring.r1{width:90px;height:90px;animation-delay:0s;}
-.hero-ring.r2{width:90px;height:90px;animation-delay:0.9s;}
-.hero-ring.r3{width:90px;height:90px;animation-delay:1.8s;}
+.hero-ring.r1{width:100px;height:90px;animation-delay:0s;}
+.hero-ring.r2{width:100px;height:90px;animation-delay:0.9s;}
+.hero-ring.r3{width:100px;height:90px;animation-delay:1.8s;}
+.hero-ring.r4{width:130px;height:130px;animation-delay:0.3s;opacity:0.4;border-color:rgba(26,26,255,0.15);}
+.hero-ring.r5{width:170px;height:170px;animation-delay:1.1s;opacity:0.25;border-color:rgba(26,26,255,0.1);}
+.hero-ring.r6{width:215px;height:215px;animation-delay:1.9s;opacity:0.15;border-color:rgba(26,26,255,0.07);}
 @keyframes hr-pulse{
-    0%{transform:scale(0.5);opacity:0.5;}
-    100%{transform:scale(1.6);opacity:0;}
+    0%{transform:scale(0.4);opacity:0.6;}
+    60%{opacity:0.1;}
+    100%{transform:scale(1.9);opacity:0;}
 }
 .hero-orbit{
-    position:absolute;inset:-18px;border-radius:50%;
-    border:1px dashed rgba(26,26,255,0.18);
+    position:absolute;inset:-65px; /* bigger */
+    border-radius:50%;
+    border:3px dashed rgba(5,10,55,0.72);
+    box-shadow:0 0 35px rgba(8,18,90,.35),inset 0 0 18px rgba(5,10,55,.45);
     animation:orbit-spin 12s linear infinite;
 }
 .hero-orbit::before{
-    content:'';position:absolute;width:7px;height:7px;border-radius:50%;
-    background:var(--blue);top:-3px;left:50%;transform:translateX(-50%);
-    box-shadow:0 0 8px var(--blue);
+    content:'';position:absolute;width:18px;height:18px;border-radius:60%;
+    background:#0A18FF;top:-9px;left:50%;transform:translateX(-50%);
+     box-shadow:0 0 18px rgba(10,24,255,.9),0 0 50px rgba(10,24,255,.65);
 }
 .hero-eyebrow{
     display:inline-flex;align-items:center;gap:6px;
-    font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+    font-size:11.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
     color:var(--blue);background:var(--subtle);border:1px solid rgba(26,26,255,0.18);
     border-radius:20px;padding:3px 12px;margin-bottom:1rem;margin-top:0.8rem;
     align-self:center;
@@ -1336,9 +1585,9 @@ section[data-testid="stMain"] > div {
 .hero{
     padding:1.8rem 0 1.5rem 0!important;
 }
-.hero-logo-wrap{margin-bottom:0.8rem!important;}
+.hero-logo-wrap{margin-bottom:0.7rem!important;}
 .hero-title{font-size:2.6rem!important;letter-spacing:-0.04em!important;}
-.hero-sub{font-size:0.95rem!important;margin-bottom:1.3rem!important;}
+.hero-sub{font-size:0.95rem!important;margin-bottom:0.85rem!important;}
 
 /* ── MICRO INTERACTIONS ── */
 .camp-card,.cex-card,.dapp-card,.news-card{
@@ -1374,6 +1623,199 @@ section[data-testid="stMain"] > div {
     padding:5px 12px;border-radius:8px;
     border:1px solid #D0D3E0;background:#FFFFFF;color:#0C0C1A;
     cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;
+}
+
+/* ═══════════════════════════════════════════
+   FEATURE 1: THINKING ORB
+═══════════════════════════════════════════ */
+.orb-wrap{
+    display:flex;justify-content:center;align-items:center;
+    margin:0.5rem 0;
+}
+.orb{
+    width:40px;height:49px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 35% 35%, #6B8CFF, #1A1AFF 60%, #0A0A2E);
+    box-shadow:0 0 20px rgba(26,26,255,0.25),0 0 40px rgba(26,26,255,0.1);
+    animation:orb-breathe 3s ease-in-out infinite;
+    cursor:pointer;flex-shrink:0;
+}
+.orb::before{
+    content:'';position:absolute;inset:3px;border-radius:50%;
+    background:radial-gradient(circle at 30% 25%,rgba(255,255,255,0.35),transparent 60%);
+    pointer-events:none;
+}
+.orb::after{
+    content:'';position:absolute;inset:-6px;border-radius:50%;
+    border:1.5px solid rgba(26,26,255,0.2);
+    animation:orb-ring 3s ease-in-out infinite;
+}
+.orb.orb-thinking{
+    animation:orb-think 0.8s ease-in-out infinite!important;
+    box-shadow:0 0 30px rgba(26,26,255,0.5),0 0 60px rgba(26,26,255,0.2)!important;
+}
+.orb.orb-done{
+    animation:orb-settle 0.6s ease both!important;
+}
+@keyframes orb-breathe{
+    0%,100%{transform:scale(1);box-shadow:0 0 20px rgba(26,26,255,0.25),0 0 40px rgba(26,26,255,0.1);}
+    50%{transform:scale(1.06);box-shadow:0 0 28px rgba(26,26,255,0.4),0 0 56px rgba(26,26,255,0.15);}
+}
+@keyframes orb-think{
+    0%{transform:scale(0.96) rotate(0deg);opacity:0.9;}
+    50%{transform:scale(1.08) rotate(180deg);opacity:1;}
+    100%{transform:scale(0.96) rotate(360deg);opacity:0.9;}
+}
+@keyframes orb-ring{
+    0%,100%{transform:scale(1);opacity:0.5;}
+    50%{transform:scale(1.15);opacity:0.15;}
+}
+@keyframes orb-settle{
+    0%{transform:scale(1.12);box-shadow:0 0 40px rgba(26,26,255,0.6);}
+    100%{transform:scale(1);box-shadow:0 0 20px rgba(26,26,255,0.25);}
+}
+
+/* ═══════════════════════════════════════════
+   FEATURE 2: BUILD PATH CARD
+═══════════════════════════════════════════ */
+.build-path-card{
+    background:#FFFFFF;border:1.5px solid #C8D0FF;
+    border-radius:16px;padding:1.3rem 1.4rem;
+    box-shadow:0 4px 20px rgba(26,26,255,0.09);
+    margin-top:0.8rem;
+}
+.build-path-title{
+    font-family:Syne,sans-serif;font-size:16px;font-weight:800;
+    color:#0C0C1A;margin-bottom:0.3rem;
+}
+.build-path-goal{
+    font-size:11px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;
+    color:#1A1AFF;background:rgba(26,26,255,0.07);
+    border:1px solid rgba(26,26,255,0.2);border-radius:20px;
+    padding:2px 10px;display:inline-block;margin-bottom:0.8rem;
+}
+.build-path-step{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:0.55rem 0;border-bottom:1px solid #ECEEF4;
+}
+.build-path-step:last-child{border-bottom:none;}
+.build-step-num{
+    width:22px;height:22px;border-radius:50%;
+    background:#1A1AFF;color:#fff;
+    font-size:11px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    margin-top:1px;
+}
+.build-step-text{font-size:13px;color:#0C0C1A;line-height:1.5;}
+.build-step-sub{font-size:11px;color:#7A7F96;margin-top:2px;}
+.build-path-actions{
+    display:flex;gap:8px;flex-wrap:wrap;margin-top:0.9rem;
+    padding-top:0.7rem;border-top:1px solid #ECEEF4;
+}
+.build-action-btn{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:600;padding:5px 12px;
+    border-radius:8px;border:1px solid #1A1AFF;
+    background:#1A1AFF;color:#fff;text-decoration:none;
+    font-family:'DM Sans',sans-serif;
+}
+.build-action-ghost{
+    background:#FFFFFF!important;color:#1A1AFF!important;
+}
+
+/* ═══════════════════════════════════════════
+   FEATURE 3: INTERACTIVE LOGO ASSISTANT
+═══════════════════════════════════════════ */
+.logo-btn{
+    background:none;border:none;padding:0;cursor:pointer;
+    display:inline-block;position:relative;
+}
+.logo-bubble{
+    position:absolute;
+    top:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(0.92);
+    background:#FFFFFF;border:1.5px solid #C8D0FF;
+    border-radius:14px;box-shadow:0 8px 32px rgba(26,26,255,0.14);
+    padding:0.8rem 1rem;width:220px;z-index:100;
+    opacity:0;pointer-events:none;
+    transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.logo-bubble.open{
+    opacity:1;pointer-events:all;
+    transform:translateX(-50%) scale(1) translateY(0);
+}
+.logo-bubble-text{
+    font-size:12px;color:#0C0C1A;font-weight:500;
+    line-height:1.5;margin-bottom:0.5rem;
+    font-family:'DM Sans',sans-serif;
+}
+.logo-bubble-cta{
+    font-size:11px;font-weight:700;color:#1A1AFF;
+    cursor:pointer;background:none;border:none;padding:0;
+    font-family:'DM Sans',sans-serif;
+}
+
+/* ═══════════════════════════════════════════
+   HOME VISUAL DECORATIVE ELEMENTS
+═══════════════════════════════════════════ */
+
+/* Animated features marquee ticker */
+.marquee-wrap{
+    overflow:hidden;
+    background:#FFFFFF;
+    border:1px solid #E3E5EA;
+    border-radius:12px;
+    padding:0;
+    margin:1.2rem 0 1rem 0;
+    box-shadow:0 1px 4px rgba(20,20,60,0.04);
+    position:relative;
+}
+.marquee-wrap::before,.marquee-wrap::after{
+    content:'';position:absolute;top:0;bottom:0;width:48px;z-index:2;
+}
+.marquee-wrap::before{left:0;background:linear-gradient(90deg,#FFFFFF,transparent);}
+.marquee-wrap::after{right:0;background:linear-gradient(270deg,#FFFFFF,transparent);}
+.marquee-track{
+    display:flex;align-items:center;
+    animation:marquee-scroll 28s linear infinite;
+    width:max-content;
+    padding:0.55rem 0;
+}
+.marquee-track:hover{animation-play-state:paused;}
+.marquee-item{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:0 2rem;white-space:nowrap;
+    border-right:1px solid #E3E5EA;
+}
+.marquee-item:last-child{border-right:none;}
+.marquee-icon{font-size:16px;line-height:1;}
+.marquee-label{
+    font-family:Syne,sans-serif;font-size:13px;font-weight:700;
+    color:#0C0C1A;
+}
+.marquee-sub{
+    font-size:11px;color:#7A7F96;
+}
+@keyframes marquee-scroll{
+    0%{transform:translateX(0);}
+    100%{transform:translateX(-50%);}
+}
+
+.home-stat-strip{
+    display:flex;gap:0;background:#0C0C1A;border-radius:12px;
+    overflow:hidden;margin:0.8rem 0;
+}
+.home-stat-item{
+    flex:1;padding:0.75rem 0.5rem;text-align:center;
+    border-right:1px solid rgba(255,255,255,0.08);
+}
+.home-stat-item:last-child{border-right:none;}
+.home-stat-num{
+    font-family:Syne,sans-serif;font-size:18px;font-weight:800;
+    color:#FFFFFF;line-height:1;
+}
+.home-stat-lbl{
+    font-size:9px;font-weight:600;letter-spacing:0.08em;
+    text-transform:uppercase;color:rgba(255,255,255,0.4);
+    margin-top:3px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1440,24 +1882,8 @@ st.markdown('<hr style="border:none;border-top:1px solid #E3E5EA;margin:0 0 1rem
 if st.session_state.page == "home":
 
     # ── Hero ──────────────────────────────────
-    if logo_b64:
-        hero_logo = (
-            '<div class="hero-logo-wrap">'
-            '<div class="hero-ring r1"></div>'
-            '<div class="hero-ring r2"></div>'
-            '<div class="hero-ring r3"></div>'
-            '<div class="hero-orbit"></div>'
-            '<img src="' + logo_b64 + '" />'
-            '</div>'
-        )
-    else:
-        hero_logo = (
-            '<div class="hero-logo-wrap">'
-            '<div class="hero-ring r1"></div><div class="hero-ring r2"></div><div class="hero-ring r3"></div>'
-            '<div class="hero-orbit"></div>'
-            '<span class="fi">🐙</span>'
-            '</div>'
-        )
+    # ── Interactive logo (feature 3) ────────────
+    render_interactive_logo(logo_b64)
 
     p = price_data
     if p.get("available") and p.get("price_usd"):
@@ -1474,15 +1900,12 @@ if st.session_state.page == "home":
 
     st.markdown(
         '<div class="hero">'
-        + hero_logo +
-        '<div class="hero-eyebrow"><div class="live-dot"></div>Live · Pharos Network AI Hub</div>'
+        '<div class="hero-eyebrow"><div class="live-dot"></div>Live On Pharos Network </div>'
         '<h1 class="hero-title">Your <span>Pharos</span> Command Center</h1>'
         '<p class="hero-sub">Ask OctoBot anything about Pharos, track live $PROS price, explore active campaigns, read the latest updates, and trade — all in one place.</p>'
         '<div style="margin-bottom:1.2rem;">' + price_pill + '</div>'
         '<div class="hero-actions">'
-        '<a class="hbtn hbtn-primary" href="?nav=chat" onclick="void(0)">💬 Chat with OctoBot</a>'
-        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DOCS_URL + '" target="_blank">📄 Pharos Docs ↗</a>'
-        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DISCORD_URL + '" target="_blank">Discord ↗</a>'
+        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DISCORD_URL + '" target="_blank">Join the Pharos Discord for more updates and insights 🌊↗</a>'
         '</div>'
         '</div>',
         unsafe_allow_html=True,
@@ -1574,20 +1997,93 @@ if st.session_state.page == "home":
         '</div></div>',
         unsafe_allow_html=True,
     )
-    camp_cols = st.columns(2)
-    for i, c in enumerate(CAMPAIGNS[:2]):
-        with camp_cols[i % 2]:
-            st.markdown(
-                '<div class="camp-card">'
-                '<div class="camp-tag">' + c["tag"] + '</div>'
-                '<div class="camp-title">' + c["title"] + '</div>'
-                '<div class="camp-desc">' + c["desc"] + '</div>'
-                '<a class="camp-link" href="' + c["link"] + '" target="_blank">' + c["cta"] + ' ↗</a>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+    home_camp_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
+    for c in CAMPAIGNS[:2]:
+        home_camp_html += (
+            f'<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;'
+            f'padding:1rem 1.1rem;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;'
+            f'box-shadow:0 1px 3px rgba(20,20,60,0.04);">'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div class="camp-tag" style="margin-bottom:5px;">{c["tag"]}</div>'
+            f'<div class="camp-title" style="margin-bottom:4px;">{c["title"]}</div>'
+            f'<div class="camp-desc" style="margin-bottom:6px;">{c["desc"]}</div>'
+            f'<a class="camp-link" href="{c["link"]}" target="_blank">{c["cta"]} ↗</a>'
+            f'</div>'
+            f'<div style="width:44px;height:44px;border-radius:12px;flex-shrink:0;'
+            f'background:{c["bg"]};display:flex;align-items:center;justify-content:center;'
+            f'font-size:22px;line-height:1;">{c["icon"]}</div>'
+            f'</div>'
+        )
+    home_camp_html += '</div>'
+    st.markdown(home_camp_html, unsafe_allow_html=True)
     if st.button("View all campaigns →", key="home_all_camp"):
         st.session_state.page = "campaigns"; st.rerun()
+
+    # ── Stats strip ───────────────────────────────────────────────
+    st.markdown(
+        '<div class="home-stat-strip">'
+        '<div class="home-stat-item"><div class="home-stat-num">30K+</div><div class="home-stat-lbl">TPS Capacity</div></div>'
+        '<div class="home-stat-item"><div class="home-stat-num">$44M</div><div class="home-stat-lbl">Series A Raised</div></div>'
+        '<div class="home-stat-item"><div class="home-stat-num">14+</div><div class="home-stat-lbl">Ecosystem DApps</div></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Animated features marquee (centered, replaces 3-card grid) ─
+    MARQUEE_ITEMS = [
+        ("🤖", "RAG-Powered AI",      "Zero hallucination"),
+        ("🌐", "50+ Languages",       "Ask in any language"),
+        ("📊", "Live Market Data",    "Real-time $PROS price"),
+        ("⚡", "30,000+ TPS",         "Fastest EVM L1"),
+        ("🔐", "Built-in Compliance", "zk-KYC & SPNs"),
+        ("🏦", "RWA Native",          "Tokenized real assets"),
+        ("🛠", "EVM Compatible",      "Deploy existing contracts"),
+        ("🐙", "OctoBot AI Hub",      "Your Pharos assistant"),
+    ]
+    # Duplicate items so seamless infinite loop works
+    def _mk_item(icon, title, sub):
+        return (
+            f'<div class="marquee-item">'
+            f'<span class="marquee-icon">{icon}</span>'
+            f'<span class="marquee-label">{title}</span>'
+            f'<span class="marquee-sub">{sub}</span>'
+            f'</div>'
+        )
+    items_html = "".join([_mk_item(i,t,s) for i,t,s in MARQUEE_ITEMS])
+    # Duplicate for seamless loop
+    items_html = items_html + items_html
+    st.markdown(
+        '<div style="text-align:center;margin:0 0 0.4rem 0;">'
+        '<span style="font-size:10px;font-weight:600;letter-spacing:0.1em;'
+        'text-transform:uppercase;color:#9499A8;">What OctoBot can do</span>'
+        '</div>'
+        '<div class="marquee-wrap">'
+        '<div class="marquee-track">' + items_html + '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Build Path Generator (feature 2 — home entry point) ───────
+    st.markdown(
+        '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:14px;'
+        'padding:1.1rem 1.3rem;margin-bottom:0.8rem;box-shadow:0 1px 4px rgba(20,20,60,0.04);">'
+        '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;margin-bottom:0.3rem;">'
+        '🛠 Build on Pharos</div>'
+        '<div style="font-size:12px;color:#7A7F96;margin-bottom:0.8rem;">'
+        'Get a personalised roadmap — choose your goal and OctoBot builds your path.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    bp1, bp2, bp3, bp4 = st.columns(4)
+    for col, goal in zip([bp1,bp2,bp3,bp4], ["Agent","dApp","Learning","Infrastructure"]):
+        icons = {"Agent":"🤖","dApp":"🏗","Learning":"📚","Infrastructure":"⚙️"}
+        with col:
+            if st.button(icons[goal] + " " + goal, key="bp_home_" + goal, use_container_width=True):
+                st.session_state.build_path_goal = goal
+                st.session_state.build_path_data = None
+                st.session_state.page = "chat"
+                st.session_state["pending_q"] = f"Build path for {goal} on Pharos"
+                st.rerun()
 
 
 # ═════════════════════════════════════════════
@@ -1639,30 +2135,7 @@ elif st.session_state.page == "chat":
             unsafe_allow_html=True,
         )
 
-        # Live price card
-        p = price_data
-        if p.get("price_usd"):
-            chg     = p.get("change_24h") or 0
-            chg_col = "#1FA855" if chg >= 0 else "#E5484D"
-            chg_sym = "▲" if chg >= 0 else "▼"
-            st.markdown(
-                '<div style="background:#0C0C1A;border-radius:10px;padding:0.8rem 1rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:9px;font-weight:700;letter-spacing:0.12em;'
-                'text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:5px;">$PROS Live Price</div>'
-                '<div style="font-size:22px;font-weight:800;font-family:Syne,sans-serif;'
-                'color:#FFFFFF;line-height:1.1;letter-spacing:-0.02em;">$' + f'{p["price_usd"]:.4f}' + '</div>'
-                '<div style="font-size:12px;font-weight:600;color:' + chg_col + ';margin-top:3px;">'
-                + chg_sym + f' {abs(chg):.2f}% 24h</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<div style="background:#0C0C1A;border-radius:10px;padding:0.7rem 0.9rem;'
-                'margin-bottom:0.9rem;font-size:11px;color:rgba(255,255,255,0.4);">$PROS loading…</div>',
-                unsafe_allow_html=True,
-            )    
-
+           
         # New conversation
         st.markdown(
             '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
@@ -1685,30 +2158,33 @@ elif st.session_state.page == "chat":
             'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Settings</div>',
             unsafe_allow_html=True,
         )
-        st.session_state.show_sources = st.toggle("📎 Show sources", value=st.session_state.show_sources)
-        st.session_state.voice_reply  = st.toggle("🔊 Read aloud",   value=st.session_state.voice_reply)
+        st.session_state.show_sources = st.toggle("🔍 Show sources", value=st.session_state.show_sources)
+        st.session_state.voice_reply  = st.toggle("🗣 Read aloud",   value=st.session_state.voice_reply)
 
-        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+        st.markdown('<hr style="border:none;border-top:2px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
 
-        # Knowledge base stats
+        # Build Path Generator entry
         st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Knowledge Base</div>'
-            '<div style="font-size:13px;color:#42475A;margin-bottom:0.6rem;">'
-            '<strong style="color:#0C0C1A;">' + str(chunk_count) + '</strong> document chunks</div>',
+            '<div style="font-size:12px;font-weight:800;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">🛠 Build Path (General Mode Exclusive)</div>',
             unsafe_allow_html=True,
         )
+        for goal, icon in [("Agent","🤖"),("dApp","🏗"),("Learning","📚"),("Infrastructure","⚙️")]:
+            if st.button(icon + " " + goal, key="bp_sb_" + goal, use_container_width=True):
+                st.session_state.build_path_goal = goal
+                st.session_state.build_path_data = None
+                st.session_state["pending_q"]    = f"How do I start building a {goal} on Pharos?"
+                st.rerun()
 
         st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
 
         # Example prompts
         st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Ask OctoBot</div>',
+            '<div style="font-size:12px;font-weight:800;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Example Prompts</div>',
             unsafe_allow_html=True,
         )
-        for q in ["What is Pharos?", "What are SPNs?", "How does Native Restaking work?",
-                  "What is the PROS token?", "How do I build on Pharos?", "What is RWA?"]:
+        for q in ["What is Pharos?","What is the PROS token?", "How do I build on Pharos?", "What is RWA?"]:
             if st.button(q, key="sb_" + q, use_container_width=True):
                 st.session_state["pending_q"] = q
                 st.rerun()
@@ -1877,7 +2353,12 @@ elif st.session_state.page == "chat":
             st.markdown(question)
 
         with st.chat_message("assistant", avatar="🐙"):
-            with st.spinner("Searching…"):
+            # ── Thinking orb (feature 1) ──────────────
+            orb_slot = st.empty()
+            with orb_slot.container():
+                render_thinking_orb("thinking")
+
+            with st.spinner(""):
                 try:
                     # General mode: try docs first, fall back to Gemini if not found
                     answer, sources = bot.ask(guided_question)
@@ -1909,14 +2390,63 @@ elif st.session_state.page == "chat":
                     answer  = "An error occurred: " + str(e)
                     sources = []
 
+            # ── Orb: done state ───────────────────────
+            with orb_slot.container():
+                render_thinking_orb("done")
+
             st.markdown(answer)
+
+            # ── Build Path card (feature 2) ───────────
+            msg_idx = str(len(st.session_state.messages))
+            goal = st.session_state.get("build_path_goal")
+            if goal and st.session_state.get("build_path_data") is None:
+                with st.spinner("Generating your build path…"):
+                    bp_data = build_path_generator(goal, bot)
+                st.session_state.build_path_data = bp_data
+                st.session_state.build_path_goal = None
+
+            bp = st.session_state.get("build_path_data")
+            if bp and isinstance(bp, dict):
+                steps_html = "".join([
+                    f'<div class="build-path-step">'
+                    f'<div class="build-step-num">{s["num"]}</div>'
+                    f'<div><div class="build-step-text">{s["title"]}</div>'
+                    f'<div class="build-step-sub">{s["desc"]}</div></div>'
+                    f'</div>'
+                    for s in bp.get("steps", [])
+                ])
+                docs_html = " · ".join([
+                    f'<a href="{d["url"]}" target="_blank" '
+                    f'style="color:#1A1AFF;font-size:11px;font-weight:600;text-decoration:none;">'
+                    f'{d["title"]} ↗</a>'
+                    for d in bp.get("docs", [])
+                ])
+                actions_html = "".join([
+                    f'<a class="build-action-btn" href="{a["url"]}" target="_blank">{a["label"]} ↗</a>'
+                    for a in bp.get("actions", [])
+                ])
+                st.markdown(
+                    f'<div class="build-path-card">'
+                    f'<div class="build-path-title">Your Build Path</div>'
+                    f'<div class="build-path-goal">{bp.get("goal","")}</div>'
+                    f'{steps_html}'
+                    f'<div style="margin-top:0.7rem;font-size:11px;color:#7A7F96;margin-bottom:4px;">📄 Key Docs</div>'
+                    f'<div style="display:flex;gap:8px;flex-wrap:wrap;">{docs_html}</div>'
+                    f'<div class="build-path-actions">{actions_html}'
+                    f'<button class="build-action-btn build-action-ghost" '
+                    f'onclick="(function(){{document.getElementById(\'bpc\').style.display=\'none\';}})()">✕ Dismiss</button>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("✕ Clear build path", key="clear_bp_" + msg_idx):
+                    st.session_state.build_path_data = None
+                    st.rerun()
 
             # ── Voice ─────────────────────────────────
             if st.session_state.voice_reply:
                 speak_text(answer)
 
             # ── Action buttons row ────────────────────
-            msg_idx = str(len(st.session_state.messages))
             render_copy_share_download(answer, btn_key=msg_idx)
 
             # Read aloud button
@@ -2022,18 +2552,39 @@ elif st.session_state.page == "campaigns":
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="camp-grid">', unsafe_allow_html=True)
+    # All campaign cards in ONE st.markdown so layout renders correctly
+    all_camp_html = '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:1.2rem;">'
     for c in CAMPAIGNS:
-        st.markdown(
-            '<div class="camp-card">'
-            '<div class="camp-tag">' + c["tag"] + '</div>'
-            '<div class="camp-title">' + c["title"] + '</div>'
-            '<div class="camp-desc">' + c["desc"] + '</div>'
-            '<a class="camp-link" href="' + c["link"] + '" target="_blank">' + c["cta"] + ' ↗</a>'
-            '</div>',
-            unsafe_allow_html=True,
+        all_camp_html += (
+            f'<a href="{c["link"]}" target="_blank" '
+            f'style="display:flex;align-items:center;justify-content:space-between;gap:16px;'
+            f'background:#FFFFFF;border:1px solid #E3E5EA;border-radius:14px;'
+            f'padding:1.1rem 1.3rem;text-decoration:none;'
+            f'box-shadow:0 1px 4px rgba(20,20,60,0.04);'
+            f'transition:all 0.18s ease;">'
+            # Left content
+            f'<div style="flex:1;min-width:0;">'
+            f'<div class="camp-tag" style="margin-bottom:6px;">{c["tag"]}</div>'
+            f'<div class="camp-title" style="margin-bottom:5px;">{c["title"]}</div>'
+            f'<div class="camp-desc" style="margin-bottom:8px;">{c["desc"]}</div>'
+            f'<span style="font-size:11px;font-weight:600;color:#1A1AFF;">{c["cta"]} ↗</span>'
+            f'</div>'
+            # Right logo
+            f'<div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;">'
+            f'<div style="width:56px;height:56px;border-radius:14px;'
+            f'background:{c["bg"]};'
+            f'display:flex;align-items:center;justify-content:center;'
+            f'font-size:26px;line-height:1;">'
+            f'{c["icon"]}'
+            f'</div>'
+            f'<img src="{c["logo"]}" width="20" height="20" '
+            f'style="border-radius:4px;opacity:0.6;" '
+            f'onerror="this.style.display=\'none\'"/>'
+            f'</div>'
+            f'</a>'
         )
-    st.markdown('</div>', unsafe_allow_html=True)
+    all_camp_html += '</div>'
+    st.markdown(all_camp_html, unsafe_allow_html=True)
 
     # Hackathon timeline
     st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
@@ -2279,9 +2830,17 @@ elif st.session_state.page == "ecosystem":
     for dapp in filtered_dapps:
         tags_html = "".join(
             f'<span style="display:inline-block;font-size:11px;font-weight:500;color:#42475A;'
-            f'background:#E9EEFF;border:1px solid #E9EEFF;border-radius:6px;'
+            f'background:#F2F3F8;border:1px solid #E3E5EA;border-radius:6px;'
             f'padding:3px 9px;margin-right:4px;">{t}</span>'
             for t in dapp["cat"]
+        )
+        logo_html = (
+            f'<img src="{dapp["logo"]}" width="48" height="48" '
+            f'style="border-radius:50%;object-fit:cover;background:{dapp.get("bg","#EEF0FF")};'
+            f'border:1px solid #ECEEF4;" '
+            f'onerror="this.outerHTML=\'<div style=&quot;width:48px;height:48px;border-radius:50%;'
+            f'background:{dapp.get("bg","#EEF0FF")};display:flex;align-items:center;'
+            f'justify-content:center;font-size:22px;&quot;></div>\'"/>'
         )
         cards_html += (
             f'<a href="{dapp["url"]}" target="_blank" '
@@ -2289,6 +2848,8 @@ elif st.session_state.page == "ecosystem":
             f'padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0;'
             f'text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);'
             f'transition:all 0.18s ease;cursor:pointer;">'
+            # Logo circle
+            f'<div style="margin-bottom:0.75rem;">{logo_html}</div>'
             f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;'
             f'color:#0C0C1A;margin-bottom:0.4rem;line-height:1.2;">{dapp["name"]}</div>'
             f'<div style="font-size:12px;color:#5B5F6E;line-height:1.6;'
