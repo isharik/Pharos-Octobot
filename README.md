@@ -282,10 +282,7 @@ GET /pros-price
  "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
       Each with category, description, emoji, and direct link. Category filter pills at the top.
 
-      <img width="1210" height="906" alt="image" src="https://github.com/user-attachments/assets/1f96b9ea-2232-41b6-beda-881dd19ae130" />
-
-
-
+    
 # 🔍 Knowledge Sources other than LLM responses
 
 OctoBot currently retrieves from verified sources:
