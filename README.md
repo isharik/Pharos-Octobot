@@ -69,8 +69,8 @@ Every Agent built on Pharos will eventually need to answer user questions about 
 
 Traditionally, each Pharos Agent would have to individually build its own documentation retrieval logic leading to duplicated effort and inconsistent quality. OctoBot solves this by providing a single, reusable skill: a plug-and-play knowledge layer that any Agent can call, saving developers countless hours
 
-Get personalized Path for Building Dapps , Agents , Infra and Learning right from the core of Octobot
 ---
+
 
 # 🖥️ Website Experience (NEW)
 
