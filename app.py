@@ -1109,17 +1109,66 @@ st.markdown("""
 }
 html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
 .stApp{
-    background:var(--bg)!important;
+    background-color: #D7DCE6!important;
     background-image:
-        radial-gradient(ellipse 70% 45% at 50% -5%,rgba(26,26,255,0.07) 0%,transparent 50%),
-        radial-gradient(ellipse 35% 25% at 85% 70%,rgba(26,26,255,0.03) 0%,transparent 50%),
-        radial-gradient(ellipse 25% 20% at 10% 80%,rgba(107,140,255,0.04) 0%,transparent 50%),
-        radial-gradient(circle 2px at 0 0,rgba(26,26,255,0.12) 0%,transparent 100%),
-        repeating-linear-gradient(0deg,  rgba(26,26,255,0.03) 0px,rgba(26,26,255,0.03) 1px,transparent 1px,transparent 64px),
-        repeating-linear-gradient(90deg, rgba(26,26,255,0.03) 0px,rgba(26,26,255,0.03) 1px,transparent 1px,transparent 64px)
-        !important;
-    background-size:auto,auto,auto,64px 64px,100% 100%,100% 100%!important;
-    background-attachment:fixed!important;
+        /* Ambient light source — top right, moves slowly */
+        radial-gradient(ellipse 65% 50% at 78% 8%,  rgba(220,228,255,0.55) 0%, transparent 65%),
+        /* Secondary light — bottom left */
+        radial-gradient(ellipse 50% 40% at 12% 88%, rgba(200,215,255,0.30) 0%, transparent 60%),
+        /* Mid tone depth */
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(185,200,240,0.12) 0%, transparent 70%),
+        /* Wave band 1 — diagonal flow */
+        repeating-linear-gradient(
+            -28deg,
+            transparent 0px,
+            transparent 38px,
+            rgba(160,180,225,0.09) 38px,
+            rgba(160,180,225,0.09) 40px,
+            transparent 40px,
+            transparent 78px
+        ),
+        /* Wave band 2 — counter diagonal */
+        repeating-linear-gradient(
+            62deg,
+            transparent 0px,
+            transparent 55px,
+            rgba(140,165,215,0.06) 55px,
+            rgba(140,165,215,0.06) 57px,
+            transparent 57px,
+            transparent 114px
+        ),
+        /* Wave band 3 — shallow angle */
+        repeating-linear-gradient(
+            -12deg,
+            transparent 0px,
+            transparent 80px,
+            rgba(170,190,230,0.05) 80px,
+            rgba(170,190,230,0.05) 82px,
+            transparent 82px,
+            transparent 160px
+        )
+    !important;
+    background-attachment: fixed!important;
+    animation: wave-shift 22s cubic-bezier(0.4,0,0.2,1) infinite!important;
+}
+
+/* Wave motion — shifts the gradient positions smoothly */
+@keyframes wave-shift {
+    0%   { background-position:
+        78% 8%,    12% 88%,   50% 50%,
+        0px 0px,   0px 0px,   0px 0px; }
+    25%  { background-position:
+        82% 12%,   8%  84%,   52% 48%,
+        8px 4px,   -5px 3px,  4px -2px; }
+    50%  { background-position:
+        74% 6%,    16% 90%,   48% 52%,
+        14px 7px,  -10px 5px, 8px -4px; }
+    75%  { background-position:
+        80% 10%,   10% 86%,   51% 49%,
+        9px 5px,   -6px 4px,  5px -3px; }
+    100% { background-position:
+        78% 8%,    12% 88%,   50% 50%,
+        0px 0px,   0px 0px,   0px 0px; }
 }
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
 [data-testid="stSidebar"]{
@@ -1260,6 +1309,7 @@ section[data-testid="stMain"] > div {
 .hero-logo-wrap img,.hero-logo-wrap .fi{
     width:80px;height:80px;border-radius:50%;
     position:relative;z-index:3;
+    will-change:transform;
 }
 .hero-logo-wrap .fi{font-size:36px;line-height:80px;}
 /* hero-ring and hero-orbit removed — replaced by Neural Pulse canvas */
@@ -1940,6 +1990,7 @@ section[data-testid="stMain"] > div {
     animation:marquee-scroll 28s linear infinite;
     width:max-content;
     padding:0.55rem 0;
+    will-change:transform;
 }
 .marquee-track:hover{animation-play-state:paused;}
 .marquee-item{
@@ -1995,14 +2046,10 @@ section[data-testid="stMain"] > div {
     to{opacity:1;transform:translateY(0);}
 }
 [data-testid="stMainBlockContainer"]{
-    animation:page-fadein 0.45s cubic-bezier(0.4,0,0.2,1) both;
+    animation:page-fadein 0.22s cubic-bezier(0.4,0,0.2,1) both;
+    contain:layout style;
 }
-/* Progressive stagger for direct block children */
-[data-testid="stMainBlockContainer"] > div > div:nth-child(1){animation-delay:0ms;}
-[data-testid="stMainBlockContainer"] > div > div:nth-child(2){animation-delay:40ms;}
-[data-testid="stMainBlockContainer"] > div > div:nth-child(3){animation-delay:80ms;}
-[data-testid="stMainBlockContainer"] > div > div:nth-child(4){animation-delay:120ms;}
-[data-testid="stMainBlockContainer"] > div > div:nth-child(5){animation-delay:160ms;}
+
 
 
 /* ── 2. HERO — handled by Neural Pulse canvas component ── */
@@ -2028,12 +2075,13 @@ section[data-testid="stMain"] > div {
 .build-action-btn,
 .nav-cta .stButton > button{
     transition:
-        transform 140ms cubic-bezier(0.4,0,0.2,1),
-        box-shadow 140ms cubic-bezier(0.4,0,0.2,1),
-        background 160ms cubic-bezier(0.4,0,0.2,1),
-        border-color 160ms cubic-bezier(0.4,0,0.2,1)
+        transform 120ms cubic-bezier(0.4,0,0.2,1),
+        box-shadow 120ms cubic-bezier(0.4,0,0.2,1),
+        background 130ms cubic-bezier(0.4,0,0.2,1),
+        border-color 130ms cubic-bezier(0.4,0,0.2,1)
     !important;
-    will-change:transform,box-shadow;
+    will-change:auto;
+    transform:translateZ(0);
 }
 .stButton > button:hover{
     transform:translateY(-2px)!important;
@@ -2067,17 +2115,47 @@ section[data-testid="stMain"] > div {
 .welcome-card,.build-path-card,.glass-card,
 .chat-showcase{
     transition:
-        transform 200ms cubic-bezier(0.4,0,0.2,1),
-        box-shadow 200ms cubic-bezier(0.4,0,0.2,1),
-        border-color 200ms cubic-bezier(0.4,0,0.2,1)
+        transform 180ms cubic-bezier(0.34,1.4,0.64,1),
+        box-shadow 180ms cubic-bezier(0.4,0,0.2,1),
+        border-color 150ms cubic-bezier(0.4,0,0.2,1),
+        background 150ms cubic-bezier(0.4,0,0.2,1)
     !important;
-    will-change:transform;
+    will-change:auto;
+    transform:translateZ(0);
 }
 .camp-card:hover,.cex-card:hover,.news-card:hover,
 .chat-showcase:hover{
-    transform:translateY(-3px)!important;
-    box-shadow:0 8px 28px rgba(26,26,255,0.1)!important;
+    transform:translateY(-6px) scale(1.012)!important;
+    box-shadow:
+        0 12px 40px rgba(26,26,255,0.14),
+        0 4px 12px rgba(26,26,255,0.08),
+        0 0 0 1px rgba(26,26,255,0.1)
+    !important;
+    border-color:rgba(26,26,255,0.3)!important;
+    background:linear-gradient(135deg,#FFFFFF 0%,#F6F8FF 100%)!important;
 }
+ /* Campaign anchor cards — inline styled so target via child selectors */
+[data-testid="stMarkdownContainer"] a[href*="dorahacks"],
+[data-testid="stMarkdownContainer"] a[href*="notion"],
+[data-testid="stMarkdownContainer"] a[href*="silken"],
+[data-testid="stMarkdownContainer"] a[href*="pharos"] {
+    transition:
+        transform 180ms cubic-bezier(0.34,1.4,0.64,1),
+        box-shadow 180ms cubic-bezier(0.4,0,0.2,1)
+    !important;
+    transform:translateZ(0);
+}
+[data-testid="stMarkdownContainer"] a[href*="dorahacks"]:hover,
+[data-testid="stMarkdownContainer"] a[href*="notion"]:hover,
+[data-testid="stMarkdownContainer"] a[href*="silken"]:hover,
+[data-testid="stMarkdownContainer"] a[href*="pharos"]:hover {
+    transform:translateY(-5px) scale(1.012)!important;
+    box-shadow:
+        0 12px 36px rgba(26,26,255,0.13),
+        0 4px 12px rgba(26,26,255,0.07),
+        0 0 0 1.5px rgba(26,26,255,0.25)
+    !important;
+}           
 .dapp-card:hover{
     transform:translateY(-3px)!important;
     box-shadow:0 10px 32px rgba(26,26,255,0.12)!important;
@@ -2091,13 +2169,31 @@ section[data-testid="stMain"] > div {
     transform:translateY(-1px)!important;
     box-shadow:0 3px 10px rgba(26,26,255,0.1)!important;
 }
+ /* DApp cards — inline-style <a> tags with border-radius:16px */
+[data-testid="stMarkdownContainer"] a[style*="border-radius:16px"]{
+    transition:
+        transform 200ms cubic-bezier(0.34,1.4,0.64,1),
+        box-shadow 200ms cubic-bezier(0.4,0,0.2,1),
+        border-color 180ms ease
+    !important;
+    transform:translateZ(0);
+}
+[data-testid="stMarkdownContainer"] a[style*="border-radius:16px"]:hover{
+    transform:translateY(-5px) scale(1.010)!important;
+    box-shadow:
+        0 14px 40px rgba(26,26,255,0.13),
+        0 4px 12px rgba(26,26,255,0.07),
+        0 0 0 1.5px rgba(26,26,255,0.22)
+    !important;
+    border-color:rgba(26,26,255,0.28)!important;
+}           
 
 
 /* ── 5. CHAT — message reveal + input focus ── */
 /* Each new chat message slides in */
 [data-testid="stChatMessage"]{
-    animation:chat-msg-in 0.32s cubic-bezier(0.4,0,0.2,1) both;
-    will-change:opacity,transform;
+    animation:chat-msg-in 0.22s cubic-bezier(0.4,0,0.2,1) both;
+    contain:layout;
 }
 @keyframes chat-msg-in{
     from{opacity:0;transform:translateY(8px);}
@@ -2188,22 +2284,42 @@ section[data-testid="stMain"] > div {
 /* Marquee pause on hover already in marquee-track */
 
 
-/* ── 9. BACKGROUND — ultra subtle ambient drift ── */
-@keyframes bg-drift{
-    0%,100%{background-position:0% 0%,100% 100%,0% 100%,0 0,0 0;}
-    33%{background-position:1% 1%,99% 99%,1% 99%,0 0,0 0;}
-    66%{background-position:0.5% 0.5%,99.5% 99.5%,0.5% 99.5%,0 0,0 0;}
+/* ── 9. BACKGROUND — animated wave lighting ── */
+/* wave-shift keyframes defined in main CSS block above */
+
+/* Soft light sweep that moves across the wave texture */
+@keyframes light-sweep {
+    0%   { opacity:0.0; transform:translateX(-15%) skewX(-8deg); }
+    15%  { opacity:1.0; }
+    85%  { opacity:1.0; }
+    100% { opacity:0.0; transform:translateX(115%) skewX(-8deg); }
 }
-.stApp{
-    animation:bg-drift 18s ease-in-out infinite!important;
-    will-change:background-position!important;
+
+/* Pseudo overlay for the light sweep — applied via a ::before on a wrapper */
+[data-testid="stAppViewContainer"]::before {
+    content:'';
+    position:fixed;
+    top:-20%;left:-20%;
+    width:35%;height:140%;
+    background:linear-gradient(
+        105deg,
+        transparent 0%,
+        rgba(230,238,255,0.0) 35%,
+        rgba(230,238,255,0.08) 50%,
+        rgba(230,238,255,0.0) 65%,
+        transparent 100%
+    );
+    animation:light-sweep 18s cubic-bezier(0.4,0,0.6,1) infinite;
+    animation-delay:4s;
+    pointer-events:none;
+    z-index:0;
 }
 
 
 /* ── 10. NAV / STATE CHANGES — crossfade ── */
 /* Page content crossfade on navigation */
 [data-testid="stMainBlockContainer"] > div{
-    animation:page-fadein 0.35s cubic-bezier(0.4,0,0.2,1) both;
+    animation:page-fadein 0.25s cubic-bezier(0.4,0,0.2,1) both;
 }
 /* Section dark cards animate in */
 .section-dark{
@@ -2270,6 +2386,8 @@ section[data-testid="stMain"] > div {
 /* Smooth scrollbar */
 html{scroll-behavior:smooth!important;}
 *{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+*,*::before,*::after{box-sizing:border-box;}
+*,*::before,*::after{will-change:auto;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2488,7 +2606,7 @@ if st.session_state.page == "home":
         home_camp_html += (
             f'<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;'
             f'padding:1rem 1.1rem;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;'
-            f'box-shadow:0 1px 3px rgba(20,20,60,0.04);">'
+            f'box-shadow:0 1px 3px rgba(20,20,60,0.04);transition:transform 180ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 180ms ease;">'
             f'<div style="flex:1;min-width:0;">'
             f'<div class="camp-tag" style="margin-bottom:5px;">{c["tag"]}</div>'
             f'<div class="camp-title" style="margin-bottom:4px;">{c["title"]}</div>'
@@ -3047,7 +3165,9 @@ elif st.session_state.page == "campaigns":
             f'background:#FFFFFF;border:1px solid #E3E5EA;border-radius:14px;'
             f'padding:1.1rem 1.3rem;text-decoration:none;'
             f'box-shadow:0 1px 4px rgba(20,20,60,0.04);'
-            f'transition:all 0.18s ease;">'
+            f'transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease,border-color 180ms ease;"'
+            f' onmouseover="this.style.transform=\'translateY(-5px) scale(1.010)\';this.style.boxShadow=\'0 14px 40px rgba(26,26,255,0.13),0 0 0 1.5px rgba(26,26,255,0.22)\';"'
+            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 1px 4px rgba(20,20,60,0.04)\';">'
             # Left content
             f'<div style="flex:1;min-width:0;">'
             f'<div class="camp-tag" style="margin-bottom:6px;">{c["tag"]}</div>'
@@ -3333,7 +3453,9 @@ elif st.session_state.page == "ecosystem":
             f'style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
             f'padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0;'
             f'text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);'
-            f'transition:all 0.18s ease;cursor:pointer;">'
+            f'transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease,border-color 180ms ease;cursor:pointer;"'
+            f' onmouseover="this.style.transform=\'translateY(-5px) scale(1.010)\';this.style.boxShadow=\'0 14px 40px rgba(26,26,255,0.13),0 0 0 1.5px rgba(26,26,255,0.22)\';"'
+            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 1px 4px rgba(20,20,60,0.05)\';">'
             # Logo circle
             f'<div style="margin-bottom:0.75rem;">{logo_html}</div>'
             f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;'
