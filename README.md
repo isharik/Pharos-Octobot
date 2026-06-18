@@ -637,6 +637,49 @@ streamlit run app.py
 
 ---
 
+---
+
+## 🔮 Upcoming Features
+
+### OctoBot Memory Ledger — On-Chain User Intelligence
+> *A Pharos-native AI companion that knows you before you speak.*
+
+**Status:** `Planned · Phase 2`
+
+The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
+
+#### How it works
+
+| Step | Action |
+|------|--------|
+| 🔗 Wallet Connect | User connects Pharos wallet — OctoBot reads last 90 days of on-chain activity |
+| 🧠 Intelligence Synthesis | Gemini processes on-chain data to infer builder type, risk profile, and intent |
+| 💬 Contextual Answers | Every RAG response becomes personalised to your actual positions and history |
+| 🔔 Proactive Alerts | OctoBot surfaces campaign deadlines, LP range warnings, and new SPN opportunities |
+| 💾 Memory Persistence | Profile signed by wallet and persisted — OctoBot remembers context across sessions |
+
+#### What it feels like
+
+Instead of:
+> *"Here's how Native Restaking works."*
+
+OctoBot says:
+> *"You have 2,400 PROS staked since March. Adding to the SPN-2 pool would increase your yield by ~12% at current rates. Want me to walk you through the steps?"*
+
+#### Why it matters
+- First AI agent to derive **identity and intent from on-chain behaviour** rather than user-filled forms
+- Uniquely powerful on Pharos due to high signal density — SPNs, RWA positions, and campaign data all on one chain
+- Transforms OctoBot from a chatbot into a **trusted Pharos-native advisor**
+
+#### Technical stack
+- Pharos EVM-compatible RPC for transaction history
+- Gemini 2.5 Flash for profile synthesis
+- MetaMask / WalletConnect for wallet auth
+- Signed message anchored in Pharos calldata for on-chain profile persistence
+
+---
+
+
 # 🎯 Vision
 
 OctoBot is becoming more than a knowledge skill.
