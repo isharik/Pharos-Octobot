@@ -404,30 +404,6 @@ Useful for future Agent orchestration and reusable integrations.
 
 </div>
 
-
-
-```
-
-<!-- ===================================================== -->
-
-<!--                ECOSYSTEM DAPPS SECTION                -->
-
-<!-- ===================================================== -->
-
-# 🧩 Ecosystem Tab — Easy Access to Pharos DApps
-
-To make ecosystem discovery easier, OctoBot introduces a dedicated **Ecosystem navigation tab** directly inside the application.
-
-This section transforms discovery from scattered searching into a **single curated experience**.
-
----
-
-## 🌐 New Navigation Section
-
-A dedicated sidebar tab:
-
-```text
-🧩 Ecosystem
 ```
 
 Built to provide quick access to verified projects across the Pharos ecosystem.
