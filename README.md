@@ -406,71 +406,87 @@ Useful for future Agent orchestration and reusable integrations.
 
 ```
 
-<!-- ===================================================== -->
+# 🧩 Ecosystem Hub — Discover the Pharos Ecosystem
 
-<!--                ECOSYSTEM SECTION                      -->
+As OctoBot evolved beyond a documentation assistant, one challenge became clear:
 
-<!-- ===================================================== -->
+> Users shouldn't have to leave the platform to discover what is being built on Pharos.
 
-# 🧩 Ecosystem — Explore Pharos DApps in One Place
-
-OctoBot introduces a dedicated **Ecosystem experience** designed to make discovering projects across Pharos faster and more intuitive.
-
-Instead of searching across multiple websites, dashboards, and announcements, users can access ecosystem applications directly from inside OctoBot.
-
-The goal is simple:
-
-> **Reduce friction. Increase discovery. Keep users inside the Pharos experience.**
+To solve this, OctoBot introduces a dedicated **Ecosystem Hub** — a centralized discovery layer that brings Pharos applications, tools, and ecosystem projects into a single experience.
 
 ---
 
-## 🌐 Dedicated Ecosystem Navigation
+## 🌐 A New Ecosystem Navigation Experience
 
-A new navigation section has been introduced directly inside the application:
+A new navigation section has been added to the application:
 
 ```text
 🧩 Ecosystem
 ```
 
-This acts as a curated gateway to the Pharos ecosystem.
+Designed as a curated gateway into the growing Pharos ecosystem.
 
-Users can instantly browse and discover verified projects without leaving the platform.
-
----
-
-## 🚀 What You’ll Find
-
-The Ecosystem tab currently includes **14 confirmed Pharos ecosystem DApps**, presented through a cleaner discovery experience.
-
-Each entry includes:
-
-* 🏷️ Project Category
-* 📝 Short Description
-* 🎨 Visual Identity (Emoji)
-* 🔗 Direct Access Link
+Rather than searching through announcements, social posts, or external websites, users can explore ecosystem projects directly from inside OctoBot.
 
 ---
 
-## 🔎 Faster Discovery with Category Filters
+## 🚀 Featured Pharos DApps
 
-To improve navigation and reduce exploration time, the Ecosystem page includes:
+The Ecosystem Hub currently includes **14 confirmed Pharos ecosystem projects**:
 
-```text
-Category Filter Pills
-```
-
-Allowing users to:
-
-* Filter projects instantly
-* Browse by ecosystem segment
-* Discover relevant applications faster
-* Explore without leaving the UI
+* Faroswap
+* Bitverse
+* AquaFlux
+* Asseto
+* AutoStaking
+* Brokex
+* OpenFi
+* Zenith
+* Fiamma
+* Gotchipus
+* Buzzing Club
+* PNS
+* Spout Finance
+* Grandline
 
 ---
+
+## ✨ Rich Discovery Experience
+
+Every ecosystem entry includes:
+
+* 🏷️ Project category
+* 📝 Short project description
+* 🎨 Visual identifier (emoji)
+* 🔗 Direct project link
+
+Providing users with quick context before visiting a project.
+
+---
+
+## 🔍 Smart Category Filtering
+
+To improve exploration, the Ecosystem Hub includes **Category Filter Pills** at the top of the page.
+
+Users can instantly filter projects by category and discover relevant applications without scrolling through the entire ecosystem list.
+
+This creates a faster and more organized discovery experience as the ecosystem continues to grow.
+
+---
+
+## 🎯 Why This Matters
+
+The goal isn't simply to list DApps.
+
+The goal is to make OctoBot a gateway into the broader Pharos ecosystem.
+
+By combining documentation, live ecosystem information, and project discovery in a single interface, users can learn, explore, and take action without leaving the platform.
 
 <div align="center">
 
-### ⚓ One Interface • Multiple DApps • Better Discovery
+### ⚓ Discover • Learn • Explore • Build
+
+**Everything Pharos. One Experience.**
 
 </div>
 
