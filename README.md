@@ -150,14 +150,15 @@ Replies preserve technical terms while adapting language naturally.
 ---
 ## Build Path Generator 
 
-<img width="1193" height="580" alt="image" src="https://github.com/user-attachments/assets/5971a00a-598c-43b6-bd4b-a94ba2328e76" />
+<img width="1230" height="541" alt="Screenshot 2026-06-18 120804" src="https://github.com/user-attachments/assets/9849b527-c715-48b4-8fdb-655c3155971c" />
 
 
 It:
 First tries the RAG pipeline with a relevant question about that goal
 Feeds the RAG context (if found) into a Gemini prompt asking for structured JSON: goal label, 4-5 numbered steps (title + description), 2-3 doc links, 2-3 action links
 Returns the parsed dict or falls back to the RAG text answer
-<img width="1195" height="300" alt="image" src="https://github.com/user-attachments/assets/167d961a-9a69-4559-b884-ce9403bc90a0" />
+
+<img width="1193" height="580" alt="image" src="https://github.com/user-attachments/assets/5971a00a-598c-43b6-bd4b-a94ba2328e76" />
 
 
 
