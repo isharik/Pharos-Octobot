@@ -2388,6 +2388,123 @@ html{scroll-behavior:smooth!important;}
 *{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 *,*::before,*::after{box-sizing:border-box;}
 *,*::before,*::after{will-change:auto;}
+            
+ /* ═══════════════════════════════════════════
+   MOBILE RESPONSIVE — Phone optimised
+   Breakpoint: 768px and below
+═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Layout ── */
+    [data-testid="stMainBlockContainer"]{
+        padding-left:0.8rem!important;
+        padding-right:0.8rem!important;
+        padding-top:0!important;
+    }
+    section[data-testid="stMain"] > div{
+        padding-left:0.5rem!important;
+        padding-right:0.5rem!important;
+    }
+
+    /* ── Hide sidebar on mobile ── */
+    [data-testid="stSidebar"]{display:none!important;}
+    [data-testid="collapsedControl"]{display:none!important;}
+
+    /* ── Nav bar — stack vertically, scrollable ── */
+    [data-testid="stHorizontalBlock"]{
+        flex-wrap:wrap!important;
+        gap:4px!important;
+    }
+    .nav-wrap .stButton>button{
+        font-size:11px!important;
+        padding:0.25rem 0.5rem!important;
+    }
+    .nav-cta .stButton>button{
+        font-size:11px!important;
+        padding:0.25rem 0.7rem!important;
+    }
+
+    /* ── Hero ── */
+    .hero{padding:0.3rem 0 1rem 0!important;}
+    .hero-title{font-size:1.55rem!important;letter-spacing:-0.02em!important;}
+    .hero-sub{font-size:0.85rem!important;margin-bottom:1rem!important;}
+    .hero-actions{gap:6px!important;}
+    .hbtn{font-size:12px!important;padding:0.5rem 1rem!important;}
+
+    /* ── Stat strip — 2 columns on mobile ── */
+    .home-stat-strip{
+        display:grid!important;
+        grid-template-columns:1fr 1fr!important;
+    }
+    .home-stat-item{border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.08)!important;}
+    .home-stat-num{font-size:15px!important;}
+
+    /* ── Marquee — slower on mobile for readability ── */
+    .marquee-track{animation-duration:40s!important;}
+
+    /* ── Campaign cards — full width single column ── */
+    div[style*="grid-template-columns:1fr 1fr"]{
+        grid-template-columns:1fr!important;
+    }
+    .camp-grid{grid-template-columns:1fr!important;}
+
+    /* ── DApp grid — 1 column on phone, 2 on tablet ── */
+    div[style*="minmax(260px,1fr)"]{
+        grid-template-columns:1fr!important;
+    }
+
+    /* ── CEX grid — 2 columns ── */
+    .cex-grid{grid-template-columns:1fr 1fr!important;}
+    .cex-card{padding:0.7rem!important;}
+    .cex-name{font-size:13px!important;}
+
+    /* ── Section dark header — smaller text ── */
+    .section-h{font-size:1.5rem!important;}
+    .section-dark{padding:1.5rem 1rem 1.2rem!important;}
+
+    /* ── Price ticker — 2x2 grid instead of row ── */
+    .price-ticker{
+        display:grid!important;
+        grid-template-columns:1fr 1fr!important;
+    }
+    .ticker-cell{border-right:none!important;border-bottom:1px solid var(--border)!important;}
+    .ticker-value{font-size:14px!important;}
+
+    /* ── Chat input ── */
+    [data-testid="stChatInput"] textarea{font-size:14px!important;}
+
+    /* ── Docs banner — stack vertically ── */
+    .docs-banner{flex-direction:column!important;gap:6px!important;align-items:flex-start!important;}
+
+    /* ── Build path buttons — 2 columns ── */
+    div[style*="grid-template-columns:repeat(4"]{
+        grid-template-columns:1fr 1fr!important;
+    }
+
+    /* ── Octopus FAB — smaller on mobile ── */
+    #ocfab{width:42px!important;height:42px!important;bottom:70px!important;right:12px!important;}
+
+    /* ── General text sizing ── */
+    .camp-title{font-size:13px!important;}
+    .camp-desc{font-size:11px!important;}
+    .dapp-name{font-size:13px!important;}
+    .dapp-desc{font-size:11px!important;}
+    .news-title{font-size:12px!important;}
+
+    /* ── Buttons full width on mobile ── */
+    .stButton>button{font-size:12px!important;}
+
+    /* ── Mode bar ── */
+    div[style*="mode_docs"]{flex-wrap:wrap!important;}
+}
+
+/* ── Extra small phones (iPhone SE etc) ── */
+@media (max-width: 390px) {
+    .hero-title{font-size:1.3rem!important;}
+    .section-h{font-size:1.2rem!important;}
+    .home-stat-num{font-size:13px!important;}
+    .nav-wrap .stButton>button{font-size:10px!important;padding:0.2rem 0.4rem!important;}
+}           
 </style>
 """, unsafe_allow_html=True)
 
