@@ -610,17 +610,6 @@ The goal was to create a reusable knowledge layer that any future Pharos Agent c
 
 ---
 
-# 🧩 API Endpoints
-
-| Method | Endpoint      | Purpose        |
-| ------ | ------------- | -------------- |
-| GET    | `/`           | Health Check   |
-| POST   | `/query`      | Ask OctoBot    |
-| GET    | `/info`       | Skill Metadata |
-| GET    | `/docs`       | Swagger UI     |
-| GET    | `/pros-price` | Live PROS Data |
-
----
 
 # 🛠️ Run Locally
 
