@@ -690,7 +690,7 @@ The goal is to create the **AI front page of Pharos** where users can explore do
 
 <div align="center">
 
-Built with 🐙 for the Pharos community
+Built with 🩵 for the Pharos community
 
 ⭐ Star the repo if you enjoyed it
 
