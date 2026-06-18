@@ -406,47 +406,54 @@ Useful for future Agent orchestration and reusable integrations.
 
 ```
 
-Built to provide quick access to verified projects across the Pharos ecosystem.
+<!-- ===================================================== -->
+
+<!--                ECOSYSTEM SECTION                      -->
+
+<!-- ===================================================== -->
+
+# 🧩 Ecosystem — Explore Pharos DApps in One Place
+
+OctoBot introduces a dedicated **Ecosystem experience** designed to make discovering projects across Pharos faster and more intuitive.
+
+Instead of searching across multiple websites, dashboards, and announcements, users can access ecosystem applications directly from inside OctoBot.
+
+The goal is simple:
+
+> **Reduce friction. Increase discovery. Keep users inside the Pharos experience.**
 
 ---
 
-## 🚀 Included Ecosystem DApps
+## 🌐 Dedicated Ecosystem Navigation
 
-Currently includes **14 confirmed Pharos ecosystem DApps**:
+A new navigation section has been introduced directly inside the application:
 
-| DApp          | Category       |
-| ------------- | -------------- |
-| Faroswap      | DeFi           |
-| Bitverse      | Ecosystem      |
-| AquaFlux      | Infrastructure |
-| Asseto        | Assets         |
-| AutoStaking   | Staking        |
-| Brokex        | Trading        |
-| OpenFi        | Finance        |
-| Zenith        | Infrastructure |
-| Fiamma        | Ecosystem      |
-| Gotchipus     | Gaming         |
-| Buzzing Club  | Community      |
-| PNS           | Identity       |
-| Spout Finance | Finance        |
-| Grandline     | Ecosystem      |
+```text
+🧩 Ecosystem
+```
+
+This acts as a curated gateway to the Pharos ecosystem.
+
+Users can instantly browse and discover verified projects without leaving the platform.
 
 ---
 
-## ✨ Experience Features
+## 🚀 What You’ll Find
 
-Every ecosystem entry includes:
+The Ecosystem tab currently includes **14 confirmed Pharos ecosystem DApps**, presented through a cleaner discovery experience.
 
-* 🏷️ Category classification
-* 📝 Short description
-* 🎨 Dedicated emoji icon
-* 🔗 Direct access links
+Each entry includes:
+
+* 🏷️ Project Category
+* 📝 Short Description
+* 🎨 Visual Identity (Emoji)
+* 🔗 Direct Access Link
 
 ---
 
-## 🔎 Discovery Experience
+## 🔎 Faster Discovery with Category Filters
 
-The Ecosystem page also introduces:
+To improve navigation and reduce exploration time, the Ecosystem page includes:
 
 ```text
 Category Filter Pills
@@ -454,30 +461,19 @@ Category Filter Pills
 
 Allowing users to:
 
-* Filter by category
-* Discover projects faster
-* Explore ecosystem sectors
-* Reduce navigation friction
-
----
-
-## 🎯 Goal
-
-The Ecosystem section was designed to make discovering Pharos projects feel:
-
-```text
-Fast • Visual • Curated • Accessible
-```
-
-instead of requiring users to search externally across multiple platforms.
+* Filter projects instantly
+* Browse by ecosystem segment
+* Discover relevant applications faster
+* Explore without leaving the UI
 
 ---
 
 <div align="center">
 
-### ⚓ Explore the entire Pharos ecosystem in one place
+### ⚓ One Interface • Multiple DApps • Better Discovery
 
 </div>
+
 
       
 <img width="1210" height="880" alt="image" src="https://github.com/user-attachments/assets/1f4acba2-2529-4636-87d1-bbd7113774bf" />
