@@ -405,19 +405,104 @@ Useful for future Agent orchestration and reusable integrations.
 </div>
 
 
-Example:
 
-```bash
-GET /pros-price
 ```
+
+<!-- ===================================================== -->
+
+<!--                ECOSYSTEM DAPPS SECTION                -->
+
+<!-- ===================================================== -->
+
+# 🧩 Ecosystem Tab — Easy Access to Pharos DApps
+
+To make ecosystem discovery easier, OctoBot introduces a dedicated **Ecosystem navigation tab** directly inside the application.
+
+This section transforms discovery from scattered searching into a **single curated experience**.
 
 ---
 
-## Ecosystem Tab for Easy Access to Dapps :
+## 🌐 New Navigation Section
 
-# Ecosystem DApps page  new nav tab
- "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
-      Each with category, description, emoji, and direct link. Category filter pills at the top.
+A dedicated sidebar tab:
+
+```text
+🧩 Ecosystem
+```
+
+Built to provide quick access to verified projects across the Pharos ecosystem.
+
+---
+
+## 🚀 Included Ecosystem DApps
+
+Currently includes **14 confirmed Pharos ecosystem DApps**:
+
+| DApp          | Category       |
+| ------------- | -------------- |
+| Faroswap      | DeFi           |
+| Bitverse      | Ecosystem      |
+| AquaFlux      | Infrastructure |
+| Asseto        | Assets         |
+| AutoStaking   | Staking        |
+| Brokex        | Trading        |
+| OpenFi        | Finance        |
+| Zenith        | Infrastructure |
+| Fiamma        | Ecosystem      |
+| Gotchipus     | Gaming         |
+| Buzzing Club  | Community      |
+| PNS           | Identity       |
+| Spout Finance | Finance        |
+| Grandline     | Ecosystem      |
+
+---
+
+## ✨ Experience Features
+
+Every ecosystem entry includes:
+
+* 🏷️ Category classification
+* 📝 Short description
+* 🎨 Dedicated emoji icon
+* 🔗 Direct access links
+
+---
+
+## 🔎 Discovery Experience
+
+The Ecosystem page also introduces:
+
+```text
+Category Filter Pills
+```
+
+Allowing users to:
+
+* Filter by category
+* Discover projects faster
+* Explore ecosystem sectors
+* Reduce navigation friction
+
+---
+
+## 🎯 Goal
+
+The Ecosystem section was designed to make discovering Pharos projects feel:
+
+```text
+Fast • Visual • Curated • Accessible
+```
+
+instead of requiring users to search externally across multiple platforms.
+
+---
+
+<div align="center">
+
+### ⚓ Explore the entire Pharos ecosystem in one place
+
+</div>
+
       
 <img width="1210" height="880" alt="image" src="https://github.com/user-attachments/assets/1f4acba2-2529-4636-87d1-bbd7113774bf" />
 
