@@ -35,46 +35,41 @@ https://pharos-octobot-by-echo.streamlit.app/
 
 # ✨ What is OctoBot?
 
-OctoBot started as a **Pharos Knowledge Skill** and evolved into a **complete AI experience for the Pharos ecosystem**.
+OctoBot started as a Pharos Knowledge Skill and is now evolving into a complete AI-powered Pharos companion.
+Instead of behaving like a traditional documentation chatbot, OctoBot combines:
 
-Instead of acting like a traditional docs chatbot, OctoBot combines:
+Verified documentation retrieval
+Live ecosystem information
+Real time token tracking
+Multilingual interaction
+Voice support
+Modern web experience
+Agent-ready API infrastructure
 
-📚 Verified documentation retrieval
-🌐 Live ecosystem information
-💹 Real time token data
-🗣️ Voice interactions
-🌎 Multilingual conversations
-🧠 Intelligent model fallback
-🎨 Modern website experience
-⚡ Agent-ready APIs
-
-Any AI Agent deployed on Pharos can integrate OctoBot using a single API request and receive structured, context-aware responses.
+Any Agent deployed on Pharos can call OctoBot through a single endpoint and receive structured, source-aware responses. OctoBot’s architecture is built on a robust RAG pipeline, leveraging ChromaDB for vector retrieval and Gemini for generative responses. This scalable design allows seamless integration across Pharos Agents, ensuring accurate, source-grounded knowledge retrieval at scale
 
 ---
 
 # 🚀 Why OctoBot?
 
-General AI can answer questions.
+General AI tools can answer broad questions. OctoBot empowers developers with a skill-first approach, ensuring that every Pharos Agent can focus on unique business logic while OctoBot handles the deep, technical knowledge retrieval and structured responses
 
-OctoBot was designed to answer **Pharos questions with Pharos context.**
+OctoBot was built to answer Pharos questions the Pharos way.
 
-It combines:
+The goal is to create an experience where users can:
 
-* Verified documentation
-* Real ecosystem updates
-* Dynamic market information
-* AI powered assistance
-* Better onboarding for new users
-* Developer friendly integrations
+→ Explore ecosystem updates & Learn about Pharos → Understand technical concepts → Access live market information → Interact naturally in their own language → Use AI without leaving the ecosystem
 
-The long term goal is to become an **embedded AI layer across the Pharos ecosystem.**
+The long term vision is to make OctoBot become an embedded intelligence layer across the entire Pharos experience.**
 
 
 ## What problem does this solve?
 
 Every Agent built on Pharos will eventually need to answer user questions about the protocol itself — what are SPNs, how does staking work, what is RWA, how do I build here, what is the consensus mechanism.
-Right now, every builder would have to build their own documentation reader from scratch. OctoBot solves this once, for everyone. It is a plug-and-play knowledge layer that any Agent can call instantly.
 
+Traditionally, each Pharos Agent would have to individually build its own documentation retrieval logic leading to duplicated effort and inconsistent quality. OctoBot solves this by providing a single, reusable skill: a plug-and-play knowledge layer that any Agent can call, saving developers countless hours
+
+Get personalized Path for Building Dapps , Agents , Infra and Learning right from the core of Octobot
 ---
 
 # 🖥️ Website Experience (NEW)
@@ -183,8 +178,10 @@ Features:
 
 ## How to Test it ?
 
-Option 1 — Interactive Swagger UI (easiest, no code needed)
+# Option 1 — Interactive Swagger UI (easiest, no code needed)
+
 Start the Skill API:
+
 uvicorn skill_api:app --host 0.0.0.0 --port 8000
 
 Open in your browser:
@@ -194,7 +191,7 @@ Click POST /query → Try it out → Execute
 Type any question about Pharos in the request body:
 
 {
-  "question": "What are Special Processing Networks?"
+ "question": "What are Special Processing Networks?"
 }
 
 Hit Execute and see the full structured response instantly.
@@ -282,6 +279,8 @@ GET /pros-price
 # Ecosystem DApps page  new nav tab
  "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
       Each with category, description, emoji, and direct link. Category filter pills at the top.
+      
+<img width="1210" height="880" alt="image" src="https://github.com/user-attachments/assets/1f4acba2-2529-4636-87d1-bbd7113774bf" />
 
     
 # 🔍 Knowledge Sources other than LLM responses
@@ -321,7 +320,8 @@ More sources continue to be crawled and indexed.
 # OctoBot was built around that idea.
 
 Rather than every Agent rebuilding its own documentation search, retrieval logic, and answer validation layer, OctoBot provides a single reusable knowledge interface for Pharos.
-What OctoBot delivers:
+
+# What OctoBot delivers:
 
 ✅ Simple input — send a question string
 
@@ -344,7 +344,7 @@ The goal was to create a reusable knowledge layer that any future Pharos Agent c
 
 
 
-# 📌 Recent Updates
+# 📌 Recent Updates (Check @isharik on X for more details and walkthroughs on Updates :) )
 
 ## ✅ 8 June 2026
 
