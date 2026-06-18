@@ -16,7 +16,6 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 https://youtu.be/PeoMUNVTvGg
 
 ## Check out the Dora Hacks page for more details on updates :
-
 https://dorahacks.io/buidl/44453
 
 ## Public Link (Always under Development)
@@ -36,47 +35,42 @@ https://pharos-octobot-by-echo.streamlit.app/
 
 # ✨ What is OctoBot?
 
-OctoBot started as a **Pharos Knowledge Skill** and evolved into a **complete AI experience for the Pharos ecosystem**.
+OctoBot started as a Pharos Knowledge Skill and is now evolving into a complete AI-powered Pharos companion.
+Instead of behaving like a traditional documentation chatbot, OctoBot combines:
 
-Instead of acting like a traditional docs chatbot, OctoBot combines:
+Verified documentation retrieval
+Live ecosystem information
+Real time token tracking
+Multilingual interaction
+Voice support
+Modern web experience
+Agent-ready API infrastructure
 
-📚 Verified documentation retrieval
-🌐 Live ecosystem information
-💹 Real time token data
-🗣️ Voice interactions
-🌎 Multilingual conversations
-🧠 Intelligent model fallback
-🎨 Modern website experience
-⚡ Agent-ready APIs
-
-Any AI Agent deployed on Pharos can integrate OctoBot using a single API request and receive structured, context-aware responses.
+Any Agent deployed on Pharos can call OctoBot through a single endpoint and receive structured, source-aware responses. OctoBot’s architecture is built on a robust RAG pipeline, leveraging ChromaDB for vector retrieval and Gemini for generative responses. This scalable design allows seamless integration across Pharos Agents, ensuring accurate, source-grounded knowledge retrieval at scale
 
 ---
 
 # 🚀 Why OctoBot?
 
-General AI can answer questions.
+General AI tools can answer broad questions. OctoBot empowers developers with a skill-first approach, ensuring that every Pharos Agent can focus on unique business logic while OctoBot handles the deep, technical knowledge retrieval and structured responses
 
-OctoBot was designed to answer **Pharos questions with Pharos context.**
+OctoBot was built to answer Pharos questions the Pharos way.
 
-It combines:
+The goal is to create an experience where users can:
 
-* Verified documentation
-* Real ecosystem updates
-* Dynamic market information
-* AI powered assistance
-* Better onboarding for new users
-* Developer friendly integrations
+→ Explore ecosystem updates & Learn about Pharos → Understand technical concepts → Access live market information → Interact naturally in their own language → Use AI without leaving the ecosystem
 
-The long term goal is to become an **embedded AI layer across the Pharos ecosystem.**
+The long term vision is to make OctoBot become an embedded intelligence layer across the entire Pharos experience.**
 
 
 ## What problem does this solve?
 
 Every Agent built on Pharos will eventually need to answer user questions about the protocol itself — what are SPNs, how does staking work, what is RWA, how do I build here, what is the consensus mechanism.
-Right now, every builder would have to build their own documentation reader from scratch. OctoBot solves this once, for everyone. It is a plug-and-play knowledge layer that any Agent can call instantly.
+
+Traditionally, each Pharos Agent would have to individually build its own documentation retrieval logic leading to duplicated effort and inconsistent quality. OctoBot solves this by providing a single, reusable skill: a plug-and-play knowledge layer that any Agent can call, saving developers countless hours
 
 ---
+
 
 # 🖥️ Website Experience (NEW)
 
@@ -149,13 +143,17 @@ Arabic → ما هو فاروس؟
 Replies preserve technical terms while adapting language naturally.
 
 ---
-## Build Path Generator
+## Build Path Generator 
+
+<img width="1230" height="541" alt="Screenshot 2026-06-18 120804" src="https://github.com/user-attachments/assets/9849b527-c715-48b4-8fdb-655c3155971c" />
+
 
 It:
 First tries the RAG pipeline with a relevant question about that goal
 Feeds the RAG context (if found) into a Gemini prompt asking for structured JSON: goal label, 4-5 numbered steps (title + description), 2-3 doc links, 2-3 action links
 Returns the parsed dict or falls back to the RAG text answer
-<img width="1195" height="300" alt="image" src="https://github.com/user-attachments/assets/167d961a-9a69-4559-b884-ce9403bc90a0" />
+
+<img width="1193" height="580" alt="image" src="https://github.com/user-attachments/assets/5971a00a-598c-43b6-bd4b-a94ba2328e76" />
 
 
 
@@ -177,33 +175,81 @@ Features:
 
  <img width="1158" height="678" alt="image" src="https://github.com/user-attachments/assets/f91fd1a4-5170-4dec-a882-bfd210be9e00" />
 
+<!-- ===================================================== -->
 
-## How to Test it ?
+<!--                    HOW TO TEST                        -->
 
-Option 1 — Interactive Swagger UI (easiest, no code needed)
-Start the Skill API:
+<!-- ===================================================== -->
+
+# 🧪 How to Test
+
+OctoBot can be tested through multiple interfaces depending on whether you want to validate the Skill API directly, test structured responses, or experience the full UI.
+
+---
+
+## ① Interactive Swagger UI *(Fastest — No Code Needed)*
+
+Use Swagger to test the Skill directly in your browser.
+
+### Start the Skill API
+
+```bash
 uvicorn skill_api:app --host 0.0.0.0 --port 8000
+```
 
-Open in your browser:
+### Open Swagger UI
+
+```text
 http://localhost:8000/docs
+```
 
-Click POST /query → Try it out → Execute
-Type any question about Pharos in the request body:
+---
 
+### Execute a Query
+
+Navigate to:
+
+```http
+POST /query
+```
+
+Click:
+
+```text
+Try it out → Execute
+```
+
+Paste:
+
+```json
 {
   "question": "What are Special Processing Networks?"
 }
+```
 
-Hit Execute and see the full structured response instantly.
+Expected behavior:
 
-# Option 2 — Call the Skill from Terminal
+✅ Structured response
+✅ Documentation retrieval
+✅ Source-aware output
 
+---
+
+## ② Call the Skill from Terminal
+
+Direct API access for developers.
+
+### Request
+
+```bash
 curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d "{\"question\": \"What is Native Restaking on Pharos?\"}"
-  
-Response:
+-H "Content-Type: application/json" \
+-d "{\"question\":\"What is Native Restaking on Pharos?\"}"
+```
 
+### Response
+
+```json
 {
   "answer": "Native Restaking on Pharos allows validators to...",
   "sources": [
@@ -214,71 +260,239 @@ Response:
   ],
   "found_in_docs": true
 }
+```
 
-# Option 3 — Use the Chat UI (Recommended)
+---
+
+## ③ Use the Chat UI *(Recommended Experience)*
+
+Launch the complete web experience.
+
+### Start Streamlit
+
+```bash
 streamlit run app.py
+```
 
-Opens a full Pharos-branded chat interface at http://localhost:8501 with:
+Open:
 
-Logo hero section with animated glow effects
-Dark Pharos blue theme matching the brand
-Source citations shown for every answer
-Example questions in the sidebar
-Conversation memory
+```text
+http://localhost:8501
+```
 
-# Option 4 — Test the Health Check
+### Included Experience
 
+| Feature               | Included |
+| --------------------- | -------- |
+| Animated Hero Section | ✅        |
+| Pharos Theme          | ✅        |
+| Source Citations      | ✅        |
+| Sidebar Prompts       | ✅        |
+| Conversation Memory   | ✅        |
+| Responsive Layout     | ✅        |
+
+---
+
+## ④ Test the Health Check
+
+Verify the Skill status.
+
+### Request
+
+```http
 GET http://localhost:8000/
+```
 
-Returns:
+### Response
 
+```json
 {
   "skill": "pharos-knowledge",
   "status": "online",
   "knowledge_chunks": 350,
   "model": "gemini"
 }
+```
 
-# Option 5 — Discover Skill Metadata
+---
 
+## ⑤ Discover Skill Metadata
+
+Retrieve metadata for Agent integration.
+
+### Request
+
+```http
 GET http://localhost:8000/info
+```
 
-Returns the full Skill spec — input/output schema, tags, category — for Agent discovery and integration.
+### Returns
 
-Skill API Reference
-MethodEndpointWhat it doesGET/Health check — is the Skill online?POST/queryAsk any Pharos question, get structured answer
+```text
+✓ Input Schema
+✓ Output Schema
+✓ Skill Tags
+✓ Categories
+✓ Discovery Metadata
+```
 
-GET/infoSkill metadata for Agent discoveryGET/docsInteractive Swagger UI — test in browser
+Useful for future Agent orchestration and reusable integrations.
 
-Request body for POST /query
+---
+
+<br>
+
+# 🔌 Skill API Reference
+
+<div align="center">
+
+| Method | Endpoint | Description            |
+| :----: | :------: | ---------------------- |
+|   GET  |    `/`   | Health check           |
+|  POST  | `/query` | Ask Pharos questions   |
+|   GET  |  `/info` | Retrieve metadata      |
+|   GET  |  `/docs` | Interactive Swagger UI |
+
+</div>
+
+---
+
+# 📨 POST `/query`
+
+### Request Body
+
+```json
 {
   "question": "string — any question about Pharos Network"
 }
-Response schema
+```
+
+---
+
+### Response Schema
+
+```json
 {
   "answer": "string — answer extracted from documentation",
+
   "sources": [
     {
       "url": "string — source page URL",
       "title": "string — source page title"
     }
   ],
-  "found_in_docs": "boolean — true if answer was found"
+
+  "found_in_docs": true
 }
-
-Example:
-
-```bash
-GET /pros-price
 ```
 
 ---
 
-## Ecosystem Tab for Easy Access to Dapps :
+## Response Fields
 
-# Ecosystem DApps page  new nav tab
- "🧩 Ecosystem" with 14 confirmed Pharos DApps: Faroswap, Bitverse, AquaFlux, Asseto, AutoStaking, Brokex, OpenFi, Zenith, Fiamma, Gotchipus, Buzzing Club, PNS, Spout Finance, and Grandline 
-      Each with category, description, emoji, and direct link. Category filter pills at the top.
+| Field           | Type      | Description                                       |
+| --------------- | --------- | ------------------------------------------------- |
+| `answer`        | `string`  | Final generated answer                            |
+| `sources`       | `array`   | Supporting references                             |
+| `found_in_docs` | `boolean` | Whether information originated from verified docs |
+
+---
+
+<div align="center">
+
+### ⚓ Built for reusable Agent integration
+
+</div>
+
+```
+
+# 🧩 Ecosystem Hub — Discover the Pharos Ecosystem
+
+As OctoBot evolved beyond a documentation assistant, one challenge became clear:
+
+> Users shouldn't have to leave the platform to discover what is being built on Pharos.
+
+To solve this, OctoBot introduces a dedicated **Ecosystem Hub** — a centralized discovery layer that brings Pharos applications, tools, and ecosystem projects into a single experience.
+
+---
+
+## 🌐 A New Ecosystem Navigation Experience
+
+A new navigation section has been added to the application:
+
+```text
+🧩 Ecosystem
+```
+
+Designed as a curated gateway into the growing Pharos ecosystem.
+
+Rather than searching through announcements, social posts, or external websites, users can explore ecosystem projects directly from inside OctoBot.
+
+---
+
+## 🚀 Featured Pharos DApps
+
+The Ecosystem Hub currently includes **14 confirmed Pharos ecosystem projects**:
+
+* Faroswap
+* Bitverse
+* AquaFlux
+* Asseto
+* AutoStaking
+* Brokex
+* OpenFi
+* Zenith
+* Fiamma
+* Gotchipus
+* Buzzing Club
+* PNS
+* Spout Finance
+* Grandline
+
+---
+
+## ✨ Rich Discovery Experience
+
+Every ecosystem entry includes:
+
+* 🏷️ Project category
+* 📝 Short project description
+* 🎨 Visual identifier (emoji)
+* 🔗 Direct project link
+
+Providing users with quick context before visiting a project.
+
+---
+
+## 🔍 Smart Category Filtering
+
+To improve exploration, the Ecosystem Hub includes **Category Filter Pills** at the top of the page.
+
+Users can instantly filter projects by category and discover relevant applications without scrolling through the entire ecosystem list.
+
+This creates a faster and more organized discovery experience as the ecosystem continues to grow.
+
+---
+
+## 🎯 Why This Matters
+
+The goal isn't simply to list DApps.
+
+The goal is to make OctoBot a gateway into the broader Pharos ecosystem.
+
+By combining documentation, live ecosystem information, and project discovery in a single interface, users can learn, explore, and take action without leaving the platform.
+
+<div align="center">
+
+### ⚓ Discover • Learn • Explore • Build
+
+**Everything Pharos. One Experience.**
+
+</div>
+
+
+      
+<img width="1210" height="880" alt="image" src="https://github.com/user-attachments/assets/1f4acba2-2529-4636-87d1-bbd7113774bf" />
 
     
 # 🔍 Knowledge Sources other than LLM responses
@@ -318,7 +532,8 @@ More sources continue to be crawled and indexed.
 # OctoBot was built around that idea.
 
 Rather than every Agent rebuilding its own documentation search, retrieval logic, and answer validation layer, OctoBot provides a single reusable knowledge interface for Pharos.
-What OctoBot delivers:
+
+# What OctoBot delivers:
 
 ✅ Simple input — send a question string
 
@@ -341,7 +556,7 @@ The goal was to create a reusable knowledge layer that any future Pharos Agent c
 
 
 
-# 📌 Recent Updates
+# 📌 Recent Updates (Check @isharik on X for more details and walkthroughs on Updates :) )
 
 ## ✅ 8 June 2026
 
@@ -383,17 +598,6 @@ The goal was to create a reusable knowledge layer that any future Pharos Agent c
 
 ---
 
-# 🧩 API Endpoints
-
-| Method | Endpoint      | Purpose        |
-| ------ | ------------- | -------------- |
-| GET    | `/`           | Health Check   |
-| POST   | `/query`      | Ask OctoBot    |
-| GET    | `/info`       | Skill Metadata |
-| GET    | `/docs`       | Swagger UI     |
-| GET    | `/pros-price` | Live PROS Data |
-
----
 
 # 🛠️ Run Locally
 
@@ -433,6 +637,49 @@ streamlit run app.py
 
 ---
 
+---
+
+## 🔮 Upcoming Features
+
+### OctoBot Memory Ledger — On-Chain User Intelligence
+> *A Pharos-native AI companion that knows you before you speak.*
+
+**Status:** `Planned · Phase 2`
+
+The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
+
+#### How it works
+
+| Step | Action |
+|------|--------|
+| 🔗 Wallet Connect | User connects Pharos wallet — OctoBot reads last 90 days of on-chain activity |
+| 🧠 Intelligence Synthesis | Gemini processes on-chain data to infer builder type, risk profile, and intent |
+| 💬 Contextual Answers | Every RAG response becomes personalised to your actual positions and history |
+| 🔔 Proactive Alerts | OctoBot surfaces campaign deadlines, LP range warnings, and new SPN opportunities |
+| 💾 Memory Persistence | Profile signed by wallet and persisted — OctoBot remembers context across sessions |
+
+#### What it feels like
+
+Instead of:
+> *"Here's how Native Restaking works."*
+
+OctoBot says:
+> *"You have 2,400 PROS staked since March. Adding to the SPN-2 pool would increase your yield by ~12% at current rates. Want me to walk you through the steps?"*
+
+#### Why it matters
+- First AI agent to derive **identity and intent from on-chain behaviour** rather than user-filled forms
+- Uniquely powerful on Pharos due to high signal density — SPNs, RWA positions, and campaign data all on one chain
+- Transforms OctoBot from a chatbot into a **trusted Pharos-native advisor**
+
+#### Technical stack
+- Pharos EVM-compatible RPC for transaction history
+- Gemini 2.5 Flash for profile synthesis
+- MetaMask / WalletConnect for wallet auth
+- Signed message anchored in Pharos calldata for on-chain profile persistence
+
+---
+
+
 # 🎯 Vision
 
 OctoBot is becoming more than a knowledge skill.
@@ -443,7 +690,7 @@ The goal is to create the **AI front page of Pharos** where users can explore do
 
 <div align="center">
 
-Built with 🐙 for the Pharos community
+Built with 🩵 for the Pharos community
 
 ⭐ Star the repo if you enjoyed it
 
