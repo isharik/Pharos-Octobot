@@ -236,12 +236,15 @@ if "chat_mode"       not in st.session_state: st.session_state.chat_mode       =
 if "octobot_lang"    not in st.session_state: st.session_state.octobot_lang    = "English"
 if "build_path_goal" not in st.session_state: st.session_state.build_path_goal = None
 if "build_path_data" not in st.session_state: st.session_state.build_path_data = None
+if "sailor_name"     not in st.session_state: st.session_state.sailor_name     = ""
+if "sailor_done"     not in st.session_state: st.session_state.sailor_done     = False
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
 if _goto == "chat":
     st.session_state.page = "chat"
     st.query_params.clear()
+    
 
 # Voice query from mic widget
 _voice_q = st.query_params.get("voice_q", "")
@@ -2508,6 +2511,12 @@ html{scroll-behavior:smooth!important;}
 </style>
 """, unsafe_allow_html=True)
 
+_sailor = st.query_params.get("sailor", "")
+if _sailor:
+    st.session_state.sailor_name = _sailor
+    st.session_state.sailor_done = True
+    st.session_state.page = "chat"
+    st.query_params.clear()
 
 # ─────────────────────────────────────────────
 # NAV BAR (rendered on every page)
@@ -2977,14 +2986,105 @@ elif st.session_state.page == "chat":
         if st.button("🌐 Docs + General", key="mode_general", use_container_width=True):
             st.session_state.chat_mode = "general"; st.rerun()
 
-    # ── Welcome card ───────────────────────────
+    # ── Name gate — blocks chat until name entered ──
+    if not st.session_state.sailor_done:
+        st.markdown("""
+        <style>
+        /* Hide everything on the chat page except the gate form */
+        section[data-testid="stSidebar"]{display:none!important;}
+        div[data-testid="stDecoration"]{display:none!important;}
+        .gate-wrap{
+            display:flex;flex-direction:column;align-items:center;
+            justify-content:center;min-height:20vh;padding:1rem 1rem 0 1rem;
+        }
+        .gate-card{
+            background:#FFFFFF;
+            border:1.5px solid rgba(26,26,255,0.12);
+            border-radius:22px 22px 0 0;
+            padding:2.6rem 2.4rem 1.4rem 2.4rem;
+            width:100%;max-width:380px;
+            text-align:center;
+            box-shadow:0 24px 64px rgba(26,26,255,0.12),
+                       0 4px 16px rgba(0,0,0,0.05);
+            animation:gate-pop 0.55s cubic-bezier(0.34,1.4,0.64,1) both;
+        }
+        @keyframes gate-pop{
+            from{opacity:0;transform:scale(0.9) translateY(16px);}
+            to{opacity:1;transform:scale(1) translateY(0);}
+        }
+        .gate-emoji{font-size:52px;display:block;margin-bottom:0.8rem;}
+        .gate-title{
+            font-family:'Syne',sans-serif;font-size:24px;font-weight:800;
+            color:#0C0C1A;margin-bottom:0.35rem;letter-spacing:-0.02em;
+        }
+        .gate-sub{
+            font-size:13px;color:#7A7F96;line-height:1.6;margin-bottom:1.4rem;
+        }
+        /* Style the Streamlit text input inside gate */
+        .gate-input-wrap div[data-testid="stTextInput"] input{
+            border-radius:0 0 18px 18px!important;
+            border:1.5px solid rgba(26,26,255,0.12)!important;
+            border-top:none!important;
+            background:#FFFFFF!important;
+            font-size:15px!important;
+            font-weight:500!important;
+            text-align:center!important;
+            padding:0.85rem 1rem!important;
+            font-family:'DM Sans',sans-serif!important;
+            color:#0C0C1A!important;
+            box-shadow:0 24px 64px rgba(26,26,255,0.12)!important;
+        }
+        .gate-input-wrap div[data-testid="stTextInput"] input:focus{
+            border-color:#1A1AFF!important;
+            box-shadow:0 0 0 3px rgba(26,26,255,0.1)!important;
+            background:#fff!important;
+            outline:none!important;
+        }
+        .gate-input-wrap div[data-testid="stTextInput"] input::placeholder{
+            color:#B0B4C4!important;font-size:13px!important;
+        }
+        .gate-hint{font-size:11px;color:#C0C4D0;margin-top:0.6rem;}
+        </style>
+        <div class="gate-wrap">
+          <div class="gate-card">
+            <span class="gate-emoji">🐙</span>
+            <div class="gate-title">Ahoy, Sailor!</div>
+            <div class="gate-sub">What should I call you?<br>Enter your name to open OctoBot.</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        _, mid, _ = st.columns([1, 2, 1])
+        with mid:
+            st.markdown('<div class="gate-input-wrap">', unsafe_allow_html=True)
+            name_val = st.text_input(
+                "name",
+                placeholder="Your name… then press Enter",
+                key="sailor_input",
+                label_visibility="collapsed",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<p style="text-align:center;font-size:11px;'
+                'color:#B0B4C4;margin-top:0.3rem;">Press Enter after typing</p>',
+                unsafe_allow_html=True,
+            )
+
+        if name_val.strip():
+            st.session_state.sailor_name = name_val.strip()
+            st.session_state.sailor_done = True
+            st.rerun()
+        st.stop()
+
+    # ── Welcome card with name ──────────────────
     if not st.session_state.messages:
+        name      = st.session_state.sailor_name
         mode_note = ("Docs + General mode: OctoBot answers from docs first, then uses Gemini for anything not in documentation."
                      if st.session_state.chat_mode == "general"
                      else "Docs only mode: OctoBot answers strictly from verified Pharos documentation.")
         st.markdown(
-            '<div class="welcome-card">'
-            '<h3>Welcome to OctoBot</h3>'
+            '<div class="welcome-card" style="animation:page-fadein 0.5s cubic-bezier(0.4,0,0.2,1) both;">'
+            '<h3>Hi ' + name + '! 👋 Welcome aboard</h3>'
             '<p>Ask me anything about Pharos Network — SPNs, Native Restaking, RWA, consensus, '
             'building on Pharos, or the $PROS token. <em>' + mode_note + '</em></p>'
             '<div class="tag-row">'
@@ -2993,62 +3093,11 @@ elif st.session_state.page == "chat":
             '<span class="tag">DeFi</span><span class="tag">Build on Pharos</span>'
             '<span class="tag">$PROS Token</span><span class="tag">🌐 Multilingual</span>'
             '</div></div>'
-
-            '<p class="notice" style="color:#000000; font-weight:700;">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
-             'Run OctoBot locally with your own API key to continue.</p>'
-
-            '</div>',
+            '<p class="notice" style="color:#000000;font-weight:700;">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
+            'Run OctoBot locally with your own API key to continue.</p>',
             unsafe_allow_html=True,
         )
 
-    # ── Chat history ───────────────────────────
-    for i, msg in enumerate(st.session_state.messages):
-        av = "👤" if msg["role"] == "user" else "🐙"
-        with st.chat_message(msg["role"], avatar=av):
-            st.markdown(msg["content"])
-            if msg["role"] == "assistant":
-                if st.button("🔊", key="rh_" + str(i), help="Read aloud"):
-                    speak_text(msg["content"])
-                if st.session_state.show_sources:
-                    src_idx = i // 2
-                    if src_idx < len(st.session_state.sources_history):
-                        srcs = st.session_state.sources_history[src_idx]
-                        if srcs:
-                            with st.expander("Sources · " + str(len(srcs)), expanded=False):
-                                for s in srcs:
-                                    st.markdown(
-                                        '<div class="source-card"><strong>' + s["title"] + '</strong>'
-                                        '<a href="' + s["url"] + '" target="_blank">' + s["url"] + '</a></div>',
-                                        unsafe_allow_html=True,
-                                    )
-
-    # ── Voice input widget ─────────────────────
-    if False:  # disabled until mic works reliably — remove "if False:" to re-enable
-        components.html("""
-        <div style="font-family:'DM Sans',sans-serif;margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button id="m" style="width:28px;height:28px;border-radius:50%;border:1px solid #D6D9E0;background:#fff;color:#1A1AFF;cursor:pointer;font-size:13px;flex-shrink:0;">🎙</button>
-            <span id="ms" style="font-size:11px;color:#5B5F6E;">Tap to speak</span>
-            <button id="ms2" style="display:none;padding:3px 10px;border-radius:6px;border:1px solid #1A1AFF;background:#1A1AFF;color:#fff;cursor:pointer;font-size:11px;font-weight:600;">Send →</button>
-          </div>
-        </div>
-        <script>(function(){
-        const btn=document.getElementById('m'),st=document.getElementById('ms'),sb=document.getElementById('ms2');
-        const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-        if(!SR){st.innerText='Voice needs Chrome/Edge';btn.style.opacity='0.4';return;}
-        const r=new SR();r.continuous=true;r.interimResults=true;r.maxAlternatives=1;r.lang=navigator.language||'en-US';
-        let on=false,ft='',timer=null;
-        function rst(){if(timer)clearTimeout(timer);timer=setTimeout(()=>{if(on)r.stop();},3500);}
-        btn.onclick=()=>{if(on){r.stop();}else{ft='';sb.style.display='none';r.start();}};
-        sb.onclick=()=>{if(!ft.trim())return;
-          try{const u=new URL(window.top.location.href);u.searchParams.set('voice_q',ft.trim());window.top.location.assign(u.toString());}
-          catch(e){try{const u2=new URL(window.parent.location.href);u2.searchParams.set('voice_q',ft.trim());window.parent.location.assign(u2.toString());}catch(e2){st.innerText='Copy: '+ft;}}
-        };
-        r.onstart=()=>{on=true;btn.style.background='#1A1AFF';btn.style.color='#fff';st.innerText='Listening…';rst();};
-        r.onresult=(e)=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal){ft+=t+' ';}else{it+=t;}}if((ft+it).trim())st.innerText='"'+(ft+it).trim()+'"';rst();};
-        r.onerror=(e)=>{on=false;btn.style.background='#fff';btn.style.color='#1A1AFF';st.innerText=e.error==='not-allowed'?'Mic blocked':e.error;};
-        r.onend=()=>{on=false;btn.style.background='#fff';btn.style.color='#1A1AFF';if(ft.trim()){st.innerText='"'+ft.trim()+'" — click Send';sb.style.display='inline-flex';}else if(st.innerText.indexOf('Listening')>-1){st.innerText='Tap to speak';}};
-        })();</script>""", height=44)
 
     # ── Chat input + answer ────────────────────
     pending    = st.session_state.pop("pending_q", None)
