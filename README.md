@@ -148,7 +148,10 @@ Arabic → ما هو فاروس؟
 Replies preserve technical terms while adapting language naturally.
 
 ---
-## Build Path Generator
+## Build Path Generator 
+
+<img width="1193" height="580" alt="image" src="https://github.com/user-attachments/assets/5971a00a-598c-43b6-bd4b-a94ba2328e76" />
+
 
 It:
 First tries the RAG pipeline with a relevant question about that goal
