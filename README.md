@@ -683,8 +683,10 @@ OctoBot says:
 
 ## Transaction simulation/explainer
 
-Status : 'https://x.com/isharik99/status/2069443058509521029?s=20'
+# Status : https://x.com/isharik99/status/2069443058509521029?s=20
+
 A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
+
 Planning to implement  if selected for Phase 2 🩵
 
 
