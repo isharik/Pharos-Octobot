@@ -639,12 +639,12 @@ streamlit run app.py
 
 ---
 
-## 🔮 Upcoming Features
+## 🔮 Upcoming Features WIP
 
 ### OctoBot Memory Ledger — On-Chain User Intelligence
 > *A Pharos-native AI companion that knows you before you speak.*
 
-**Status:** `Planned · Phase 2`
+**Status:** `Status : https://x.com/isharik99/status/2068588499318804887?s=20`
 
 The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
 
@@ -678,6 +678,14 @@ OctoBot says:
 - Signed message anchored in Pharos calldata for on-chain profile persistence
 
 ---
+
+
+
+## Transaction simulation/explainer
+
+Status : 'https://x.com/isharik99/status/2069443058509521029?s=20'
+A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
+Planning to implement  if selected for Phase 2 🩵
 
 
 # 🎯 Vision
