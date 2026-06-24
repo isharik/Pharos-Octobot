@@ -180,7 +180,6 @@ Features:
 <!--                    HOW TO TEST                        -->
 
 <!-- ===================================================== -->
-
 # 🧪 How to Test
 
 OctoBot can be tested through multiple interfaces depending on whether you want to validate the Skill API directly, test structured responses, or experience the full UI.
@@ -189,16 +188,14 @@ OctoBot can be tested through multiple interfaces depending on whether you want 
 
 ## ① Interactive Swagger UI *(Fastest — No Code Needed)*
 
-Use Swagger to test the Skill directly in your browser.
+Use Swagger to test all 6 Skill endpoints directly in your browser.
 
 ### Start the Skill API
-
 ```bash
 uvicorn skill_api:app --host 0.0.0.0 --port 8000
 ```
 
 ### Open Swagger UI
-
 ```text
 http://localhost:8000/docs
 ```
@@ -208,19 +205,16 @@ http://localhost:8000/docs
 ### Execute a Query
 
 Navigate to:
-
 ```http
 POST /query
 ```
 
 Click:
-
 ```text
 Try it out → Execute
 ```
 
 Paste:
-
 ```json
 {
   "question": "What are Special Processing Networks?"
@@ -228,27 +222,25 @@ Paste:
 ```
 
 Expected behavior:
-
-✅ Structured response
-✅ Documentation retrieval
-✅ Source-aware output
+✅ Structured RAG response from verified Pharos docs  
+✅ Live $PROS price appended for token-related questions  
+✅ Source-aware output with citations  
 
 ---
 
 ## ② Call the Skill from Terminal
 
-Direct API access for developers.
+Direct API access for developers and Agent integrations.
 
-### Request
+### 2a — Ask a Pharos Question
 
 ```bash
 curl -X POST http://localhost:8000/query \
--H "Content-Type: application/json" \
--d "{\"question\":\"What is Native Restaking on Pharos?\"}"
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"What is Native Restaking on Pharos?\"}"
 ```
 
-### Response
-
+Response:
 ```json
 {
   "answer": "Native Restaking on Pharos allows validators to...",
@@ -258,7 +250,94 @@ curl -X POST http://localhost:8000/query \
       "title": "Native Restaking — Pharos Docs"
     }
   ],
-  "found_in_docs": true
+  "found_in_docs": true,
+  "pros_price": null
+}
+```
+
+---
+
+### 2b — Get Live $PROS Price
+
+```bash
+curl http://localhost:8000/pros-price
+```
+
+Response:
+```json
+{
+  "price_usd": 0.5828,
+  "market_cap_usd": 75000000,
+  "volume_24h": 4200000,
+  "change_24h": 7.39,
+  "last_updated": "2025-06-15 14:32 UTC",
+  "available": true,
+  "source": "CoinGecko",
+  "asset_id": "pharos-network"
+}
+```
+
+---
+
+### 2c — Wallet Intelligence Profile
+
+```bash
+curl -X POST http://localhost:8000/wallet-profile \
+  -H "Content-Type: application/json" \
+  -d "{\"address\": \"0xYourWalletAddressHere\"}"
+```
+
+Response:
+```json
+{
+  "address": "0xYour...",
+  "balance_pros": 12.4832,
+  "tx_count": 47,
+  "is_contract": false,
+  "profile": {
+    "summary": "This wallet is an active Pharos explorer with 47 transactions and a healthy PROS balance. Activity patterns suggest a DeFi-native user comfortable with on-chain interactions.",
+    "tags": ["Active Trader", "Pharos Native", "On-chain Verified"],
+    "risk": "Moderate",
+    "insight": "Consider exploring Faroswap for yield opportunities on your PROS holdings."
+  },
+  "available": true,
+  "explorer_url": "https://pharosscan.xyz/address/0xYour..."
+}
+```
+
+---
+
+### 2d — Transaction Explainer
+
+```bash
+curl -X POST http://localhost:8000/explain-tx \
+  -H "Content-Type: application/json" \
+  -d "{\"tx_hash\": \"0xYourTxHashHere66CharactersLong\"}"
+```
+
+Response:
+```json
+{
+  "tx_hash": "0xYour...",
+  "from_addr": "0xabc...",
+  "to_addr": "0xdef...",
+  "value_pros": 5.0,
+  "gas_used": 21000,
+  "gas_price_gwei": 1.0,
+  "status": "success",
+  "block_number": 123456,
+  "is_contract_call": false,
+  "explanation": {
+    "summary": "This was a simple PROS transfer that completed successfully. The sender moved 5 PROS to another wallet with minimal gas cost.",
+    "category": "Transfer",
+    "plain_steps": [
+      "Sent from 0xabc...",
+      "Received by 0xdef...",
+      "Status: completed successfully"
+    ]
+  },
+  "available": true,
+  "explorer_url": "https://pharosscan.xyz/tx/0xYour..."
 }
 ```
 
@@ -266,51 +345,59 @@ curl -X POST http://localhost:8000/query \
 
 ## ③ Use the Chat UI *(Recommended Experience)*
 
-Launch the complete web experience.
+Launch the complete OctoBot web experience.
 
 ### Start Streamlit
-
 ```bash
 streamlit run app.py
 ```
 
 Open:
-
 ```text
 http://localhost:8501
 ```
 
 ### Included Experience
 
-| Feature               | Included |
-| --------------------- | -------- |
-| Animated Hero Section | ✅        |
-| Pharos Theme          | ✅        |
-| Source Citations      | ✅        |
-| Sidebar Prompts       | ✅        |
-| Conversation Memory   | ✅        |
-| Responsive Layout     | ✅        |
+| Feature | Included |
+|---|---|
+| Animated Hero Section | ✅ |
+| Nothing OS Memory Ledger Page | ✅ |
+| On-chain Wallet Profiler | ✅ |
+| Transaction Explainer | ✅ |
+| Live $PROS Price + Chart | ✅ |
+| RAG Chat with Source Citations | ✅ |
+| Multilingual Support (50+ Languages) | ✅ |
+| Active Campaigns Directory | ✅ |
+| Pharos Ecosystem DApp Browser | ✅ |
+| CEX Trading Links | ✅ |
+| Sidebar Example Prompts | ✅ |
+| Conversation Memory | ✅ |
+| Follow-up Question Generation | ✅ |
+| Voice Reply | ✅ |
+| Responsive Layout | ✅ |
 
 ---
 
 ## ④ Test the Health Check
 
-Verify the Skill status.
+Verify the Skill is online and check live status.
 
 ### Request
-
 ```http
 GET http://localhost:8000/
 ```
 
 ### Response
-
 ```json
 {
   "skill": "pharos-knowledge",
+  "version": "2.0.0",
   "status": "online",
   "knowledge_chunks": 350,
-  "model": "gemini"
+  "model": "gemini",
+  "pros_price_usd": 0.5828,
+  "coingecko_status": "ok"
 }
 ```
 
@@ -318,22 +405,20 @@ GET http://localhost:8000/
 
 ## ⑤ Discover Skill Metadata
 
-Retrieve metadata for Agent integration.
+Retrieve the full Skill spec for Agent discovery and integration.
 
 ### Request
-
 ```http
 GET http://localhost:8000/info
 ```
 
 ### Returns
-
 ```text
-✓ Input Schema
-✓ Output Schema
-✓ Skill Tags
-✓ Categories
-✓ Discovery Metadata
+✓ All 4 Skill endpoint descriptions
+✓ Input / Output schema for each
+✓ Live data providers and cache settings
+✓ Safety guarantees (read-only, zero gas, no signature)
+✓ Tags and categories for Agent discovery
 ```
 
 Useful for future Agent orchestration and reusable integrations.
@@ -346,12 +431,15 @@ Useful for future Agent orchestration and reusable integrations.
 
 <div align="center">
 
-| Method | Endpoint | Description            |
-| :----: | :------: | ---------------------- |
-|   GET  |    `/`   | Health check           |
-|  POST  | `/query` | Ask Pharos questions   |
-|   GET  |  `/info` | Retrieve metadata      |
-|   GET  |  `/docs` | Interactive Swagger UI |
+| Method | Endpoint | Description |
+|:---:|:---:|---|
+| GET | `/` | Health check — status, knowledge size, live price |
+| POST | `/query` | RAG answer from Pharos docs + optional live $PROS price |
+| GET | `/pros-price` | Live $PROS price and market data from CoinGecko |
+| POST | `/wallet-profile` | On-chain wallet intelligence profile via Pharos RPC |
+| POST | `/explain-tx` | Plain-language transaction explanation via Pharos RPC |
+| GET | `/info` | Full Skill metadata for Agent discovery |
+| GET | `/docs` | Interactive Swagger UI — test all endpoints in browser |
 
 </div>
 
@@ -360,43 +448,128 @@ Useful for future Agent orchestration and reusable integrations.
 # 📨 POST `/query`
 
 ### Request Body
-
 ```json
 {
   "question": "string — any question about Pharos Network"
 }
 ```
 
----
-
 ### Response Schema
-
 ```json
 {
-  "answer": "string — answer extracted from documentation",
-
+  "answer": "string — RAG answer from verified Pharos documentation",
   "sources": [
     {
       "url": "string — source page URL",
       "title": "string — source page title"
     }
   ],
-
-  "found_in_docs": true
+  "found_in_docs": true,
+  "pros_price": {
+    "price_usd": 0.5828,
+    "market_cap_usd": 75000000,
+    "change_24h": 7.39,
+    "available": true,
+    "source": "CoinGecko"
+  }
 }
 ```
 
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `answer` | `string` | RAG-generated answer from Pharos documentation |
+| `sources` | `array` | Supporting source citations with URL and title |
+| `found_in_docs` | `boolean` | Whether answer originated from verified documentation |
+| `pros_price` | `object \| null` | Live $PROS market data — only present for token-related questions |
+
 ---
 
-## Response Fields
+# 📨 POST `/wallet-profile`
 
-| Field           | Type      | Description                                       |
-| --------------- | --------- | ------------------------------------------------- |
-| `answer`        | `string`  | Final generated answer                            |
-| `sources`       | `array`   | Supporting references                             |
-| `found_in_docs` | `boolean` | Whether information originated from verified docs |
+### Request Body
+```json
+{
+  "address": "0x1234...42-character-Pharos-wallet-address"
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `address` | `string` | The queried wallet address |
+| `balance_pros` | `float \| null` | Current PROS balance on Pharos |
+| `tx_count` | `int \| null` | Total transaction count |
+| `is_contract` | `boolean` | Whether the address is a smart contract |
+| `profile` | `object \| null` | AI-generated intelligence profile (summary, tags, risk, insight) |
+| `available` | `boolean` | Whether RPC data was successfully fetched |
+| `explorer_url` | `string` | Direct link to Pharosscan explorer |
 
 ---
+
+# 📨 POST `/explain-tx`
+
+### Request Body
+```json
+{
+  "tx_hash": "0xabc...66-character-transaction-hash"
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `tx_hash` | `string` | The queried transaction hash |
+| `from_addr` | `string \| null` | Sender address |
+| `to_addr` | `string \| null` | Recipient address |
+| `value_pros` | `float \| null` | PROS value transferred |
+| `gas_used` | `int \| null` | Gas units consumed |
+| `gas_price_gwei` | `float \| null` | Gas price in Gwei |
+| `status` | `string \| null` | `success`, `failed`, or `pending` |
+| `block_number` | `int \| null` | Block in which tx was included |
+| `is_contract_call` | `boolean` | Whether tx called a smart contract |
+| `explanation` | `object \| null` | AI-generated plain-language explanation (summary, category, steps) |
+| `available` | `boolean` | Whether RPC data was successfully fetched |
+| `explorer_url` | `string` | Direct link to Pharosscan explorer |
+
+---
+
+# 🛡 Safety Guarantees
+
+All on-chain endpoints (`/wallet-profile`, `/explain-tx`) are strictly read-only:
+
+| Guarantee | Status |
+|---|---|
+| No signature required | ✅ |
+| Zero gas used | ✅ |
+| No funds accessed | ✅ |
+| Public blockchain data only | ✅ |
+| No wallet connection needed | ✅ |
+| Reads from Pharos public RPC | ✅ |
+
+---
+
+# 🤖 Built With
+
+| Component | Technology |
+|---|---|
+| LLM | Gemini 2.5 Flash (Google) |
+| Embeddings | HuggingFace `all-MiniLM-L6-v2` |
+| Vector DB | ChromaDB |
+| RAG Framework | LangChain |
+| Skill API | FastAPI + Uvicorn |
+| Web UI | Streamlit |
+| Price Data | CoinGecko Free API |
+| On-chain Data | Pharos Public RPC |
+
+---
+
+*Built for the Pharos AI Agent Carnival — Phase 1 Skill Hackathon*  
+*By Echo · Discord: @echoplex99 · [@isharik99](https://x.com/isharik99) on X · [GitHub](https://github.com/isharik/Pharos-Octobot)*
+
 
 <div align="center">
 
@@ -639,12 +812,12 @@ streamlit run app.py
 
 ---
 
-## 🔮 Upcoming Features
+## 🔮 Upcoming Features WIP on Site (Available on Skill API)
 
 ### OctoBot Memory Ledger — On-Chain User Intelligence
 > *A Pharos-native AI companion that knows you before you speak.*
 
-**Status:** `Planned · Phase 2`
+**Status:** : https://x.com/isharik99/status/2068588499318804887?s=20
 
 The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
 
@@ -678,6 +851,16 @@ OctoBot says:
 - Signed message anchored in Pharos calldata for on-chain profile persistence
 
 ---
+
+
+
+## Transaction simulation/explainer
+
+# Status : https://x.com/isharik99/status/2069443058509521029?s=20
+
+A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
+
+Planning to implement  if selected for Phase 2 🩵
 
 
 # 🎯 Vision
