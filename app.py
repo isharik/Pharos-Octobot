@@ -1939,9 +1939,9 @@ section[data-testid="stMain"] > div {
 /* hero-ring and hero-orbit removed — replaced by Neural Pulse canvas */
 .hero-eyebrow{
     display:inline-flex;align-items:center;gap:7px;
-    font-size:16px;font-weight:700;letter-spacing:0.02em;
+    font-size:13.5px;font-weight:700;letter-spacing:0.02em;
     color:#FFFFFF;background:#0C0C1A;border:none;
-    border-radius:30px;padding:7px 16px;margin-bottom:0.1rem;margin-top:2rem;
+    border-radius:27px;padding:5px 15px;margin-bottom:0.1rem;margin-top:2rem;
     align-self:center;
     box-shadow:0 4px 14px rgba(12,12,26,0.18);
 }
@@ -3100,7 +3100,7 @@ section[data-testid="stMain"] > div {
 
 
 /* ── 8. HOVER INTERACTIONS — every element responsive ── */
-/* Nav buttons — handled above, ensure animation transitions are smooth */
+/* Nav buttons — handled above, ensure animation transitions are smoother */
 .nav-wrap .stButton > button{
     transition:
         background 150ms cubic-bezier(0.4,0,0.2,1),
