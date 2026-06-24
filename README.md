@@ -36,11 +36,17 @@ https://pharos-octobot-by-echo.streamlit.app/
 # ✨ What is OctoBot?
 
 OctoBot is a Pharos-native AI Skill built for the Skill-to-Agent Dual Cascade Hackathon. It started as a Pharos Knowledge Skill and has grown into a complete on-chain AI companion — the first reusable intelligence layer built natively for the Pharos AI Agent ecosystem.
+
 Rather than behaving like a traditional documentation chatbot, OctoBot combines four production-ready Skills into a single callable API that any Agent on Pharos can use:
-Pharos Knowledge Skill — RAG-powered answers from verified Pharos documentation, zero hallucination, source-cited
-Live Market Skill — real-time $PROS price and market data from CoinGecko, cached and fallback-safe
-Wallet Intelligence Skill — reads any Pharos wallet via public RPC, synthesises an AI-generated on-chain profile, zero gas, no signature
-Transaction Explainer Skill — reads any Pharos transaction hash on-chain and returns a plain-language explanation via Gemini
+
+* Pharos Knowledge Skill — RAG-powered answers from verified Pharos documentation, zero hallucination, source-cited
+
+* Live Market Skill — real-time $PROS price and market data from CoinGecko, cached and fallback-safe
+
+* Wallet Intelligence Skill — reads any Pharos wallet via public RPC, synthesises an AI-generated on-chain profile, zero gas, no signature
+
+* Transaction Explainer Skill — reads any Pharos transaction hash on-chain and returns a plain-language explanation via Gemini
+
 Any Agent deployed on Pharos can call all four Skills through a single API endpoint and receive structured, source-aware, on-chain-verified responses. OctoBot's architecture is built on a RAG pipeline using ChromaDB for vector retrieval and Gemini 2.5 Flash for generative responses, with FastAPI exposing every capability as a composable, reusable Skill module. **
 
 ---
@@ -48,22 +54,31 @@ Any Agent deployed on Pharos can call all four Skills through a single API endpo
 # 🚀 Why OctoBot?
 
 Every Agent built on Pharos will eventually need to answer user questions about the protocol — what are SPNs, how does restaking work, what is RWA, how do I build here, what does this transaction mean. Traditionally, each Agent would have to build its own documentation retrieval, its own RPC integration, and its own AI pipeline — duplicated effort, inconsistent quality, and wasted build time.
+
 OctoBot solves this at the infrastructure level. It is a plug-and-play Skill suite that any Pharos Agent can call instead of rebuilding from scratch:
-No RAG pipeline to build
-No RPC integration to write
-No documentation to crawl
-No price API to maintain
+
+* No RAG pipeline to build
+
+* No RPC integration to write
+
+* No documentation to crawl
+
+* No price API to maintain
+
 This is the core promise of the Pharos Skill model — reusable, composable modules that let Agents focus on unique business logic while OctoBot handles knowledge retrieval, on-chain reading, and AI synthesis..**
 
 
 ## What problem does this solve?
 
 The Pharos AI Agent economy needs a shared knowledge and on-chain intelligence layer. Without it, every Agent reinvents the same wheel. OctoBot is that layer — built once, callable by all.
+
 Concretely, OctoBot enables:
-Any Agent to answer "What is Pharos?" without building a RAG system
-Any Agent to profile a user's wallet without writing RPC code
-Any Agent to explain a transaction without integrating Gemini directly
-Any user to explore Pharos, understand their on-chain activity, track $PROS, and get a personalised build path for dApps, Agents, infrastructure, or learning — all from within the same interface
+
+* Any Agent to answer "What is Pharos?" without building a RAG system
+* Any Agent to profile a user's wallet without writing RPC code
+* Any Agent to explain a transaction without integrating Gemini directly
+* Any user to explore Pharos, understand their on-chain activity, track $PROS, and get a personalised build path for dApps, Agents, infrastructure, or learning — all from within the same interface
+* 
 The long-term vision is for OctoBot to become an embedded intelligence layer across the entire Pharos ecosystem — the one Skill every Agent calls first.
 
 ---
