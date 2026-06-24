@@ -54,11 +54,11 @@ PHAROS_DISCORD_URL = "https://discord.com/invite/pharos"
 PHAROS_X_URL       = "https://x.com/pharos_network"
 
 CEX_LINKS = [
-    {"name": "OKX",      "url": "https://www.okx.com/trade-spot/pros-usdt?channelid=35427002",                 "desc": "PROS/USDT · Highest Volume"},
-    {"name": "Bitget",   "url": "https://www.bitget.com/spot/PROSUSDT?channelCode=y53z&vipCode=s3t2",                     "desc": "PROS/USDT"},
-    {"name": "KuCoin",   "url": "https://www.kucoin.com/trade/PROS-USDT?rcode=rPH7VCS",                   "desc": "PROS/USDT"},
-    {"name": "Upbit",    "url": "https://www.upbit.com/exchange?code=CRIX.UPBIT.KRW-PROS",     "desc": "PROS/USDT · KRW · BTC"},
-    {"name": "Coinbase", "url": "https://exchange.coinbase.com/trade/PROS-USD",   "desc": "PROS/USDT"},
+    {"name": "OKX",      "url": "https://www.okx.com/trade-spot/pros-usdt?channelid=35427002",                 "desc": "PROS/USDT · Highest Volume", "logo": "https://www.google.com/s2/favicons?domain=okx.com&sz=64"},
+    {"name": "Bitget",   "url": "https://www.bitget.com/spot/PROSUSDT?channelCode=y53z&vipCode=s3t2",          "desc": "PROS/USDT", "logo": "https://www.google.com/s2/favicons?domain=bitget.com&sz=64"},
+    {"name": "KuCoin",   "url": "https://www.kucoin.com/trade/PROS-USDT?rcode=rPH7VCS",                        "desc": "PROS/USDT", "logo": "https://www.google.com/s2/favicons?domain=kucoin.com&sz=64"},
+    {"name": "Upbit",    "url": "https://www.upbit.com/exchange?code=CRIX.UPBIT.KRW-PROS",                     "desc": "PROS/USDT · KRW · BTC", "logo": "https://www.google.com/s2/favicons?domain=upbit.com&sz=64"},
+    {"name": "Coinbase", "url": "https://exchange.coinbase.com/trade/PROS-USD",                                "desc": "PROS/USDT", "logo": "https://www.google.com/s2/favicons?domain=coinbase.com&sz=64"},
 ]
 
 CAMPAIGNS = [
@@ -123,7 +123,7 @@ PHAROS_DAPPS = [
         "cat":   ["Dex", "RWA", "Perp"],
         "desc":  "All-in-one RWA perp DEX bringing real-world assets and U.S. stock futures onto a single AI-powered trading platform.",
         "url":   "https://www.bitverse.zone",
-        "logo":  "https://www.google.com/s2/favicons?domain=bitverse.zone&sz=64",
+        "logo":  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQcd3T03MuTOTnv7Q173YWoQHibpIpDb33H-a-lAkDOBu88U7fpA5LHUgUO&s=10",
         "bg":    "#E8F0FF",
     },
     {
@@ -179,7 +179,7 @@ PHAROS_DAPPS = [
         "cat":   ["Lend & Borrow"],
         "desc":  "Yield-optimized lending and borrowing platform with institutional-grade risk management built natively on Pharos.",
         "url":   "https://testnet.zenithfinance.xyz/home",
-        "logo":  "https://www.google.com/s2/favicons?domain=zenithfinance.xyz&sz=64",
+        "logo":  "https://pbs.twimg.com/profile_images/1912204746074501120/u7tIPl9T_400x400.jpg",
         "bg":    "#FFFAE8",
     },
     {
@@ -212,7 +212,7 @@ PHAROS_DAPPS = [
         "cat":   ["RWAfi"],
         "desc":  "Transforms collateral in DeFi using predictable real-world yield-bearing assets with seamless redemption mechanisms.",
         "url":   "https://www.spout.finance/",
-        "logo":  "https://www.google.com/s2/favicons?domain=spout.finance&sz=64",
+        "logo":  "https://images.cryptorank.io/coins/150x150.spout_finance1776399650650.png",
         "bg":    "#E8F0F8",
     },
     {
@@ -238,11 +238,27 @@ if "build_path_goal" not in st.session_state: st.session_state.build_path_goal =
 if "build_path_data" not in st.session_state: st.session_state.build_path_data = None
 if "sailor_name"     not in st.session_state: st.session_state.sailor_name     = ""
 if "sailor_done"     not in st.session_state: st.session_state.sailor_done     = False
+if "wallet_address"  not in st.session_state: st.session_state.wallet_address  = ""
+if "wallet_data"     not in st.session_state: st.session_state.wallet_data     = None
+if "wallet_profile"  not in st.session_state: st.session_state.wallet_profile  = None
+if "wallet_loading"  not in st.session_state: st.session_state.wallet_loading  = False
+if "tx_hash_input"   not in st.session_state: st.session_state.tx_hash_input   = ""
+if "tx_data"         not in st.session_state: st.session_state.tx_data         = None
+if "tx_explanation"  not in st.session_state: st.session_state.tx_explanation  = None
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
 if _goto == "chat":
     st.session_state.page = "chat"
+    st.query_params.clear()
+
+# Wallet connect widget → navigate back with address
+_wallet = st.query_params.get("wallet", "")
+if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
+    st.session_state.wallet_address = _wallet
+    st.session_state.wallet_data    = None
+    st.session_state.wallet_profile = None
+    st.session_state.page = "memory"
     st.query_params.clear()
     
 
@@ -621,44 +637,6 @@ def render_followup_pills(questions: list, key: str) -> None:
     )
 
 
-def render_octo_fab() -> None:
-    """Fixed bottom-right animated octopus scroll-to-bottom FAB."""
-    components.html(
-        "<style>"
-        "#ocfab{position:fixed;bottom:80px;right:20px;width:54px;height:54px;"
-        "cursor:pointer;z-index:99999;animation:ocbo 3s ease-in-out infinite;"
-        "filter:drop-shadow(0 4px 14px rgba(26,26,255,0.4));}"
-        "#ocfab:hover{animation-play-state:paused;}"
-        "@keyframes ocbo{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}"
-        "</style>"
-        '<svg id="ocfab" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg"'
-        ' title="Scroll to bottom"'
-        " onclick=\"window.parent.scrollTo({top:window.parent.document.body.scrollHeight,behavior:'smooth'})\">"
-        '<ellipse cx="50" cy="42" rx="32" ry="30" fill="#1A1AFF"/>'
-        '<ellipse cx="42" cy="32" rx="10" ry="7" fill="rgba(255,255,255,0.2)" transform="rotate(-15,42,32)"/>'
-        '<circle cx="38" cy="36" r="8" fill="white"/>'
-        '<circle cx="62" cy="36" r="8" fill="white"/>'
-        '<circle cx="40" cy="37" r="4.5" fill="#0A0A2E"/>'
-        '<circle cx="63" cy="37" r="4.5" fill="#0A0A2E"/>'
-        '<circle cx="42" cy="35" r="1.5" fill="white"/>'
-        '<circle cx="65" cy="35" r="1.5" fill="white"/>'
-        '<path d="M40 48 Q50 56 60 48" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
-        '<path d="M22 66 Q14 82 20 96 Q24 102 28 96 Q30 84 24 68" fill="#1A1AFF"/>'
-        '<path d="M34 70 Q28 88 34 102 Q38 106 42 102 Q42 88 36 72" fill="#1A1AFF"/>'
-        '<path d="M50 72 Q48 90 50 106 Q53 110 56 106 Q58 90 52 72" fill="#1A1AFF"/>'
-        '<path d="M65 70 Q68 88 64 102 Q60 106 57 102 Q58 88 63 72" fill="#1A1AFF"/>'
-        '<path d="M78 66 Q86 82 80 96 Q76 102 72 96 Q70 84 76 68" fill="#1A1AFF"/>'
-        '<circle cx="24" cy="96" r="3.5" fill="#6B8CFF"/>'
-        '<circle cx="38" cy="102" r="3.5" fill="#6B8CFF"/>'
-        '<circle cx="53" cy="106" r="3.5" fill="#6B8CFF"/>'
-        '<circle cx="60" cy="102" r="3.5" fill="#6B8CFF"/>'
-        '<circle cx="76" cy="96" r="3.5" fill="#6B8CFF"/>'
-        '<path d="M44 50 L50 59 L56 50" stroke="white" stroke-width="2.8" fill="none"'
-        ' stroke-linecap="round" stroke-linejoin="round"/>'
-        "</svg>",
-        height=1,
-    )
-
 def build_path_generator(goal: str, bot) -> str:
     """
     Generates a structured Pharos build roadmap for the given goal.
@@ -724,7 +702,7 @@ def render_thinking_orb(state: str = "idle") -> None:
     )
     spin_style = (
         "animation:orb-think 0.8s ease-in-out infinite!important;"
-        "box-shadow:0 0 35px rgba(26,26,255,0.6),0 0 70px rgba(26,26,255,0.2)!important;"
+        "box-shadow:0 0 24px rgba(26,26,255,0.5)!important;"
         if state == "thinking" else
         "animation:orb-settle 0.5s ease both!important;"
         if state == "done" else
@@ -739,7 +717,8 @@ def render_thinking_orb(state: str = "idle") -> None:
             width:38px;height:38px;border-radius:50%;position:relative;flex-shrink:0;
             background:radial-gradient(circle at 35% 30%,#8BAAFF 0%,#1A1AFF 55%,#050525 100%);
             box-shadow:0 0 18px rgba(26,26,255,0.35);
-            animation:orb-breathe 3s ease-in-out infinite;
+            animation:orb-breathe 3.6s ease-in-out infinite;
+            will-change:transform;
             {spin_style}
         }}
         .orb::after{{
@@ -750,10 +729,17 @@ def render_thinking_orb(state: str = "idle") -> None:
             position:absolute;inset:-5px;border-radius:50%;
             border:1px solid rgba(26,26,255,0.22);
             animation:orb-ring 2.8s ease-in-out infinite;
+            will-change:transform,opacity;
         }}
+        /* orb-breathe now animates only `transform` (GPU-composited)
+           instead of also animating `box-shadow` every frame — the
+           shadow stays fixed at its resting value and only the orb's
+           scale pulses, which still reads as "breathing" but is far
+           cheaper since box-shadow recalculation/repaint no longer
+           happens 60 times a second while a chat response is loading. */
         @keyframes orb-breathe{{
-            0%,100%{{transform:scale(1);box-shadow:0 0 18px rgba(26,26,255,0.3);}}
-            50%{{transform:scale(1.06);box-shadow:0 0 28px rgba(26,26,255,0.5);}}
+            0%,100%{{transform:scale(1);}}
+            50%{{transform:scale(1.06);}}
         }}
         @keyframes orb-think{{
             0%{{transform:scale(0.94) rotate(0deg);}}
@@ -761,8 +747,8 @@ def render_thinking_orb(state: str = "idle") -> None:
             100%{{transform:scale(0.94) rotate(360deg);}}
         }}
         @keyframes orb-settle{{
-            0%{{transform:scale(1.12);box-shadow:0 0 40px rgba(26,26,255,0.6);}}
-            100%{{transform:scale(1);box-shadow:0 0 18px rgba(26,26,255,0.3);}}
+            0%{{transform:scale(1.12);}}
+            100%{{transform:scale(1);}}
         }}
         @keyframes orb-ring{{
             0%,100%{{transform:scale(1);opacity:0.5;}}
@@ -841,8 +827,9 @@ canvas{
 /* Assistant bubble */
 .bubble{
     position:absolute;
-    top:calc(50% + 52px);
-    left:50%;transform:translateX(-50%) scale(0.92);
+    top:50%;
+    left:calc(50% + 70px);
+    transform:translateY(-50%) translateX(-8px) scale(0.92);
     background:#fff;border:1.5px solid #C8D0FF;
     border-radius:14px;
     box-shadow:0 8px 32px rgba(26,26,255,0.14);
@@ -853,13 +840,13 @@ canvas{
 }
 .bubble.vis{
     opacity:1;pointer-events:all;
-    transform:translateX(-50%) scale(1);
+    transform:translateY(-50%) translateX(0) scale(1);
 }
 .bubble::before{
-    content:'';position:absolute;top:-7px;left:50%;
+    content:'';position:absolute;top:50%;left:-6px;
     width:12px;height:12px;background:#fff;
-    border-left:1.5px solid #C8D0FF;border-top:1.5px solid #C8D0FF;
-    transform:translateX(-50%) rotate(45deg);
+    border-left:1.5px solid #C8D0FF;border-bottom:1.5px solid #C8D0FF;
+    transform:translateY(-50%) rotate(45deg);
 }
 .bubble-q{font-size:12px;color:#0C0C1A;font-weight:500;line-height:1.5;margin-bottom:8px;}
 .bubble-cta{
@@ -882,8 +869,7 @@ canvas{
   </div>
   <div class="bubble" id="bubble">
     <div class="bubble-q">👋 Hi! I'm OctoBot.<br>Ask me anything about Pharos.</div>
-    <button class="bubble-cta" onclick="goChat()">💬 Open Chat →</button>
-  </div>
+    </div>
 </div>
 
 <script>
@@ -908,14 +894,31 @@ canvas{
   let pulseWaves= [];            // active pulse waves
   let lastPulse = 0;             // timestamp of last pulse
 
-  function getCenter(){
+  // getCenter() previously called getBoundingClientRect() twice on
+  // EVERY animation frame (120 layout reads/second) — this forces the
+  // browser to flush pending layout and recalculate geometry every
+  // single tick, which is real layout-thrashing overhead for a value
+  // that essentially never changes during normal use (the logo's
+  // position relative to its own wrapper is stable unless the window
+  // resizes). Now computed once up front, cached, and only
+  // recalculated on resize or a slow 1s safety-net interval (in case
+  // Streamlit reflows the surrounding layout without a window resize
+  // event, e.g. during a page navigation).
+  let cachedCenter = { x: 0, y: 0 };
+  function recomputeCenter(){
     const r = btn.getBoundingClientRect();
     const w = wrap.getBoundingClientRect();
-    return {
+    cachedCenter = {
       x: r.left - w.left + r.width  * 0.5,
       y: r.top  - w.top  + r.height * 0.5,
     };
   }
+  function getCenter(){
+    return cachedCenter;
+  }
+  recomputeCenter();
+  window.addEventListener('resize', recomputeCenter);
+  setInterval(recomputeCenter, 1000);
 
   btn.addEventListener('mouseenter', ()=>{ hovered=true;  emitPulse(); });
   btn.addEventListener('mouseleave', ()=>{ hovered=false; });
@@ -1039,11 +1042,43 @@ canvas{
     document.getElementById('bubble').classList.toggle('vis');
   };
   window.goChat = function(){
+    var navigated = false;
+
+    // Primary approach: directly manipulate the REAL top-level page's
+    // URL bar via history API, then dispatch a popstate-like reload.
+    // This works even in cases where browsers silently block iframe-
+    // initiated full navigation (location.href / location.assign),
+    // because pushState + a manual reload of window.parent's own
+    // document is treated as same-origin same-document navigation,
+    // not a cross-frame redirect.
     try{
-      var url = new URL(window.parent.location.href);
-      url.searchParams.set('goto','chat');
-      window.parent.location.href = url.toString();
-    }catch(e){
+      var pdoc = window.parent.document;
+      var purl = new URL(window.parent.location.href);
+      purl.searchParams.set('goto','chat');
+      window.parent.history.pushState({}, '', purl.toString());
+      window.parent.location.reload();
+      navigated = true;
+    }catch(e){}
+
+    if(!navigated){
+      try{
+        var url = new URL(window.top.location.href);
+        url.searchParams.set('goto','chat');
+        window.top.location.assign(url.toString());
+        navigated = true;
+      }catch(e2){}
+    }
+
+    if(!navigated){
+      try{
+        var url3 = new URL(window.parent.location.href);
+        url3.searchParams.set('goto','chat');
+        window.parent.location.assign(url3.toString());
+        navigated = true;
+      }catch(e3){}
+    }
+
+    if(!navigated){
       document.getElementById('bubble').classList.remove('vis');
     }
   };
@@ -1061,6 +1096,469 @@ canvas{
         height=220,
         scrolling=False,
     )
+
+
+# ─────────────────────────────────────────────
+# MEMORY LEDGER — On-chain wallet intelligence
+# Read-only. No transactions. No funds. No gas.
+# ─────────────────────────────────────────────
+PHAROS_CHAIN_ID_HEX = "0x688"      # 1672 decimal — confirmed via ChainList
+PHAROS_CHAIN_ID_DEC = 1672
+PHAROS_RPC_URL       = "https://rpc.pharos.xyz"
+PHAROS_EXPLORER_URL  = "https://pharosscan.xyz"
+
+
+def render_wallet_connect_widget() -> None:
+    """
+    Renders a real OKX Wallet connect button.
+
+    IMPORTANT: st.markdown(..., unsafe_allow_html=True) injects HTML
+    directly into Streamlit's own page DOM (via React's
+    dangerouslySetInnerHTML) — it does NOT create an iframe. Only
+    components.html() creates an iframe. An earlier version of this
+    function assumed it needed to "escape" an iframe by searching
+    document.getElementsByTagName('iframe') for itself and swapping
+    places — but since there was never an iframe to find, that search
+    always failed, the widget was left inside its `display:none`
+    source wrapper forever, and the button never appeared at all.
+
+    Fix: since this content is already running in the real top-level
+    page, we just need to reveal the wrapper and wire up the click
+    handler directly — no DOM relocation necessary.
+
+    Forces network switch to Pharos (chain 0x688) — adds it if not present.
+    Read-only: only requests eth_requestAccounts + wallet_switchEthereumChain.
+    Never requests a signature, never sends a transaction, never touches funds.
+    On success, sets ?wallet=0x... in the real URL and reloads.
+    """
+    st.markdown(
+        """
+        <div id="wc-mounted" style="display:flex;flex-direction:column;align-items:center;margin:0 auto 0.5rem auto;font-family:'DM Sans',sans-serif;">
+            <button id="wc-btn" style="display:inline-flex;align-items:center;gap:10px;
+                background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 160%);
+                color:#fff;border:none;border-radius:14px;
+                padding:1rem 2rem;font-size:15px;font-weight:700;
+                cursor:pointer;font-family:'DM Sans',sans-serif;
+                transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease;
+                box-shadow:0 8px 24px rgba(20,20,90,0.28);"><svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network</button>
+            <div id="wc-status" style="font-size:12px;color:#7A7F96;margin-top:10px;font-family:'DM Sans',sans-serif;text-align:center;">Read-only · No funds · No gas · No signature required</div>
+        </div>
+
+        <script>
+        (function(){
+            function wireWalletButton(){
+                var btn = document.getElementById('wc-btn');
+                var statusEl = document.getElementById('wc-status');
+                if (!btn || !statusEl) return;
+                if (btn.dataset.wired === '1') return; // avoid double-binding on reruns
+                btn.dataset.wired = '1';
+
+                btn.addEventListener('mouseenter', function(){
+                    btn.style.transform = 'translateY(-2px)';
+                    btn.style.boxShadow = '0 12px 32px rgba(20,20,90,0.4)';
+                });
+                btn.addEventListener('mouseleave', function(){
+                    btn.style.transform = 'translateY(0)';
+                    btn.style.boxShadow = '0 8px 24px rgba(20,20,90,0.28)';
+                });
+                btn.addEventListener('mousedown', function(){
+                    btn.style.transform = 'scale(0.96)';
+                });
+                btn.addEventListener('mouseup', function(){
+                    btn.style.transform = 'translateY(-2px)';
+                });
+
+                btn.addEventListener('click', async function(){
+                    if (typeof window.okxwallet === 'undefined') {
+                        statusEl.innerText = 'OKX Wallet not found — install the OKX Wallet extension to continue';
+                        statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
+                        return;
+                    }
+
+                    try {
+                        btn.innerText = 'Connecting…';
+                        var accounts = await window.okxwallet.request({ method: 'eth_requestAccounts' });
+                        if (!accounts || accounts.length === 0) {
+                            statusEl.innerText = 'No account selected';
+                            statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
+                            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network';
+                            return;
+                        }
+
+                        statusEl.innerText = 'Switching to Pharos Network…';
+                        try {
+                            await window.okxwallet.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: '""" + PHAROS_CHAIN_ID_HEX + """' }],
+                            });
+                        } catch (switchError) {
+                            if (switchError.code === 4902) {
+                                await window.okxwallet.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{
+                                        chainId: '""" + PHAROS_CHAIN_ID_HEX + """',
+                                        chainName: 'Pharos Mainnet',
+                                        nativeCurrency: { name: 'PROS', symbol: 'PROS', decimals: 18 },
+                                        rpcUrls: ['""" + PHAROS_RPC_URL + """'],
+                                        blockExplorerUrls: ['""" + PHAROS_EXPLORER_URL + """'],
+                                    }],
+                                });
+                            } else {
+                                throw switchError;
+                            }
+                        }
+
+                        statusEl.innerText = 'Connected! Loading your on-chain profile…';
+                        statusEl.style.color = '#1FA855'; statusEl.style.fontWeight = '600';
+                        var addr = accounts[0];
+
+                        setTimeout(function(){
+                            try {
+                                var url = new URL(window.location.href);
+                                url.searchParams.set('wallet', addr);
+                                window.location.assign(url.toString());
+                            } catch(e) {
+                                statusEl.innerText = 'Connected: ' + addr + ' (copy this address)';
+                            }
+                        }, 400);
+
+                    } catch (err) {
+                        statusEl.innerText = 'Connection rejected or failed: ' + (err.message || err);
+                        statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
+                        btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network';
+                    }
+                });
+            }
+
+            wireWalletButton();
+        })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def fetch_pharos_onchain_data(address: str) -> dict:
+    """
+    Reads PUBLIC on-chain data for a wallet via standard read-only JSON-RPC calls.
+    No signature, no transaction, no funds ever touched.
+    Tries multiple known-good Pharos RPC endpoints in order until one responds.
+    Returns dict with balance, tx count, and recent activity summary.
+    """
+    result = {
+        "address":     address,
+        "balance_pros": None,
+        "tx_count":     None,
+        "is_contract":  False,
+        "available":    False,
+        "error":        None,
+    }
+
+    rpc_candidates = [PHAROS_RPC_URL, "https://pharos.drpc.org"]
+    headers = {"Content-Type": "application/json"}
+    last_error = None
+
+    for rpc_url in rpc_candidates:
+        try:
+            # 1) Native PROS balance — read-only, costs nothing
+            bal_payload = {
+                "jsonrpc": "2.0", "id": 1, "method": "eth_getBalance",
+                "params": [address, "latest"],
+            }
+            r1 = requests.post(rpc_url, json=bal_payload, headers=headers, timeout=8)
+            r1.raise_for_status()
+            bal_hex = r1.json().get("result")
+            if bal_hex:
+                result["balance_pros"] = int(bal_hex, 16) / 1e18
+
+            # 2) Transaction count — proxy for on-chain activity level
+            count_payload = {
+                "jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionCount",
+                "params": [address, "latest"],
+            }
+            r2 = requests.post(rpc_url, json=count_payload, headers=headers, timeout=8)
+            r2.raise_for_status()
+            count_hex = r2.json().get("result")
+            if count_hex:
+                result["tx_count"] = int(count_hex, 16)
+
+            # 3) Check if address is a contract (bytecode present)
+            code_payload = {
+                "jsonrpc": "2.0", "id": 3, "method": "eth_getCode",
+                "params": [address, "latest"],
+            }
+            r3 = requests.post(rpc_url, json=code_payload, headers=headers, timeout=8)
+            r3.raise_for_status()
+            code_hex = r3.json().get("result", "0x")
+            result["is_contract"] = code_hex not in ("0x", "0x0", None)
+
+            result["available"] = True
+            result["error"] = None
+            return result  # success — stop trying other endpoints
+
+        except Exception as e:
+            last_error = str(e)
+            continue  # try next RPC candidate
+
+    result["error"] = last_error
+    return result
+
+
+def fetch_pharos_transaction(tx_hash: str) -> dict:
+    """
+    Reads PUBLIC transaction data via standard read-only JSON-RPC calls.
+    Same safety profile as fetch_pharos_onchain_data: no signature, no
+    transaction sent, no funds ever touched — purely reads what is
+    already permanently recorded on-chain for anyone to see.
+    Tries the same RPC candidates in order until one responds.
+    """
+    result = {
+        "hash":          tx_hash,
+        "from_addr":     None,
+        "to_addr":       None,
+        "value_pros":    None,
+        "gas_used":      None,
+        "gas_price_gwei":None,
+        "status":        None,   # "success" | "failed" | None (pending/unknown)
+        "block_number":  None,
+        "is_contract_call": False,
+        "input_data":    None,
+        "available":     False,
+        "error":         None,
+    }
+
+    rpc_candidates = [PHAROS_RPC_URL, "https://pharos.drpc.org"]
+    headers = {"Content-Type": "application/json"}
+    last_error = None
+
+    for rpc_url in rpc_candidates:
+        try:
+            # 1) Transaction details — sender, recipient, value, input data
+            tx_payload = {
+                "jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionByHash",
+                "params": [tx_hash],
+            }
+            r1 = requests.post(rpc_url, json=tx_payload, headers=headers, timeout=8)
+            r1.raise_for_status()
+            tx = r1.json().get("result")
+
+            if not tx:
+                # Valid RPC response but transaction not found — could be
+                # a wrong hash, or on a different chain. Not an error,
+                # just nothing to show.
+                result["available"] = True
+                result["error"] = "Transaction not found on Pharos — check the hash and try again."
+                return result
+
+            result["from_addr"] = tx.get("from")
+            result["to_addr"]   = tx.get("to")
+            if tx.get("value"):
+                result["value_pros"] = int(tx["value"], 16) / 1e18
+            if tx.get("gasPrice"):
+                result["gas_price_gwei"] = int(tx["gasPrice"], 16) / 1e9
+            if tx.get("blockNumber"):
+                result["block_number"] = int(tx["blockNumber"], 16)
+            input_data = tx.get("input", "0x")
+            result["input_data"] = input_data
+            # Any input data beyond "0x" means this called a contract
+            # method rather than a plain value transfer.
+            result["is_contract_call"] = input_data not in ("0x", "0x0", None) and len(input_data) > 2
+
+            # 2) Receipt — confirms success/failure and actual gas used
+            receipt_payload = {
+                "jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionReceipt",
+                "params": [tx_hash],
+            }
+            r2 = requests.post(rpc_url, json=receipt_payload, headers=headers, timeout=8)
+            r2.raise_for_status()
+            receipt = r2.json().get("result")
+            if receipt:
+                status_hex = receipt.get("status")
+                if status_hex is not None:
+                    result["status"] = "success" if status_hex == "0x1" else "failed"
+                if receipt.get("gasUsed"):
+                    result["gas_used"] = int(receipt["gasUsed"], 16)
+            else:
+                result["status"] = None  # pending — not yet mined
+
+            result["available"] = True
+            result["error"] = None
+            return result
+
+        except Exception as e:
+            last_error = str(e)
+            continue
+
+    result["error"] = last_error
+    return result
+
+
+def explain_transaction(tx_data: dict) -> dict:
+    """
+    Uses Gemini to turn raw transaction fields into a plain-language
+    explanation. Falls back to a deterministic explanation (still using
+    the REAL transaction numbers) if Gemini is unavailable — same
+    fallback pattern as synthesize_wallet_profile.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    def deterministic_explanation():
+        """Builds an explanation straight from real transaction fields — no AI needed."""
+        status = tx_data.get("status")
+        status_label = (
+            "completed successfully" if status == "success" else
+            "failed" if status == "failed" else
+            "is still pending / status unknown"
+        )
+        value = tx_data.get("value_pros")
+        kind = "a smart contract interaction" if tx_data.get("is_contract_call") else "a simple PROS transfer"
+
+        summary_parts = [f"This transaction {status_label} and was {kind}."]
+        if value is not None and value > 0:
+            summary_parts.append(f"It moved {value:.6f} PROS.")
+        elif not tx_data.get("is_contract_call"):
+            summary_parts.append("No PROS value was attached to it.")
+        if tx_data.get("gas_used"):
+            summary_parts.append(f"It consumed {tx_data['gas_used']:,} gas to execute.")
+
+        return {
+            "summary": " ".join(summary_parts),
+            "category": "Contract Call" if tx_data.get("is_contract_call") else "Transfer",
+            "plain_steps": [
+                f"Sent from {tx_data.get('from_addr','unknown')[:10]}…",
+                f"Received by {tx_data.get('to_addr','unknown')[:10] if tx_data.get('to_addr') else 'a new contract'}…",
+                f"Status: {status_label}",
+            ],
+        }
+
+    if not api_key or not tx_data.get("available") or tx_data.get("error"):
+        return deterministic_explanation()
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash", temperature=0.3,
+            google_api_key=api_key,
+        )
+        prompt = (
+            "You are OctoBot's transaction explainer for Pharos Network. "
+            "Based on this read-only, publicly-verifiable transaction data, "
+            "write a SHORT (2-3 sentence) plain-language explanation that a "
+            "non-technical person could understand — what happened, and why "
+            "it likely happened (e.g. a token swap, a transfer, a contract "
+            "deployment, an approval, etc). Then classify it into one short "
+            "category label (2-3 words, e.g. 'Token Transfer', 'Contract Call', "
+            "'Token Swap', 'NFT Mint').\n\n"
+            f"From: {tx_data.get('from_addr')}\n"
+            f"To: {tx_data.get('to_addr')}\n"
+            f"Value: {tx_data.get('value_pros')} PROS\n"
+            f"Status: {tx_data.get('status')}\n"
+            f"Is contract call: {tx_data.get('is_contract_call')}\n"
+            f"Gas used: {tx_data.get('gas_used')}\n\n"
+            "Return ONLY valid JSON in this exact format, no markdown fences:\n"
+            '{"summary": "...", "category": "...", '
+            '"plain_steps": ["step 1", "step 2", "step 3"]}'
+        )
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        raw  = resp.content.strip()
+        raw  = re.sub(r"^```(?:json)?\n?", "", raw, flags=re.IGNORECASE)
+        raw  = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not all(k in parsed for k in ("summary", "category", "plain_steps")):
+            return deterministic_explanation()
+        return parsed
+    except Exception:
+        return deterministic_explanation()
+
+
+def synthesize_wallet_profile(onchain_data: dict) -> dict:
+    """
+    Uses Gemini to turn raw on-chain numbers into a readable intelligence
+    profile. Falls back to a deterministic profile (still using the REAL
+    on-chain numbers) if Gemini is unavailable or returns bad output.
+    """
+    api_key  = os.getenv("GEMINI_API_KEY")
+    addr     = onchain_data.get("address", "")
+    bal      = onchain_data.get("balance_pros")
+    tx_count = onchain_data.get("tx_count")
+    is_contract = onchain_data.get("is_contract")
+
+    def deterministic_profile():
+        """Builds a profile straight from real on-chain numbers — no AI needed."""
+        n = tx_count or 0
+        if n == 0:
+            tx_label, risk = "New Wallet", "Unknown"
+        elif n <= 20:
+            tx_label, risk = "Early Explorer", "Conservative"
+        elif n <= 150:
+            tx_label, risk = "Active Trader", "Moderate"
+        else:
+            tx_label, risk = "Power User", "Active"
+
+        bal_str = f"{bal:.4f}" if bal is not None else "an unknown amount of"
+        summary = (
+            f"This wallet has made {n} transaction{'s' if n != 1 else ''} on Pharos "
+            f"with a current balance of {bal_str} PROS."
+            if bal is not None or tx_count is not None
+            else "Wallet connected. Limited on-chain signal available yet — "
+                 "interact with Pharos testnet/mainnet to build your profile."
+        )
+        return {
+            "summary": summary,
+            "tags":    [tx_label, "Pharos Native", "On-chain Verified"],
+            "risk":    risk,
+            "insight": (
+                "Explore the Ecosystem page to find dApps matching your activity."
+                if n > 0 else
+                "Once you've made a few transactions on Pharos, OctoBot can "
+                "infer your builder type, risk profile, and likely interests."
+            ),
+        }
+
+    # No on-chain data at all (RPC unreachable) — nothing to synthesize from.
+    if not onchain_data.get("available"):
+        return {
+            "summary":  "Wallet connected. Limited on-chain signal available yet — "
+                        "interact with Pharos testnet/mainnet to build your profile.",
+            "tags":     ["New Wallet"],
+            "risk":     "Unknown",
+            "insight":  "Once you've made a few transactions on Pharos, OctoBot can "
+                        "infer your builder type, risk profile, and likely interests.",
+        }
+
+    # No Gemini key — still build an accurate profile from real numbers.
+    if not api_key:
+        return deterministic_profile()
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash", temperature=0.4,
+            google_api_key=api_key,
+        )
+        prompt = (
+            "You are OctoBot's on-chain intelligence module for Pharos Network. "
+            "Based on this read-only wallet data, write a SHORT (3-4 sentence) "
+            "friendly profile summary as if OctoBot already knows this user. "
+            "Then suggest 3 short descriptive tags (2-3 words each) and a one-word "
+            "risk profile (Conservative / Moderate / Active / New Wallet).\n\n"
+            f"Wallet: {addr}\n"
+            f"PROS Balance: {bal if bal is not None else 'unknown'}\n"
+            f"Transaction count: {tx_count if tx_count is not None else 'unknown'}\n"
+            f"Is contract address: {is_contract}\n\n"
+            "Return ONLY valid JSON in this exact format, no markdown fences:\n"
+            '{"summary": "...", "tags": ["tag1","tag2","tag3"], "risk": "...", '
+            '"insight": "one actionable suggestion for what to do next on Pharos"}'
+        )
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        raw  = resp.content.strip()
+        raw  = re.sub(r"^```(?:json)?\n?", "", raw, flags=re.IGNORECASE)
+        raw  = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        # Sanity check the response actually has the fields we need.
+        if not all(k in parsed for k in ("summary", "tags", "risk", "insight")):
+            return deterministic_profile()
+        return parsed
+    except Exception:
+        return deterministic_profile()
 
 
 @st.cache_resource(show_spinner=False)
@@ -1113,6 +1611,21 @@ st.markdown("""
 html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
 .stApp{
     background-color: #D7DCE6!important;
+    position:relative;
+}
+/* Wave texture moved to its own ::before layer so the drift animation
+   can use `transform` (GPU-composited) instead of animating
+   `background-position` directly on .stApp (CPU-only — forces a full
+   repaint of the entire app's root background on every single frame,
+   made worse by background-attachment:fixed). Visual result is
+   identical; this only changes HOW the motion is computed. */
+.stApp::before{
+    content:'';
+    position:fixed;
+    inset:-60px;
+    z-index:-1;
+    pointer-events:none;
+    will-change:transform;
     background-image:
         /* Ambient light source — top right, moves slowly */
         radial-gradient(ellipse 65% 50% at 78% 8%,  rgba(220,228,255,0.55) 0%, transparent 65%),
@@ -1149,30 +1662,129 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
             rgba(170,190,230,0.05) 82px,
             transparent 82px,
             transparent 160px
-        )
-    !important;
-    background-attachment: fixed!important;
-    animation: wave-shift 22s cubic-bezier(0.4,0,0.2,1) infinite!important;
+        );
+    animation: wave-shift 22s cubic-bezier(0.4,0,0.2,1) infinite;
 }
 
-/* Wave motion — shifts the gradient positions smoothly */
-@keyframes wave-shift {
-    0%   { background-position:
-        78% 8%,    12% 88%,   50% 50%,
-        0px 0px,   0px 0px,   0px 0px; }
-    25%  { background-position:
-        82% 12%,   8%  84%,   52% 48%,
-        8px 4px,   -5px 3px,  4px -2px; }
-    50%  { background-position:
-        74% 6%,    16% 90%,   48% 52%,
-        14px 7px,  -10px 5px, 8px -4px; }
-    75%  { background-position:
-        80% 10%,   10% 86%,   51% 49%,
-        9px 5px,   -6px 4px,  5px -3px; }
-    100% { background-position:
-        78% 8%,    12% 88%,   50% 50%,
-        0px 0px,   0px 0px,   0px 0px; }
+ /* Snappy global baseline — overrides Streamlit's slower defaults */
+*, *::before, *::after {
+    transition-duration: 120ms !important;
 }
+button, a, .stButton>button, [data-testid="stTextInput"] input,
+.cex-card, .dapp-card, .camp-card, .news-card {
+    transition-timing-function: cubic-bezier(0.4,0,0.2,1) !important;
+}
+/* The aura + dots background layers use `animation`, not `transition` —
+   transition-duration has no effect on them either way, so the rule
+   above is harmless to them. The earlier stutter was actually caused
+   by the will-change catch-all further down this file; fixed there. */
+
+/* Wave motion — was animating background-position (CPU repaint every
+   frame); now animates transform on the dedicated .stApp::before
+   layer instead, which the browser can composite on the GPU and skip
+   re-painting entirely. The translate distances are scaled down
+   slightly (transform moves the WHOLE layer, not individual gradient
+   positions) to preserve the same subtle, slow drifting feel. */
+@keyframes wave-shift {
+    0%   { transform:translate(0px,0px) scale(1); }
+    25%  { transform:translate(6px,3px) scale(1.006); }
+    50%  { transform:translate(11px,6px) scale(1.012); }
+    75%  { transform:translate(7px,4px) scale(1.007); }
+    100% { transform:translate(0px,0px) scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL BRAIN-AURA AMBIENT BACKGROUND — applies on every page
+   Layered on top of the existing wave background above:
+     1. Three large, slow-drifting aura glows (the "thinking" feel)
+     2. A field of small moving dots (the "alive / neural" feel)
+   Both sit at z-index:0 behind all real content (z-index:1) and
+   use pointer-events:none so nothing is ever unclickable.
+═══════════════════════════════════════════════════════════ */
+@keyframes auraDrift1{
+    0%,100%{ transform:translate(0,0) scale(1); }
+    50%{ transform:translate(46px,-34px) scale(1.16); }
+}
+@keyframes auraDrift2{
+    0%,100%{ transform:translate(0,0) scale(1); }
+    50%{ transform:translate(-54px,42px) scale(1.12); }
+}
+@keyframes auraDrift3{
+    0%,100%{ transform:translate(0,0) scale(1); }
+    50%{ transform:translate(34px,32px) scale(1.2); }
+}
+/* dotsFloat — was animating background-position across 4 layered dot
+   patterns simultaneously (CPU repaint every frame). Converted to a
+   single transform:translateY drift on the whole pseudo-element,
+   which the GPU composites for free. The -300px top inset gives the
+   pattern enough overscan room to drift without showing a seam at
+   the edge, same purpose the background-position offset served. */
+@keyframes dotsFloat{
+    0%{ transform:translateY(0); }
+    100%{ transform:translateY(-600px); }
+}
+
+[data-testid="stAppViewContainer"]{ position:relative; }
+
+/* Layer 1 — four large soft glows, slowly drifting (whole-app aura) —
+   this is now the DOMINANT visual layer.
+   Previously ran 4 simultaneous `transform` animations on this single
+   element (auraDrift1/2/3 plus a 4th reusing auraDrift2 in reverse) —
+   since `transform` only ever resolves to one final matrix per frame,
+   the browser had to interpolate and combine 4 keyframe curves every
+   tick for a result barely different from 3. Dropped the redundant
+   4th animation; visual richness is unchanged because all 4 gradient
+   blobs still drift together as one composited layer. */
+[data-testid="stAppViewContainer"]::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+    will-change:transform;
+    background:
+        radial-gradient(circle 620px at 14% 10%, rgba(8,8,80,0.45) 0%, transparent 72%),
+        radial-gradient(circle 560px at 88% 22%, rgba(10,10,100,0.38) 0%, transparent 72%),
+        radial-gradient(circle 640px at 46% 90%, rgba(6,6,70,0.35) 0%, transparent 72%),
+        radial-gradient(circle 480px at 70% 60%, rgba(12,12,90,0.28) 0%, transparent 70%);
+    animation:
+        auraDrift1 16s ease-in-out infinite,
+        auraDrift2 20s ease-in-out infinite,
+        auraDrift3 24s ease-in-out infinite;
+}
+
+/* Layer 2 — sparse field of soft dots, now a subtle accent rather than
+   the dominant effect. Fewer dots, more spacing, lower opacity, larger
+   soft glow per dot so they read as gentle floating particles instead
+   of a busy grid. */
+[data-testid="stAppViewContainer"]::after{
+    content:'';
+    position:fixed;
+    inset:-300px 0 0 0;
+    z-index:0;
+    pointer-events:none;
+    will-change:transform;
+    opacity:0.5;
+    background-image:
+        radial-gradient(circle 2px, rgba(8,8,80,0.8) 0%, transparent 100%),
+        radial-gradient(circle 1.6px, rgba(10,10,100,0.75) 0%, transparent 100%),
+        radial-gradient(circle 1.8px, rgba(6,6,70,0.7) 0%, transparent 100%),
+        radial-gradient(circle 1.5px, rgba(12,12,90,0.8) 0%, transparent 100%);
+    background-size:
+        480px 480px, 560px 560px, 620px 620px, 700px 700px;
+    background-position:
+        40px 60px, 280px 180px, 140px 380px, 460px 80px;
+    animation: dotsFloat 56s linear infinite;
+}
+
+/* Keep every real Streamlit block above both background layers */
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stHeader"],
+section[data-testid="stSidebar"]{
+    position:relative;
+    z-index:1;
+}
+
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
 [data-testid="stSidebar"]{
     background:#F2F3F8!important;
@@ -1259,8 +1871,8 @@ section[data-testid="stMain"] > div {
     border:none!important;
     border-radius:9px!important;
     font-family:var(--fb)!important;
-    font-size:14px!important;
-    font-weight:500!important;
+    font-size:16px!important;
+    font-weight:700!important;
     color:#2B2E38!important;
     opacity:1!important;
     letter-spacing:-0.003em!important;
@@ -1291,7 +1903,9 @@ section[data-testid="stMain"] > div {
     padding:0.55rem 1.2rem!important;
     letter-spacing:0.01em!important;
     box-shadow:0 4px 14px rgba(26,26,255,0.25)!important;
-    transition:all 200ms cubic-bezier(0.4,0,0.2,1)!important;
+    transition:background 200ms cubic-bezier(0.4,0,0.2,1),
+               transform 200ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 200ms cubic-bezier(0.4,0,0.2,1)!important;
 }
 .nav-cta .stButton>button:hover{
     background:var(--blue2)!important;
@@ -1325,9 +1939,9 @@ section[data-testid="stMain"] > div {
 /* hero-ring and hero-orbit removed — replaced by Neural Pulse canvas */
 .hero-eyebrow{
     display:inline-flex;align-items:center;gap:7px;
-    font-size:12px;font-weight:700;letter-spacing:0.02em;
+    font-size:16px;font-weight:700;letter-spacing:0.02em;
     color:#FFFFFF;background:#0C0C1A;border:none;
-    border-radius:30px;padding:7px 16px;margin-bottom:1.3rem;margin-top:1.4rem;
+    border-radius:30px;padding:7px 16px;margin-bottom:0.1rem;margin-top:2rem;
     align-self:center;
     box-shadow:0 4px 14px rgba(12,12,26,0.18);
 }
@@ -1453,21 +2067,204 @@ section[data-testid="stMain"] > div {
 .camp-link:hover{text-decoration:underline;gap:7px;}
 
 /* ── NEWS CARDS ── */
-.news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;margin-bottom:1.4rem;}
-.news-card{
-    background:rgba(255,255,255,0.92);border:1px solid rgba(20,20,60,0.07);
-    border-radius:18px;padding:1.3rem 1.4rem;
-    box-shadow:0 2px 10px rgba(20,20,60,0.05);
-    transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),
-               box-shadow 240ms cubic-bezier(0.4,0,0.2,1);
-    display:flex;flex-direction:column;gap:7px;
+/* ═══════════════════════════════════════════
+   ACTIVE UPDATES — editorial news dashboard
+   3-column layout: feature / compact stack / timeline
+   Uses ONLY existing Pharos palette variables —
+   no new colors introduced.
+═══════════════════════════════════════════ */
+.news-layout{
+    display:grid;
+    grid-template-columns:1.5fr 1.15fr 0.85fr;
+    gap:18px;
+    margin-bottom:1.3rem;
+    align-items:start;
 }
-.news-card:hover{box-shadow:0 16px 40px rgba(26,26,255,0.12);transform:translateY(-5px);}
+
+/* ── LEFT: large hero feature card ── */
+.news-feature{
+    background:rgba(255,255,255,0.92);
+    border:1px solid rgba(20,20,60,0.07);
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 220ms cubic-bezier(0.4,0,0.2,1);
+    display:flex;
+    flex-direction:column;
+    height:100%;
+}
+.news-feature:hover{
+    transform:translateY(-4px);
+    box-shadow:0 16px 38px rgba(26,26,255,0.12);
+}
+.news-feature-media{
+    width:100%;
+    aspect-ratio:16/9;
+    background:var(--bg2,#F7F8FA);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    flex-shrink:0;
+}
+.news-feature-media img{
+    width:100%;
+    height:100%;
+    object-fit:contain;   /* never crop/stretch the source logo */
+}
+.news-feature-body{
+    padding:1.1rem 1.3rem 1.3rem 1.3rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.5rem;
+    flex:1;
+}
+.news-feature-eyebrow{
+    font-size:9.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--blue);
+}
+.news-feature-title{
+    font-family:var(--fd,'Syne',sans-serif);
+    font-size:1.45rem;
+    font-weight:800;
+    line-height:1.22;
+    color:var(--t1);
+    letter-spacing:-0.01em;
+    margin:0;
+}
+.news-feature-desc{
+    font-size:12.5px;
+    color:var(--t2);
+    line-height:1.6;
+    margin:0;
+}
+.news-feature-meta{
+    font-size:10px;color:var(--t3);
+    margin-top:auto;
+    padding-top:0.4rem;
+}
+
+/* ── CENTER: compact horizontal cards ── */
+.news-column{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+.news-card{
+    display:grid;
+    grid-template-columns:84px 1fr;
+    gap:12px;
+    align-items:center;
+    padding:0.8rem 0.9rem;
+    background:rgba(255,255,255,0.92);
+    border:1px solid rgba(20,20,60,0.07);
+    border-radius:14px;
+    min-height:96px;
+    box-shadow:0 2px 8px rgba(20,20,60,0.04);
+    transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 200ms cubic-bezier(0.4,0,0.2,1);
+}
+.news-card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 12px 28px rgba(26,26,255,0.1);
+}
+.news-card-media{
+    width:84px;
+    height:84px;
+    border-radius:10px;
+    background:var(--bg2,#F7F8FA);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    flex-shrink:0;
+}
+.news-card-media img{
+    width:100%;
+    height:100%;
+    object-fit:contain;  /* logos stay fully visible, no clipping */
+}
+.news-card-body{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    min-width:0;
+}
+.news-card-body h4{
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--t1);
+    line-height:1.35;
+    margin:0;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+.news-card-body p{
+    font-size:11px;
+    color:var(--t2);
+    line-height:1.5;
+    margin:0;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+
+/* ── RIGHT: compact timeline feed ── */
+.news-timeline{
+    background:rgba(255,255,255,0.92);
+    border:1px solid rgba(20,20,60,0.07);
+    border-radius:14px;
+    padding:1rem 1.1rem;
+    box-shadow:0 2px 8px rgba(20,20,60,0.04);
+}
+.news-timeline-label{
+    font-size:9.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--t3);margin-bottom:0.7rem;
+}
+.news-event-list{
+    padding-left:14px;
+    border-left:1.5px solid rgba(26,26,255,0.16);
+}
+.news-event{
+    position:relative;
+    padding-bottom:1rem;
+}
+.news-event:last-child{padding-bottom:0;}
+.news-event::before{
+    content:"";
+    position:absolute;
+    left:-18.5px;
+    top:4px;
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:var(--blue);
+    box-shadow:0 0 0 3px rgba(26,26,255,0.12);
+}
+.news-event small{
+    display:block;
+    font-size:9.5px;
+    color:var(--t3);
+    margin-bottom:2px;
+}
+.news-event-title{
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--t1);
+    line-height:1.4;
+}
+
+/* ── Fallback path (CoinGecko unavailable) — reuses .news-card with
+   inline flex layout, these classes support that simpler card style ── */
 .news-source{font-size:9.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);}
-.news-title{font-size:13.5px;font-weight:600;color:var(--t1);line-height:1.42;}
+.news-title{font-size:13px;font-weight:600;color:var(--t1);line-height:1.4;}
 .news-title a{color:var(--t1);text-decoration:none;}
 .news-title a:hover{color:var(--blue);}
-.news-desc{font-size:11.5px;color:var(--t2);line-height:1.58;}
+.news-desc{font-size:11.5px;color:var(--t2);line-height:1.55;}
 .news-date{font-size:10px;color:var(--t3);}
 
 /* ── TRADE CEX ── */
@@ -1618,7 +2415,8 @@ section[data-testid="stMain"] > div {
     border:1px solid var(--border)!important;border-radius:6px!important;
     font-family:var(--fb)!important;font-size:12px!important;
     padding:0.35rem 0.65rem!important;height:auto!important;
-    text-align:left!important;transition:all 0.12s ease!important;line-height:1.4!important;
+    text-align:left!important;line-height:1.4!important;
+    transition:background 120ms ease,border-color 120ms ease,color 120ms ease!important;
 }
 .stButton>button:hover{background:var(--subtle)!important;border-color:var(--blue)!important;color:var(--t1)!important;}
 .reset-btn>.stButton>button{background:rgba(26,26,255,0.1)!important;border-color:var(--blue2)!important;color:var(--blue)!important;font-size:12px!important;font-weight:600!important;text-align:center!important;}
@@ -1706,7 +2504,7 @@ section[data-testid="stMain"] > div {
 }
 .dapp-grid{
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    grid-template-columns:repeat(2,1fr);
     gap:16px;margin-bottom:1.4rem;
 }
 .dapp-card{
@@ -1780,6 +2578,21 @@ section[data-testid="stMain"] > div {
 }
 .followup-pill:hover{background:var(--blue);color:#fff;}
 
+/* ── Follow-up buttons (real, working Streamlit buttons) ── */
+.followup-btn-row{ margin-top:-0.4rem; }
+.followup-btn-row .stButton>button{
+    display:inline-flex!important;align-items:center!important;
+    font-size:11.5px!important;font-weight:500!important;color:var(--blue)!important;
+    background:rgba(26,26,255,0.06)!important;border:1px solid rgba(26,26,255,0.2)!important;
+    border-radius:20px!important;padding:6px 12px!important;
+    transition:background 150ms ease,color 150ms ease,border-color 150ms ease!important;
+    white-space:normal!important;
+    text-align:center!important;height:auto!important;
+}
+.followup-btn-row .stButton>button:hover{
+    background:var(--blue)!important;color:#fff!important;border-color:var(--blue)!important;
+}
+
 /* ── SOURCE SIDEBAR SLIDE ── */
 .source-slide{
     position:fixed;top:0;right:0;height:100vh;width:320px;
@@ -1823,15 +2636,23 @@ section[data-testid="stMain"] > div {
 /* ── HERO IMPROVEMENTS ── */
 .hero{
     padding:2rem 0 1.5rem 0!important;
-    margin-top: -6.62rem !important;
+    margin-top: -7.65rem !important;
 }
-.hero-logo-wrap{margin-bottom:0.7rem!important;}
+.hero-logo-wrap{margin-bottom:0.7rem!important;margin-top:-2rem!important;}
 .hero-title{font-size:2.95rem!important;font-weight:600!important;letter-spacing:-0.015em!important;line-height:1.18!important;}
 .hero-sub{font-size:1.02rem!important;margin-bottom:1.1rem!important;}
 
-/* ── MICRO INTERACTIONS ── */
+/* ── MICRO INTERACTIONS ──
+   NOTE: .camp-card already has a specific-property transition defined
+   earlier (transform/box-shadow/border-color) — this rule used to say
+   `transition:all`, which silently overrode that good definition later
+   in the cascade and made the browser watch every property for
+   changes instead of just the three that actually animate. Narrowed
+   to match. */
 .camp-card,.cex-card,.dapp-card,.news-card{
-    transition:all 0.18s cubic-bezier(0.4,0,0.2,1)!important;
+    transition:transform 180ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 180ms cubic-bezier(0.4,0,0.2,1),
+               border-color 180ms cubic-bezier(0.4,0,0.2,1)!important;
 }
 .camp-card:hover,.cex-card:hover{
     transform:translateY(-2px)!important;
@@ -1844,17 +2665,6 @@ section[data-testid="stMain"] > div {
     to{opacity:1;transform:translateY(0);}
 }
 .page-reveal{animation:fadeUp 0.35s ease both;}
-
-/* ── OCTOPUS FAB ── */
-#ocfab{
-    position:fixed;bottom:80px;right:20px;
-    width:54px;height:54px;
-    cursor:pointer;z-index:99999;
-    animation:ocbo 3s ease-in-out infinite;
-    filter:drop-shadow(0 4px 14px rgba(26,26,255,0.4));
-}
-#ocfab:hover{animation-play-state:paused;filter:drop-shadow(0 6px 20px rgba(26,26,255,0.6));}
-@keyframes ocbo{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
 
 /* ── DOWNLOAD BTN ── */
 .dl-btn{
@@ -2246,10 +3056,16 @@ section[data-testid="stMain"] > div {
 }
 
 
-/* ── 6. LOADING — premium shimmer skeleton ── */
+/* ── 6. LOADING — premium shimmer skeleton ──
+   Converted from animating `background-position` (CPU repaint every
+   frame) to `transform:translateX` on an oversized background — same
+   sweeping visual, GPU-composited instead. This runs on every
+   st.spinner() call across the app (wallet fetch, tx fetch, news
+   load, chat thinking), so it's one of the most frequently-active
+   animations and benefits the most from being GPU-friendly. */
 @keyframes shimmer-sweep{
-    0%{background-position:-600px 0;}
-    100%{background-position:600px 0;}
+    0%{transform:translateX(-35%);}
+    100%{transform:translateX(35%);}
 }
 .shimmer,.stSpinner > div{
     background:linear-gradient(
@@ -2261,6 +3077,7 @@ section[data-testid="stMain"] > div {
     background-size:1200px 100%!important;
     animation:shimmer-sweep 1.6s ease-in-out infinite!important;
     border-radius:8px!important;
+    will-change:transform;
 }
 /* Spinner text smooth fade */
 [data-testid="stSpinner"] p{
@@ -2315,40 +3132,28 @@ section[data-testid="stMain"] > div {
 /* ── 9. BACKGROUND — animated wave lighting ── */
 /* wave-shift keyframes defined in main CSS block above */
 
-/* Soft light sweep that moves across the wave texture */
-@keyframes light-sweep {
-    0%   { opacity:0.0; transform:translateX(-15%) skewX(-8deg); }
-    15%  { opacity:1.0; }
-    85%  { opacity:1.0; }
-    100% { opacity:0.0; transform:translateX(115%) skewX(-8deg); }
-}
-
-/* Pseudo overlay for the light sweep — applied via a ::before on a wrapper */
-[data-testid="stAppViewContainer"]::before {
-    content:'';
-    position:fixed;
-    top:-20%;left:-20%;
-    width:35%;height:140%;
-    background:linear-gradient(
-        105deg,
-        transparent 0%,
-        rgba(230,238,255,0.0) 35%,
-        rgba(230,238,255,0.08) 50%,
-        rgba(230,238,255,0.0) 65%,
-        transparent 100%
-    );
-    animation:light-sweep 18s cubic-bezier(0.4,0,0.6,1) infinite;
-    animation-delay:4s;
-    pointer-events:none;
-    z-index:0;
-}
+/* NOTE: the light-sweep effect that used to live here targeted
+   [data-testid="stAppViewContainer"]::before — but that selector is
+   already used by the aura glow layer earlier in this file, and a
+   given pseudo-element can only resolve to ONE rule per cascade.
+   The aura definition (being later... actually earlier — either way,
+   only one wins) made this entire block dead weight: the browser
+   still parsed and tracked an 18s animation with skew/opacity that
+   never visually rendered, for zero benefit and nonzero cost. Removed
+   entirely rather than fixed, since the aura layer already provides
+   the ambient lighting feel for this app. */
 
 
 /* ── 10. NAV / STATE CHANGES — crossfade ── */
-/* Page content crossfade on navigation */
-[data-testid="stMainBlockContainer"] > div{
-    animation:page-fadein 0.25s cubic-bezier(0.4,0,0.2,1) both;
-}
+/* Page content crossfade handled by the single page-fadein animation
+   already applied to [data-testid="stMainBlockContainer"] itself
+   (see section 1 above). A second, near-identical animation used to
+   also run on every direct child div of that same container — meaning
+   every Streamlit rerun fired two overlapping fade animations across
+   dozens of nested nodes instead of one clean fade on the parent.
+   Removed the redundant child-level rule; the parent fade alone
+   already produces the full crossfade effect with a fraction of the
+   paint work. */
 /* Section dark cards animate in */
 .section-dark{
     animation:page-fadein 0.4s cubic-bezier(0.4,0,0.2,1) both;
@@ -2415,7 +3220,29 @@ section[data-testid="stMain"] > div {
 html{scroll-behavior:smooth!important;}
 *{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 *,*::before,*::after{box-sizing:border-box;}
+/* Reset will-change everywhere by default... */
 *,*::before,*::after{will-change:auto;}
+/* ...then re-promote ONLY the aura/dots background layers to their own
+   GPU compositor layer. This rule must stay BELOW the catch-all above
+   so it wins on source order — without it, the catch-all silently
+   strips GPU promotion from these full-viewport animated layers,
+   forcing the browser to repaint them constantly and causing the
+   visible stutter across the whole app. */
+[data-testid="stAppViewContainer"]::before{ will-change:transform; }
+[data-testid="stAppViewContainer"]::after{ will-change:transform; }
+.stApp::before{ will-change:transform; }
+
+/* Respect the OS-level "reduce motion" accessibility setting — pauses
+   only the continuous ambient background animations (wave/aura/dots)
+   for users who've opted out of motion, without touching interaction
+   feedback (hover/click still feel responsive either way). */
+@media (prefers-reduced-motion: reduce) {
+    .stApp::before,
+    [data-testid="stAppViewContainer"]::before,
+    [data-testid="stAppViewContainer"]::after{
+        animation: none !important;
+    }
+}
 
 /* ═══════════════════════════════════════════
    PREMIUM MOTION SYSTEM — scroll reveal + stagger
@@ -2492,8 +3319,52 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
 .stat-pill-dot{transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1)!important;}
 .stat-pill:hover .stat-pill-dot{transform:scale(1.4)!important;}
 
+/* "Connect Wallet & View Profile" button — bold black, white text,
+   easily visible against the dark gradient banner above it on Home.
+   Wrapped in .connect-wallet-btn-wrap below (CSS :contains()/:has()
+   with text matching is not valid CSS — using a wrapper div instead,
+   the same reliable pattern used elsewhere in this file). */
+.connect-wallet-btn-wrap .stButton>button{
+    background:#0C0C1A!important;
+    color:#FFFFFF!important;
+    font-weight:800!important;
+    font-size:13.5px!important;
+    border:1.5px solid #0C0C1A!important;
+    border-radius:10px!important;
+    padding:0.65rem 1rem!important;
+    text-align:center!important;
+    box-shadow:0 6px 18px rgba(12,12,26,0.3)!important;
+    letter-spacing:0.01em!important;
+}
+.connect-wallet-btn-wrap .stButton>button:hover{
+    background:#1414E8!important;
+    border-color:#1414E8!important;
+    box-shadow:0 10px 26px rgba(20,20,232,0.4)!important;
+    transform:translateY(-2px)!important;
+}
+
 /* Elegant opacity transitions handled by existing page-fadein animation above */
-            
+
+/* ═══════════════════════════════════════════
+   TABLET RESPONSIVE — 1024px and below
+═══════════════════════════════════════════ */
+@media (max-width:1024px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-left: 1.2rem !important;
+        padding-right: 1.2rem !important;
+    }
+    .hero-title { font-size: 2.1rem !important; }
+
+    /* ── Active Updates — drop to 2 columns on tablet (feature + stack,
+       timeline moves below full-width) ── */
+    .news-layout{
+        grid-template-columns:1.4fr 1fr!important;
+    }
+    .news-timeline{
+        grid-column:1 / -1;
+    }
+}
+
  /* ═══════════════════════════════════════════
    MOBILE RESPONSIVE — Phone optimised
    Breakpoint: 768px and below
@@ -2558,6 +3429,16 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
         grid-template-columns:1fr!important;
     }
 
+    /* ── Active Updates — stack the 3-column editorial layout ── */
+    .news-layout{
+        grid-template-columns:1fr!important;
+        gap:14px!important;
+    }
+    .news-feature-media{aspect-ratio:16/10!important;}
+    .news-feature-title{font-size:1.2rem!important;}
+    .news-card{grid-template-columns:64px 1fr!important;}
+    .news-card-media{width:64px!important;height:64px!important;}
+
     /* ── CEX grid — 2 columns ── */
     .cex-grid{grid-template-columns:1fr 1fr!important;}
     .cex-card{padding:0.7rem!important;}
@@ -2585,9 +3466,6 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
     div[style*="grid-template-columns:repeat(4"]{
         grid-template-columns:1fr 1fr!important;
     }
-
-    /* ── Octopus FAB — smaller on mobile ── */
-    #ocfab{width:42px!important;height:42px!important;bottom:70px!important;right:12px!important;}
 
     /* ── General text sizing ── */
     .camp-title{font-size:13px!important;}
@@ -2757,6 +3635,36 @@ if st.session_state.page == "home":
         unsafe_allow_html=True,
     )
 
+    # ── Memory Ledger — full-width compact banner strip ─────────────
+    st.markdown(
+        '<div style="background:linear-gradient(90deg,#0C0C1A 0%,#1414E8 100%);'
+        'border-radius:14px;padding:1rem 1.4rem;margin-bottom:1rem;'
+        'box-shadow:0 6px 20px rgba(20,20,90,0.16);position:relative;overflow:hidden;">'
+        '<div style="position:relative;z-index:1;display:flex;align-items:center;'
+        'justify-content:space-between;gap:16px;flex-wrap:wrap;">'
+        '<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:240px;">'
+        '<span style="font-size:26px;line-height:1;flex-shrink:0;">🧠</span>'
+        '<div>'
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">'
+        '<span style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#FFFFFF;">'
+        'OctoBot Memory Ledger</span>'
+        '<span style="font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
+        'color:#9FB4FF;background:rgba(159,180,255,0.15);border-radius:10px;padding:2px 7px;">New</span>'
+        '</div>'
+        '<div style="font-size:11.5px;color:rgba(255,255,255,0.6);">'
+        'Connect your wallet — OctoBot reads on-chain activity and personalises every answer</div>'
+        '</div></div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+    mb1, mb2, mb3 = st.columns([1, 1.4, 1])
+    with mb2:
+        st.markdown('<div class="connect-wallet-btn-wrap">', unsafe_allow_html=True)
+        if st.button("🔗 Connect Wallet & View Profile", key="home_memory_btn", use_container_width=True):
+            st.session_state.page = "memory"; st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-bottom:0.6rem;"></div>', unsafe_allow_html=True)
+
     # ── Docs badge banner ─────────────────────
     st.markdown(
         '<div class="docs-banner">'
@@ -2917,6 +3825,640 @@ if st.session_state.page == "home":
                 st.session_state["pending_q"] = f"Build path for {goal} on Pharos"
                 st.rerun()
 
+
+# ═════════════════════════════════════════════
+# PAGE: MEMORY LEDGER — On-chain wallet intelligence
+# ═════════════════════════════════════════════
+elif st.session_state.page == "memory":
+
+    # ── Premium header — bold brain-aura "neural" theme ─────────────────
+    components.html(
+        """
+        <style>
+        body{margin:0;padding:0;background:transparent;font-family:'DM Sans',sans-serif;overflow:hidden;}
+        .ml-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:10px;width:100%;position:relative;}
+
+        .ml-badge{
+            display:inline-flex;align-items:center;gap:7px;
+            font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+            color:#FFFFFF;background:linear-gradient(90deg,#0C0C1A,#1414E8);
+            border:none;border-radius:30px;padding:7px 18px;margin-bottom:22px;
+            box-shadow:0 6px 18px rgba(20,20,90,0.3);
+            animation:ml-fadein 0.5s cubic-bezier(0.16,1,0.3,1) both;
+        }
+        .ml-badge .dot{
+            width:6px;height:6px;border-radius:50%;background:#3CFF9E;
+            box-shadow:0 0 8px #3CFF9E;animation:ml-blink 2s ease-in-out infinite;
+        }
+        @keyframes ml-blink{0%,100%{opacity:1}50%{opacity:0.25}}
+
+        /* ── Bold neural brain core with layered aura ──
+           Reduced from 4 orbiting sparks to 3, and slowed the pulse/
+           orbit cycles slightly — same layered "alive" feel, fewer
+           simultaneous animations recalculating every frame on this
+           one small area. */
+        .ml-brain-wrap{
+            position:relative;width:50px;height:50px;
+            display:flex;align-items:center;justify-content:center;
+            margin-bottom:14px;
+            animation:ml-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.1s both;
+            will-change:auto;
+        }
+        .ml-aura{
+            position:absolute;inset:0;border-radius:50%;
+            background:radial-gradient(circle, rgba(26,26,255,0.38) 0%, rgba(26,26,255,0.12) 60%, transparent 20%);
+            animation:ml-pulse 3.8s ease-in-out infinite;
+            will-change:transform;
+        }
+        .ml-aura.a2{
+            inset:-24px;
+            background:radial-gradient(circle, rgba(107,140,255,0.24) 0%, transparent 40%);
+            animation:ml-pulse 3.8s ease-in-out infinite 0.5s;
+            will-change:transform;
+        }
+        .ml-aura.a3{
+            inset:-46px;
+            background:radial-gradient(circle, rgba(20,20,232,0.12) 0%, transparent 48%);
+            animation:ml-pulse 5s ease-in-out infinite 1s;
+            will-change:transform;
+        }
+        @keyframes ml-pulse{
+            0%,100%{ transform:scale(0.9); opacity:0.65; }
+            50%{ transform:scale(1.12); opacity:1; }
+        }
+       @keyframes node-pulse{
+            0%,100%{ opacity:0.4; }
+            50%{ opacity:1; }
+        }
+        @keyframes node-pulse-slow{
+            0%,100%{ opacity:0.3; }
+            50%{ opacity:0.9; }
+        }
+        @keyframes brain-float{
+            0%,100%{ transform:translateY(0); }
+            50%{ transform:translateY(-6px); }
+        }
+        @keyframes data-flicker{
+            0%,100%{ opacity:0.18; }
+            50%{ opacity:0.38; }
+        }
+        .brain-svg-wrap{
+            animation:brain-float 5s ease-in-out infinite;
+            will-change:transform;
+        }
+        .node-glow{ animation:node-pulse 3s ease-in-out infinite; }
+        .node-glow2{ animation:node-pulse 3s ease-in-out infinite 1s; }
+        .node-glow3{ animation:node-pulse-slow 4s ease-in-out infinite 0.5s; }
+        .data-text{ animation:data-flicker 4s ease-in-out infinite; }
+        .data-text2{ animation:data-flicker 4s ease-in-out infinite 1.4s; }
+        .data-text3{ animation:data-flicker 4s ease-in-out infinite 2.2s; }
+
+        .ml-title{
+            font-family:'Space Grotesk',sans-serif;font-size:2rem;font-weight:600;
+            color:#0C0C1A;letter-spacing:-0.02em;margin-bottom:12px;line-height:1.1;
+            animation:ml-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.18s both;
+        }
+        .ml-title span{
+            background:linear-gradient(90deg,#1414E8,#6B6BFF,#1414E8);
+            background-size:200% auto;
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+            animation:ml-shimmer 5s linear infinite;
+            will-change:background-position;
+        }
+        /* Note: text-clip gradients cannot use transform (it would move
+           the text itself, not just the gradient fill), so this one
+           keeps background-position but is slowed from 4s to 5s and
+           marked will-change so the browser keeps it on its own paint
+           layer — this is a small, narrow text element, not a
+           full-viewport layer, so the cost here is minimal even with
+           background-position; the real wins were the large layers
+           (wave/dots) fixed earlier. */
+        @keyframes ml-shimmer{ to{ background-position:200% center; } }
+        .ml-sub{
+            font-size:14.5px;color:#5B5F6E;max-width:520px;line-height:1.7;font-weight:400;
+            animation:ml-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.26s both;
+            padding-bottom:10px;
+        }
+        @keyframes ml-fadein{
+            from{ opacity:0; transform:translateY(16px); }
+            to{ opacity:1; transform:translateY(0); }
+        }
+        </style>
+
+        <div class="ml-wrap">
+         <div class="ml-brain-wrap" style="width:180px;height:200px;cursor:pointer;position:relative;" id="octo-mem" onclick="octoSquish()">
+            <div style="position:absolute;inset:-16px;border-radius:50%;border:1.5px solid rgba(96,165,250,0.30);animation:ml-spin 20s linear infinite;pointer-events:none;top:10px;"></div>
+            <div style="position:absolute;inset:-6px;border-radius:50%;border:1px dashed rgba(129,140,248,0.22);animation:ml-spin 32s linear infinite reverse;pointer-events:none;top:10px;"></div>
+            <div style="position:absolute;width:6px;height:6px;border-radius:50%;background:#60A5FA;box-shadow:0 0 10px rgba(96,165,250,0.9);top:0px;left:45%;animation:node-pulse 2.2s ease-in-out infinite;pointer-events:none;"></div>
+            <div style="position:absolute;width:4px;height:4px;border-radius:50%;background:#818CF8;box-shadow:0 0 8px rgba(129,140,248,0.9);top:18%;right:-8px;animation:node-pulse 2.8s ease-in-out infinite 0.7s;pointer-events:none;"></div>
+            <div style="position:absolute;width:4px;height:4px;border-radius:50%;background:#38BDF8;box-shadow:0 0 8px rgba(56,189,248,0.9);top:18%;left:-8px;animation:node-pulse 3s ease-in-out infinite 1.3s;pointer-events:none;"></div>
+            <div style="position:absolute;width:5px;height:5px;border-radius:50%;background:#6B8FFF;box-shadow:0 0 8px rgba(107,143,255,0.8);bottom:30px;right:-4px;animation:node-pulse 2.5s ease-in-out infinite 0.4s;pointer-events:none;"></div>
+            <div id="octo-mem-inner" style="filter:drop-shadow(0 0 18px rgba(59,130,246,0.60)) drop-shadow(0 0 44px rgba(26,26,255,0.32));animation:ml-float 4s ease-in-out infinite;will-change:transform;">
+              <svg id="octo-svg" width="180" height="200" viewBox="0 0 180 200" xmlns="http://www.w3.org/2000/svg" style="transform-origin:center bottom;overflow:visible;">
+                <defs>
+                  <radialGradient id="cg-body" cx="36%" cy="28%" r="70%">
+                    <stop offset="0%" stop-color="#7EB5FF"/>
+                    <stop offset="40%" stop-color="#2563EB"/>
+                    <stop offset="100%" stop-color="#0F1F8A"/>
+                  </radialGradient>
+                  <radialGradient id="cg-head" cx="36%" cy="26%" r="68%">
+                    <stop offset="0%" stop-color="#93C5FD"/>
+                    <stop offset="38%" stop-color="#3B82F6"/>
+                    <stop offset="100%" stop-color="#1E3A8A"/>
+                  </radialGradient>
+                  <radialGradient id="cg-shine" cx="32%" cy="22%" r="50%">
+                    <stop offset="0%" stop-color="white" stop-opacity="0.55"/>
+                    <stop offset="60%" stop-color="white" stop-opacity="0.08"/>
+                    <stop offset="100%" stop-color="white" stop-opacity="0"/>
+                  </radialGradient>
+                  <radialGradient id="cg-iris" cx="38%" cy="32%" r="65%">
+                    <stop offset="0%" stop-color="#BFDBFE"/>
+                    <stop offset="30%" stop-color="#2563EB"/>
+                    <stop offset="100%" stop-color="#0C1660"/>
+                  </radialGradient>
+                  <linearGradient id="cg-tent" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#3B82F6"/>
+                    <stop offset="100%" stop-color="#1E3A8A"/>
+                  </linearGradient>
+                  <filter id="cg-rim" x="-15%" y="-15%" width="130%" height="130%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="3.5" result="b"/>
+                    <feFlood flood-color="#60A5FA" flood-opacity="0.55" result="c"/>
+                    <feComposite in="c" in2="b" operator="in" result="g"/>
+                    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <path d="M54,150 C42,156 32,162 30,172 C29,178 33,180 36,176 C38,171 36,165 42,160" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M54,150 C42,156 32,162 30,172 C29,178 33,180 36,176 C38,171 36,165 42,160" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="33" cy="176" r="5" fill="#60A5FA" style="animation:node-pulse 2.2s ease-in-out infinite;"/>
+                <path d="M66,158 C58,168 54,176 56,184 C57,189 53,191 51,187 C49,182 53,174 55,168" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M66,158 C58,168 54,176 56,184 C57,189 53,191 51,187 C49,182 53,174 55,168" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="51" cy="188" r="5" fill="#818CF8" style="animation:node-pulse 2.6s ease-in-out infinite 0.4s;"/>
+                <path d="M79,163 C76,174 74,182 76,190 C77,195 74,197 72,193 C70,188 73,180 75,173" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M79,163 C76,174 74,182 76,190 C77,195 74,197 72,193 C70,188 73,180 75,173" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="72" cy="194" r="5" fill="#38BDF8" style="animation:node-pulse 2s ease-in-out infinite 0.8s;"/>
+                <path d="M101,163 C104,174 106,182 104,190 C103,195 106,197 108,193 C110,188 107,180 105,173" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M101,163 C104,174 106,182 104,190 C103,195 106,197 108,193 C110,188 107,180 105,173" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="108" cy="194" r="5" fill="#38BDF8" style="animation:node-pulse 2s ease-in-out infinite 1s;"/>
+                <path d="M114,158 C122,168 126,176 124,184 C123,189 127,191 129,187 C131,182 127,174 125,168" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M114,158 C122,168 126,176 124,184 C123,189 127,191 129,187 C131,182 127,174 125,168" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="129" cy="188" r="5" fill="#818CF8" style="animation:node-pulse 2.6s ease-in-out infinite 0.6s;"/>
+                <path d="M126,150 C138,156 148,162 150,172 C151,178 147,180 144,176 C142,171 144,165 138,160" stroke="url(#cg-tent)" stroke-width="11" fill="none" stroke-linecap="round"/>
+                <path d="M126,150 C138,156 148,162 150,172 C151,178 147,180 144,176 C142,171 144,165 138,160" stroke="#5BA5FF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="147" cy="176" r="5" fill="#60A5FA" style="animation:node-pulse 2.2s ease-in-out infinite 0.3s;"/>
+                <path d="M44,130 C30,122 20,112 22,100 C24,92 32,90 36,96" stroke="url(#cg-tent)" stroke-width="9" fill="none" stroke-linecap="round"/>
+                <circle cx="23" cy="100" r="4" fill="#60A5FA" opacity="0.7" style="animation:node-pulse 2.8s ease-in-out infinite 1.1s;"/>
+                <path d="M136,130 C150,122 160,112 158,100 C156,92 148,90 144,96" stroke="url(#cg-tent)" stroke-width="9" fill="none" stroke-linecap="round"/>
+                <circle cx="157" cy="100" r="4" fill="#60A5FA" opacity="0.7" style="animation:node-pulse 2.8s ease-in-out infinite 0.5s;"/>
+                <ellipse cx="90" cy="148" rx="36" ry="28" fill="url(#cg-body)" filter="url(#cg-rim)"/>
+                <ellipse cx="90" cy="162" rx="30" ry="12" fill="#0F1F8A" opacity="0.35"/>
+                <ellipse cx="78" cy="136" rx="14" ry="9" fill="white" opacity="0.16"/>
+                <circle cx="90" cy="88" r="68" fill="url(#cg-head)" filter="url(#cg-rim)"/>
+                <ellipse cx="90" cy="148" rx="50" ry="18" fill="#1E3A8A" opacity="0.28"/>
+                <circle cx="90" cy="88" r="68" fill="url(#cg-shine)"/>
+                <ellipse cx="62" cy="55" rx="16" ry="10" fill="white" opacity="0.20" transform="rotate(-20,62,55)"/>
+                <ellipse class="expr-eye-l" cx="68" cy="88" rx="20" ry="22" fill="white"/>
+                <ellipse class="expr-eye-r" cx="112" cy="88" rx="20" ry="22" fill="white"/>
+                <circle cx="68" cy="90" r="14" fill="url(#cg-iris)"/>
+                <circle cx="112" cy="90" r="14" fill="url(#cg-iris)"/>
+                <circle class="expr-pupil-l" cx="70" cy="92" r="8" fill="#060820"/>
+                <circle class="expr-pupil-r" cx="114" cy="92" r="8" fill="#060820"/>
+                <circle cx="76" cy="82" r="5" fill="white" opacity="0.96"/>
+                <circle cx="120" cy="82" r="5" fill="white" opacity="0.96"/>
+                <circle cx="63" cy="90" r="2.2" fill="white" opacity="0.70"/>
+                <circle cx="107" cy="90" r="2.2" fill="white" opacity="0.70"/>
+                <circle cx="78" cy="86" r="1.4" fill="white" opacity="0.55"/>
+                <circle cx="122" cy="86" r="1.4" fill="white" opacity="0.55"/>
+                <circle cx="68" cy="90" r="14" fill="none" stroke="#BFDBFE" stroke-width="1.2" opacity="0.55"/>
+                <circle cx="112" cy="90" r="14" fill="none" stroke="#BFDBFE" stroke-width="1.2" opacity="0.55"/>
+                <ellipse cx="68" cy="88" rx="20" ry="22" fill="none" stroke="#1E3A8A" stroke-width="1.2" opacity="0.25"/>
+                <ellipse cx="112" cy="88" rx="20" ry="22" fill="none" stroke="#1E3A8A" stroke-width="1.2" opacity="0.25"/>
+                <path d="M50,104 Q68,114 86,104" fill="none" stroke="#1E3A8A" stroke-width="1" opacity="0.2" stroke-linecap="round"/>
+                <path d="M94,104 Q112,114 130,104" fill="none" stroke="#1E3A8A" stroke-width="1" opacity="0.2" stroke-linecap="round"/>
+                <ellipse class="expr-blush-l" cx="44" cy="106" rx="14" ry="8" fill="#F472B6" opacity="0.22"/>
+                <ellipse class="expr-blush-r" cx="136" cy="106" rx="14" ry="8" fill="#F472B6" opacity="0.22"/>
+                <path class="expr-mouth" d="M74,116 Q90,128 106,116" fill="none" stroke="#BFDBFE" stroke-width="2.8" stroke-linecap="round"/>
+                <path d="M78,118 Q90,126 102,118" fill="white" opacity="0.80"/>
+                <g font-family="monospace" font-size="6" fill="#93C5FD" opacity="0.30">
+                  <text x="12" y="72" style="animation:data-flicker 3.2s ease-in-out infinite;">01</text>
+                  <text x="154" y="80" style="animation:data-flicker 3.2s ease-in-out infinite 1.1s;">10</text>
+                  <text x="18" y="108" style="animation:data-flicker 3.2s ease-in-out infinite 2s;">11</text>
+                  <text x="148" y="112" style="animation:data-flicker 3.2s ease-in-out infinite 0.6s;">00</text>
+                </g>
+                <circle cx="90" cy="88" r="68" fill="none" stroke="#60A5FA" stroke-width="1.8" opacity="0.20"/>
+              </svg>
+            </div>
+          </div>
+          <style>
+          @keyframes octo-squish{
+            0%  { transform:scale(1,1); }
+            20% { transform:scale(1.22,0.80); }
+            50% { transform:scale(0.88,1.18); }
+            75% { transform:scale(1.06,0.96); }
+            100%{ transform:scale(1,1); }
+          }
+          @keyframes ml-spin{
+            from{ transform:rotate(0deg); }
+            to{ transform:rotate(360deg); }
+          }
+          #octo-mem{ user-select:none; }
+          .expr-eye-l,.expr-eye-r,.expr-pupil-l,.expr-pupil-r,
+          .expr-mouth,.expr-blush-l,.expr-blush-r{
+            transition:all 0.22s cubic-bezier(0.4,0,0.2,1);
+          }
+          </style>
+          <script>
+          (function(){
+            var exprTimeout = null;
+            function setExpression(expr){
+              var svg = document.getElementById('octo-svg');
+              if(!svg) return;
+              svg.setAttribute('data-expr', expr);
+              if(expr !== 'idle'){
+                clearTimeout(exprTimeout);
+                exprTimeout = setTimeout(function(){ setExpression('idle'); }, 3200);
+              }
+            }
+            function octoSquish(){
+              var svg = document.getElementById('octo-svg');
+              if(!svg) return;
+              setExpression('excited');
+              svg.style.animation = 'none';
+              void svg.offsetWidth;
+              svg.style.animation = 'octo-squish 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards';
+              setTimeout(function(){ svg.style.animation = ''; }, 580);
+            }
+            window.octoSquish  = octoSquish;
+            window.octoSetExpr = setExpression;
+          })();
+          </script>
+          <div class="ml-title">OctoBot <span>Memory Ledger</span></div>
+          <div class="ml-sub">
+            A Pharos-native AI companion that knows you before you speak.
+          </div>
+        </div>
+        """,
+        height=380,
+    )
+
+    # ── Side-by-side layout: Wallet entry (left) + Transaction Explainer (right) ──
+    mem_col_left, mem_col_right = st.columns(2, gap="large")
+
+    with mem_col_left:
+        if not st.session_state.wallet_address:
+            # ── Manual address entry — only connection method ──────────────
+            st.markdown('<div style="margin-top:-0.8rem;"></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="display:flex;gap:10px;flex-wrap:nowrap;margin-bottom:0.1rem;justify-content:center;">'
+                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
+                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
+                '🔒 No signature required</div>'
+                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
+                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
+                '⛽ Zero gas used</div>'
+                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
+                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
+                '👁 Read-only access</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown(
+                '<div style="display:flex;justify-content:center;">'
+                '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);border-radius:18px;'
+                'padding:1.5rem 1.7rem;'
+                'box-shadow:0 6px 20px rgba(20,20,60,0.07),0 0 0 4px rgba(26,26,255,0.06),0 0 28px rgba(56,189,248,0.12),0 0 56px rgba(26,26,255,0.08);'
+                'max-width:560px;width:100%;min-height:188px;display:flex;flex-direction:column;">'
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+                '<div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#1414E8,#0C0C1A);'
+                'display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🔑</div>'
+                '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#0C0C1A;">'
+                'Enter your Pharos wallet address</span>'
+                '</div>'
+                '<div style="font-size:13px;color:#000000;margin-bottom:14px;line-height:1.55;min-height:36px;">'
+                'Paste any Pharos wallet address to view its on-chain profile — '
+                'read-only, zero risk, nothing to install.</div>',
+                unsafe_allow_html=True,
+            )
+            manual_addr = st.text_input(
+                "Wallet address", placeholder="0x1234...your Pharos wallet address",
+                key="manual_wallet_input", label_visibility="collapsed",
+            )
+            if st.button("🔎  View Profile", key="manual_wallet_btn", use_container_width=True):
+                if manual_addr.strip().startswith("0x") and len(manual_addr.strip()) == 42:
+                    st.session_state.wallet_address = manual_addr.strip()
+                    st.session_state.wallet_data    = None
+                    st.session_state.wallet_profile = None
+                    st.rerun()
+                else:
+                    st.error("Enter a valid 0x... wallet address (42 characters).")
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        else:
+            # ── Connected — fetch and show profile ────────────────────────
+            addr = st.session_state.wallet_address
+            short_addr = addr[:6] + "…" + addr[-4:]
+
+            top1, top2 = st.columns([3, 1])
+            with top1:
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:12px;'
+                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                    f'border-radius:16px;padding:1rem 1.3rem;margin-bottom:1.1rem;'
+                    f'box-shadow:0 8px 24px rgba(20,20,90,0.22);">'
+                    f'<div style="width:38px;height:38px;border-radius:10px;'
+                    f'background:rgba(255,255,255,0.12);display:flex;align-items:center;'
+                    f'justify-content:center;font-size:18px;flex-shrink:0;">🔗</div>'
+                    f'<div><div style="font-size:10px;color:rgba(255,255,255,0.55);font-weight:700;'
+                    f'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">Connected Wallet</div>'
+                    f'<div style="font-size:15px;color:#fff;font-weight:700;font-family:monospace;letter-spacing:0.01em;">{short_addr}</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            with top2:
+                if st.button("✕ Disconnect", key="disconnect_wallet", use_container_width=True):
+                    st.session_state.wallet_address  = ""
+                    st.session_state.wallet_data     = None
+                    st.session_state.wallet_profile  = None
+                    st.rerun()
+
+            # Fetch on-chain data once
+            if st.session_state.wallet_data is None:
+                with st.spinner("Reading on-chain activity from Pharos…"):
+                    st.session_state.wallet_data = fetch_pharos_onchain_data(addr)
+
+            data = st.session_state.wallet_data
+
+            if not data.get("available"):
+                st.warning(
+                    "⚠️ Could not reach Pharos RPC right now — this wallet may be new, "
+                    "or the network is temporarily unavailable. Your address was still read "
+                    "successfully — no funds or gas were used."
+                )
+
+            # On-chain stats row — bold cards with glow accent on hover
+            bal      = data.get("balance_pros")
+            tx_count = data.get("tx_count")
+            st.markdown(
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.2rem;">'
+                f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">💰 PROS Balance</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:#1414E8;">'
+                f'{f"{bal:.4f}" if bal is not None else "—"}</div></div>'
+                f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">⚡ Transactions</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:#1414E8;">'
+                f'{tx_count if tx_count is not None else "—"}</div></div>'
+                f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">🏷 Address Type</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:#1414E8;">'
+                f'{"Contract" if data.get("is_contract") else "Wallet"}</div></div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Synthesize profile via Gemini (once)
+            if st.session_state.wallet_profile is None:
+                with st.spinner("OctoBot is synthesising your intelligence profile…"):
+                    st.session_state.wallet_profile = synthesize_wallet_profile(data)
+
+            profile = st.session_state.wallet_profile
+
+            tags_html = "".join([
+                f'<span class="tag" style="margin-right:6px;margin-bottom:6px;display:inline-block;'
+                f'font-weight:700;">{t}</span>'
+                for t in profile.get("tags", [])
+            ])
+            st.markdown(
+                '<div style="background:linear-gradient(160deg,#F0F1FF 0%,#E4E8FF 100%);'
+                'border:1.5px solid rgba(26,26,255,0.18);border-radius:20px;padding:1.6rem 1.7rem;'
+                'margin-bottom:1.1rem;box-shadow:0 12px 36px rgba(20,20,90,0.1);position:relative;overflow:hidden;">'
+                '<div style="position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;'
+                'background:radial-gradient(circle, rgba(26,26,255,0.15) 0%, transparent 70%);pointer-events:none;"></div>'
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.9rem;position:relative;z-index:1;">'
+                '<div style="width:36px;height:36px;border-radius:50%;'
+                'background:linear-gradient(135deg,#1414E8,#0C0C1A);display:flex;align-items:center;'
+                'justify-content:center;font-size:18px;flex-shrink:0;'
+                'box-shadow:0 4px 12px rgba(20,20,90,0.3);">🐙</div>'
+                '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
+                'OctoBot says:</div></div>'
+                f'<div style="font-size:14.5px;color:#0C0C1A;line-height:1.7;font-style:italic;margin-bottom:1.1rem;position:relative;z-index:1;">'
+                f'"{profile.get("summary", "")}"</div>'
+                f'<div style="margin-bottom:0.9rem;position:relative;z-index:1;">{tags_html}'
+                f'<span class="tag" style="background:rgba(31,168,85,0.12);border-color:rgba(31,168,85,0.35);'
+                f'color:#1FA855;display:inline-block;font-weight:700;">Risk: {profile.get("risk", "Unknown")}</span></div>'
+                f'<div style="font-size:13px;color:#42475A;background:rgba(255,255,255,0.7);'
+                f'border-radius:12px;padding:0.8rem 1rem;position:relative;z-index:1;">'
+                f'💡 <strong>Suggested next step:</strong> {profile.get("insight", "")}</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("💬 Ask OctoBot about my profile", key="memory_to_chat", use_container_width=True):
+                    bal_display = f"{bal:.4f}" if bal is not None else "0"
+                    st.session_state["pending_q"] = (
+                        f"Based on my wallet with {tx_count or 0} transactions and "
+                        f"{bal_display} PROS balance, what should I do next on Pharos?"
+                    )
+                    # Wallet-derived questions aren't in the docs — switch to
+                    # Docs + General mode so OctoBot can actually answer them
+                    # via the Gemini fallback instead of saying "not found".
+                    st.session_state.chat_mode = "general"
+                    st.session_state.page = "chat"
+                    st.rerun()
+            with col_b:
+                st.link_button(
+                    "🔍 View on Pharos Explorer",
+                    PHAROS_EXPLORER_URL + "/address/" + addr,
+                    use_container_width=True,
+                )
+
+            st.markdown(
+                '<div style="font-size:10.5px;color:#B0B4C4;text-align:center;margin-top:1rem;">'
+                'Profile generated from public on-chain data only · No funds accessed · '
+                'Disconnect anytime above</div>',
+                unsafe_allow_html=True,
+            )
+
+    with mem_col_right:
+        # ── Transaction Explainer ───────────────────────────────────────
+        # Shows regardless of wallet-connect state above — works as a
+        # standalone read-only tool. Reuses the exact same RPC pattern and
+        # safety guarantees as the wallet profile feature: no signature,
+        # no transaction sent, no funds touched, only public on-chain data.
+        #
+        # Mirrors the left wallet card's exact structure (badges row,
+        # then a white card that stays open through the Streamlit input
+        # and button, closed afterward) so both cards share identical
+        # heading markup, spacing, and overall card height.
+        st.markdown('<div style="margin-top:-0.8rem;"></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:0.1rem;justify-content:center;">'
+            '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
+            'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
+            '⛓️ Reads any public transaction</div>'
+            '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
+            'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
+            '⚡ Instant on-chain lookup</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div style="display:flex;justify-content:center;">'
+            '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);border-radius:18px;'
+            'padding:1.5rem 1.7rem;'
+            'box-shadow:0 6px 20px rgba(20,20,60,0.07),0 0 0 4px rgba(26,26,255,0.06),0 0 28px rgba(56,189,248,0.12),0 0 56px rgba(26,26,255,0.08);'
+            'max-width:560px;width:100%;min-height:188px;display:flex;flex-direction:column;">'
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+            '<div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#1414E8,#0C0C1A);'
+            'display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🔎</div>'
+            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#0C0C1A;">'
+            'Transaction Explainer</span>'
+            '</div>'
+            '<div style="font-size:13px;color:#000000;margin-bottom:14px;line-height:1.55;min-height:36px;">'
+            'Paste any Pharos transaction hash — OctoBot reads it on-chain and explains it in plain language.</div>',
+            unsafe_allow_html=True,
+        )
+        tx_input = st.text_input(
+            "Transaction hash", placeholder="0x...transaction hash from pharosscan.xyz",
+            key="tx_hash_field", label_visibility="collapsed",
+        )
+        if st.button("🧠  Explain this transaction", key="explain_tx_btn", use_container_width=True):
+            cleaned = tx_input.strip()
+            if cleaned.startswith("0x") and len(cleaned) == 66:
+                st.session_state.tx_hash_input  = cleaned
+                st.session_state.tx_data        = None
+                st.session_state.tx_explanation = None
+                st.rerun()
+            else:
+                st.error("Enter a valid 0x... transaction hash (66 characters).")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+        if st.session_state.tx_hash_input:
+            tx_h = st.session_state.tx_hash_input
+
+            if st.session_state.tx_data is None:
+                with st.spinner("Reading transaction from Pharos…"):
+                    st.session_state.tx_data = fetch_pharos_transaction(tx_h)
+
+            tx_data = st.session_state.tx_data
+
+            if tx_data.get("error") and not tx_data.get("from_addr"):
+                st.warning("⚠️ " + str(tx_data.get("error", "Could not read this transaction.")))
+            else:
+                short_hash = tx_h[:10] + "…" + tx_h[-6:]
+                status     = tx_data.get("status")
+                status_color = (
+                    "#1FA855" if status == "success" else
+                    "#E5484D" if status == "failed" else
+                    "#9499A8"
+                )
+                status_label = (
+                    "✓ Success" if status == "success" else
+                    "✕ Failed"  if status == "failed"  else
+                    "⏳ Pending"
+                )
+
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:12px;'
+                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                    f'border-radius:16px;padding:1rem 1.3rem;margin-top:1rem;margin-bottom:1.1rem;'
+                    f'box-shadow:0 8px 24px rgba(20,20,90,0.22);">'
+                    f'<div style="width:38px;height:38px;border-radius:10px;'
+                    f'background:rgba(255,255,255,0.12);display:flex;align-items:center;'
+                    f'justify-content:center;font-size:18px;flex-shrink:0;">🧾</div>'
+                    f'<div><div style="font-size:10px;color:rgba(255,255,255,0.55);font-weight:700;'
+                    f'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">Transaction</div>'
+                    f'<div style="font-size:14px;color:#fff;font-weight:700;font-family:monospace;'
+                    f'letter-spacing:0.01em;">{short_hash}</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+                # On-chain stats row — same card style as wallet profile stats
+                value_pros = tx_data.get("value_pros")
+                gas_used   = tx_data.get("gas_used")
+                st.markdown(
+                    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.1rem;">'
+                    f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                    f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                    f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">📌 Status</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:{status_color};">'
+                    f'{status_label}</div></div>'
+                    f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                    f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                    f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">💰 Value</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#1414E8;">'
+                    f'{f"{value_pros:.4f}" if value_pros is not None else "—"}</div></div>'
+                    f'<div style="background:#FFFFFF;border:1.5px solid #E3E5EA;border-radius:16px;padding:1.1rem 1rem;'
+                    f'text-align:center;box-shadow:0 4px 14px rgba(20,20,60,0.05);">'
+                    f'<div style="font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#9499A8;margin-bottom:6px;">⚡ Gas Used</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#1414E8;">'
+                    f'{f"{gas_used:,}" if gas_used is not None else "—"}</div></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # Plain-language explanation via Gemini (with deterministic fallback)
+                if st.session_state.tx_explanation is None:
+                    with st.spinner("OctoBot is explaining this transaction…"):
+                        st.session_state.tx_explanation = explain_transaction(tx_data)
+
+                explanation = st.session_state.tx_explanation
+                steps_html = "".join([
+                    f'<div style="display:flex;align-items:flex-start;gap:8px;padding:0.4rem 0;'
+                    f'border-bottom:1px solid rgba(255,255,255,0.5);font-size:12px;color:#42475A;">'
+                    f'<span style="color:#1A1AFF;flex-shrink:0;">→</span><span>{s}</span></div>'
+                    for s in explanation.get("plain_steps", [])
+                ])
+                st.markdown(
+                    '<div style="background:linear-gradient(160deg,#F0F1FF 0%,#E4E8FF 100%);'
+                    'border:1.5px solid rgba(26,26,255,0.18);border-radius:20px;padding:1.4rem 1.5rem;'
+                    'margin-bottom:1rem;box-shadow:0 12px 36px rgba(20,20,90,0.1);position:relative;overflow:hidden;">'
+                    '<div style="position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;'
+                    'background:radial-gradient(circle, rgba(26,26,255,0.15) 0%, transparent 70%);pointer-events:none;"></div>'
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.9rem;position:relative;z-index:1;">'
+                    '<div style="width:36px;height:36px;border-radius:50%;'
+                    'background:linear-gradient(135deg,#1414E8,#0C0C1A);display:flex;align-items:center;'
+                    'justify-content:center;font-size:18px;flex-shrink:0;'
+                    'box-shadow:0 4px 12px rgba(20,20,90,0.3);">🐙</div>'
+                    '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
+                    'OctoBot explains:</div></div>'
+                    f'<div style="font-size:14px;color:#0C0C1A;line-height:1.65;font-style:italic;margin-bottom:0.9rem;position:relative;z-index:1;">'
+                    f'"{explanation.get("summary", "")}"</div>'
+                    f'<span class="tag" style="display:inline-block;margin-bottom:0.9rem;position:relative;z-index:1;">'
+                    f'{explanation.get("category", "Transaction")}</span>'
+                    f'<div style="position:relative;z-index:1;">{steps_html}</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+                col_tx1, col_tx2 = st.columns(2)
+                with col_tx1:
+                    if st.button("✕ Clear", key="clear_tx", use_container_width=True):
+                        st.session_state.tx_hash_input  = ""
+                        st.session_state.tx_data        = None
+                        st.session_state.tx_explanation = None
+                        st.rerun()
+                with col_tx2:
+                    st.link_button(
+                        "🔍 View on Pharos Explorer",
+                        PHAROS_EXPLORER_URL + "/tx/" + tx_h,
+                        use_container_width=True,
+                    )
+
+                st.markdown(
+                    '<div style="font-size:10.5px;color:#B0B4C4;text-align:center;margin-top:1rem;">'
+                    'Explanation generated from public on-chain data only · Read-only · No funds accessed</div>',
+                    unsafe_allow_html=True,
+                )
+
+    
 
 # ═════════════════════════════════════════════
 # PAGE: CHAT
@@ -3092,66 +4634,93 @@ elif st.session_state.page == "chat":
     if not st.session_state.sailor_done:
         st.markdown("""
         <style>
-        /* Hide everything on the chat page except the gate form */
         section[data-testid="stSidebar"]{display:none!important;}
         div[data-testid="stDecoration"]{display:none!important;}
         .gate-wrap{
             display:flex;flex-direction:column;align-items:center;
-            justify-content:center;min-height:20vh;padding:1rem 1rem 0 1rem;
+            justify-content:center;min-height:30vh;padding:2rem 1rem 0 1rem;
         }
         .gate-card{
             background:#FFFFFF;
-            border:1.5px solid rgba(26,26,255,0.12);
-            border-radius:22px 22px 0 0;
-            padding:2.6rem 2.4rem 1.4rem 2.4rem;
-            width:100%;max-width:380px;
+            border:1.5px solid rgba(26,26,255,0.15);
+            border-radius:28px;
+            padding:2.8rem 2.8rem 2rem 2.8rem;
+            width:100%;max-width:400px;
             text-align:center;
-            box-shadow:0 24px 64px rgba(26,26,255,0.12),
-                       0 4px 16px rgba(0,0,0,0.05);
-            animation:gate-pop 0.55s cubic-bezier(0.34,1.4,0.64,1) both;
+            box-shadow:0 32px 80px rgba(26,26,255,0.14),
+                       0 8px 24px rgba(0,0,0,0.08);
+            position:relative;overflow:hidden;
+            animation:card-pop 0.6s cubic-bezier(0.34,1.5,0.64,1) 0.1s both;
         }
-        @keyframes gate-pop{
-            from{opacity:0;transform:scale(0.9) translateY(16px);}
-            to{opacity:1;transform:scale(1) translateY(0);}
+        @keyframes card-pop{
+            0%  {opacity:0;transform:scale(0.78) translateY(40px);}
+            60% {opacity:1;transform:scale(1.04) translateY(-6px);}
+            80% {transform:scale(0.98) translateY(2px);}
+            100%{transform:scale(1) translateY(0);}
         }
-        .gate-emoji{font-size:52px;display:block;margin-bottom:0.8rem;}
+        .gate-card::after{
+            content:'';position:absolute;
+            width:180px;height:180px;border-radius:50%;
+            background:radial-gradient(circle,rgba(26,26,255,0.10) 0%,transparent 70%);
+            top:-60px;right:-60px;pointer-events:none;
+        }
+        .gate-emoji{
+            font-size:60px;display:block;margin-bottom:1rem;
+            animation:emoji-bounce 0.7s cubic-bezier(0.34,1.6,0.64,1) 0.5s both;
+        }
+        @keyframes emoji-bounce{
+            0%  {opacity:0;transform:scale(0.4) rotate(-15deg);}
+            60% {transform:scale(1.18) rotate(6deg);}
+            80% {transform:scale(0.94) rotate(-2deg);}
+            100%{opacity:1;transform:scale(1) rotate(0deg);}
+        }
         .gate-title{
-            font-family:'Syne',sans-serif;font-size:24px;font-weight:800;
-            color:#0C0C1A;margin-bottom:0.35rem;letter-spacing:-0.02em;
+            font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
+            color:#0C0C1A;margin-bottom:0.4rem;letter-spacing:-0.025em;
+            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.65s both;
         }
         .gate-sub{
-            font-size:13px;color:#7A7F96;line-height:1.6;margin-bottom:1.4rem;
+            font-size:13.5px;color:#7A7F96;line-height:1.65;margin-bottom:0.5rem;
+            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.78s both;
         }
-        /* Style the Streamlit text input inside gate */
+        .gate-divider{
+            width:0%;height:1.5px;
+            background:linear-gradient(90deg,#1A1AFF,#6B8CFF,#1A1AFF);
+            border-radius:4px;margin:0 auto 1.4rem auto;
+            animation:line-draw 0.6s cubic-bezier(0.4,0,0.2,1) 0.9s both;
+        }
+        @keyframes line-draw{
+            from{width:0%;opacity:0;}to{width:60%;opacity:1;}
+        }
+        @keyframes rise{
+            from{opacity:0;transform:translateY(12px);}
+            to{opacity:1;transform:translateY(0);}
+        }
         .gate-input-wrap div[data-testid="stTextInput"] input{
-            border-radius:0 0 18px 18px!important;
-            border:1.5px solid rgba(26,26,255,0.12)!important;
-            border-top:none!important;
-            background:#FFFFFF!important;
-            font-size:15px!important;
-            font-weight:500!important;
-            text-align:center!important;
-            padding:0.85rem 1rem!important;
-            font-family:'DM Sans',sans-serif!important;
-            color:#0C0C1A!important;
-            box-shadow:0 24px 64px rgba(26,26,255,0.12)!important;
+            border-radius:14px!important;
+            border:2px solid rgba(26,26,255,0.18)!important;
+            background:#F8F9FF!important;
+            font-size:16px!important;font-weight:500!important;
+            text-align:center!important;padding:0.9rem 1rem!important;
+            font-family:'DM Sans',sans-serif!important;color:#0C0C1A!important;
+            transition:border-color 200ms ease,box-shadow 200ms ease!important;
+            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 1s both;
         }
         .gate-input-wrap div[data-testid="stTextInput"] input:focus{
             border-color:#1A1AFF!important;
-            box-shadow:0 0 0 3px rgba(26,26,255,0.1)!important;
-            background:#fff!important;
-            outline:none!important;
+            box-shadow:0 0 0 4px rgba(26,26,255,0.10)!important;
+            background:#FFFFFF!important;outline:none!important;
         }
         .gate-input-wrap div[data-testid="stTextInput"] input::placeholder{
             color:#B0B4C4!important;font-size:13px!important;
         }
-        .gate-hint{font-size:11px;color:#C0C4D0;margin-top:0.6rem;}
         </style>
         <div class="gate-wrap">
           <div class="gate-card">
             <span class="gate-emoji">🐙</span>
             <div class="gate-title">Ahoy, Sailor!</div>
             <div class="gate-sub">What should I call you?<br>Enter your name to open OctoBot.</div>
+            <div class="gate-divider"></div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -3167,8 +4736,7 @@ elif st.session_state.page == "chat":
             )
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(
-                '<p style="text-align:center;font-size:11px;'
-                'color:#B0B4C4;margin-top:0.3rem;">Press Enter after typing</p>',
+                '<p style="text-align:center;font-size:11px;color:#B0B4C4;margin-top:0.3rem;">Press Enter after typing</p>',
                 unsafe_allow_html=True,
             )
 
@@ -3375,38 +4943,45 @@ elif st.session_state.page == "chat":
                         )
 
             # ── Follow-up questions ───────────────────
-            if "fups_" + msg_idx not in st.session_state:
-                fups = get_followup_questions(question, answer)
-                st.session_state["fups_" + msg_idx] = fups
-            fups = st.session_state.get("fups_" + msg_idx, [])
+            try:
+                if "fups_" + msg_idx not in st.session_state:
+                    fups = get_followup_questions(question, answer)
+                    st.session_state["fups_" + msg_idx] = fups
+                fups = st.session_state.get("fups_" + msg_idx, [])
+            except Exception:
+                fups = []
+
             if fups:
                 st.markdown(
                     '<div style="margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid #D0D3E0;">'
                     '<div style="font-size:10px;font-weight:600;color:#7A7F96;letter-spacing:0.08em;'
                     'text-transform:uppercase;margin-bottom:0.5rem;">Follow-up questions</div>'
-                    '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
-                    + "".join([
-                        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;'
-                        'font-weight:500;color:#1A1AFF;background:rgba(26,26,255,0.06);'
-                        'border:1px solid rgba(26,26,255,0.2);border-radius:20px;'
-                        'padding:4px 12px;cursor:pointer;" '
-                        'onclick="void(0)">↪ ' + q + '</span>'
-                        for q in fups
-                    ])
-                    + '</div></div>',
+                    '</div>',
                     unsafe_allow_html=True,
                 )
-                # Render as actual clickable Streamlit buttons below
-                for fq in fups:
-                    if st.button("↪ " + fq, key="fup_" + msg_idx + "_" + fq[:15]):
-                        st.session_state["pending_q"] = fq
-                        st.rerun()
+                st.markdown('<div class="followup-btn-row">', unsafe_allow_html=True)
+                fup_cols = st.columns(len(fups))
+                for fup_i, (fcol, fq) in enumerate(zip(fup_cols, fups)):
+                    with fcol:
+                        # Key uses the loop position (enumerate), never
+                        # fups.index(fq) or hash(fq) — both of those can
+                        # collide (duplicate questions from Gemini, or
+                        # hash-seed randomisation across processes) and
+                        # trigger a Streamlit "duplicate element ID" error,
+                        # which crashes the whole page render and looks
+                        # exactly like the button "doing nothing."
+                        fq_key = "fup_" + msg_idx + "_" + str(fup_i)
+                        if st.button("↪ " + fq, key=fq_key, use_container_width=True):
+                            st.session_state["pending_q"] = fq
+                            # Clear this answer's cached follow-ups so the
+                            # NEXT answer (from the follow-up question) gets
+                            # its own fresh set instead of reusing this one.
+                            st.session_state.pop("fups_" + msg_idx, None)
+                            st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
         st.session_state.messages.append({"role":"assistant","content":answer})
         st.session_state.sources_history.append(sources)
-
-    # ── Octopus scroll-to-bottom FAB ─────────────
-    render_octo_fab()
 
 
 # ═════════════════════════════════════════════
@@ -3512,52 +5087,87 @@ elif st.session_state.page == "updates":
         news_items = get_pharos_news()
 
     if news_items:
-        st.markdown('<div class="news-grid">', unsafe_allow_html=True)
-        for item in news_items:
-            date_str = ""
-            if item.get("date"):
-                try:
-                    dt = datetime.fromisoformat(str(item["date"]).replace("Z",""))
-                    date_str = dt.strftime("%b %d, %Y")
-                except Exception:
-                    date_str = str(item["date"])[:10]
-
-            st.markdown(
-                '<div class="news-card">'
-                '<div class="news-source">' + (item.get("source","") or "") + '</div>'
-                '<div class="news-title"><a href="' + item.get("url","#") + '" target="_blank">' + item.get("title","") + '</a></div>'
-                + ('<div class="news-desc">' + item["description"][:160] + '…</div>' if item.get("description") else '')
-                + ('<div class="news-date">' + date_str + '</div>' if date_str else '')
-                + '</div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown('</div>', unsafe_allow_html=True)
+        cards_source = news_items[:6]
     else:
-        # Fallback curated updates if CoinGecko news returns nothing
+        cards_source = [
+            {"title": "Cross-chain access is expanding on Pharos", "description": "@StargateFinance now supports Pharos, enabling users to transfer and swap assets across EVM chains", "url": "https://x.com/pharos_network/status/2067208187615576378?s=20", "thumb": "https://pbs.twimg.com/profile_images/1928147506699145217/n7-KQGNJ_400x400.png", "date": ""},
+            {"title": "Pharos is partnering with @avalonfinance and @FunctionBTC", "description": " To expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019?s=20", "thumb": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "date": ""},
+            {"title": "AI Agent Carnival Phase 1 is LIVE", "description": "150,000 PROS prize pool · Submit Skills by June 15 on DoraHacks", "url": "https://dorahacks.io/hackathon/pharos-phase1", "thumb": "https://www.google.com/s2/favicons?domain=dorahacks.io&sz=64", "date": ""},
+            {"title": "The Builders Harbor on Pharos has been upgraded", "description": "New tools, templates, and technical resources.", "url": "https://www.pharos.xyz/devhub", "thumb": "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64", "date": ""},
+            {"title": "USDC + CCTP integration live", "description": "Pharos integrates Circle's USDC and CCTP for real-time RealFi settlement.", "url": PHAROS_MAIN_URL, "thumb": "https://www.google.com/s2/favicons?domain=circle.com&sz=64", "date": ""},
+            {"title": "Expedition Season 2 ongoing", "description": "Particpate in the Ecosystem.", "url": "https://discord.gg/pharos", "thumb": "https://www.google.com/s2/favicons?domain=discord.com&sz=64", "date": ""},
+            {"title": "Pharos x XLayer & OKX", "description": "Fellow partners in bringing World Cup outcomes onchain.", "url": "https://x.com/pharos_network/status/2065362220851335650", "thumb": "https://www.google.com/s2/favicons?domain=okx.com&sz=64", "date": ""},
+            {"title": "Follow Pharos on X for more updates", "description": "Also join Discord for more insights.", "url": "https://x.com/pharos_network", "thumb": "https://pbs.twimg.com/profile_images/2005491865450430464/ta6znFqT_400x400.jpg", "date": ""},
+        ]
         st.markdown(
-            '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:10px;padding:1rem 1.2rem;margin-bottom:0.8rem;">'
-            '<div style="font-size:11px;color:#9499A8;margin-bottom:0.4rem;">News could not be loaded from CoinGecko. Latest known updates:</div>',
+            '<div style="font-size:11px;color:#9499A8;margin-bottom:0.6rem;">'
+            'News could not be loaded from CoinGecko — showing latest known updates:</div>',
             unsafe_allow_html=True,
         )
-        fallback_updates = [
-            {"title": "AI Agent Carnival Phase 1 is LIVE", "desc": "150,000 PROS prize pool · Submit Skills by June 15 on DoraHacks", "link": "https://dorahacks.io/hackathon/pharos-phase1"},
-            {"title": "The Builders Harbor on Pharos has been upgraded ", "desc": "new tools, templates, and technical resources .", "link": "https://www.pharos.xyz/devhub"},
-            {"title": "USDC + CCTP integration live", "desc": "Pharos integrates Circle's USDC and CCTP for real-time RealFi settlement.", "link": PHAROS_MAIN_URL},
-            {"title": "Expedition Season 2 ongoing", "desc": "Particpate in the Ecosystem.", "link": "https://discord.gg/pharos"},
-            {"title": "$PROS now powers AI payments","desc": "Use $PROS and USDC to access premier AI models.", "link": "https://x.com/pharos_network/status/2066517384928834003"},
-            {"title": "Pharos x XLayer & OKX ","desc": "Fellow partners in bringing World Cup outcomes onchain.", "link": "https://x.com/pharos_network/status/2065362220851335650"},
-        ]
-        for u in fallback_updates:
-            st.markdown(
-                '<div class="news-card" style="margin-bottom:8px;">'
-                '<div class="news-title"><a href="' + u["link"] + '" target="_blank">' + u["title"] + '</a></div>'
-                '<div class="news-desc">' + u["desc"] + '</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown('</div>', unsafe_allow_html=True)
 
+    # All update cards in ONE st.markdown — same grid + top-media-block
+    # style as the campaign cards, just driven by news data instead.
+    UPDATE_BG = "linear-gradient(135deg,#EEF0FF,#E4E8FF)"
+    all_updates_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.4rem;">'
+    for n in cards_source:
+        title = n.get("title", "")
+        desc  = (n.get("description", "") or "")[:140]
+        link  = n.get("url", "#")
+        thumb = n.get("thumb", "")
+        date  = n.get("date", "")
+        all_updates_html += (
+            f'<a href="{link}" target="_blank" '
+            f'style="display:flex;flex-direction:column;'
+            f'background:#FFFFFF;border:1px solid #E3E5EA;border-radius:18px;'
+            f'overflow:hidden;text-decoration:none;'
+            f'box-shadow:0 2px 10px rgba(20,20,60,0.05);'
+            f'transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease,border-color 180ms ease;"'
+            f' onmouseover="this.style.transform=\'translateY(-6px)\';this.style.boxShadow=\'0 18px 44px rgba(26,26,255,0.16)\';"'
+            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 2px 10px rgba(20,20,60,0.05)\';">'
+            # Top media block — same 140px height as campaign cards
+            f'<div style="background:{UPDATE_BG};height:140px;'
+            f'display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">'
+            + (
+                f'<img src="{thumb}" style="max-width:72px;max-height:72px;object-fit:contain;'
+                f'filter:drop-shadow(0 4px 14px rgba(0,0,0,0.12));" '
+                f'onerror="this.outerHTML=\'<span style=&quot;font-size:44px;&quot;>📰</span>\'"/>'
+                if thumb else
+                '<span style="font-size:44px;">📰</span>'
+            ) +
+            f'</div>'
+            # Bottom text block — same padding/tag/title/desc/cta as campaigns
+            f'<div style="padding:1.3rem 1.4rem 1.5rem 1.4rem;display:flex;flex-direction:column;gap:8px;">'
+            + (f'<div class="camp-tag" style="align-self:flex-start;">{date}</div>' if date else '<div class="camp-tag" style="align-self:flex-start;">LATEST</div>')
+            + f'<div class="camp-title">{title}</div>'
+            f'<div class="camp-desc">{desc}</div>'
+            f'<span style="font-size:11.5px;font-weight:600;color:#1A1AFF;margin-top:2px;">Read more ↗</span>'
+            f'</div>'
+            f'</a>'
+        )
+    all_updates_html += '</div>'
+    st.markdown(all_updates_html, unsafe_allow_html=True)
+
+    # Quick Updates timeline — same visual language as the campaign
+    # "Phase Timeline" card (white card, vertical connector line)
     st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+    if news_items and len(news_items) > 6:
+        timeline_html = (
+            '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;">'
+            '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">Quick Updates</div>'
+            '<div style="display:flex;flex-direction:column;gap:8px;">'
+        )
+        for n in news_items[6:9]:
+            timeline_html += (
+                '<div style="display:flex;align-items:flex-start;gap:10px;">'
+                f'<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">{n.get("date","") or "—"}</div>'
+                '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
+                f'<div><div style="font-size:12px;font-weight:600;color:#14141F;">{n.get("title","")}</div>'
+                f'<div style="font-size:11px;color:#5B5F6E;">{(n.get("description","") or "")[:90]}</div></div>'
+                '</div>'
+            )
+        timeline_html += '</div></div>'
+        st.markdown(timeline_html, unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
     with col1:
         st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
@@ -3572,32 +5182,30 @@ elif st.session_state.page == "updates":
 # PAGE: TRADE
 # ═════════════════════════════════════════════
 elif st.session_state.page == "trade":
-
     st.markdown(
         '<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#14141F;margin-bottom:0.3rem;">📊 Trade $PROS</div>'
         '<div style="font-size:13px;color:#5B5F6E;margin-bottom:1.2rem;">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
         unsafe_allow_html=True,
-    )
+        )
 
     # Live price bar
     p = price_data
     if p.get("available") and p.get("price_usd"):
-        chg     = p["change_24h"] or 0
+        chg = p.get("change_24h") or 0
         chg_cls = "green" if chg >= 0 else "red"
-        st.markdown(
-            '<div class="price-ticker" style="margin-bottom:1.2rem;">'
-            '<div class="ticker-cell"><div class="ticker-label">$PROS Price</div>'
-            '<div class="ticker-value">$' + f'{p["price_usd"]:.4f}' + '</div></div>'
-            '<div class="ticker-cell"><div class="ticker-label">24h Change</div>'
-            '<div class="ticker-value ' + chg_cls + '">' + ("▲" if chg>=0 else "▼") + f'{abs(chg):.2f}%</div></div>'
-            '<div class="ticker-cell"><div class="ticker-label">Market Cap</div>'
-            '<div class="ticker-value">' + ("$" + f'{p["market_cap_usd"]:,.0f}' if p.get("market_cap_usd") else "—") + '</div></div>'
-            '<div class="ticker-cell"><div class="ticker-label">24h Volume</div>'
-            '<div class="ticker-value">' + ("$" + f'{p["volume_24h"]:,.0f}' if p.get("volume_24h") else "—") + '</div></div>'
-            '</div>'
-            '<div class="ticker-source">CoinGecko · Updated ' + (p.get("last_updated","—")) + '</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown(f'''
+<div class="price-ticker" style="margin-bottom:1.2rem;">
+    <div class="ticker-cell"><div class="ticker-label">$PROS Price</div>
+        <div class="ticker-value">${p["price_usd"]:.4f}</div></div>
+    <div class="ticker-cell"><div class="ticker-label">24h Change</div>
+        <div class="ticker-value {chg_cls}">{'▲' if chg>=0 else '▼'}{abs(chg):.2f}%</div></div>
+    <div class="ticker-cell"><div class="ticker-label">Market Cap</div>
+        <div class="ticker-value">{('$' + f'{p["market_cap_usd"]:,.0f}') if p.get('market_cap_usd') else '—'}</div></div>
+    <div class="ticker-cell"><div class="ticker-label">24h Volume</div>
+        <div class="ticker-value">{('$' + f'{p["volume_24h"]:,.0f}') if p.get('volume_24h') else '—'}</div></div>
+</div>
+<div class="ticker-source">CoinGecko · Updated {p.get('last_updated','—')}</div>
+''', unsafe_allow_html=True)
 
     # Chart
     with st.container(border=True):
@@ -3636,8 +5244,17 @@ elif st.session_state.page == "trade":
     cex_cols = st.columns(len(CEX_LINKS))
     for i, cex in enumerate(CEX_LINKS):
         with cex_cols[i]:
+            logo_html = (
+                f'<img src="{cex["logo"]}" alt="{cex["name"]}" width="32" height="32" '
+                f'style="border-radius:8px;margin-bottom:6px;box-shadow:0 2px 8px rgba(20,20,60,0.1);" '
+                f'onerror="this.outerHTML=\'<div style=&quot;width:32px;height:32px;border-radius:8px;'
+                f'background:linear-gradient(135deg,#1414E8,#0C0C1A);display:flex;align-items:center;'
+                f'justify-content:center;font-size:14px;font-weight:800;color:#fff;margin:0 auto 6px auto;&quot;>'
+                f'{cex["name"][0]}</div>\'"/>'
+            )
             st.markdown(
                 '<div class="cex-card">'
+                + logo_html +
                 '<div class="cex-name">' + cex["name"] + '</div>'
                 '<div class="cex-pair">' + cex["desc"] + '</div>'
                 '<a class="cex-btn" href="' + cex["url"] + '" target="_blank">Trade ↗</a>'
