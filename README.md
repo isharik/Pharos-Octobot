@@ -31,7 +31,7 @@ https://pharos-octobot-by-echo.streamlit.app/
 
 # ✨ What is OctoBot?
 
-OctoBot is a Pharos-native AI Skill built for the Skill-to-Agent Dual Cascade Hackathon. It started as a Pharos Knowledge Skill and has grown into a complete on-chain AI companion — the first reusable intelligence layer built natively for the Pharos AI Agent ecosystem.
+OctoBot is a Pharos-native AI Skill built for Pharos Network. It started as a Pharos Knowledge Skill and has grown into a complete on-chain AI companion — the first reusable intelligence layer built natively for the Pharos AI Agent ecosystem.
 
 Rather than behaving like a traditional documentation chatbot, OctoBot combines four production-ready Skills into a single callable API that any Agent on Pharos can use:
 
@@ -629,7 +629,7 @@ All on-chain endpoints (`/wallet-profile`, `/explain-tx`) are strictly read-only
 
 ---
 
-*Built for the Pharos AI Agent Carnival — Phase 1 Skill Hackathon*  
+*Built for the AI hackathon*  
 *By Echo · Discord: @echoplex99 · [@isharik99](https://x.com/isharik99) on X · [GitHub](https://github.com/isharik/Pharos-Octobot)*
 
 
