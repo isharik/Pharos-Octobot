@@ -761,12 +761,6 @@ More sources continue to be crawled and indexed.
 
 ---
 
-## My Pitch for Phase 1 :)
-
-# The hackathon asked for a Skill that solves a focused problem well and can be reused across the ecosystem instead of being tied to a single application.
-# OctoBot was built around that idea.
-
-Rather than every Agent rebuilding its own documentation search, retrieval logic, and answer validation layer, OctoBot provides a single reusable knowledge interface for Pharos.
 
 # What OctoBot delivers:
 
@@ -793,43 +787,7 @@ The goal was to create a reusable knowledge layer that any future Pharos Agent c
 
 # 📌 Recent Updates (Check @isharik on X for more details and walkthroughs on Updates :) )
 
-## ✅ 8 June 2026
-
-* Added Skill Test feature
-* Expanded data crawling
-* Website improvements
-
-## ✅ 12 June 2026
-
-* Added live PROS integration
-* Added dedicated token endpoint
-* Added Streamlit token support
-
-## ✅ 13 June 2026
-
-* Added real time price tables
-* Added market data visualization
-
-## ✅ 14 June 2026
-
-* Added multilingual support
-* Added voice interactions
-* Added automatic response translation
-
-## ✅ Latest Update
-
-* Full homepage redesign
-* New website sections
-* Campaigns integration
-* Updates center
-* Trade Pharos section
-* Better navigation
-* Improved responsiveness
-* Cleaner layouts
-* Enhanced AI routing
-* More polished experience
-
-## FOR MORE UPDATES CHECK OUT THE CODE & DORA HACKS SITE 
+## FOR MORE UPDATES CHECK OUT THE CODE 
 
 ---
 
@@ -874,7 +832,7 @@ streamlit run app.py
 
 ---
 
-## UPCOMING FEATURE :
+# UPCOMING FEATURE :
 
 **OctoBot Autonomous Payment Agent — AI-to-AI PROS Payments on Pharos**
 
