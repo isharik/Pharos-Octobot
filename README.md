@@ -115,6 +115,9 @@ OctoBot says:
 - Uniquely powerful on Pharos due to high signal density — SPNs, RWA positions, and campaign data all on one chain
 - Transforms OctoBot from a chatbot into a **trusted Pharos-native advisor**
 
+  <img width="691" height="689" alt="image" src="https://github.com/user-attachments/assets/4efc40ae-6b4c-4aae-bed5-aa5bf611f102" />
+
+
 #### Technical stack
 - Pharos EVM-compatible RPC for transaction history
 - Gemini 2.5 Flash for profile synthesis
@@ -130,6 +133,9 @@ OctoBot says:
 # Status : https://x.com/isharik99/status/2069443058509521029?s=20
 
 A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
+
+<img width="621" height="866" alt="Screenshot 2026-06-21 224801" src="https://github.com/user-attachments/assets/a398ab2c-457c-483a-873c-4174e24f6bf2" />
+
 
 
 # 🖥️ Website Experience (NEW)
