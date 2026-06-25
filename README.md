@@ -12,9 +12,7 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 **Built for the Ai Hackathon ⚓**
 
 
-## Demo Video:
-Soon
-
+## Demo Video: https://youtu.be/VJXpuDpfrcM
 
 ## Public Link Demo (Always under Development)
 https://pharos-octobot-by-echo.streamlit.app/
