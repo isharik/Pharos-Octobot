@@ -83,6 +83,54 @@ The long-term vision is for OctoBot to become an embedded intelligence layer acr
 
 ---
 
+## 🔮 Onchain Features {WIP on Site (Available on Skill API)}
+
+### OctoBot Memory Ledger — On-Chain User Intelligence
+> *A Pharos-native AI companion that knows you before you speak.*
+
+**Status:** : https://x.com/isharik99/status/2068588499318804887?s=20
+
+The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
+
+#### How it works
+
+| Step | Action |
+|------|--------|
+| 🔗 Wallet Connect | User connects Pharos wallet — OctoBot reads last 90 days of on-chain activity |
+| 🧠 Intelligence Synthesis | Gemini processes on-chain data to infer builder type, risk profile, and intent |
+| 💬 Contextual Answers | Every RAG response becomes personalised to your actual positions and history |
+| 🔔 Proactive Alerts | OctoBot surfaces campaign deadlines, LP range warnings, and new SPN opportunities |
+| 💾 Memory Persistence | Profile signed by wallet and persisted — OctoBot remembers context across sessions |
+
+#### What it feels like
+
+Instead of:
+> *"Here's how Native Restaking works."*
+
+OctoBot says:
+> *"You have 2,400 PROS staked since March. Adding to the SPN-2 pool would increase your yield by ~12% at current rates. Want me to walk you through the steps?"*
+
+#### Why it matters
+- First AI agent to derive **identity and intent from on-chain behaviour** rather than user-filled forms
+- Uniquely powerful on Pharos due to high signal density — SPNs, RWA positions, and campaign data all on one chain
+- Transforms OctoBot from a chatbot into a **trusted Pharos-native advisor**
+
+#### Technical stack
+- Pharos EVM-compatible RPC for transaction history
+- Gemini 2.5 Flash for profile synthesis
+- MetaMask / WalletConnect for wallet auth
+- Signed message anchored in Pharos calldata for on-chain profile persistence
+
+---
+
+
+
+## Transaction simulation/explainer
+
+# Status : https://x.com/isharik99/status/2069443058509521029?s=20
+
+A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
+
 
 # 🖥️ Website Experience (NEW)
 
@@ -824,55 +872,6 @@ streamlit run app.py
 
 ---
 
-## 🔮 Upcoming Features WIP on Site (Available on Skill API)
-
-### OctoBot Memory Ledger — On-Chain User Intelligence
-> *A Pharos-native AI companion that knows you before you speak.*
-
-**Status:** : https://x.com/isharik99/status/2068588499318804887?s=20
-
-The next evolution of OctoBot moves beyond a documentation chatbot into a true on-chain intelligent companion. By reading a connected wallet's Pharos transaction history, staking positions, SPN interactions, RWA holdings, and campaign participation, OctoBot will synthesise a private intelligence profile and make every interaction deeply personalised.
-
-#### How it works
-
-| Step | Action |
-|------|--------|
-| 🔗 Wallet Connect | User connects Pharos wallet — OctoBot reads last 90 days of on-chain activity |
-| 🧠 Intelligence Synthesis | Gemini processes on-chain data to infer builder type, risk profile, and intent |
-| 💬 Contextual Answers | Every RAG response becomes personalised to your actual positions and history |
-| 🔔 Proactive Alerts | OctoBot surfaces campaign deadlines, LP range warnings, and new SPN opportunities |
-| 💾 Memory Persistence | Profile signed by wallet and persisted — OctoBot remembers context across sessions |
-
-#### What it feels like
-
-Instead of:
-> *"Here's how Native Restaking works."*
-
-OctoBot says:
-> *"You have 2,400 PROS staked since March. Adding to the SPN-2 pool would increase your yield by ~12% at current rates. Want me to walk you through the steps?"*
-
-#### Why it matters
-- First AI agent to derive **identity and intent from on-chain behaviour** rather than user-filled forms
-- Uniquely powerful on Pharos due to high signal density — SPNs, RWA positions, and campaign data all on one chain
-- Transforms OctoBot from a chatbot into a **trusted Pharos-native advisor**
-
-#### Technical stack
-- Pharos EVM-compatible RPC for transaction history
-- Gemini 2.5 Flash for profile synthesis
-- MetaMask / WalletConnect for wallet auth
-- Signed message anchored in Pharos calldata for on-chain profile persistence
-
----
-
-
-
-## Transaction simulation/explainer
-
-# Status : https://x.com/isharik99/status/2069443058509521029?s=20
-
-A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransactionReceipt (read-only, same safety profile as Memory Ledger) and explains in plain language what happened
-
-Planning to implement  if selected for Phase 2 🩵
 
 
 # 🎯 Vision
