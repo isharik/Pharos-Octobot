@@ -133,6 +133,31 @@ A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransacti
 <img width="621" height="866" alt="Screenshot 2026-06-21 224801" src="https://github.com/user-attachments/assets/a398ab2c-457c-483a-873c-4174e24f6bf2" />
 
 
+# UPCOMING FEATURE WIP :
+
+**OctoBot Autonomous Payment Agent — AI-to-AI PROS Payments on Pharos**
+
+An AI agent that sends and receives PROS on Pharos using simple natural language commands, without any wallet interaction.
+
+**What it does:**
+Users give plain English instructions like:
+
+* “Pay 2 PROS to 0x1234”
+* “Split 10 PROS between 3 addresses”
+* “Send 1 PROS daily for 7 days”
+* “Execute swap via Faroswap”
+
+OctoBot then:
+
+* Interprets intent using Gemini
+* Checks PROS balance via RPC
+* Builds transaction calldata
+* Shows a human-readable confirmation (amount, gas, total)
+* Executes via OKX Wallet after approval
+* Returns on-chain confirmation with tx hash + block info
+
+For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
+
 
 # 🖥️ Website Experience (NEW)
 
@@ -831,32 +856,6 @@ streamlit run app.py
 ---
 
 ---
-
-# UPCOMING FEATURE :
-
-**OctoBot Autonomous Payment Agent — AI-to-AI PROS Payments on Pharos**
-
-An AI agent that sends and receives PROS on Pharos using simple natural language commands, without any wallet interaction.
-
-**What it does:**
-Users give plain English instructions like:
-
-* “Pay 2 PROS to 0x1234”
-* “Split 10 PROS between 3 addresses”
-* “Send 1 PROS daily for 7 days”
-* “Execute swap via Faroswap”
-
-OctoBot then:
-
-* Interprets intent using Gemini
-* Checks PROS balance via RPC
-* Builds transaction calldata
-* Shows a human-readable confirmation (amount, gas, total)
-* Executes via OKX Wallet after approval
-* Returns on-chain confirmation with tx hash + block info
-
-For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
-
 
 ---
 
