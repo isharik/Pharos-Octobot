@@ -9,16 +9,14 @@
 
 Documentation • Live Data • Voice • Multilingual • Web Experience
 
-**Built for the Pharos AI Agent Carnival ⚓**
+**Built for the Ai Hackathon ⚓**
 
 
-## Updated Demo:
-https://youtu.be/PeoMUNVTvGg
+## Demo Video:
+Soon
 
-## Check out the Dora Hacks page for more details on updates :
-https://dorahacks.io/buidl/44453
 
-## Public Link (Always under Development)
+## Public Link Demo (Always under Development)
 https://pharos-octobot-by-echo.streamlit.app/
 
 *(If unavailable, the request quota may have expired. You can clone the repo and run locally with your own API key.)*
