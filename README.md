@@ -142,12 +142,12 @@ An AI agent that sends and receives PROS on Pharos using simple natural language
 **What it does:**
 Users give plain English instructions like:
 
-* “Pay 2 PROS to 0x1234”
-* “Split 10 PROS between 3 addresses”
-* “Send 1 PROS daily for 7 days”
-* “Execute swap via Faroswap”
+* "Send 5 PROS to 0x1234…" 
+* "Send 1 PROS each to 0xAAA…, 0xBBB…, 0xCCC…" 
+* "Approve 0xFaroswap to spend 100 PROS"
   
-<img width="1208" height="593" alt="Screenshot 2026-06-26 150314" src="https://github.com/user-attachments/assets/e85d1e6c-c047-4ee1-a197-83159fb218dd" />
+<img width="1164" height="650" alt="Screenshot 2026-06-26 152822" src="https://github.com/user-attachments/assets/87080d89-2d6e-4fbd-9224-ea0b7b0c1594" />
+
 
 
 OctoBot then:
@@ -156,10 +156,11 @@ OctoBot then:
 * Checks PROS balance via RPC
 * Builds transaction calldata
 * Shows a human-readable confirmation (amount, gas, total)
-* Executes via OKX Wallet after approval
+* Executes via  Wallet after approval
 * Returns on-chain confirmation with tx hash + block info
 
-<img width="1166" height="598" alt="Screenshot 2026-06-26 150332" src="https://github.com/user-attachments/assets/2f32c9cc-5d86-4e8f-a75f-d2f5c14182ee" />
+<img width="1186" height="483" alt="Screenshot 2026-06-26 152747" src="https://github.com/user-attachments/assets/180fb7d0-90d3-4863-b794-843bc3b2bcd9" />
+
   
 
 For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
