@@ -164,7 +164,7 @@ OctoBot then:
 
 
 
-For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
+* For recurring payments, The option is there but would need a backend server to run it :( it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
 
 
 # 🖥️ Website Experience (NEW)
