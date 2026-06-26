@@ -133,7 +133,7 @@ A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransacti
 <img width="621" height="866" alt="Screenshot 2026-06-21 224801" src="https://github.com/user-attachments/assets/a398ab2c-457c-483a-873c-4174e24f6bf2" />
 
 
-# UPCOMING FEATURE WIP :
+# NEW FEATURE WIP :
 
 **OctoBot Autonomous Payment Agent — AI-to-AI PROS Payments on Pharos**
 
@@ -146,6 +146,9 @@ Users give plain English instructions like:
 * “Split 10 PROS between 3 addresses”
 * “Send 1 PROS daily for 7 days”
 * “Execute swap via Faroswap”
+  
+<img width="1208" height="593" alt="Screenshot 2026-06-26 150314" src="https://github.com/user-attachments/assets/e85d1e6c-c047-4ee1-a197-83159fb218dd" />
+
 
 OctoBot then:
 
@@ -156,17 +159,19 @@ OctoBot then:
 * Executes via OKX Wallet after approval
 * Returns on-chain confirmation with tx hash + block info
 
+<img width="1166" height="598" alt="Screenshot 2026-06-26 150332" src="https://github.com/user-attachments/assets/2f32c9cc-5d86-4e8f-a75f-d2f5c14182ee" />
+  
+
 For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
 
 
 # 🖥️ Website Experience (NEW)
 
 
-
-
 OctoBot is no longer just chat.
 
-<img width="1400" height="811" alt="image" src="https://github.com/user-attachments/assets/cf7898a4-ed04-4dec-bc8e-c4033db33faa" />
+<img width="1470" height="905" alt="image" src="https://github.com/user-attachments/assets/dc304e0e-f6fb-4db8-bd24-6ae853fe803f" />
+
 
 The app now includes a redesigned website experience while keeping the original Pharos identity.
 
