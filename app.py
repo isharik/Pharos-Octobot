@@ -251,6 +251,9 @@ if "pay_confirmed"   not in st.session_state: st.session_state.pay_confirmed   =
 if "pay_result"      not in st.session_state: st.session_state.pay_result      = None
 if "pay_history"     not in st.session_state: st.session_state.pay_history     = []
 if "pay_network"     not in st.session_state: st.session_state.pay_network     = "mainnet"
+if "nav_dark"        not in st.session_state: st.session_state.nav_dark        = False
+if "req_invoices"    not in st.session_state: st.session_state.req_invoices    = []
+if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -265,6 +268,24 @@ if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.session_state.wallet_data    = None
     st.session_state.wallet_profile = None
     st.session_state.page = "memory"
+    st.query_params.clear()
+
+# ── Incoming payment-request link handler ─────────────────────────────────
+_req_to   = st.query_params.get("req_to",   "")
+_req_amt  = st.query_params.get("req_amt",  "")
+_req_for  = st.query_params.get("req_for",  "")
+_req_from = st.query_params.get("req_from", "")
+_req_net  = st.query_params.get("req_net",  "mainnet")
+if _req_to and _req_amt:
+    st.session_state.page      = "request"
+    st.session_state.req_draft = {
+        "to":      _req_to,
+        "amount":  _req_amt,
+        "note":    _req_for,
+        "from":    _req_from,
+        "network": _req_net,
+        "mode":    "pay_invoice",
+    }
     st.query_params.clear()
     
 
@@ -1479,29 +1500,56 @@ st.markdown(
 st.markdown("""
 <style>
 :root {
-    --blue:    #1A1AFF;
-    --blue2:   #2D2DE0;
-    --light:   #6B8CFF;
-    --glow:    rgba(26,26,255,0.15);
-    --subtle:  rgba(26,26,255,0.06);
-    --bg:   #C9D4E8;
---bg1:  #D9E2F0;
---bg2:  #D0DBEB;
-    --glass:   rgba(244,245,248,0.82);
-    --border:  #D0D3E0;
-    --border2: #C4C8D8;
-    --t1:      #0C0C1A;
-    --t2:      #42475A;
-    --t3:      #7A7F96;
-    --green:   #1FA855;
-    --red:     #E5484D;
-    --fd:      'Syne', sans-serif;
-    --fb:      'DM Sans', sans-serif;
-    --rad:     12px;
-    --rad-lg:  18px;
-    --shadow:  0 2px 12px rgba(20,20,60,0.07);
-    --shadow-md: 0 6px 24px rgba(20,20,60,0.1);
-    --shadow-blue: 0 4px 20px rgba(26,26,255,0.12);
+    /* Brand */
+    --blue:      #1A1AFF;
+    --blue2:     #2D2DE0;
+    --light:     #6B8CFF;
+
+    /* Effects */
+    --glow:      rgba(26,26,255,0.18);
+    --subtle:    rgba(26,26,255,0.08);
+
+    /* Background (cooler & slightly darker) */
+    --bg:        #B7C3DA;
+    --bg1:       #C5D0E3;
+    --bg2:       #AFBCD4;
+
+    /* Glass */
+    --glass:     rgba(250,252,255,0.72);
+
+    /* Borders */
+    --border:    #B9C4D8;
+    --border2:   #AEBACE;
+
+    /* Text */
+    --t1:        #0B1020;
+    --t2:        #39445D;
+    --t3:        #68738C;
+
+    /* Status */
+    --green:     #1FA855;
+    --red:       #E5484D;
+
+    /* Fonts */
+    --fd:        'Syne', sans-serif;
+    --fb:        'DM Sans', sans-serif;
+
+    /* Radius */
+    --rad:       12px;
+    --rad-lg:    18px;
+
+    /* Shadows */
+    --shadow:        0 8px 24px rgba(18,28,60,0.08);
+    --shadow-md:     0 16px 40px rgba(18,28,60,0.12);
+    --shadow-blue:   0 10px 36px rgba(26,26,255,0.16);
+}
+            /* Design*/
+body {
+    background:
+        radial-gradient(circle at 15% 20%, rgba(26,26,255,.10), transparent 35%),
+        radial-gradient(circle at 85% 30%, rgba(107,140,255,.08), transparent 40%),
+        radial-gradient(circle at 50% 100%, rgba(255,255,255,.15), transparent 50%),
+        linear-gradient(180deg, var(--bg1), var(--bg), var(--bg2));
 }
 html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
 .stApp{
@@ -1523,11 +1571,11 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
     will-change:transform;
     background-image:
         /* Ambient light source — top right, moves slowly */
-        radial-gradient(ellipse 65% 50% at 78% 8%,  rgba(220,228,255,0.55) 0%, transparent 65%),
+        radial-gradient(ellipse 70% 55% at 78% 8%,  rgba(220,228,255,0.55) 0%, transparent 60%),
         /* Secondary light — bottom left */
-        radial-gradient(ellipse 50% 40% at 12% 88%, rgba(200,215,255,0.30) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 12% 88%, rgba(200,215,255,0.30) 0%, transparent 50%),
         /* Mid tone depth */
-        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(185,200,240,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(185,200,240,0.12) 0%, transparent 60%),
         /* Wave band 1 — diagonal flow */
         repeating-linear-gradient(
             -28deg,
@@ -1681,6 +1729,16 @@ section[data-testid="stSidebar"]{
 }
 
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
+
+/* Hide the zero-height wrapper that holds hidden nav fallback buttons */
+div[style*="height:0"][style*="overflow:hidden"][style*="visibility:hidden"]{
+    display:none!important;
+    height:0!important;
+    overflow:hidden!important;
+    margin:0!important;
+    padding:0!important;
+    position:absolute!important;
+}
 [data-testid="stSidebar"]{
     background:#F2F3F8!important;
     border-right:1px solid #D0D3E0!important;
@@ -1760,52 +1818,150 @@ section[data-testid="stMain"] > div {
 .nav-links{display:flex;align-items:center;gap:2px;flex:1;}
 .nav-ml{margin-left:auto;display:flex;align-items:center;gap:6px;}
 
-/* nav buttons handled via Streamlit — clean text-link style like reference */
+/* ═══════════════════════════════════════════════
+   DYNAMIC ISLAND NAVBAR — liquid glass
+   ═══════════════════════════════════════════════ */
+#octobot-nav-island{
+    position:sticky;
+    top:12px;
+    z-index:9999;
+    display:flex;
+    justify-content:center;
+    pointer-events:none;
+}
+#octobot-nav-pill{
+    pointer-events:all;
+    display:inline-flex;
+    align-items:center;
+    gap:0;
+    padding:5px 10px;
+    border-radius:50px;
+    /* light glass */
+    background:rgba(255,255,255,0.55);
+    backdrop-filter:blur(28px) saturate(180%);
+    -webkit-backdrop-filter:blur(28px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.75);
+    box-shadow:
+        0 8px 32px rgba(20,20,60,0.13),
+        0 2px 8px rgba(20,20,60,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.9),
+        inset 0 -1px 0 rgba(20,20,60,0.04);
+    transition:
+        background 0.35s ease,
+        border-color 0.35s ease,
+        box-shadow 0.35s ease;
+}
+#octobot-nav-pill.dark{
+    background:rgba(12,12,26,0.82);
+    border-color:rgba(255,255,255,0.10);
+    box-shadow:
+        0 8px 40px rgba(0,0,0,0.45),
+        0 2px 10px rgba(0,0,0,0.30),
+        inset 0 1px 0 rgba(255,255,255,0.10),
+        inset 0 -1px 0 rgba(0,0,0,0.25);
+}
+
+/* Logo pill inside island */
+.ni-logo{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:5px 14px 5px 8px;
+    border-right:1px solid rgba(20,20,60,0.10);
+    margin-right:4px;
+    flex-shrink:0;
+}
+#octobot-nav-pill.dark .ni-logo{
+    border-right-color:rgba(255,255,255,0.10);
+}
+.ni-logo-text{
+    font-family:Syne,sans-serif;
+    font-size:14px;
+    font-weight:800;
+    color:#0C0C1A;
+    letter-spacing:-0.02em;
+    transition:color 0.3s;
+}
+#octobot-nav-pill.dark .ni-logo-text{ color:#FFFFFF; }
+
+/* Nav buttons */
 .nav-wrap .stButton>button{
     background:transparent!important;
     border:none!important;
-    border-radius:9px!important;
+    border-radius:30px!important;
     font-family:var(--fb)!important;
-    font-size:16px!important;
-    font-weight:700!important;
+    font-size:12.5px!important;
+    font-weight:1000!important;
     color:#2B2E38!important;
-    opacity:1!important;
-    letter-spacing:-0.003em!important;
-    padding:0.5rem 0.85rem!important;
+    letter-spacing:-0.01em!important;
+    padding:0.38rem 0.85rem!important;
     height:auto!important;
-    text-align:center!important;
+    min-width:0!important;
+    white-space:nowrap!important;
     box-shadow:none!important;
-    transition:background 200ms cubic-bezier(0.4,0,0.2,1),
-               color 200ms cubic-bezier(0.4,0,0.2,1)!important;
+    transition:
+        background 180ms cubic-bezier(0.4,0,0.2,1),
+        color 180ms cubic-bezier(0.4,0,0.2,1),
+        transform 140ms cubic-bezier(0.34,1.5,0.64,1)!important;
 }
 .nav-wrap .stButton>button:hover{
-    background:rgba(20,20,60,0.05)!important;
+    background:rgba(20,20,60,0.07)!important;
     color:#0C0C1A!important;
+    transform:translateY(-1px)!important;
     box-shadow:none!important;
 }
 .nav-wrap.active .stButton>button{
-    background:#0C0C1A!important;
-    color:#FFFFFF!important;
-    font-weight:600!important;
-    box-shadow:none!important;
+    background:rgba(26,26,255,0.12)!important;
+    color:#1414E8!important;
+    font-weight:700!important;
+    box-shadow:inset 0 0 0 1px rgba(26,26,255,0.18)!important;
 }
+
+/* Dark mode nav buttons */
+#octobot-nav-pill.dark ~ * .nav-wrap .stButton>button,
+.nav-dark .nav-wrap .stButton>button{
+    color:rgba(255,255,255,0.75)!important;
+}
+.nav-dark .nav-wrap .stButton>button:hover{
+    background:rgba(255,255,255,0.10)!important;
+    color:#FFFFFF!important;
+}
+.nav-dark .nav-wrap.active .stButton>button{
+    background:rgba(255,255,255,0.15)!important;
+    color:#FFFFFF!important;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.25)!important;
+}
+
+/* CTA link button */
+.nav-cta .stLinkButton>a,
 .nav-cta .stButton>button{
-    background:var(--blue)!important;
+    background:linear-gradient(135deg,#1414E8,#0C0CE0)!important;
     color:#fff!important;
     border-radius:30px!important;
-    font-size:13.5px!important;
-    font-weight:600!important;
-    padding:0.55rem 1.2rem!important;
+    font-size:12px!important;
+    font-weight:700!important;
+    padding:0.38rem 1rem!important;
     letter-spacing:0.01em!important;
-    box-shadow:0 4px 14px rgba(26,26,255,0.25)!important;
-    transition:background 200ms cubic-bezier(0.4,0,0.2,1),
-               transform 200ms cubic-bezier(0.4,0,0.2,1),
-               box-shadow 200ms cubic-bezier(0.4,0,0.2,1)!important;
+    border:1px solid rgba(255,255,255,0.25)!important;
+    box-shadow:0 4px 14px rgba(26,26,255,0.30),inset 0 1px 0 rgba(255,255,255,0.25)!important;
+    transition:
+        transform 160ms cubic-bezier(0.34,1.5,0.64,1),
+        box-shadow 160ms ease!important;
 }
+.nav-cta .stLinkButton>a:hover,
 .nav-cta .stButton>button:hover{
-    background:var(--blue2)!important;
-    transform:translateY(-1px)!important;
-    box-shadow:0 6px 20px rgba(26,26,255,0.35)!important;
+    transform:translateY(-2px) scale(1.03)!important;
+    box-shadow:0 8px 24px rgba(26,26,255,0.40),inset 0 1px 0 rgba(255,255,255,0.30)!important;
+}
+
+/* Dark theme toggle hidden label */
+.nav-theme-toggle label{display:none!important;}
+.nav-theme-toggle{
+    display:flex!important;
+    align-items:center!important;
+    padding:0 4px 0 8px!important;
+    border-left:1px solid rgba(20,20,60,0.10)!important;
+    margin-left:4px!important;
 }
 
 /* ── HERO ─── */
@@ -3402,56 +3558,40 @@ price_data = get_pros_price()
 NAV_PAGES = [
     ("🏠", "Home",      "home"),
     ("💬", "Chat",      "chat"),
-    ("🚀", "Campaigns", "campaigns"),
+    ("", "Campaigns", "campaigns"),
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🧩", "Ecosystem", "ecosystem"),
     ("💸", "Pay",       "pay"),
+    ("🧾", "Request",   "request"),
 ]
-
 st.markdown('<div style="display:flex;justify-content:center;margin-bottom:0.5rem;">', unsafe_allow_html=True)
-nav_cols = st.columns([1.2, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.1, 1.1])
+nav_cols = st.columns([2.5, 2, 2, 2, 2, 2, 2, 2, 2, 0.3, 2.5])
 
-st.markdown(
-    '<div style="display:flex;justify-content:center;margin-bottom:0.6rem;">'
-    '<div style="display:inline-flex;align-items:center;gap:2px;'
-    'background:#0C0C1A;border-radius:40px;padding:5px 6px;'
-    'box-shadow:0 2px 12px rgba(0,0,0,0.15);">'
-    '</div></div>',
-    unsafe_allow_html=True,
-)
 with nav_cols[0]:
     if logo_b64:
-        logo_html = (
+        st.markdown(
             '<div style="display:flex;align-items:center;gap:7px;padding:8px 0;">'
-            '<div style="position:relative;width:26px;height:26px;flex-shrink:0;">'
-            '<img src="' + logo_b64 + '" style="width:26px;height:26px;border-radius:50%;position:relative;z-index:2;" />'
-            '<div style="position:absolute;inset:-5px;border-radius:50%;border:1.5px solid rgba(26,26,255,0.3);animation:orbit-spin 8s linear infinite;">'
-            '<div style="position:absolute;width:5px;height:5px;border-radius:50%;background:#1A1AFF;top:-2px;left:50%;transform:translateX(-50%);"></div>'
-            '</div></div>'
+            '<img src="' + logo_b64 + '" style="width:26px;height:26px;border-radius:50%;" />'
             '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
-            '</div>'
-        )
+            '</div>', unsafe_allow_html=True)
     else:
-        logo_html = (
+        st.markdown(
             '<div style="display:flex;align-items:center;gap:6px;padding:8px 0;">'
             '<span style="font-size:20px;">🐙</span>'
             '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
-            '</div>'
-        )
-    st.markdown(logo_html, unsafe_allow_html=True)
+            '</div>', unsafe_allow_html=True)
 
 for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
     with nav_cols[col_idx + 1]:
         is_active = st.session_state.page == page_key
-        prefix    = "● " if is_active else ""
         st.markdown('<div class="nav-wrap' + (" active" if is_active else "") + '">', unsafe_allow_html=True)
-        if st.button(prefix + icon + " " + label, key="nav_" + page_key, use_container_width=True):
+        if st.button(("● " if is_active else "") + icon + " " + label, key="nav_" + page_key, use_container_width=True):
             st.session_state.page = page_key
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-with nav_cols[9]:
+with nav_cols[10]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
     st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -6069,6 +6209,547 @@ elif st.session_state.page == "pay":
                 f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">{h.get("timestamp","")} · {_h_net} · {tx_short}</div></div>'
                 f'<a href="{_h_exp}/tx/{h["tx_hash"]}" target="_blank" '
                 'style="font-size:11.5px;font-weight:600;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+
+
+# ═════════════════════════════════════════════════════════════
+# PAGE: REQUEST PROS  (on-chain payment requests / invoicing)
+# ═════════════════════════════════════════════════════════════
+elif st.session_state.page == "request":
+
+    import urllib.parse as _urlparse
+    import hashlib    as _hashlib
+
+    def _req_net_config(network: str) -> dict:
+        if network == "testnet":
+            return {
+                "label":        "Pharos Atlantic",
+                "chain_id":     PHAROS_TESTNET_CHAIN_ID_HEX,
+                "rpc":          PHAROS_TESTNET_RPC_URL,
+                "explorer":     PHAROS_TESTNET_EXPLORER_URL,
+                "chain_id_dec": PHAROS_TESTNET_CHAIN_ID_DEC,
+                "symbol":       "PHRS",
+            }
+        return {
+            "label":        "Pharos Mainnet",
+            "chain_id":     PHAROS_CHAIN_ID_HEX,
+            "rpc":          PHAROS_RPC_URL,
+            "explorer":     PHAROS_EXPLORER_URL,
+            "chain_id_dec": PHAROS_CHAIN_ID_DEC,
+            "symbol":       "PROS",
+        }
+
+    def _build_invoice_url(base_url: str, to: str, amount: str,
+                           note: str, sender: str, network: str) -> str:
+        params = {"req_to": to, "req_amt": amount,
+                  "req_for": note, "req_from": sender, "req_net": network}
+        return base_url.rstrip("/") + "/?" + _urlparse.urlencode(params)
+
+    def _pay_invoice_widget(chain_id, chain_name, rpc_url, explorer,
+                            net_symbol, recipient, amount_hex, pay_net_ss, amount_display):
+        _tid = _hashlib.md5(f"req{recipient}{amount_hex}{chain_id}".encode()).hexdigest()[:8]
+        html = f"""<!DOCTYPE html>
+<html><head>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;}}
+  body{{background:transparent;overflow:hidden;padding:8px 0;}}
+  #sb{{display:flex;align-items:center;gap:10px;background:#F4F5FF;border-radius:10px;
+       padding:10px 14px;font-size:13px;color:#5B5F6E;min-height:42px;}}
+  #dot{{width:9px;height:9px;border-radius:50%;background:#9499A8;flex-shrink:0;transition:background 0.3s;}}
+  #msg{{flex:1;line-height:1.4;}}
+  #res{{display:none;margin-top:8px;background:#F0FFF4;border:1.5px solid #22C55E;
+        border-radius:10px;padding:10px 14px;font-size:12px;color:#15803D;
+        word-break:break-all;line-height:1.8;}}
+</style></head><body>
+<div id="sb"><div id="dot"></div><div id="msg">⏳ Starting…</div></div>
+<div id="res"></div>
+<script>
+(async function(){{
+  var dot=document.getElementById('dot'),msg=document.getElementById('msg'),res=document.getElementById('res');
+  function st(t,c,d){{msg.textContent=t;msg.style.color=c||'#5B5F6E';dot.style.background=d||'#9499A8';}}
+  function rp(){{
+    if(typeof window.ethereum!=='undefined') return window.ethereum;
+    if(typeof window.okxwallet!=='undefined') return window.okxwallet;
+    try{{if(typeof window.parent.ethereum!=='undefined') return window.parent.ethereum;}}catch(e){{}}
+    try{{if(typeof window.parent.okxwallet!=='undefined') return window.parent.okxwallet;}}catch(e){{}}
+    try{{if(typeof window.top.ethereum!=='undefined') return window.top.ethereum;}}catch(e){{}}
+    return null;
+  }}
+  st('⏳ Looking for wallet…','#5B5F6E','#F5C842');
+  var p=null;
+  for(var i=0;i<15;i++){{p=rp();if(p)break;await new Promise(r=>setTimeout(r,100));}}
+  if(!p){{st('❌ No Web3 wallet found. Unlock your wallet extension and try again.','#B91C1C','#E5484D');return;}}
+  try{{
+    st('⏳ Requesting account access…','#5B5F6E','#F5C842');
+    var acc=await p.request({{method:'eth_requestAccounts'}});
+    if(!acc||!acc.length){{st('❌ No accounts returned.','#B91C1C','#E5484D');return;}}
+    st('⏳ Switching to {chain_name}…','#5B5F6E','#F5C842');
+    try{{
+      await p.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{chain_id}'}}]}});
+    }}catch(sw){{
+      if(sw.code===4902||sw.code===-32603){{
+        await p.request({{method:'wallet_addEthereumChain',params:[{{
+          chainId:'{chain_id}',chainName:'{chain_name}',
+          nativeCurrency:{{name:'{net_symbol}',symbol:'{net_symbol}',decimals:18}},
+          rpcUrls:['{rpc_url}'],blockExplorerUrls:['{explorer}']
+        }}]}});
+        await p.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{chain_id}'}}]}});
+      }}else{{throw sw;}}
+    }}
+    st('⏳ Waiting for your signature…','#5B5F6E','#F5C842');
+    var tx=await p.request({{method:'eth_sendTransaction',params:[{{
+      from:acc[0],to:'{recipient}',value:'{amount_hex}',gas:'0x5208',chainId:'{chain_id}'
+    }}]}});
+    st('✅ Payment sent!','#15803D','#22C55E');
+    res.style.display='block';
+    res.innerHTML='🎉 <strong>Tx Hash:</strong> '+tx+'<br>'
+      +'<a href="{explorer}/tx/'+tx+'" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
+    setTimeout(function(){{
+      try{{
+        var tgt=window.parent||window.top||window;
+        var url=new URL(tgt.location.href);
+        url.searchParams.set('req_paid_tx',tx);
+        url.searchParams.set('req_paid_to','{recipient}');
+        url.searchParams.set('req_paid_amt','{amount_display}');
+        url.searchParams.set('req_paid_net','{pay_net_ss}');
+        tgt.history.pushState({{}},'',url.toString());
+        tgt.location.reload();
+      }}catch(e){{}}
+    }},2200);
+  }}catch(err){{
+    if(err.code===4001){{st('❌ Rejected — you cancelled.','#B91C1C','#E5484D');}}
+    else{{st('❌ '+(err.message||JSON.stringify(err)),'#B91C1C','#E5484D');}}
+  }}
+}})();
+</script></body></html>"""
+        components.html(html, height=140, scrolling=False)
+
+    # ── Handle paid-invoice return from wallet ──
+    _rpaid_tx  = st.query_params.get("req_paid_tx",  "")
+    _rpaid_to  = st.query_params.get("req_paid_to",  "")
+    _rpaid_amt = st.query_params.get("req_paid_amt", "")
+    _rpaid_net = st.query_params.get("req_paid_net", "mainnet")
+    if _rpaid_tx and _rpaid_to:
+        _rn_cfg = _req_net_config(_rpaid_net)
+        _paid_entry = {
+            "type":      "paid",
+            "tx_hash":   _rpaid_tx,
+            "to":        _rpaid_to,
+            "amount":    _rpaid_amt,
+            "network":   _rn_cfg["label"],
+            "explorer":  _rn_cfg["explorer"],
+            "symbol":    _rn_cfg.get("symbol", "PROS"),
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        }
+        existing = [e.get("tx_hash") for e in st.session_state.req_invoices]
+        if _rpaid_tx not in existing:
+            st.session_state.req_invoices.insert(0, _paid_entry)
+        st.session_state.req_draft = {"mode": "paid_success", "entry": _paid_entry}
+        st.query_params.clear()
+        st.rerun()
+
+    _draft = st.session_state.get("req_draft") or {}
+    _mode  = _draft.get("mode", "create")
+    wallet_addr = st.session_state.get("wallet_address", "")
+
+    # ── Header ───────────────────────────────────
+    _hdr_map = {
+        "pay_invoice":  ("🧾", "You've Received a Payment Request",
+                         "Review the invoice below and pay with one click — your wallet handles the rest."),
+        "paid_success": ("🎉", "Payment Sent!", "The invoice has been paid on-chain."),
+        "create":       ("🧾", "Request PROS",
+                         "Create a payment request, generate a shareable link, and send it to whoever owes you — they open it and pay with one click."),
+    }
+    _hdr_icon, _hdr_title, _hdr_sub = _hdr_map.get(_mode, _hdr_map["create"])
+    st.markdown(
+        f'<div style="background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 100%);'
+        f'border-radius:20px;padding:2.2rem 2.4rem 1.8rem 2.4rem;margin-bottom:1.4rem;'
+        f'box-shadow:0 8px 32px rgba(20,20,90,0.22);position:relative;overflow:hidden;">'
+        f'<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.05) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>'
+        f'<div style="position:relative;z-index:1;">'
+        f'<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
+        f'letter-spacing:0.15em;text-transform:uppercase;color:#9FB4FF;margin-bottom:0.7rem;">'
+        f'{_hdr_icon} REQUEST PROS · PHAROS NETWORK</div>'
+        f'<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        f'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">{_hdr_title}</h2>'
+        f'<p style="font-size:0.92rem;color:rgba(255,255,255,0.6);line-height:1.55;max-width:600px;margin:0;">'
+        f'{_hdr_sub}</p></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ══════════════════════════════════════════════
+    # MODE A — PAY INVOICE (recipient opened link)
+    # ══════════════════════════════════════════════
+    if _mode == "pay_invoice":
+        inv_to    = _draft.get("to", "")
+        inv_amt   = _draft.get("amount", "0")
+        inv_note  = _draft.get("note", "")
+        inv_from  = _draft.get("from", "")
+        inv_net   = _draft.get("network", "mainnet")
+        _n        = _req_net_config(inv_net)
+        _sym      = _n.get("symbol", "PROS")
+        try:
+            inv_amt_f = float(inv_amt)
+        except Exception:
+            inv_amt_f = 0.0
+
+        price_info = get_pros_price()
+        usd_val    = None
+        if price_info.get("available") and price_info.get("price_usd") and inv_net == "mainnet":
+            usd_val = inv_amt_f * price_info["price_usd"]
+
+        st.markdown(
+            '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
+            'padding:1.8rem 2rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);'
+            'max-width:680px;margin:0 auto 1.2rem auto;">'
+            '<div style="display:flex;align-items:center;justify-content:space-between;'
+            'margin-bottom:1.2rem;flex-wrap:wrap;gap:10px;">'
+            '<div style="display:flex;align-items:center;gap:10px;">'
+            '<div style="width:44px;height:44px;border-radius:12px;'
+            'background:linear-gradient(135deg,#0C0C1A,#1414E8);'
+            'display:flex;align-items:center;justify-content:center;font-size:22px;">🧾</div>'
+            '<div><div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">Invoice</div>'
+            '<div style="font-size:11px;color:#7A7F96;">Powered by OctoBot · Pharos Network</div></div>'
+            '</div>'
+            f'<div style="background:#EEF0FF;border-radius:10px;padding:5px 14px;'
+            f'font-size:12px;font-weight:700;color:#1414E8;">🌐 {_n["label"]}</div>'
+            '</div>'
+            '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
+            'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;text-align:center;">'
+            '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
+            'text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Amount Requested</div>'
+            f'<div style="font-family:Syne,sans-serif;font-size:2.4rem;font-weight:800;'
+            f'color:#0C0C1A;letter-spacing:-0.02em;">{inv_amt_f:,.4f} {_sym}</div>'
+            + (f'<div style="font-size:13px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+            '</div>'
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+            + (
+                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Requested by</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{inv_from}</div>'
+                '</div>' if inv_from else ''
+            ) +
+            '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Pay to</div>'
+            f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{inv_to}</div>'
+            '</div></div>'
+            + (
+                '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
+                'padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Note / For</div>'
+                f'<div style="font-size:13px;color:#0C0C1A;font-weight:500;">{inv_note}</div>'
+                '</div>' if inv_note else ''
+            ) +
+            '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
+            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
+            '<div style="font-size:12px;color:#0C0C1A;">21,000 gas units (standard transfer)</div>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        if not wallet_addr:
+            st.markdown(
+                '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
+                'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:13px;font-weight:700;color:#0C0C1A;margin-bottom:0.5rem;">🔑 Connect your wallet to pay</div>'
+                '<div style="font-size:12px;color:#5B5F6E;margin-bottom:0.8rem;">Paste your wallet address — read-only, no signing required just to connect.</div>',
+                unsafe_allow_html=True,
+            )
+            _ri = st.text_input("Your wallet address", placeholder="0x…",
+                                key="req_pay_wallet_input", label_visibility="collapsed")
+            rw1, rw2 = st.columns([2, 1])
+            with rw1:
+                if st.button("🔗 Connect Wallet", key="req_pay_wallet_btn",
+                             use_container_width=True, type="primary"):
+                    if _ri.strip().startswith("0x") and len(_ri.strip()) == 42:
+                        st.session_state.wallet_address = _ri.strip()
+                        st.rerun()
+                    else:
+                        st.error("Enter a valid 0x… address (42 chars).")
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            _wa = wallet_addr
+            _ws = _wa[:6] + "…" + _wa[-4:]
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;'
+                f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.8rem;">'
+                f'<span style="font-size:16px;">🔗</span><div>'
+                f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;'
+                f'letter-spacing:0.07em;text-transform:uppercase;">Paying from</div>'
+                f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                f"✅ Pay {inv_amt_f:,.4f} {_sym} → {inv_to[:10]}…",
+                key="req_pay_confirm_btn",
+                use_container_width=True,
+                type="primary",
+            ):
+                _pay_invoice_widget(
+                    chain_id=_n["chain_id"], chain_name=_n["label"],
+                    rpc_url=_n["rpc"], explorer=_n["explorer"], net_symbol=_sym,
+                    recipient=inv_to, amount_hex=hex(int(inv_amt_f * 1e18)),
+                    pay_net_ss=inv_net, amount_display=str(inv_amt_f),
+                )
+
+        if st.button("✕ Cancel / Close invoice", key="req_cancel_invoice"):
+            st.session_state.req_draft = None
+            st.rerun()
+
+    # ══════════════════════════════════════════════
+    # MODE B — PAID SUCCESS
+    # ══════════════════════════════════════════════
+    elif _mode == "paid_success":
+        entry = _draft.get("entry", {})
+        _exp  = entry.get("explorer", PHAROS_EXPLORER_URL)
+        _sym  = entry.get("symbol", "PROS")
+        st.markdown(
+            '<div style="background:#F0FFF4;border:2px solid #22C55E;border-radius:16px;'
+            'padding:1.5rem 1.8rem;margin-bottom:1.2rem;box-shadow:0 4px 20px rgba(34,197,94,0.12);">'
+            '<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#15803D;margin-bottom:0.6rem;">🎉 Invoice Paid!</div>'
+            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Amount:</strong> {entry.get("amount","?")} {_sym}</div>'
+            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Paid to:</strong> {entry.get("to",entry.get("recipient","?"))}</div>'
+            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {entry.get("network","Pharos")}</div>'
+            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:6px;"><strong>Tx Hash:</strong> {entry.get("tx_hash","?")}</div>'
+            f'<a href="{_exp}/tx/{entry.get("tx_hash","")}" target="_blank" '
+            'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">View on Pharosscan ↗</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("🧾 Create a New Request", key="req_new_after_pay"):
+            st.session_state.req_draft = None
+            st.rerun()
+
+    # ══════════════════════════════════════════════
+    # MODE C — CREATE REQUEST (default)
+    # ══════════════════════════════════════════════
+    else:
+        # ── Network selector ──────────────────
+        st.markdown('<div style="font-size:12px;font-weight:700;color:#7A7F96;margin-bottom:6px;letter-spacing:0.05em;text-transform:uppercase;">Network</div>', unsafe_allow_html=True)
+        rn1, rn2, rn_sp = st.columns([1, 1, 3])
+        with rn1:
+            _mn_active = st.session_state.pay_network == "mainnet"
+            if st.button(("● " if _mn_active else "") + "🌐 Mainnet",
+                         key="req_net_mainnet", use_container_width=True,
+                         type="primary" if _mn_active else "secondary"):
+                if not _mn_active:
+                    st.session_state.pay_network = "mainnet"; st.rerun()
+        with rn2:
+            _tn_active = st.session_state.pay_network == "testnet"
+            if st.button(("● " if _tn_active else "") + "🧪 Testnet",
+                         key="req_net_testnet", use_container_width=True,
+                         type="primary" if _tn_active else "secondary"):
+                if not _tn_active:
+                    st.session_state.pay_network = "testnet"; st.rerun()
+
+        _rn   = _req_net_config(st.session_state.pay_network)
+        _rsym = _rn.get("symbol", "PROS")
+        nb_color = "#1414E8" if st.session_state.pay_network == "mainnet" else "#166016"
+        nb_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
+        st.markdown(
+            f'<div style="display:inline-flex;align-items:center;gap:7px;background:{nb_bg};'
+            f'border:1px solid {nb_color}33;border-radius:10px;padding:5px 12px;margin-bottom:1rem;'
+            f'font-size:12px;font-weight:600;color:{nb_color};">'
+            f'{"🌐" if st.session_state.pay_network=="mainnet" else "🧪"} '
+            f'{_rn["label"]} · {_rsym} · Chain ID {_rn["chain_id_dec"]}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Wallet connect ────────────────────
+        if not wallet_addr:
+            st.markdown(
+                '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
+                'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+                '<div style="font-size:13px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
+                '🔑 Your wallet address (where you will receive payment)</div>'
+                '<div style="font-size:12px;color:#5B5F6E;margin-bottom:0.7rem;">'
+                'Read-only — no signing, no extension needed.</div>',
+                unsafe_allow_html=True,
+            )
+            _cwi = st.text_input("Your wallet address", placeholder="0x… your receiving address",
+                                 key="req_create_wallet_input", label_visibility="collapsed")
+            cw1, cw2 = st.columns([2, 1])
+            with cw1:
+                if st.button("🔗 Set My Address", key="req_create_wallet_btn",
+                             use_container_width=True, type="primary"):
+                    if _cwi.strip().startswith("0x") and len(_cwi.strip()) == 42:
+                        st.session_state.wallet_address = _cwi.strip()
+                        st.rerun()
+                    else:
+                        st.error("Enter a valid 0x… address (42 chars).")
+            with cw2:
+                if st.button("🧠 Memory Ledger", key="req_go_memory", use_container_width=True):
+                    st.session_state.page = "memory"; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            _wa  = wallet_addr
+            _ws  = _wa[:6] + "…" + _wa[-4:]
+            rcol1, rcol2 = st.columns([4, 1])
+            with rcol1:
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:10px;'
+                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                    f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.8rem;">'
+                    f'<span style="font-size:16px;">🔗</span><div>'
+                    f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;'
+                    f'letter-spacing:0.07em;text-transform:uppercase;">Receiving wallet</div>'
+                    f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            with rcol2:
+                if st.button("✕ Change", key="req_disconnect", use_container_width=True):
+                    st.session_state.wallet_address = ""
+                    st.rerun()
+
+        st.markdown('<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;margin:0.4rem 0 0.7rem 0;">Create Payment Request</div>', unsafe_allow_html=True)
+
+        fc1, fc2 = st.columns([1, 1])
+        with fc1:
+            req_amount = st.text_input(f"Amount ({_rsym})", placeholder="e.g. 10", key="req_amount_input")
+        with fc2:
+            req_payer = st.text_input("Payer wallet address (optional)",
+                                      placeholder="0x… leave blank for anyone",
+                                      key="req_payer_input")
+        req_note = st.text_input("Note / What is this for?",
+                                 placeholder='"Design work", "Hackathon bounty", "Invoice #001"',
+                                 key="req_note_input")
+
+        gen_col, _ = st.columns([1, 2])
+        with gen_col:
+            gen_clicked = st.button("🔗 Generate Payment Link", key="req_generate_btn",
+                                    use_container_width=True, type="primary")
+
+        if gen_clicked:
+            _err = None
+            if not wallet_addr:
+                _err = "Set your wallet address first — that's where the PROS will be sent."
+            elif not req_amount.strip():
+                _err = "Enter an amount."
+            else:
+                try:
+                    _amt_f = float(req_amount.strip())
+                    if _amt_f <= 0:
+                        _err = "Amount must be greater than zero."
+                except ValueError:
+                    _err = "Amount must be a number."
+            if _err:
+                st.error(_err)
+            else:
+                _amt_f = float(req_amount.strip())
+                _invoice = {
+                    "type":      "created",
+                    "to":        wallet_addr,
+                    "amount":    str(_amt_f),
+                    "note":      req_note.strip(),
+                    "payer":     req_payer.strip(),
+                    "network":   st.session_state.pay_network,
+                    "net_label": _rn["label"],
+                    "symbol":    _rsym,
+                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                }
+                st.session_state.req_invoices.insert(0, _invoice)
+
+                _base_url = "http://localhost:8501"
+                try:
+                    _base_url = st.context.headers.get("origin", _base_url)
+                except Exception:
+                    pass
+                _link = _build_invoice_url(
+                    base_url=_base_url, to=wallet_addr, amount=str(_amt_f),
+                    note=req_note.strip(), sender=req_payer.strip(),
+                    network=st.session_state.pay_network,
+                )
+
+                price_info = get_pros_price()
+                usd_val    = None
+                if price_info.get("available") and price_info.get("price_usd") and st.session_state.pay_network == "mainnet":
+                    usd_val = _amt_f * price_info["price_usd"]
+
+                st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
+                    'padding:1.6rem 1.8rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);margin-bottom:1rem;">'
+                    '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
+                    'color:#0C0C1A;margin-bottom:1rem;">🧾 Invoice Preview</div>'
+                    '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
+                    'border-radius:14px;padding:1rem 1.2rem;margin-bottom:0.9rem;text-align:center;">'
+                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#0C0C1A;">{_amt_f:,.4f} {_rsym}</div>'
+                    + (f'<div style="font-size:12px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+                    '</div>'
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+                    '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Receive to</div>'
+                    f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr}</div>'
+                    '</div>'
+                    '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Network</div>'
+                    f'<div style="font-size:13px;font-weight:700;color:#0C0C1A;">{_rn["label"]}</div>'
+                    f'<div style="font-size:11px;color:#7A7F96;margin-top:1px;">Chain ID {_rn["chain_id_dec"]}</div>'
+                    '</div></div>'
+                    + (
+                        '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
+                        'padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">For</div>'
+                        f'<div style="font-size:13px;font-weight:500;color:#0C0C1A;">{req_note.strip()}</div>'
+                        '</div>' if req_note.strip() else ''
+                    ) +
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+                st.markdown(
+                    '<div style="background:#F0FFF4;border:1.5px solid #22C55E;border-radius:14px;'
+                    'padding:1rem 1.2rem;margin-bottom:0.8rem;">'
+                    '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;'
+                    'color:#15803D;margin-bottom:0.5rem;">🔗 Shareable Payment Link</div>'
+                    '<div style="font-size:11px;color:#166534;margin-bottom:0.6rem;">'
+                    'Send this link to the payer. They open it, see the invoice, and pay with one click.</div>'
+                    f'<div style="background:#FFFFFF;border:1px solid #86EFAC;border-radius:8px;'
+                    f'padding:8px 12px;font-size:11px;font-family:monospace;color:#0C0C1A;'
+                    f'word-break:break-all;line-height:1.6;">{_link}</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                st.code(_link, language=None)
+                st.caption("👆 Copy the link above and send it via Telegram, Discord, or email.")
+
+    # ── Invoice History ───────────────────────────
+    if _mode == "create" and st.session_state.req_invoices:
+        st.markdown(
+            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
+            'color:#0C0C1A;margin:1.6rem 0 0.6rem 0;">📋 Invoice History</div>',
+            unsafe_allow_html=True,
+        )
+        for _inv in st.session_state.req_invoices[:10]:
+            _it    = _inv.get("type", "created")
+            _i_sym = _inv.get("symbol", "PROS")
+            _i_net = _inv.get("net_label", _inv.get("network", "Pharos"))
+            _icon  = "🧾" if _it == "created" else "✅"
+            _label = "Created" if _it == "created" else "Paid"
+            _addr  = _inv.get("to", _inv.get("recipient", "?"))
+            st.markdown(
+                '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:12px;'
+                'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
+                'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+                f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
+                f'{_icon} {_label} · {_inv.get("amount","?")} {_i_sym}'
+                + (f' · {_inv.get("note","")}' if _inv.get("note") else '') +
+                f'</div>'
+                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">'
+                f'{_inv.get("timestamp","")} · {_i_net} · {_addr[:16]}…</div></div>'
+                + (
+                    f'<a href="{_inv.get("explorer",PHAROS_EXPLORER_URL)}/tx/{_inv.get("tx_hash","")}" '
+                    f'target="_blank" style="font-size:11.5px;font-weight:600;color:#1A1AFF;'
+                    f'white-space:nowrap;text-decoration:none;">Tx ↗</a>'
+                    if _it == "paid" and _inv.get("tx_hash") else ''
+                ) +
                 '</div>',
                 unsafe_allow_html=True,
             )
