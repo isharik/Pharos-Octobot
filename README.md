@@ -133,6 +133,19 @@ A User pastes a Pharos transaction hash, OctoBot fetches it via eth_getTransacti
 <img width="621" height="866" alt="Screenshot 2026-06-21 224801" src="https://github.com/user-attachments/assets/a398ab2c-457c-483a-873c-4174e24f6bf2" />
 
 
+## Payment Requests (on-chain invoicing)
+
+"Request 10 PROS from 0x1234… for design work"
+
+* → generates a shareable link
+* → recipient opens link, sees the invoice, clicks pay
+* → one click, wallet signs, done
+
+No other Pharos tool lets you send a payment request. This alone would get used daily by every builder in the ecosystem.
+
+<img width="1210" height="765" alt="Screenshot 2026-06-26 210718" src="https://github.com/user-attachments/assets/bdf18523-e750-4c48-b522-3903ec51b03f" />
+
+
 # NEW FEATURE WIP :
 
 **OctoBot Autonomous Payment Agent — AI-to-AI PROS Payments on Pharos**
