@@ -245,6 +245,12 @@ if "wallet_loading"  not in st.session_state: st.session_state.wallet_loading  =
 if "tx_hash_input"   not in st.session_state: st.session_state.tx_hash_input   = ""
 if "tx_data"         not in st.session_state: st.session_state.tx_data         = None
 if "tx_explanation"  not in st.session_state: st.session_state.tx_explanation  = None
+if "pay_intent_raw"  not in st.session_state: st.session_state.pay_intent_raw  = ""
+if "pay_parsed"      not in st.session_state: st.session_state.pay_parsed      = None
+if "pay_confirmed"   not in st.session_state: st.session_state.pay_confirmed   = False
+if "pay_result"      not in st.session_state: st.session_state.pay_result      = None
+if "pay_history"     not in st.session_state: st.session_state.pay_history     = []
+if "pay_network"     not in st.session_state: st.session_state.pay_network     = "mainnet"
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -1107,141 +1113,30 @@ PHAROS_CHAIN_ID_DEC = 1672
 PHAROS_RPC_URL       = "https://rpc.pharos.xyz"
 PHAROS_EXPLORER_URL  = "https://pharosscan.xyz"
 
+# Pharos Testnet constants
+PHAROS_TESTNET_CHAIN_ID_HEX = "0xa8231"  # 688689 decimal — Pharos Atlantic Testnet
+PHAROS_TESTNET_CHAIN_ID_DEC = 688689
+PHAROS_TESTNET_RPC_URL       = "https://atlantic.dplabs-internal.com"
+PHAROS_TESTNET_EXPLORER_URL  = "https://atlantic.pharosscan.xyz"
+
 
 def render_wallet_connect_widget() -> None:
     """
-    Renders a real OKX Wallet connect button.
-
-    IMPORTANT: st.markdown(..., unsafe_allow_html=True) injects HTML
-    directly into Streamlit's own page DOM (via React's
-    dangerouslySetInnerHTML) — it does NOT create an iframe. Only
-    components.html() creates an iframe. An earlier version of this
-    function assumed it needed to "escape" an iframe by searching
-    document.getElementsByTagName('iframe') for itself and swapping
-    places — but since there was never an iframe to find, that search
-    always failed, the widget was left inside its `display:none`
-    source wrapper forever, and the button never appeared at all.
-
-    Fix: since this content is already running in the real top-level
-    page, we just need to reveal the wrapper and wire up the click
-    handler directly — no DOM relocation necessary.
-
-    Forces network switch to Pharos (chain 0x688) — adds it if not present.
-    Read-only: only requests eth_requestAccounts + wallet_switchEthereumChain.
-    Never requests a signature, never sends a transaction, never touches funds.
-    On success, sets ?wallet=0x... in the real URL and reloads.
+    No-signature wallet connection: user simply pastes their wallet address.
+    No browser extension required, no signing, no gas, read-only.
+    Kept for API compatibility — actual UI rendered inline on Memory Ledger page.
     """
-    st.markdown(
-        """
-        <div id="wc-mounted" style="display:flex;flex-direction:column;align-items:center;margin:0 auto 0.5rem auto;font-family:'DM Sans',sans-serif;">
-            <button id="wc-btn" style="display:inline-flex;align-items:center;gap:10px;
-                background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 160%);
-                color:#fff;border:none;border-radius:14px;
-                padding:1rem 2rem;font-size:15px;font-weight:700;
-                cursor:pointer;font-family:'DM Sans',sans-serif;
-                transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease;
-                box-shadow:0 8px 24px rgba(20,20,90,0.28);"><svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network</button>
-            <div id="wc-status" style="font-size:12px;color:#7A7F96;margin-top:10px;font-family:'DM Sans',sans-serif;text-align:center;">Read-only · No funds · No gas · No signature required</div>
-        </div>
-
-        <script>
-        (function(){
-            function wireWalletButton(){
-                var btn = document.getElementById('wc-btn');
-                var statusEl = document.getElementById('wc-status');
-                if (!btn || !statusEl) return;
-                if (btn.dataset.wired === '1') return; // avoid double-binding on reruns
-                btn.dataset.wired = '1';
-
-                btn.addEventListener('mouseenter', function(){
-                    btn.style.transform = 'translateY(-2px)';
-                    btn.style.boxShadow = '0 12px 32px rgba(20,20,90,0.4)';
-                });
-                btn.addEventListener('mouseleave', function(){
-                    btn.style.transform = 'translateY(0)';
-                    btn.style.boxShadow = '0 8px 24px rgba(20,20,90,0.28)';
-                });
-                btn.addEventListener('mousedown', function(){
-                    btn.style.transform = 'scale(0.96)';
-                });
-                btn.addEventListener('mouseup', function(){
-                    btn.style.transform = 'translateY(-2px)';
-                });
-
-                btn.addEventListener('click', async function(){
-                    if (typeof window.okxwallet === 'undefined') {
-                        statusEl.innerText = 'OKX Wallet not found — install the OKX Wallet extension to continue';
-                        statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
-                        return;
-                    }
-
-                    try {
-                        btn.innerText = 'Connecting…';
-                        var accounts = await window.okxwallet.request({ method: 'eth_requestAccounts' });
-                        if (!accounts || accounts.length === 0) {
-                            statusEl.innerText = 'No account selected';
-                            statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
-                            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network';
-                            return;
-                        }
-
-                        statusEl.innerText = 'Switching to Pharos Network…';
-                        try {
-                            await window.okxwallet.request({
-                                method: 'wallet_switchEthereumChain',
-                                params: [{ chainId: '""" + PHAROS_CHAIN_ID_HEX + """' }],
-                            });
-                        } catch (switchError) {
-                            if (switchError.code === 4902) {
-                                await window.okxwallet.request({
-                                    method: 'wallet_addEthereumChain',
-                                    params: [{
-                                        chainId: '""" + PHAROS_CHAIN_ID_HEX + """',
-                                        chainName: 'Pharos Mainnet',
-                                        nativeCurrency: { name: 'PROS', symbol: 'PROS', decimals: 18 },
-                                        rpcUrls: ['""" + PHAROS_RPC_URL + """'],
-                                        blockExplorerUrls: ['""" + PHAROS_EXPLORER_URL + """'],
-                                    }],
-                                });
-                            } else {
-                                throw switchError;
-                            }
-                        }
-
-                        statusEl.innerText = 'Connected! Loading your on-chain profile…';
-                        statusEl.style.color = '#1FA855'; statusEl.style.fontWeight = '600';
-                        var addr = accounts[0];
-
-                        setTimeout(function(){
-                            try {
-                                var url = new URL(window.location.href);
-                                url.searchParams.set('wallet', addr);
-                                window.location.assign(url.toString());
-                            } catch(e) {
-                                statusEl.innerText = 'Connected: ' + addr + ' (copy this address)';
-                            }
-                        }, 400);
-
-                    } catch (err) {
-                        statusEl.innerText = 'Connection rejected or failed: ' + (err.message || err);
-                        statusEl.style.color = '#E5484D'; statusEl.style.fontWeight = '600';
-                        btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 200 200" style="flex-shrink:0;"><rect width="200" height="200" rx="40" fill="#fff"/><rect x="40" y="40" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="40" width="46.67" height="46.67" fill="#000"/><rect x="76.67" y="76.67" width="46.67" height="46.67" fill="#000"/><rect x="40" y="113.33" width="46.67" height="46.67" fill="#000"/><rect x="113.33" y="113.33" width="46.67" height="46.67" fill="#000"/></svg> Connect OKX Wallet — Pharos Network';
-                    }
-                });
-            }
-
-            wireWalletButton();
-        })();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
+    pass
+def _render_wallet_connect_widget_UNUSED():
+    """UNUSED — retained only to prevent accidental re-introduction of removed code."""
 
 
-def fetch_pharos_onchain_data(address: str) -> dict:
+
+def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
     """
     Reads PUBLIC on-chain data for a wallet via standard read-only JSON-RPC calls.
     No signature, no transaction, no funds ever touched.
+    Accepts an optional rpc_override to query testnet or any custom RPC.
     Tries multiple known-good Pharos RPC endpoints in order until one responds.
     Returns dict with balance, tx count, and recent activity summary.
     """
@@ -1254,7 +1149,7 @@ def fetch_pharos_onchain_data(address: str) -> dict:
         "error":        None,
     }
 
-    rpc_candidates = [PHAROS_RPC_URL, "https://pharos.drpc.org"]
+    rpc_candidates = [rpc_override] if rpc_override else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     headers = {"Content-Type": "application/json"}
     last_error = None
 
@@ -3511,10 +3406,11 @@ NAV_PAGES = [
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🧩", "Ecosystem", "ecosystem"),
+    ("💸", "Pay",       "pay"),
 ]
 
 st.markdown('<div style="display:flex;justify-content:center;margin-bottom:0.5rem;">', unsafe_allow_html=True)
-nav_cols = st.columns([1.2, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.1, 1.1])
+nav_cols = st.columns([1.2, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.1, 1.1])
 
 st.markdown(
     '<div style="display:flex;justify-content:center;margin-bottom:0.6rem;">'
@@ -3555,7 +3451,7 @@ for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-with nav_cols[8]:
+with nav_cols[9]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
     st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -3635,35 +3531,79 @@ if st.session_state.page == "home":
         unsafe_allow_html=True,
     )
 
-    # ── Memory Ledger — full-width compact banner strip ─────────────
-    st.markdown(
-        '<div style="background:linear-gradient(90deg,#0C0C1A 0%,#1414E8 100%);'
-        'border-radius:14px;padding:1rem 1.4rem;margin-bottom:1rem;'
-        'box-shadow:0 6px 20px rgba(20,20,90,0.16);position:relative;overflow:hidden;">'
-        '<div style="position:relative;z-index:1;display:flex;align-items:center;'
-        'justify-content:space-between;gap:16px;flex-wrap:wrap;">'
-        '<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:240px;">'
-        '<span style="font-size:26px;line-height:1;flex-shrink:0;">🧠</span>'
-        '<div>'
-        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">'
-        '<span style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#FFFFFF;">'
-        'OctoBot Memory Ledger</span>'
-        '<span style="font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
-        'color:#9FB4FF;background:rgba(159,180,255,0.15);border-radius:10px;padding:2px 7px;">New</span>'
-        '</div>'
-        '<div style="font-size:11.5px;color:rgba(255,255,255,0.6);">'
-        'Connect your wallet — OctoBot reads on-chain activity and personalises every answer</div>'
-        '</div></div>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
-    mb1, mb2, mb3 = st.columns([1, 1.4, 1])
-    with mb2:
+    # ── Memory Ledger + Payment Agent — elegant side-by-side cards ──
+    home_card_col1, home_card_col2 = st.columns(2, gap="medium")
+
+    with home_card_col1:
+        # Memory Ledger card
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 100%);'
+            'border-radius:20px;padding:1.6rem 1.6rem 1.2rem 1.6rem;'
+            'box-shadow:0 8px 32px rgba(20,20,90,0.22);position:relative;overflow:hidden;'
+            'min-height:170px;display:flex;flex-direction:column;justify-content:space-between;">'
+            '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;'
+            'background:radial-gradient(circle,rgba(100,130,255,0.18) 0%,transparent 70%);pointer-events:none;"></div>'
+            '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);'
+            'background-size:18px 18px;pointer-events:none;"></div>'
+            '<div style="position:relative;z-index:1;">'
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">'
+            '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
+            'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
+            'border:1px solid rgba(255,255,255,0.12);">🧠</div>'
+            '<div>'
+            '<div style="display:flex;align-items:center;gap:7px;">'
+            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#FFFFFF;">Memory Ledger</span>'
+            '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+            'color:#9FB4FF;background:rgba(159,180,255,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(159,180,255,0.25);">New</span>'
+            '</div>'
+            '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">On-chain wallet intelligence</div>'
+            '</div></div>'
+            '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;margin-bottom:1rem;">'
+            'Connect your wallet — OctoBot reads on-chain activity and personalises every answer.</div>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown('<div class="connect-wallet-btn-wrap">', unsafe_allow_html=True)
-        if st.button("🔗 Connect Wallet & View Profile", key="home_memory_btn", use_container_width=True):
+        if st.button("🔗 View Wallet Profile →", key="home_memory_btn", use_container_width=True):
             st.session_state.page = "memory"; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div style="margin-bottom:0.6rem;"></div>', unsafe_allow_html=True)
+
+    with home_card_col2:
+        # Payment Agent card
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#0A2A0A 0%,#166016 100%);'
+            'border-radius:20px;padding:1.6rem 1.6rem 1.2rem 1.6rem;'
+            'box-shadow:0 8px 32px rgba(10,60,20,0.22);position:relative;overflow:hidden;'
+            'min-height:170px;display:flex;flex-direction:column;justify-content:space-between;">'
+            '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;'
+            'background:radial-gradient(circle,rgba(139,255,176,0.15) 0%,transparent 70%);pointer-events:none;"></div>'
+            '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);'
+            'background-size:18px 18px;pointer-events:none;"></div>'
+            '<div style="position:relative;z-index:1;">'
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">'
+            '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
+            'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
+            'border:1px solid rgba(255,255,255,0.12);">💸</div>'
+            '<div>'
+            '<div style="display:flex;align-items:center;gap:7px;">'
+            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#FFFFFF;">Payment Agent</span>'
+            '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+            'color:#8BFFB0;background:rgba(139,255,176,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(139,255,176,0.25);">Beta</span>'
+            '</div>'
+            '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">AI-powered PROS transfers</div>'
+            '</div></div>'
+            '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;margin-bottom:1rem;">'
+            'Send PROS with plain English — "Send 5 PROS to 0x1234…" and OctoBot handles the rest.</div>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div style="margin-top:0.6rem;"></div>', unsafe_allow_html=True)
+        if st.button("💸 Open Payment Agent →", key="home_pay_btn", use_container_width=True):
+            st.session_state.page = "pay"; st.rerun()
+
+    st.markdown('<div style="margin-bottom:0.8rem;"></div>', unsafe_allow_html=True)
 
     # ── Docs badge banner ─────────────────────
     st.markdown(
@@ -4107,18 +4047,39 @@ elif st.session_state.page == "memory":
         if not st.session_state.wallet_address:
             # ── Manual address entry — only connection method ──────────────
             st.markdown('<div style="margin-top:-0.8rem;"></div>', unsafe_allow_html=True)
+
+            # ── Rotating advisory ticker strip ────────────────────────────
             st.markdown(
-                '<div style="display:flex;gap:10px;flex-wrap:nowrap;margin-bottom:0.1rem;justify-content:center;">'
-                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
-                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
-                '🔒 No signature required</div>'
-                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
-                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
-                '⛽ Zero gas used</div>'
-                '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
-                'border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(20,20,60,0.05);">'
-                '👁 Read-only access</div>'
-                '</div>',
+                '<style>'
+                '@keyframes ml-ticker-scroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}'
+                '.ml-ticker-wrap{overflow:hidden;background:linear-gradient(90deg,#F0FFF4,#E8F5FF);'
+                'border:1px solid #86EFAC;border-radius:12px;padding:0;margin-bottom:0.9rem;position:relative;}'
+                '.ml-ticker-wrap::before,.ml-ticker-wrap::after{content:"";position:absolute;top:0;bottom:0;'
+                'width:40px;z-index:2;pointer-events:none;}'
+                '.ml-ticker-wrap::before{left:0;background:linear-gradient(90deg,#F0FFF4,transparent);}'
+                '.ml-ticker-wrap::after{right:0;background:linear-gradient(270deg,#F0FFF4,transparent);}'
+                '.ml-ticker-track{display:flex;align-items:center;width:max-content;'
+                'animation:ml-ticker-scroll 22s linear infinite;padding:9px 0;}'
+                '.ml-ticker-track:hover{animation-play-state:paused;}'
+                '.ml-ticker-item{display:inline-flex;align-items:center;gap:6px;padding:0 1.6rem;'
+                'white-space:nowrap;border-right:1px solid #86EFAC;font-size:12px;font-weight:600;color:#15803D;}'
+                '.ml-ticker-item:last-child{border-right:none;}'
+                '.ml-ticker-dot{width:6px;height:6px;border-radius:50%;background:#22C55E;flex-shrink:0;}'
+                '</style>'
+                '<div class="ml-ticker-wrap"><div class="ml-ticker-track">'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🔒 No signing required</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>⛽ Zero gas used</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>👁 Read-only access</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🔌 No wallet extension needed</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>📋 Just paste your address</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🛡 Your funds are never touched</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🔒 No signing required</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>⛽ Zero gas used</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>👁 Read-only access</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🔌 No wallet extension needed</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>📋 Just paste your address</div>'
+                '<div class="ml-ticker-item"><span class="ml-ticker-dot"></span>🛡 Your funds are never touched</div>'
+                '</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -4295,7 +4256,7 @@ elif st.session_state.page == "memory":
         # then a white card that stays open through the Streamlit input
         # and button, closed afterward) so both cards share identical
         # heading markup, spacing, and overall card height.
-        st.markdown('<div style="margin-top:-0.8rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="margin-top:1.9rem;"></div>', unsafe_allow_html=True)
         st.markdown(
             '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:0.1rem;justify-content:center;">'
             '<div style="font-size:11.5px;font-weight:600;color:#42475A;background:#FFFFFF;border:1px solid #E3E5EA;'
@@ -5356,8 +5317,762 @@ elif st.session_state.page == "ecosystem":
     )
 
 
+
 # ── Footer (rendered on every page) ───────────────────────
     # ── Footer ────────────────────────────────────────────────────
+
+# ═════════════════════════════════════════════
+# PAGE: OCTOBOT PAYMENT AGENT
+# ═════════════════════════════════════════════
+elif st.session_state.page == "pay":
+
+    # ════════════════════════════════════════════════════════
+    # HELPERS — intent parsers
+    # ════════════════════════════════════════════════════════
+
+    def _classify_intent(text: str) -> str:
+        """Return: 'send' | 'batch' | 'approve'"""
+        t = text.lower()
+        # batch: multiple addresses in the text
+        addrs = re.findall(r"0x[0-9a-fA-F]{40}", text)
+        if len(addrs) >= 2:
+            return "batch"
+        if any(w in t for w in ["approve", "allow", "authorise", "authorize", "permission", "spend"]):
+            return "approve"
+        return "send"
+
+    def _parse_gemini(text: str, intent: str) -> dict | None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None
+        try:
+            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1,
+                                          google_api_key=api_key)
+            if intent == "batch":
+                prompt = (
+                    "Extract a batch payment intent from the following message.\n"
+                    "Return ONLY valid JSON, no markdown:\n"
+                    '{"recipients":["0x...","0x..."],"amount_each":1.0,"reason":""}\n\n'
+                    "Rules:\n"
+                    "- recipients: list of ALL valid 0x Ethereum addresses found.\n"
+                    "- amount_each: the amount to send TO EACH address (positive number).\n"
+                    "- reason: short description or empty string.\n\n"
+                    f"Message: {text}"
+                )
+            elif intent == "approve":
+                prompt = (
+                    "Extract a token approval intent from the following message.\n"
+                    "Return ONLY valid JSON, no markdown:\n"
+                    '{"spender":"0x...","amount":100.0,"reason":""}\n\n'
+                    "Rules:\n"
+                    "- spender: the contract address being approved (0x, 42 chars). If none found, use null.\n"
+                    "- amount: the amount to approve (positive number). If 'unlimited' or 'max', use -1.\n"
+                    "- reason: short description or empty string.\n\n"
+                    f"Message: {text}"
+                )
+            else:
+                prompt = (
+                    "Extract the payment intent from the following message.\n"
+                    "Return ONLY valid JSON, no markdown:\n"
+                    '{"recipient":"0x...","amount":1.5,"reason":""}\n\n'
+                    "Rules:\n"
+                    "- recipient: valid Ethereum address (0x, 42 chars). null if none.\n"
+                    "- amount: positive number. null if none.\n"
+                    "- reason: short description or empty string.\n\n"
+                    f"Message: {text}"
+                )
+            resp = llm.invoke([HumanMessage(content=prompt)])
+            raw  = resp.content.strip()
+            raw  = re.sub(r"^```(?:json)?\n?", "", raw, flags=re.IGNORECASE)
+            raw  = re.sub(r"\n?```$", "", raw)
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    def _parse_regex(text: str, intent: str) -> dict | None:
+        addrs  = re.findall(r"0x[0-9a-fA-F]{40}", text)
+        amt_m  = re.search(r"(\d+(?:\.\d+)?)", text)
+        reason = ""
+        rm     = re.search(r"(?:for|reason[:\s]+)([\w\s]+)", text, re.IGNORECASE)
+        if rm:
+            reason = rm.group(1).strip()
+        if intent == "batch" and len(addrs) >= 2 and amt_m:
+            return {"recipients": addrs, "amount_each": float(amt_m.group(1)), "reason": reason}
+        if intent == "approve" and addrs and amt_m:
+            return {"spender": addrs[0], "amount": float(amt_m.group(1)), "reason": reason}
+        if intent == "send" and addrs and amt_m:
+            return {"recipient": addrs[0], "amount": float(amt_m.group(1)), "reason": reason}
+        return None
+
+    def _pay_net_config(network: str) -> dict:
+        if network == "testnet":
+            return {
+                "label":        "Pharos Atlantic",
+                "chain_id":     PHAROS_TESTNET_CHAIN_ID_HEX,
+                "rpc":          PHAROS_TESTNET_RPC_URL,
+                "explorer":     PHAROS_TESTNET_EXPLORER_URL,
+                "chain_id_dec": PHAROS_TESTNET_CHAIN_ID_DEC,
+                "symbol":       "PHRS",
+            }
+        return {
+            "label":        "Pharos Mainnet",
+            "chain_id":     PHAROS_CHAIN_ID_HEX,
+            "rpc":          PHAROS_RPC_URL,
+            "explorer":     PHAROS_EXPLORER_URL,
+            "chain_id_dec": PHAROS_CHAIN_ID_DEC,
+            "symbol":       "PROS",
+        }
+
+    def _tx_widget(chain_id, chain_name, rpc_url, explorer, net_symbol,
+                   recipient, amount_hex, pay_net_ss,
+                   amount_display, mode="send",
+                   recipients_json="[]", approve_amount_hex="0x0", spender=""):
+        """Render the components.html transaction widget for any tx type."""
+        import hashlib as _hl
+        _tid = _hl.md5(f"{recipient}{amount_hex}{chain_id}{mode}".encode()).hexdigest()[:8]
+
+        if mode == "batch":
+            js_send_block = f"""
+    // BATCH SEND — fire one tx per recipient in sequence
+    var recipients = {recipients_json};
+    var txHashes   = [];
+    for (var bi = 0; bi < recipients.length; bi++) {{
+      status('⏳ Sending tx ' + (bi+1) + ' of ' + recipients.length + '…', '#5B5F6E', '#F5C842');
+      var bHash = await provider.request({{
+        method: 'eth_sendTransaction',
+        params: [{{ from: accounts[0], to: recipients[bi],
+                    value: '{amount_hex}', gas: '0x5208', chainId: '{chain_id}' }}]
+      }});
+      txHashes.push(bHash);
+    }}
+    var txHash = txHashes.join(',');
+    var resHtml = '🎉 Batch complete! ' + txHashes.length + ' transactions sent.<br>';
+    txHashes.forEach(function(h, i) {{
+      resHtml += '<a href="{explorer}/tx/' + h + '" target="_blank" style="color:#1A1AFF;font-weight:600;font-size:11px;">Tx ' + (i+1) + ' ↗</a>&nbsp; ';
+    }});
+    res.innerHTML = resHtml;
+"""
+        elif mode == "approve":
+            # ERC-20 approve(address spender, uint256 amount) selector = 0x095ea7b3
+            js_send_block = f"""
+    // APPROVE — encode approve(spender, amount) calldata
+    var spender = '{spender}';
+    var approveHex = '{approve_amount_hex}';
+    // ABI encode: 4-byte selector + 32-byte padded spender + 32-byte padded amount
+    var sel = '095ea7b3';
+    var paddedSpender = spender.replace('0x','').toLowerCase().padStart(64,'0');
+    var paddedAmount  = approveHex.replace('0x','').toLowerCase().padStart(64,'0');
+    var data = '0x' + sel + paddedSpender + paddedAmount;
+    status('⏳ Waiting for approval signature…', '#5B5F6E', '#F5C842');
+    var txHash = await provider.request({{
+      method: 'eth_sendTransaction',
+      params: [{{ from: accounts[0], to: '{recipient}',
+                  value: '0x0', data: data, gas: '0xF424', chainId: '{chain_id}' }}]
+    }});
+    res.innerHTML = '✅ Approval granted!<br><strong>Spender:</strong> {spender}<br>' +
+      '🎉 <strong>Tx Hash:</strong> ' + txHash + '<br>' +
+      '<a href="{explorer}/tx/' + txHash + '" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
+"""
+        else:
+            js_send_block = f"""
+    // STANDARD SEND
+    status('⏳ Waiting for your signature in the wallet popup…', '#5B5F6E', '#F5C842');
+    var txHash = await provider.request({{
+      method: 'eth_sendTransaction',
+      params: [{{ from: accounts[0], to: '{recipient}',
+                  value: '{amount_hex}', gas: '0x5208', chainId: '{chain_id}' }}]
+    }});
+    res.innerHTML = '🎉 <strong>Tx Hash:</strong> ' + txHash + '<br>' +
+      '<a href="{explorer}/tx/' + txHash + '" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
+"""
+
+        html = f"""<!DOCTYPE html>
+<html><head>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;}}
+  body{{background:transparent;overflow:hidden;padding:8px 0;}}
+  #status-box{{display:flex;align-items:center;gap:10px;background:#F4F5FF;border-radius:10px;
+    padding:10px 14px;font-size:13px;color:#5B5F6E;min-height:42px;}}
+  #dot{{width:9px;height:9px;border-radius:50%;background:#9499A8;flex-shrink:0;transition:background 0.3s;}}
+  #msg{{flex:1;line-height:1.4;}}
+  #tx-result{{display:none;margin-top:8px;background:#F0FFF4;border:1.5px solid #22C55E;
+    border-radius:10px;padding:10px 14px;font-size:12px;color:#15803D;word-break:break-all;line-height:1.8;}}
+</style>
+</head><body>
+<div id="status-box"><div id="dot"></div><div id="msg">⏳ Starting…</div></div>
+<div id="tx-result"></div>
+<script>
+(async function() {{
+  var dot = document.getElementById('dot');
+  var msg = document.getElementById('msg');
+  var res = document.getElementById('tx-result');
+  function status(text, color, dotColor) {{
+    msg.textContent = text; msg.style.color = color||'#5B5F6E';
+    dot.style.background = dotColor||'#9499A8';
+  }}
+  function resolveProvider() {{
+    if (typeof window.ethereum !== 'undefined')        return window.ethereum;
+    if (typeof window.okxwallet !== 'undefined')       return window.okxwallet;
+    try {{ if (typeof window.parent.ethereum !== 'undefined')  return window.parent.ethereum; }} catch(e) {{}}
+    try {{ if (typeof window.parent.okxwallet !== 'undefined') return window.parent.okxwallet; }} catch(e) {{}}
+    try {{ if (typeof window.top.ethereum !== 'undefined')     return window.top.ethereum; }} catch(e) {{}}
+    try {{ if (typeof window.top.okxwallet !== 'undefined')    return window.top.okxwallet; }} catch(e) {{}}
+    return null;
+  }}
+  status('⏳ Looking for wallet…', '#5B5F6E', '#F5C842');
+  var provider = null;
+  for (var i=0; i<15; i++) {{
+    provider = resolveProvider();
+    if (provider) break;
+    await new Promise(function(r){{ setTimeout(r,100); }});
+  }}
+  if (!provider) {{
+    status('❌ No Web3 wallet found. Unlock your wallet extension and try again.','#B91C1C','#E5484D');
+    return;
+  }}
+  try {{
+    status('⏳ Requesting account access…','#5B5F6E','#F5C842');
+    var accounts = await provider.request({{method:'eth_requestAccounts'}});
+    if (!accounts||accounts.length===0) {{
+      status('❌ No accounts returned. Unlock your wallet.','#B91C1C','#E5484D'); return;
+    }}
+    status('⏳ Switching to {chain_name}…','#5B5F6E','#F5C842');
+    try {{
+      await provider.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{chain_id}'}}]}});
+    }} catch(swErr) {{
+      if (swErr.code===4902||swErr.code===-32603) {{
+        status('⏳ Adding {chain_name} to your wallet…','#5B5F6E','#F5C842');
+        await provider.request({{method:'wallet_addEthereumChain',params:[{{
+          chainId:'{chain_id}',chainName:'{chain_name}',
+          nativeCurrency:{{name:'{net_symbol}',symbol:'{net_symbol}',decimals:18}},
+          rpcUrls:['{rpc_url}'],blockExplorerUrls:['{explorer}']
+        }}]}});
+        await provider.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{chain_id}'}}]}});
+      }} else {{ throw swErr; }}
+    }}
+    {js_send_block}
+    status('✅ Done!','#15803D','#22C55E');
+    res.style.display='block';
+    setTimeout(function(){{
+      try {{
+        var target=window.parent||window.top||window;
+        var url=new URL(target.location.href);
+        url.searchParams.set('pay_tx', typeof txHash!=='undefined'?txHash:'batch');
+        url.searchParams.set('pay_to', '{recipient}');
+        url.searchParams.set('pay_amt','{amount_display}');
+        url.searchParams.set('pay_net','{pay_net_ss}');
+        url.searchParams.set('pay_mode','{mode}');
+        target.history.pushState({{}},'',url.toString());
+        target.location.reload();
+      }} catch(e) {{}}
+    }},2200);
+  }} catch(err) {{
+    if (err.code===4001) {{ status('❌ Rejected — you cancelled in the wallet.','#B91C1C','#E5484D'); }}
+    else {{ status('❌ '+( err.message||JSON.stringify(err)),'#B91C1C','#E5484D'); }}
+  }}
+}})();
+</script></body></html>"""
+        components.html(html, height=140, scrolling=False)
+
+    # ════════════════════════════════════════════════════════
+    # PAGE HEADER
+    # ════════════════════════════════════════════════════════
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#0A2A0A 0%,#145214 100%);'
+        'border-radius:20px;padding:2.2rem 2.4rem 1.8rem 2.4rem;margin-bottom:1.4rem;'
+        'box-shadow:0 8px 32px rgba(10,60,20,0.2);position:relative;overflow:hidden;">'
+        '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.06) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>'
+        '<div style="position:relative;z-index:1;">'
+        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
+        'letter-spacing:0.15em;text-transform:uppercase;color:#8BFFB0;margin-bottom:0.7rem;">'
+        '💸 PAYMENT AGENT · PHAROS NETWORK</div>'
+        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">Send PROS with Plain English</h2>'
+        '<p style="font-size:0.92rem;color:rgba(255,255,255,0.6);line-height:1.55;max-width:620px;margin:0;">'
+        'Send tokens, batch-pay multiple addresses, or approve a contract — just describe what you want '
+        'and OctoBot builds the transaction. Nothing moves without your wallet signature.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Intent type legend ────────────────────────
+    st.markdown(
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">'
+        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
+        'color:#166016;background:#F0FFF4;border:1px solid #86EFAC;border-radius:20px;padding:5px 12px;">'
+        '➡️ Send — "Send 5 PROS to 0x1234…"</div>'
+        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
+        'color:#1414E8;background:#EEF0FF;border:1px solid #C7D2FE;border-radius:20px;padding:5px 12px;">'
+        '📦 Batch — "Send 1 PROS to 0xAAA…, 0xBBB…, 0xCCC…"</div>'
+        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
+        'color:#7A5800;background:#FFFBEB;border:1px solid #FDE68A;border-radius:20px;padding:5px 12px;">'
+        '✅ Approve — "Approve 0xFaroswap to spend 100 PROS"</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Network selector ──────────────────────────
+    st.markdown('<div style="font-size:12px;font-weight:700;color:#7A7F96;margin-bottom:6px;letter-spacing:0.05em;text-transform:uppercase;">Select Network</div>', unsafe_allow_html=True)
+    net_col1, net_col2, net_spacer = st.columns([1, 1, 3])
+    with net_col1:
+        mainnet_active = st.session_state.pay_network == "mainnet"
+        if st.button(("● " if mainnet_active else "") + "🌐 Mainnet", key="pay_net_mainnet",
+                     use_container_width=True, type="primary" if mainnet_active else "secondary"):
+            if st.session_state.pay_network != "mainnet":
+                st.session_state.pay_network = "mainnet"
+                st.session_state.pay_parsed  = None
+                st.session_state.pay_result  = None
+                st.rerun()
+    with net_col2:
+        testnet_active = st.session_state.pay_network == "testnet"
+        if st.button(("● " if testnet_active else "") + "🧪 Testnet", key="pay_net_testnet",
+                     use_container_width=True, type="primary" if testnet_active else "secondary"):
+            if st.session_state.pay_network != "testnet":
+                st.session_state.pay_network = "testnet"
+                st.session_state.pay_parsed  = None
+                st.session_state.pay_result  = None
+                st.session_state.wallet_data = None
+                st.rerun()
+
+    _net = _pay_net_config(st.session_state.pay_network)
+    net_badge_color = "#1414E8" if st.session_state.pay_network == "mainnet" else "#166016"
+    net_badge_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
+    st.markdown(
+        f'<div style="display:inline-flex;align-items:center;gap:7px;background:{net_badge_bg};'
+        f'border:1px solid {net_badge_color}33;border-radius:10px;padding:5px 12px;margin-bottom:1rem;'
+        f'font-size:12px;font-weight:600;color:{net_badge_color};">'
+        f'{"🌐" if st.session_state.pay_network == "mainnet" else "🧪"} '
+        f'{_net["label"]} · Chain ID {_net["chain_id_dec"]} · {_net.get("symbol","PROS")} · {_net["rpc"][:32]}…</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Wallet connect ────────────────────────────
+    wallet_addr = st.session_state.get("wallet_address", "")
+    if not wallet_addr:
+        st.markdown(
+            '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);border-radius:18px;'
+            'padding:1.4rem 1.7rem;margin-bottom:1.2rem;'
+            'box-shadow:0 6px 20px rgba(20,20,60,0.07),0 0 0 4px rgba(26,26,255,0.04);">'
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.6rem;">'
+            '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1414E8,#0C0C1A);'
+            'display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🔑</div>'
+            '<div><div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#0C0C1A;">Connect Your Wallet</div>'
+            '<div style="font-size:11.5px;color:#7A7F96;margin-top:1px;">Paste your wallet address — read-only, no signing</div>'
+            '</div></div>'
+            '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.55;margin-bottom:0.9rem;">'
+            'Enter your Pharos wallet address to enable the Payment Agent.</div>',
+            unsafe_allow_html=True,
+        )
+        _pwi = st.text_input("Your wallet address", placeholder="0x1234...your Pharos wallet address",
+                              key="pay_inline_wallet_input", label_visibility="collapsed")
+        pw1, pw2 = st.columns([2, 1])
+        with pw1:
+            if st.button("🔗 Connect Wallet", key="pay_inline_wallet_btn", use_container_width=True, type="primary"):
+                if _pwi.strip().startswith("0x") and len(_pwi.strip()) == 42:
+                    st.session_state.wallet_address = _pwi.strip()
+                    st.session_state.wallet_data    = None
+                    st.session_state.wallet_profile = None
+                    st.rerun()
+                else:
+                    st.error("Enter a valid 0x… wallet address (42 characters).")
+        with pw2:
+            if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
+                st.session_state.page = "memory"; st.rerun()
+        st.markdown('</div><div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
+    else:
+        _wa = wallet_addr; _ws = _wa[:6] + "…" + _wa[-4:]
+        wcol1, wcol2 = st.columns([4, 1])
+        with wcol1:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.7rem;">'
+                f'<span style="font-size:16px;">🔗</span><div>'
+                f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">Connected Wallet</div>'
+                f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
+                f'</div></div>', unsafe_allow_html=True)
+        with wcol2:
+            if st.button("✕ Disconnect", key="pay_disconnect_wallet", use_container_width=True):
+                st.session_state.wallet_address = ""
+                st.session_state.wallet_data    = None
+                st.session_state.wallet_profile = None
+                st.session_state.pay_parsed     = None
+                st.session_state.pay_result     = None
+                st.rerun()
+
+    # ── Example prompts ───────────────────────────
+    EXAMPLE_PROMPTS = [
+        ("➡️ Send",    "Send 10 PROS to 0xAbCd1234567890AbCd1234567890AbCd12345678"),
+        ("📦 Batch",   "Send 1 PROS each to 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB, 0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
+        ("✅ Approve", "Approve 0xFaroswap1111111111111111111111111111111111 to spend 100 PROS"),
+    ]
+    st.markdown('<div style="font-size:12px;font-weight:600;color:#7A7F96;margin-bottom:6px;">Try an example:</div>', unsafe_allow_html=True)
+    ep_cols = st.columns(3)
+    for i, (ep_label, ep_text) in enumerate(EXAMPLE_PROMPTS):
+        with ep_cols[i]:
+            if st.button(ep_label, key=f"pay_ep_{i}", use_container_width=True):
+                st.session_state.pay_intent_raw = ep_text
+                st.session_state.pay_parsed     = None
+                st.session_state.pay_confirmed  = False
+                st.session_state.pay_result     = None
+                st.rerun()
+
+    # ── Input + Parse ─────────────────────────────
+    st.markdown('<div style="margin-top:0.8rem;"></div>', unsafe_allow_html=True)
+    pay_input = st.text_input(
+        "Payment instruction in plain English",
+        value=st.session_state.pay_intent_raw,
+        placeholder='e.g. "Send 5 PROS to 0xAbCd…" or "Approve 0xContract to spend 100 PROS"',
+        key="pay_text_input",
+        label_visibility="collapsed",
+    )
+    parse_col, clear_col = st.columns([2, 1])
+    with parse_col:
+        parse_clicked = st.button("🔍 Parse Payment Intent", key="pay_parse_btn", use_container_width=True, type="primary")
+    with clear_col:
+        if st.button("✕ Clear", key="pay_clear_btn", use_container_width=True):
+            st.session_state.pay_intent_raw = ""
+            st.session_state.pay_parsed     = None
+            st.session_state.pay_confirmed  = False
+            st.session_state.pay_result     = None
+            st.rerun()
+
+    if parse_clicked and pay_input.strip():
+        st.session_state.pay_intent_raw = pay_input.strip()
+        st.session_state.pay_confirmed  = False
+        st.session_state.pay_result     = None
+        with st.spinner("Parsing intent with AI…"):
+            _intent = _classify_intent(pay_input.strip())
+            parsed  = _parse_gemini(pay_input.strip(), _intent)
+            if not parsed:
+                parsed = _parse_regex(pay_input.strip(), _intent)
+        if parsed:
+            parsed["_intent"] = _intent
+            st.session_state.pay_parsed = parsed
+        else:
+            st.session_state.pay_parsed = None
+            st.error('Could not parse intent. Try: "Send 5 PROS to 0x…" or "Approve 0x… to spend 100 PROS" or list multiple addresses for batch.')
+
+    # ══════════════════════════════════════════════
+    # CONFIRMATION CARDS (intent-aware)
+    # ══════════════════════════════════════════════
+    if st.session_state.pay_parsed and not st.session_state.pay_result:
+        p_data  = st.session_state.pay_parsed
+        _intent = p_data.get("_intent", "send")
+        _sym    = _net.get("symbol", "PROS")
+
+        price_info = get_pros_price()
+        _pros_price = price_info.get("price_usd") if price_info.get("available") else None
+
+        # ── Fetch sender balance ──────────────────
+        sender_balance = None
+        if wallet_addr:
+            try:
+                onchain = fetch_pharos_onchain_data(wallet_addr, rpc_override=_net["rpc"])
+                if onchain.get("available"):
+                    sender_balance = onchain.get("balance_pros")
+            except Exception:
+                pass
+        if st.session_state.pay_network == "mainnet" and sender_balance is not None:
+            if st.session_state.get("wallet_data") is None:
+                st.session_state.wallet_data = {"available": True, "balance_pros": sender_balance}
+
+        st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
+
+        # ══════════════════════════
+        # SEND — single recipient
+        # ══════════════════════════
+        if _intent == "send":
+            recipient = p_data.get("recipient", "")
+            amount    = float(p_data.get("amount", 0))
+            reason    = p_data.get("reason", "")
+            usd_val   = (amount * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
+            insufficient = sender_balance is not None and sender_balance < amount
+
+            st.markdown(
+                f'<div style="background:#FFFFFF;border:1.5px solid {"#E5484D" if insufficient else "#C8D0FF"};'
+                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(26,26,255,0.08);margin-bottom:1rem;">'
+                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
+                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>📋</span> Transaction Preview · Send</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#0C0C1A;">{amount:,.4f} {_sym}</div>'
+                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+                '</div>'
+                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Network</div>'
+                f'<div style="font-size:14px;font-weight:700;color:#0C0C1A;">{_net["label"]}</div>'
+                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">Chain ID {_net["chain_id_dec"]} · {_sym}</div>'
+                '</div></div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
+                '</div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">To</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{recipient}</div>'
+                '</div>'
+                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
+                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
+                '<div style="font-size:12px;color:#0C0C1A;">21,000 gas units</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+            if insufficient:
+                st.markdown(f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.8rem;font-size:13px;font-weight:600;color:#B91C1C;">⚠️ Insufficient funds: balance {sender_balance:,.4f} {_sym} &lt; {amount:,.4f} {_sym}.</div>', unsafe_allow_html=True)
+            if not wallet_addr:
+                st.info("Connect your wallet above to proceed.")
+            elif not insufficient:
+                if st.button("✅ Confirm & Sign — Send", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    _tx_widget(
+                        chain_id=_net["chain_id"], chain_name=_net["label"],
+                        rpc_url=_net["rpc"], explorer=_net["explorer"], net_symbol=_sym,
+                        recipient=recipient, amount_hex=hex(int(amount * 1e18)),
+                        pay_net_ss=st.session_state.pay_network,
+                        amount_display=str(amount), mode="send",
+                    )
+
+        # ══════════════════════════
+        # BATCH SEND
+        # ══════════════════════════
+        elif _intent == "batch":
+            recipients   = p_data.get("recipients", [])
+            amount_each  = float(p_data.get("amount_each", 0))
+            reason       = p_data.get("reason", "")
+            total_amount = amount_each * len(recipients)
+            usd_each     = (amount_each * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
+            usd_total    = (total_amount * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
+            insufficient = sender_balance is not None and sender_balance < total_amount
+
+            st.markdown(
+                f'<div style="background:#FFFFFF;border:1.5px solid {"#E5484D" if insufficient else "#C7D2FE"};'
+                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(26,26,255,0.08);margin-bottom:1rem;">'
+                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
+                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>📦</span> Transaction Preview · Batch Send</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Each Address</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">{amount_each:,.4f} {_sym}</div>'
+                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_each:,.4f}</div>' if usd_each else '') +
+                '</div>'
+                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Recipients</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#1414E8;">{len(recipients)}</div>'
+                '</div>'
+                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Total</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">{total_amount:,.4f} {_sym}</div>'
+                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_total:,.4f}</div>' if usd_total else '') +
+                '</div></div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
+                '</div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:8px;">Recipients</div>' +
+                "".join([f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;padding:4px 0;border-bottom:1px solid #ECEEF4;">'
+                         f'<span style="color:#1414E8;font-weight:700;">{i+1}.</span> {addr} '
+                         f'<span style="color:#7A7F96;">({amount_each:,.4f} {_sym})</span></div>'
+                         for i, addr in enumerate(recipients)]) +
+                '</div>'
+                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
+                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
+                f'<div style="font-size:12px;color:#0C0C1A;">21,000 × {len(recipients)} = {21000*len(recipients):,} gas units ({len(recipients)} separate transactions)</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+            if insufficient:
+                st.markdown(f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.8rem;font-size:13px;font-weight:600;color:#B91C1C;">⚠️ Insufficient funds: balance {sender_balance:,.4f} {_sym} &lt; total {total_amount:,.4f} {_sym}.</div>', unsafe_allow_html=True)
+            if not wallet_addr:
+                st.info("Connect your wallet above to proceed.")
+            elif not insufficient:
+                if st.button(f"✅ Confirm & Sign — Send to {len(recipients)} addresses", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    import json as _json
+                    _tx_widget(
+                        chain_id=_net["chain_id"], chain_name=_net["label"],
+                        rpc_url=_net["rpc"], explorer=_net["explorer"], net_symbol=_sym,
+                        recipient=recipients[0] if recipients else "",
+                        amount_hex=hex(int(amount_each * 1e18)),
+                        pay_net_ss=st.session_state.pay_network,
+                        amount_display=str(amount_each),
+                        mode="batch",
+                        recipients_json=_json.dumps(recipients),
+                    )
+
+        # ══════════════════════════
+        # APPROVE
+        # ══════════════════════════
+        elif _intent == "approve":
+            spender      = p_data.get("spender", "")
+            raw_amount   = p_data.get("amount", 0)
+            reason       = p_data.get("reason", "")
+            is_unlimited = raw_amount == -1
+            approve_amt  = float(raw_amount) if not is_unlimited else 0
+            # Max uint256 for unlimited approval
+            MAX_UINT256  = 2**256 - 1
+            approve_hex  = hex(MAX_UINT256) if is_unlimited else hex(int(approve_amt * 1e18))
+            amt_display  = "Unlimited" if is_unlimited else f"{approve_amt:,.4f} {_sym}"
+
+            st.markdown(
+                '<div style="background:#FFFFFF;border:1.5px solid #FDE68A;'
+                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(250,200,0,0.08);margin-bottom:1rem;">'
+                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
+                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>✅</span> Transaction Preview · Token Approval</div>'
+                '<div style="background:#FFFBEB;border-radius:10px;padding:0.85rem 1rem;margin-bottom:0.9rem;'
+                'border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:8px;">'
+                '<span style="font-size:16px;flex-shrink:0;">⚠️</span>'
+                '<div style="font-size:12px;color:#7A5800;line-height:1.55;">'
+                '<strong>Approval grants a contract permission to spend your tokens.</strong> '
+                'Always verify the spender address before confirming. You can revoke approvals later.</div>'
+                '</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Allowance</div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:{"15" if is_unlimited else "18"}px;font-weight:800;color:{"#E5484D" if is_unlimited else "#0C0C1A"};">{amt_display}</div>'
+                '</div>'
+                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Network</div>'
+                f'<div style="font-size:14px;font-weight:700;color:#0C0C1A;">{_net["label"]}</div>'
+                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">Chain ID {_net["chain_id_dec"]}</div>'
+                '</div></div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Owner (Your Wallet)</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}</div>' if sender_balance is not None else '') +
+                '</div>'
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Spender (Contract being approved)</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#1414E8;word-break:break-all;">{spender}</div>'
+                '</div>'
+                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
+                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Note</div>'
+                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
+                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
+                '<div style="font-size:12px;color:#0C0C1A;">~62,000 gas units (ERC-20 approve)</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+            if not wallet_addr:
+                st.info("Connect your wallet above to proceed.")
+            elif not spender:
+                st.error("No valid spender contract address found. Try: \"Approve 0xContractAddress to spend 100 PROS\"")
+            else:
+                if st.button("✅ Confirm & Sign — Approve", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    _tx_widget(
+                        chain_id=_net["chain_id"], chain_name=_net["label"],
+                        rpc_url=_net["rpc"], explorer=_net["explorer"], net_symbol=_sym,
+                        recipient=spender,
+                        amount_hex="0x0",
+                        pay_net_ss=st.session_state.pay_network,
+                        amount_display=str(approve_amt),
+                        mode="approve",
+                        approve_amount_hex=approve_hex,
+                        spender=spender,
+                    )
+
+        if st.button("✕ Cancel", key="pay_cancel_btn", use_container_width=False):
+            st.session_state.pay_parsed    = None
+            st.session_state.pay_confirmed = False
+            st.session_state.pay_result    = None
+            st.rerun()
+
+    # ── Handle tx hash returned via query param ───
+    _pay_tx   = st.query_params.get("pay_tx", "")
+    _pay_to   = st.query_params.get("pay_to", "")
+    _pay_amt  = st.query_params.get("pay_amt", "")
+    _pay_net  = st.query_params.get("pay_net", "mainnet")
+    _pay_mode = st.query_params.get("pay_mode", "send")
+    if _pay_tx and _pay_to and _pay_amt:
+        try:
+            amt_float = float(_pay_amt)
+        except Exception:
+            amt_float = 0.0
+        _net_cfg = _pay_net_config(_pay_net)
+        _mode_label = {"send": "Send", "batch": "Batch Send", "approve": "Approve"}.get(_pay_mode, "Send")
+        entry = {
+            "tx_hash":   _pay_tx,
+            "recipient": _pay_to,
+            "amount":    amt_float,
+            "network":   _net_cfg["label"],
+            "explorer":  _net_cfg["explorer"],
+            "symbol":    _net_cfg.get("symbol", "PROS"),
+            "mode":      _mode_label,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        }
+        existing = [h.get("tx_hash") for h in st.session_state.pay_history]
+        if _pay_tx not in existing:
+            st.session_state.pay_history.insert(0, entry)
+        st.session_state.pay_result    = entry
+        st.session_state.pay_parsed    = None
+        st.session_state.pay_confirmed = True
+        st.query_params.clear()
+        st.rerun()
+
+    # ── Success card ─────────────────────────────
+    if st.session_state.pay_result:
+        r    = st.session_state.pay_result
+        _exp = r.get("explorer", PHAROS_EXPLORER_URL)
+        _sym = r.get("symbol", "PROS")
+        _m   = r.get("mode", "Send")
+        st.markdown(
+            '<div style="background:#F0FFF4;border:1.5px solid #22C55E;border-radius:16px;'
+            'padding:1.2rem 1.5rem;margin:1rem 0;box-shadow:0 4px 16px rgba(34,197,94,0.12);">'
+            '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#15803D;margin-bottom:0.5rem;">'
+            f'🎉 {_m} Complete!</div>'
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Type:</strong> {_m}</div>'
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Amount:</strong> {r["amount"]:,.4f} {_sym}</div>'
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Address:</strong> {r["recipient"]}</div>'
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {r.get("network","Pharos")}</div>'
+            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:4px;"><strong>Tx Hash:</strong> {r["tx_hash"]}</div>'
+            f'<a href="{_exp}/tx/{r["tx_hash"]}" target="_blank" '
+            'style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;'
+            'color:#1A1AFF;margin-top:4px;text-decoration:none;">View on Pharosscan ↗</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("💸 New Transaction", key="pay_again_btn"):
+            st.session_state.pay_result     = None
+            st.session_state.pay_parsed     = None
+            st.session_state.pay_confirmed  = False
+            st.session_state.pay_intent_raw = ""
+            st.rerun()
+
+    # ── Payment History ───────────────────────────
+    if st.session_state.pay_history:
+        st.markdown(
+            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
+            'color:#0C0C1A;margin:1.5rem 0 0.6rem 0;">📜 Recent Transactions</div>',
+            unsafe_allow_html=True,
+        )
+        for h in st.session_state.pay_history[:10]:
+            tx_short = h["tx_hash"][:14] + "…" + h["tx_hash"][-8:]
+            _h_exp   = h.get("explorer", PHAROS_EXPLORER_URL)
+            _h_net   = h.get("network", "Pharos")
+            _h_sym   = h.get("symbol", "PROS")
+            _h_mode  = h.get("mode", "Send")
+            _mode_icon = {"Send": "➡️", "Batch Send": "📦", "Approve": "✅"}.get(_h_mode, "➡️")
+            st.markdown(
+                '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:12px;'
+                'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
+                'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+                f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
+                f'{_mode_icon} {_h_mode} · {h["amount"]:,.4f} {_h_sym} → {h["recipient"][:16]}…</div>'
+                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">{h.get("timestamp","")} · {_h_net} · {tx_short}</div></div>'
+                f'<a href="{_h_exp}/tx/{h["tx_hash"]}" target="_blank" '
+                'style="font-size:11.5px;font-weight:600;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
 
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
 st.markdown(
