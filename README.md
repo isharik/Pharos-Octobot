@@ -146,7 +146,8 @@ Users give plain English instructions like:
 * "Send 1 PROS each to 0xAAA…, 0xBBB…, 0xCCC…" 
 * "Approve 0xFaroswap to spend 100 PROS"
   
-<img width="1164" height="650" alt="Screenshot 2026-06-26 152822" src="https://github.com/user-attachments/assets/87080d89-2d6e-4fbd-9224-ea0b7b0c1594" />
+<img width="1164" height="650" alt="HLu1Jr6acAAY8vJ" src="https://github.com/user-attachments/assets/bd0bf122-a516-4b63-949b-e716f9a3d76e" />
+
 
 
 
@@ -159,9 +160,9 @@ OctoBot then:
 * Executes via  Wallet after approval
 * Returns on-chain confirmation with tx hash + block info
 
-<img width="1186" height="483" alt="Screenshot 2026-06-26 152747" src="https://github.com/user-attachments/assets/180fb7d0-90d3-4863-b794-843bc3b2bcd9" />
+<img width="1186" height="483" alt="HLu1NJAbwAAJXTm" src="https://github.com/user-attachments/assets/8cd55c6a-1d2c-4b17-b50f-c9e06d5a6076" />
 
-  
+
 
 For recurring payments, it stores the schedule in an on-chain scheduler contract on Pharos that any agent can trigger.
 
