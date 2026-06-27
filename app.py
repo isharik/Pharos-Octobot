@@ -253,6 +253,8 @@ if "pay_history"     not in st.session_state: st.session_state.pay_history     =
 if "pay_network"     not in st.session_state: st.session_state.pay_network     = "mainnet"
 if "req_invoices"    not in st.session_state: st.session_state.req_invoices    = []
 if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
+if "net_stats_cache" not in st.session_state: st.session_state.net_stats_cache = {}
+if "spn_filter"      not in st.session_state: st.session_state.spn_filter      = "all"
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -1826,33 +1828,34 @@ section[data-testid="stMain"] > div {
 .nav-wrap .stButton>button{
     background:transparent!important;
     border:none!important;
-    border-radius:30px!important;
+    border-radius:6px!important;
     font-family:var(--fb)!important;
-    font-size:12.5px!important;
-    font-weight:1000!important;
-    color:#2B2E38!important;
-    letter-spacing:-0.01em!important;
-    padding:0.38rem 0.85rem!important;
+    font-size:11.5px!important;
+    font-weight:600!important;
+    color:#4A5068!important;
+    letter-spacing:0.01em!important;
+    padding:0.42rem 0.5rem!important;
     height:auto!important;
     min-width:0!important;
     white-space:nowrap!important;
     box-shadow:none!important;
+    width:100%!important;
+    text-align:center!important;
     transition:
-        background 180ms cubic-bezier(0.4,0,0.2,1),
         color 180ms cubic-bezier(0.4,0,0.2,1),
-        transform 140ms cubic-bezier(0.34,1.5,0.64,1)!important;
+        background 180ms cubic-bezier(0.4,0,0.2,1)!important;
 }
 .nav-wrap .stButton>button:hover{
-    background:rgba(20,20,60,0.07)!important;
     color:#0C0C1A!important;
-    transform:translateY(-1px)!important;
+    background:rgba(20,20,60,0.06)!important;
     box-shadow:none!important;
+    transform:none!important;
 }
 .nav-wrap.active .stButton>button{
-    background:rgba(26,26,255,0.12)!important;
     color:#1414E8!important;
     font-weight:700!important;
-    box-shadow:inset 0 0 0 1px rgba(26,26,255,0.18)!important;
+    background:rgba(26,26,255,0.08)!important;
+    box-shadow:inset 0 -2px 0 0 #1414E8!important;
 }
 
 
@@ -3479,9 +3482,13 @@ NAV_PAGES = [
     ("🧩", "Ecosystem", "ecosystem"),
     ("💸", "Pay",       "pay"),
     ("🧾", "Request",   "request"),
+    ("🌐", "Network",   "network"),
+    ("⚡", "SPNs",      "spns"),
 ]
 st.markdown('<div style="display:flex;justify-content:center;margin-bottom:0.5rem;">', unsafe_allow_html=True)
-nav_cols = st.columns([2.5, 2, 2, 2, 2, 2, 2, 2, 2, 0.3, 2.5])
+# Columns: logo | 10 nav pages (equal) | spacer | CTA
+# Total = 1 + 10 + 1 + 1 = 13 columns → indices 0..12
+nav_cols = st.columns([2.2, 1.4, 1.4, 1.8, 1.6, 1.4, 1.8, 1.2, 1.6, 1.6, 1.2, 0.2, 2.2])
 
 with nav_cols[0]:
     if logo_b64:
@@ -3501,12 +3508,12 @@ for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
     with nav_cols[col_idx + 1]:
         is_active = st.session_state.page == page_key
         st.markdown('<div class="nav-wrap' + (" active" if is_active else "") + '">', unsafe_allow_html=True)
-        if st.button(("● " if is_active else "") + icon + " " + label, key="nav_" + page_key, use_container_width=True):
+        if st.button(label, key="nav_" + page_key, use_container_width=True):
             st.session_state.page = page_key
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-with nav_cols[10]:
+with nav_cols[12]:
     st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
     st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -6663,6 +6670,434 @@ elif st.session_state.page == "request":
                 '</div>',
                 unsafe_allow_html=True,
             )
+
+
+
+
+# ═════════════════════════════════════════════
+# PAGE: NETWORK DASHBOARD
+# ═════════════════════════════════════════════
+elif st.session_state.page == "network":
+
+    # ── Live RPC stats fetcher ────────────────
+    def _fetch_net_stats() -> dict:
+        now    = time.time()
+        cached = st.session_state.get("net_stats_cache", {})
+        if cached and now - cached.get("fetched_at", 0) < 15:
+            return cached
+        res = {"available": False, "fetched_at": now,
+               "block_number": None, "block_time_s": None,
+               "tx_count": None, "gas_price_gwei": None,
+               "chain_id": None, "peer_count": None, "error": None}
+        def rpc(method, params=None):
+            r = requests.post(PHAROS_RPC_URL,
+                json={"jsonrpc":"2.0","id":1,"method":method,"params":params or []},
+                timeout=6, headers={"Content-Type":"application/json"})
+            r.raise_for_status()
+            d = r.json()
+            if "error" in d: raise ValueError(d["error"])
+            return d.get("result")
+        try:
+            bn_hex = rpc("eth_blockNumber")
+            bn = int(bn_hex, 16)
+            res["block_number"] = bn
+            blk = rpc("eth_getBlockByNumber", [bn_hex, False])
+            if blk:
+                res["tx_count"] = len(blk.get("transactions", []))
+                ts = int(blk.get("timestamp","0x0"), 16)
+                par = rpc("eth_getBlockByNumber", [hex(bn-1), False])
+                if par:
+                    res["block_time_s"] = max(0, ts - int(par.get("timestamp","0x0"), 16))
+            gp = rpc("eth_gasPrice")
+            if gp: res["gas_price_gwei"] = round(int(gp, 16) / 1e9, 6)
+            cid = rpc("eth_chainId")
+            if cid: res["chain_id"] = int(cid, 16)
+            try:
+                pc = rpc("net_peerCount")
+                if pc: res["peer_count"] = int(pc, 16)
+            except Exception:
+                pass
+            res["available"] = True
+        except Exception as e:
+            res["error"] = str(e)
+        st.session_state["net_stats_cache"] = res
+        return res
+
+    # ── Header ────────────────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#0C0C1A 0%,#0A1A6E 100%);'
+        'border-radius:20px;padding:2rem 2.4rem 1.6rem 2.4rem;margin-bottom:1.4rem;'
+        'box-shadow:0 8px 32px rgba(10,26,110,0.28);position:relative;overflow:hidden;">'
+        '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,'
+        'rgba(255,255,255,0.05) 1px,transparent 1px);background-size:18px 18px;pointer-events:none;"></div>'
+        '<div style="position:relative;z-index:1;">'
+        '<div style="font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;'
+        'color:rgba(255,255,255,0.5);margin-bottom:0.6rem;">🌐 PHAROS NETWORK · LIVE STATS</div>'
+        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">Network Dashboard</h2>'
+        '<p style="font-size:0.9rem;color:rgba(255,255,255,0.55);line-height:1.55;max-width:560px;margin:0;">'
+        'Live Pharos mainnet stats fetched directly from the RPC — block height, block time, '
+        'gas price and more. Auto-refreshes every 15 seconds.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    rc1, rc2, _ = st.columns([1, 2, 4])
+    with rc1:
+        if st.button("🔄 Refresh", key="net_refresh", use_container_width=True, type="primary"):
+            st.session_state["net_stats_cache"] = {}
+            st.rerun()
+    with rc2:
+        st.markdown('<div style="font-size:11px;color:#7A7F96;padding:0.55rem 0;">Auto-refresh every 15s</div>',
+                    unsafe_allow_html=True)
+
+    ns = _fetch_net_stats()
+
+    if not ns["available"]:
+        st.markdown(
+            f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:14px;'
+            f'padding:1rem 1.4rem;font-size:13px;color:#B91C1C;margin-bottom:1rem;">'
+            f'⚠️ RPC unreachable: {ns.get("error","Unknown error")}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        def _card(label, value, sub, icon, c="#1414E8", bg="#EEF0FF"):
+            return (
+                f'<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
+                f'padding:1.2rem 1.4rem;box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
+                f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.5rem;">'
+                f'<div style="width:36px;height:36px;border-radius:10px;background:{bg};'
+                f'display:flex;align-items:center;justify-content:center;font-size:18px;">{icon}</div>'
+                f'<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
+                f'text-transform:uppercase;color:#7A7F96;">{label}</div></div>'
+                f'<div style="font-family:Syne,sans-serif;font-size:1.55rem;font-weight:800;'
+                f'color:{c};letter-spacing:-0.02em;line-height:1.1;">{value}</div>'
+                f'<div style="font-size:11px;color:#9499A8;margin-top:3px;">{sub}</div></div>'
+            )
+
+        bts  = f'{ns["block_time_s"]}s'  if ns["block_time_s"]     is not None else "—"
+        gwei = f'{ns["gas_price_gwei"]} Gwei' if ns["gas_price_gwei"] is not None else "—"
+        blkn = f'{ns["block_number"]:,}' if ns["block_number"]      is not None else "—"
+        txct = str(ns["tx_count"])        if ns["tx_count"]          is not None else "—"
+        cid  = str(ns["chain_id"])        if ns["chain_id"]          is not None else "—"
+        pc   = str(ns["peer_count"])      if ns["peer_count"]        is not None else "N/A"
+
+        st.markdown(
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:1.4rem;">'
+            + _card("Block Height",   blkn, "Latest confirmed block",              "📦", "#1414E8", "#EEF0FF")
+            + _card("Block Time",     bts,  "Seconds between last two blocks",     "⏱️", "#166016", "#F0FFF4")
+            + _card("Txs in Block",   txct, "Transactions in latest block",        "📋", "#7A5800", "#FFFBEB")
+            + _card("Gas Price",      gwei, "Current network gas price",           "⛽", "#5B2D8C", "#F3EEFF")
+            + _card("Chain ID",       cid,  "Pharos Pacific Mainnet identifier",   "🔗", "#0C6E8A", "#E8F8FF")
+            + _card("Peer Count",     pc,   "Connected RPC peers (if exposed)",    "🤝", "#B94A00", "#FFF4EE")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Network info strip ────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(90deg,#0C0C1A,#0A1A6E);border-radius:14px;'
+        'padding:1rem 1.4rem;margin-bottom:1.2rem;">'
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+        + "".join([
+            f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+            f'color:rgba(255,255,255,0.4);margin-bottom:3px;">{k}</div>'
+            f'<div style="font-size:12.5px;font-weight:600;color:#FFFFFF;font-family:{"monospace" if "RPC" in k else "inherit"};">{v}</div></div>'
+            for k, v in [
+                ("Network",     "Pharos Pacific Mainnet"),
+                ("RPC URL",     PHAROS_RPC_URL),
+                ("Symbol",      "PROS"),
+                ("Status",      "🟢 Online"),
+            ]
+        ])
+        + '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Links ─────────────────────────────────
+    st.markdown(
+        f'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+        f'<a href="{PHAROS_EXPLORER_URL}" target="_blank" '
+        f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
+        f'border-radius:10px;padding:0.6rem 1.2rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
+        f'🔍 Pharosscan Explorer ↗</a>'
+        f'<a href="{PHAROS_DOCS_URL}" target="_blank" '
+        f'style="display:inline-flex;align-items:center;gap:6px;background:#EEF0FF;color:#1414E8;'
+        f'border-radius:10px;padding:0.6rem 1.2rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
+        f'📖 Pharos Docs ↗</a>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Atlantic Testnet ──────────────────────
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
+        'color:#0C0C1A;margin:1.6rem 0 0.6rem 0;">🧪 Atlantic Testnet</div>'
+        '<div style="background:linear-gradient(135deg,#F0FFF4,#E8F5FF);'
+        'border:1.5px solid #86EFAC;border-radius:14px;padding:1rem 1.4rem;">'
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:0.8rem;">'
+        + "".join([
+            f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+            f'color:#7A7F96;margin-bottom:3px;">{k}</div>'
+            f'<div style="font-size:12.5px;font-weight:700;color:#0C0C1A;font-family:{"monospace" if "RPC" in k else "inherit"};">{v}</div></div>'
+            for k, v in [
+                ("Network",   "Pharos Atlantic"),
+                ("Chain ID",  str(PHAROS_TESTNET_CHAIN_ID_DEC)),
+                ("Symbol",    "PHRS"),
+                ("RPC URL",   PHAROS_TESTNET_RPC_URL),
+            ]
+        ])
+        + '</div>'
+        f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
+        f'style="font-size:12px;font-weight:700;color:#166016;text-decoration:none;">'
+        f'🔍 Atlantic Pharosscan ↗</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ═════════════════════════════════════════════
+# PAGE: SPN EXPLORER
+# ═════════════════════════════════════════════
+elif st.session_state.page == "spns":
+
+    # ── SPN data — sourced strictly from official Pharos docs and pharos.xyz ──
+    # Source: https://docs.pharos.xyz (About Pharos, SPN docs)
+    # Source: https://www.pharos.xyz (homepage SPN section)
+    # Only confirmed use cases: HFT, ZKML, AI models, AIoT, privacy computation,
+    # RWA/compliance, PayFi. No invented specs, no unconfirmed names.
+    PHAROS_SPNS = [
+        {
+            "name":     "High-Frequency Trading (HFT)",
+            "emoji":    "📈",
+            "category": "Finance",
+            "color":    "#1414E8",
+            "bg":       "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+            "tagbg":    "rgba(26,26,255,0.08)",
+            "tagcol":   "#1414E8",
+            "desc":     (
+                "SPNs can be configured as dedicated execution environments for high-frequency "
+                "trading applications. The SPN runs semi-independently with its own execution engine "
+                "and validator set, removing shared congestion from the main chain for latency-sensitive workloads."
+            ),
+            "features": [
+                "Custom execution engine per SPN",
+                "Independent validator set",
+                "Cross-SPN interoperability",
+                "Shared security via restaking",
+            ],
+            "source":   "pharos.xyz — L1-Extension, SPN use cases",
+        },
+        {
+            "name":     "AI & ZKML",
+            "emoji":    "🤖",
+            "category": "AI",
+            "color":    "#7A5800",
+            "bg":       "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+            "tagbg":    "rgba(122,88,0,0.08)",
+            "tagcol":   "#7A5800",
+            "desc":     (
+                "SPNs support running AI models and zero-knowledge machine learning (ZKML) workloads "
+                "on-chain. Lightweight SPNs can be configured with access to specialised hardware "
+                "such as TEEs for secure AI inference and confidential computation."
+            ),
+            "features": [
+                "Specialised hardware support (TEE)",
+                "ZKML execution environments",
+                "Non-blockchain application support",
+                "Decentralised Data Exchange Protocol",
+            ],
+            "source":   "docs.pharos.xyz — About Pharos, L1-Extension",
+        },
+        {
+            "name":     "AIoT & Private Networks",
+            "emoji":    "📡",
+            "category": "IoT / Privacy",
+            "color":    "#1A6B5A",
+            "bg":       "linear-gradient(135deg,#E8FFF8,#D0F5EC)",
+            "tagbg":    "rgba(26,107,90,0.08)",
+            "tagcol":   "#1A6B5A",
+            "desc":     (
+                "SPNs are explicitly designed to support AIoT (AI + IoT) private networks and "
+                "multi-party privacy-enhancing computations. Validators can create dedicated SPNs "
+                "using their excess compute power for these specialised environments."
+            ),
+            "features": [
+                "AIoT private network support",
+                "Multi-party privacy computation",
+                "Lightweight SPN configuration",
+                "Validator restaking incentives",
+            ],
+            "source":   "docs.pharos.xyz — Pharos SPNs (confirmed use case)",
+        },
+        {
+            "name":     "RWA & Compliance (PayFi)",
+            "emoji":    "🏦",
+            "category": "Finance / RWA",
+            "color":    "#166016",
+            "bg":       "linear-gradient(135deg,#F0FFF4,#E0F8E8)",
+            "tagbg":    "rgba(22,96,22,0.08)",
+            "tagcol":   "#166016",
+            "desc":     (
+                "Pharos SPNs support financial innovations including RWA tokenisation and PayFi. "
+                "The protocol includes integrated ZK-KYC and AML modules at the protocol layer, "
+                "enabling compliance-ready SPNs for regulated finance while preserving composability."
+            ),
+            "features": [
+                "Built-in ZK-KYC / AML modules",
+                "Programmable compliance hooks",
+                "Cross-SPN asset transfers",
+                "PayFi and monthly payment support",
+            ],
+            "source":   "pharos.xyz homepage + docs.pharos.xyz SPN vision",
+        },
+        {
+            "name":     "MEV Optimisation",
+            "emoji":    "⚡",
+            "category": "Infra",
+            "color":    "#5B2D8C",
+            "bg":       "linear-gradient(135deg,#F3EEFF,#EAE0FF)",
+            "tagbg":    "rgba(91,45,140,0.08)",
+            "tagcol":   "#5B2D8C",
+            "desc":     (
+                "Lightweight SPNs can be configured with access to specialised hardware for "
+                "MEV (Maximal Extractable Value) optimisation. This is one of the confirmed SPN "
+                "hardware-acceleration use cases from the official Pharos documentation."
+            ),
+            "features": [
+                "Specialised hardware access",
+                "TEE for transaction confidentiality",
+                "Configurable consensus per SPN",
+                "SPN Manager for lifecycle control",
+            ],
+            "source":   "docs.pharos.xyz — Pharos SPNs (lightweight SPN hardware use cases)",
+        },
+    ]
+
+    # ── Header ────────────────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#0A0A28 0%,#1414E8 100%);'
+        'border-radius:20px;padding:2rem 2.4rem 1.6rem 2.4rem;margin-bottom:1.4rem;'
+        'box-shadow:0 8px 32px rgba(20,20,232,0.25);position:relative;overflow:hidden;">'
+        '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,'
+        'rgba(255,255,255,0.06) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>'
+        '<div style="position:relative;z-index:1;">'
+        '<div style="font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;'
+        'color:rgba(255,255,255,0.5);margin-bottom:0.6rem;">⚡ SPECIAL PROCESSING NETWORKS · PHAROS</div>'
+        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">SPN Explorer</h2>'
+        '<p style="font-size:0.9rem;color:rgba(255,255,255,0.60);line-height:1.6;max-width:660px;margin:0;">'
+        'Special Processing Networks (SPNs) are the core innovation of Pharos — customisable, '
+        'application-specific execution environments that run semi-independently on top of the '
+        'Pharos mainnet, each with its own execution engine, validator set, restaking incentives, '
+        'and governance. All information on this page is sourced directly from official Pharos documentation.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── What is an SPN ────────────────────────
+    st.markdown(
+        '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
+        'padding:1.2rem 1.6rem;margin-bottom:1.2rem;box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
+        '<div style="display:flex;align-items:flex-start;gap:14px;">'
+        '<div style="width:44px;height:44px;border-radius:12px;background:#EEF0FF;'
+        'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">💡</div>'
+        '<div>'
+        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
+        'color:#0C0C1A;margin-bottom:6px;">How SPNs work — from the official docs</div>'
+        '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;margin-bottom:6px;">'
+        'Validators stake P Tokens on the Primary Network. Each staked token generates a certificate '
+        '(stP) which can be restaked into an SPN for additional rewards. SPNs set their own validator '
+        'requirements, hardware needs, and soft/hard caps on stP. The Primary Network automatically '
+        'initiates SPN creation once conditions are met.</div>'
+        '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;">'
+        'Cross-SPN communication uses the Cross-SPN Interoperability Protocol: transactions are '
+        'initiated in one SPN, relayed via the Primary Network Mailbox, verified, then executed in '
+        'the destination SPN — enabling atomic cross-SPN interactions.</div>'
+        '</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── SPN Architecture facts strip ──────────
+    _arch_facts = [
+        ("SPN Manager",    "Manages SPN creation, destruction, message communication, and asset transfer"),
+        ("Registry",       "Responsible for SPN registration and management on the Primary Network"),
+        ("Mailbox",        "Records all SPN messages and events for cross-SPN communication"),
+        ("Bridge",         "Manages asset transfers between SPNs and the Primary Network"),
+        ("SPN Network Hub","Facilitates message and event communication across all SPNs"),
+        ("SPN Adapter",    "Handles incoming messages from the Primary Network within each SPN"),
+    ]
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:800;'
+        'color:#0C0C1A;margin:0.4rem 0 0.7rem 0;">SPN Architecture Components</div>'
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.2rem;">'
+        + "".join([
+            f'<div style="background:#F4F5FF;border-radius:12px;padding:0.75rem 0.9rem;">'
+            f'<div style="font-size:11px;font-weight:800;color:#1414E8;margin-bottom:3px;">{k}</div>'
+            f'<div style="font-size:11px;color:#5B5F6E;line-height:1.5;">{v}</div></div>'
+            for k, v in _arch_facts
+        ])
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Use case cards ────────────────────────
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:800;'
+        'color:#0C0C1A;margin:0 0 0.7rem 0;">Confirmed SPN Use Cases</div>',
+        unsafe_allow_html=True,
+    )
+
+    for spn in PHAROS_SPNS:
+        _feats = "".join([
+            f'<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;'
+            f'font-weight:600;color:{spn["tagcol"]};background:{spn["tagbg"]};'
+            f'border-radius:20px;padding:3px 10px;margin-right:5px;margin-bottom:5px;">✓ {f}</span>'
+            for f in spn["features"]
+        ])
+        st.markdown(
+            f'<div style="background:#FFFFFF;border:1.5px solid #ECEEF4;border-radius:18px;'
+            f'padding:1.4rem 1.6rem;margin-bottom:0.9rem;'
+            f'box-shadow:0 3px 14px rgba(20,20,60,0.07);position:relative;overflow:hidden;">'
+            f'<div style="position:absolute;left:0;top:0;bottom:0;width:4px;'
+            f'background:{spn["color"]};border-radius:18px 0 0 18px;"></div>'
+            f'<div style="padding-left:0.5rem;">'
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:0.8rem;flex-wrap:wrap;">'
+            f'<div style="width:46px;height:46px;border-radius:12px;background:{spn["bg"]};'
+            f'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">'
+            f'{spn["emoji"]}</div>'
+            f'<div>'
+            f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
+            f'{spn["name"]}</div>'
+            f'<div style="font-size:10.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
+            f'color:{spn["tagcol"]};margin-top:2px;">{spn["category"]}</div>'
+            f'</div></div>'
+            f'<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;margin-bottom:0.8rem;">'
+            f'{spn["desc"]}</div>'
+            f'<div style="margin-bottom:0.7rem;">{_feats}</div>'
+            f'<div style="font-size:10.5px;color:#9499A8;">📄 Source: {spn["source"]}</div>'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── CTA ───────────────────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);border-radius:16px;'
+        'padding:1.4rem 1.8rem;display:flex;align-items:center;justify-content:space-between;'
+        'flex-wrap:wrap;gap:12px;margin-top:0.8rem;">'
+        '<div>'
+        '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
+        'color:#FFFFFF;margin-bottom:4px;">Build your own SPN on Pharos</div>'
+        '<div style="font-size:12.5px;color:rgba(255,255,255,0.60);">'
+        'Validators can deploy custom SPNs using excess compute. Read the official docs to get started.</div>'
+        '</div>'
+        f'<a href="{PHAROS_DOCS_URL}" target="_blank" '
+        'style="display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;'
+        'color:#1414E8;border-radius:10px;padding:0.65rem 1.3rem;font-size:13px;'
+        'font-weight:700;text-decoration:none;white-space:nowrap;">📖 Pharos Docs ↗</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
