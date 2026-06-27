@@ -12,7 +12,7 @@ Architecture: single-page with st.session_state["page"] router.
 All CSS in plain triple-quoted strings (no f-prefix).
 """
 
-import os, time, base64, json, re
+import os, time, base64, json, re, hashlib, urllib.parse
 import requests
 import pandas as pd
 import plotly.graph_objects as go
@@ -251,7 +251,6 @@ if "pay_confirmed"   not in st.session_state: st.session_state.pay_confirmed   =
 if "pay_result"      not in st.session_state: st.session_state.pay_result      = None
 if "pay_history"     not in st.session_state: st.session_state.pay_history     = []
 if "pay_network"     not in st.session_state: st.session_state.pay_network     = "mainnet"
-if "nav_dark"        not in st.session_state: st.session_state.nav_dark        = False
 if "req_invoices"    not in st.session_state: st.session_state.req_invoices    = []
 if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
 
@@ -1506,22 +1505,22 @@ st.markdown("""
     --light:     #6B8CFF;
 
     /* Effects */
-    --glow:      rgba(26,26,255,0.18);
-    --subtle:    rgba(26,26,255,0.08);
+    --glow:      rgba(26,26,255,0.22);
+    --subtle:    rgba(26,26,255,0.10);
 
-    /* Background (cooler & slightly darker) */
-    --bg:        #B7C3DA;
-    --bg1:       #C5D0E3;
-    --bg2:       #AFBCD4;
+    /* Background — cool slate blue-gray, cinematic depth */
+    --bg:        #9DAABF;
+    --bg1:       #A8B6CC;
+    --bg2:       #97A5BB;
 
-    /* Glass */
-    --glass:     rgba(250,252,255,0.72);
+    /* Glass — slightly more opaque for better contrast */
+    --glass:     rgba(248,251,255,0.80);
 
-    /* Borders */
-    --border:    #B9C4D8;
-    --border2:   #AEBACE;
+    /* Borders — more visible against darker bg */
+    --border:    #A4B0C8;
+    --border2:   #97A5BE;
 
-    /* Text */
+    /* Text — unchanged, already optimal */
     --t1:        #0B1020;
     --t2:        #39445D;
     --t3:        #68738C;
@@ -1538,22 +1537,22 @@ st.markdown("""
     --rad:       12px;
     --rad-lg:    18px;
 
-    /* Shadows */
-    --shadow:        0 8px 24px rgba(18,28,60,0.08);
-    --shadow-md:     0 16px 40px rgba(18,28,60,0.12);
-    --shadow-blue:   0 10px 36px rgba(26,26,255,0.16);
+    /* Shadows — slightly deeper for more card lift */
+    --shadow:        0 8px 28px rgba(14,22,52,0.12);
+    --shadow-md:     0 16px 44px rgba(14,22,52,0.16);
+    --shadow-blue:   0 10px 36px rgba(26,26,255,0.20);
 }
             /* Design*/
 body {
     background:
-        radial-gradient(circle at 15% 20%, rgba(26,26,255,.10), transparent 35%),
-        radial-gradient(circle at 85% 30%, rgba(107,140,255,.08), transparent 40%),
-        radial-gradient(circle at 50% 100%, rgba(255,255,255,.15), transparent 50%),
+        radial-gradient(circle at 15% 20%, rgba(26,26,255,.16), transparent 35%),
+        radial-gradient(circle at 85% 30%, rgba(80,110,220,.12), transparent 40%),
+        radial-gradient(circle at 50% 100%, rgba(200,215,255,.18), transparent 50%),
         linear-gradient(180deg, var(--bg1), var(--bg), var(--bg2));
 }
-html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--bg)!important;color:var(--t1)!important;font-size:14px!important;}
+html,body,[class*="css"]{font-family:var(--fb)!important;background-color:#9DAABF!important;color:var(--t1)!important;font-size:14px!important;}
 .stApp{
-    background-color: #D7DCE6!important;
+    background-color: #B8C4D8!important;
     position:relative;
 }
 /* Wave texture moved to its own ::before layer so the drift animation
@@ -1570,19 +1569,21 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
     pointer-events:none;
     will-change:transform;
     background-image:
-        /* Ambient light source — top right, moves slowly */
-        radial-gradient(ellipse 70% 55% at 78% 8%,  rgba(220,228,255,0.55) 0%, transparent 60%),
+        /* Ambient light source — top right, brighter for more depth */
+        radial-gradient(ellipse 70% 55% at 78% 8%,  rgba(210,222,255,0.70) 0%, transparent 60%),
         /* Secondary light — bottom left */
-        radial-gradient(ellipse 60% 50% at 12% 88%, rgba(200,215,255,0.30) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 50% at 12% 88%, rgba(185,205,255,0.42) 0%, transparent 50%),
         /* Mid tone depth */
-        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(185,200,240,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(170,190,235,0.18) 0%, transparent 60%),
+        /* Cinematic radial vignette — subtle center-to-edge darkening */
+        radial-gradient(ellipse 100% 80% at 50% 0%, rgba(255,255,255,0.10) 0%, transparent 70%),
         /* Wave band 1 — diagonal flow */
         repeating-linear-gradient(
             -28deg,
             transparent 0px,
             transparent 38px,
-            rgba(160,180,225,0.09) 38px,
-            rgba(160,180,225,0.09) 40px,
+            rgba(140,165,210,0.12) 38px,
+            rgba(140,165,210,0.12) 40px,
             transparent 40px,
             transparent 78px
         ),
@@ -1591,8 +1592,8 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
             62deg,
             transparent 0px,
             transparent 55px,
-            rgba(140,165,215,0.06) 55px,
-            rgba(140,165,215,0.06) 57px,
+            rgba(120,150,200,0.08) 55px,
+            rgba(120,150,200,0.08) 57px,
             transparent 57px,
             transparent 114px
         ),
@@ -1601,8 +1602,8 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:var(--
             -12deg,
             transparent 0px,
             transparent 80px,
-            rgba(170,190,230,0.05) 80px,
-            rgba(170,190,230,0.05) 82px,
+            rgba(150,175,220,0.07) 80px,
+            rgba(150,175,220,0.07) 82px,
             transparent 82px,
             transparent 160px
         );
@@ -1686,10 +1687,10 @@ button, a, .stButton>button, [data-testid="stTextInput"] input,
     pointer-events:none;
     will-change:transform;
     background:
-        radial-gradient(circle 620px at 14% 10%, rgba(8,8,80,0.45) 0%, transparent 72%),
-        radial-gradient(circle 560px at 88% 22%, rgba(10,10,100,0.38) 0%, transparent 72%),
-        radial-gradient(circle 640px at 46% 90%, rgba(6,6,70,0.35) 0%, transparent 72%),
-        radial-gradient(circle 480px at 70% 60%, rgba(12,12,90,0.28) 0%, transparent 70%);
+        radial-gradient(circle 620px at 14% 10%, rgba(10,10,100,0.55) 0%, transparent 72%),
+        radial-gradient(circle 560px at 88% 22%, rgba(12,12,120,0.48) 0%, transparent 72%),
+        radial-gradient(circle 640px at 46% 90%, rgba(8,8,90,0.44) 0%, transparent 72%),
+        radial-gradient(circle 480px at 70% 60%, rgba(14,14,110,0.36) 0%, transparent 70%);
     animation:
         auraDrift1 16s ease-in-out infinite,
         auraDrift2 20s ease-in-out infinite,
@@ -1785,15 +1786,17 @@ section[data-testid="stMain"] > div {
 /* ── TOP NAV ─── */
 .octo-nav{
     display:flex;align-items:center;gap:0;
-    background:#F3F4F7;
-    border:1px solid #E7E9EF;
+    background:rgba(240,243,250,0.92);
+    border:1px solid #D8DCE8;
     border-radius:16px;
     padding:0 1.4rem;
     height:60px;
     margin:14px auto 0 auto;
     max-width:1180px;
     position:sticky;top:14px;z-index:100;
-    box-shadow:0 1px 2px rgba(20,20,60,0.04);
+    box-shadow:0 2px 10px rgba(20,20,60,0.10),0 1px 2px rgba(20,20,60,0.06);
+    backdrop-filter:blur(16px) saturate(160%);
+    -webkit-backdrop-filter:blur(16px) saturate(160%);
     transition:box-shadow 280ms cubic-bezier(0.4,0,0.2,1);
 }
 .octo-nav-logo{
@@ -1818,71 +1821,6 @@ section[data-testid="stMain"] > div {
 .nav-links{display:flex;align-items:center;gap:2px;flex:1;}
 .nav-ml{margin-left:auto;display:flex;align-items:center;gap:6px;}
 
-/* ═══════════════════════════════════════════════
-   DYNAMIC ISLAND NAVBAR — liquid glass
-   ═══════════════════════════════════════════════ */
-#octobot-nav-island{
-    position:sticky;
-    top:12px;
-    z-index:9999;
-    display:flex;
-    justify-content:center;
-    pointer-events:none;
-}
-#octobot-nav-pill{
-    pointer-events:all;
-    display:inline-flex;
-    align-items:center;
-    gap:0;
-    padding:5px 10px;
-    border-radius:50px;
-    /* light glass */
-    background:rgba(255,255,255,0.55);
-    backdrop-filter:blur(28px) saturate(180%);
-    -webkit-backdrop-filter:blur(28px) saturate(180%);
-    border:1px solid rgba(255,255,255,0.75);
-    box-shadow:
-        0 8px 32px rgba(20,20,60,0.13),
-        0 2px 8px rgba(20,20,60,0.08),
-        inset 0 1px 0 rgba(255,255,255,0.9),
-        inset 0 -1px 0 rgba(20,20,60,0.04);
-    transition:
-        background 0.35s ease,
-        border-color 0.35s ease,
-        box-shadow 0.35s ease;
-}
-#octobot-nav-pill.dark{
-    background:rgba(12,12,26,0.82);
-    border-color:rgba(255,255,255,0.10);
-    box-shadow:
-        0 8px 40px rgba(0,0,0,0.45),
-        0 2px 10px rgba(0,0,0,0.30),
-        inset 0 1px 0 rgba(255,255,255,0.10),
-        inset 0 -1px 0 rgba(0,0,0,0.25);
-}
-
-/* Logo pill inside island */
-.ni-logo{
-    display:inline-flex;
-    align-items:center;
-    gap:7px;
-    padding:5px 14px 5px 8px;
-    border-right:1px solid rgba(20,20,60,0.10);
-    margin-right:4px;
-    flex-shrink:0;
-}
-#octobot-nav-pill.dark .ni-logo{
-    border-right-color:rgba(255,255,255,0.10);
-}
-.ni-logo-text{
-    font-family:Syne,sans-serif;
-    font-size:14px;
-    font-weight:800;
-    color:#0C0C1A;
-    letter-spacing:-0.02em;
-    transition:color 0.3s;
-}
-#octobot-nav-pill.dark .ni-logo-text{ color:#FFFFFF; }
 
 /* Nav buttons */
 .nav-wrap .stButton>button{
@@ -1917,20 +1855,6 @@ section[data-testid="stMain"] > div {
     box-shadow:inset 0 0 0 1px rgba(26,26,255,0.18)!important;
 }
 
-/* Dark mode nav buttons */
-#octobot-nav-pill.dark ~ * .nav-wrap .stButton>button,
-.nav-dark .nav-wrap .stButton>button{
-    color:rgba(255,255,255,0.75)!important;
-}
-.nav-dark .nav-wrap .stButton>button:hover{
-    background:rgba(255,255,255,0.10)!important;
-    color:#FFFFFF!important;
-}
-.nav-dark .nav-wrap.active .stButton>button{
-    background:rgba(255,255,255,0.15)!important;
-    color:#FFFFFF!important;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.25)!important;
-}
 
 /* CTA link button */
 .nav-cta .stLinkButton>a,
@@ -1954,15 +1878,6 @@ section[data-testid="stMain"] > div {
     box-shadow:0 8px 24px rgba(26,26,255,0.40),inset 0 1px 0 rgba(255,255,255,0.30)!important;
 }
 
-/* Dark theme toggle hidden label */
-.nav-theme-toggle label{display:none!important;}
-.nav-theme-toggle{
-    display:flex!important;
-    align-items:center!important;
-    padding:0 4px 0 8px!important;
-    border-left:1px solid rgba(20,20,60,0.10)!important;
-    margin-left:4px!important;
-}
 
 /* ── HERO ─── */
 .hero{
@@ -2092,12 +2007,12 @@ section[data-testid="stMain"] > div {
 /* ── CAMPAIGN CARDS — top media block + bottom text, ref-3 style ── */
 .camp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.4rem;}
 .camp-card{
-    background:rgba(255,255,255,0.92);border:1px solid rgba(20,20,60,0.07);
+    background:rgba(255,255,255,0.97);border:1px solid rgba(20,20,60,0.10);
     border-radius:18px;padding:1.5rem 1.6rem;
     transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),
                box-shadow 240ms cubic-bezier(0.4,0,0.2,1),
                border-color 200ms ease;
-    box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    box-shadow:0 3px 14px rgba(20,20,60,0.10);
     display:flex;flex-direction:column;gap:10px;
 }
 .camp-card:hover{border-color:rgba(26,26,255,0.25);box-shadow:0 16px 44px rgba(26,26,255,0.14);transform:translateY(-5px);}
@@ -2134,11 +2049,11 @@ section[data-testid="stMain"] > div {
 
 /* ── LEFT: large hero feature card ── */
 .news-feature{
-    background:rgba(255,255,255,0.92);
-    border:1px solid rgba(20,20,60,0.07);
+    background:rgba(255,255,255,0.97);
+    border:1px solid rgba(20,20,60,0.10);
     border-radius:18px;
     overflow:hidden;
-    box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    box-shadow:0 3px 14px rgba(20,20,60,0.10);
     transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
                box-shadow 220ms cubic-bezier(0.4,0,0.2,1);
     display:flex;
@@ -5458,8 +5373,6 @@ elif st.session_state.page == "ecosystem":
 
 
 
-# ── Footer (rendered on every page) ───────────────────────
-    # ── Footer ────────────────────────────────────────────────────
 
 # ═════════════════════════════════════════════
 # PAGE: OCTOBOT PAYMENT AGENT
@@ -5568,8 +5481,7 @@ elif st.session_state.page == "pay":
                    amount_display, mode="send",
                    recipients_json="[]", approve_amount_hex="0x0", spender=""):
         """Render the components.html transaction widget for any tx type."""
-        import hashlib as _hl
-        _tid = _hl.md5(f"{recipient}{amount_hex}{chain_id}{mode}".encode()).hexdigest()[:8]
+        _tid = hashlib.md5(f"{recipient}{amount_hex}{chain_id}{mode}".encode()).hexdigest()[:8]
 
         if mode == "batch":
             js_send_block = f"""
@@ -6220,8 +6132,6 @@ elif st.session_state.page == "pay":
 # ═════════════════════════════════════════════════════════════
 elif st.session_state.page == "request":
 
-    import urllib.parse as _urlparse
-    import hashlib    as _hashlib
 
     def _req_net_config(network: str) -> dict:
         if network == "testnet":
@@ -6246,11 +6156,11 @@ elif st.session_state.page == "request":
                            note: str, sender: str, network: str) -> str:
         params = {"req_to": to, "req_amt": amount,
                   "req_for": note, "req_from": sender, "req_net": network}
-        return base_url.rstrip("/") + "/?" + _urlparse.urlencode(params)
+        return base_url.rstrip("/") + "/?" + urllib.parse.urlencode(params)
 
     def _pay_invoice_widget(chain_id, chain_name, rpc_url, explorer,
                             net_symbol, recipient, amount_hex, pay_net_ss, amount_display):
-        _tid = _hashlib.md5(f"req{recipient}{amount_hex}{chain_id}".encode()).hexdigest()[:8]
+        _tid = hashlib.md5(f"req{recipient}{amount_hex}{chain_id}".encode()).hexdigest()[:8]
         html = f"""<!DOCTYPE html>
 <html><head>
 <style>
