@@ -212,6 +212,24 @@ The app now includes a redesigned website experience while keeping the original 
 * Responsive structure
 * More polished interactions
 
+
+## SPN Explorer
+
+What it does: Pharos's biggest unique feature is Special Purpose Networks — essentially customisable sub-networks that run on top of Pharos for specific use cases (DeFi, RWA, AI, gaming etc).
+
+No tool currently shows these in a visual, explorable way. This page would explain what each SPN is, show its status (live/testnet/coming soon), what it's built for, and link to it.
+
+How you'd test it: Open the Ecosystem page equivalent but for SPNs. You'd see cards for each network, click through to learn more, and the AI (OctoBot) can answer questions about any specific SPN.
+Limitation: Pharos doesn't have a public SPN API yet so the data would be curated manually from their docs — but it would still be the only visual SPN explorer that exists.
+
+## Validator / Network Dashboard
+
+What it does: A live stats page that hits the Pharos RPC and shows block height, latest block time, transaction count, active validators, network TPS — all updating in real time.
+
+Think of it like a mini block explorer focused on network health rather than individual transactions.
+
+How you'd test it: Navigate to the page and watch the numbers update every 10 seconds. You can verify the block height is real by cross-checking it against pharosscan.xyz.  
+
 ---
 
 # 🧠 AI Features
