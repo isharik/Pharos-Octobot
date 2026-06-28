@@ -1791,7 +1791,7 @@ section[data-testid="stMain"] > div {
     background:rgba(240,243,250,0.92);
     border:1px solid #D8DCE8;
     border-radius:16px;
-    padding:0 1.4rem;
+    padding:0 2rem;
     height:60px;
     margin:14px auto 0 auto;
     max-width:1180px;
@@ -1826,13 +1826,13 @@ section[data-testid="stMain"] > div {
 
 /* Nav buttons */
 .nav-wrap .stButton>button{
-    background:transparent!important;
+    background:#0B1020!important;
     border:none!important;
     border-radius:6px!important;
     font-family:var(--fb)!important;
     font-size:11.5px!important;
     font-weight:600!important;
-    color:#4A5068!important;
+    color:#FFFFFF!important;
     letter-spacing:0.01em!important;
     padding:0.42rem 0.5rem!important;
     height:auto!important;
@@ -1846,18 +1846,17 @@ section[data-testid="stMain"] > div {
         background 180ms cubic-bezier(0.4,0,0.2,1)!important;
 }
 .nav-wrap .stButton>button:hover{
-    color:#0C0C1A!important;
-    background:rgba(20,20,60,0.06)!important;
+    color:#FFFFFF!important;
+    background:#1414E8!important;
     box-shadow:none!important;
     transform:none!important;
 }
 .nav-wrap.active .stButton>button{
-    color:#1414E8!important;
+    color:#FFFFFF!important;
     font-weight:700!important;
-    background:rgba(26,26,255,0.08)!important;
+    background:#1414E8!important;
     box-shadow:inset 0 -2px 0 0 #1414E8!important;
 }
-
 
 /* CTA link button */
 .nav-cta .stLinkButton>a,
@@ -3071,6 +3070,8 @@ section[data-testid="stMain"] > div {
 /* ── 8. HOVER INTERACTIONS — every element responsive ── */
 /* Nav buttons — handled above, ensure animation transitions are smooth */
 .nav-wrap .stButton > button{
+    background:#0B1020!important;
+    color:#FFFFFF!important;
     transition:
         background 150ms cubic-bezier(0.4,0,0.2,1),
         color 150ms cubic-bezier(0.4,0,0.2,1),
@@ -3079,10 +3080,16 @@ section[data-testid="stMain"] > div {
     !important;
 }
 .nav-wrap .stButton > button:hover{
+    background:#1414E8!important;
+    color:#FFFFFF!important;
     transform:translateY(-1px)!important;
 }
 .nav-wrap .stButton > button:active{
     transform:scale(0.97)!important;
+}
+.nav-wrap.active .stButton > button{
+    background:#1414E8!important;
+    color:#FFFFFF!important;
 }
 /* Toggle */
 [data-testid="stToggle"]{
@@ -3456,7 +3463,51 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
     .section-h{font-size:1.2rem!important;}
     .home-stat-num{font-size:13px!important;}
     .nav-wrap .stButton>button{font-size:10px!important;padding:0.2rem 0.4rem!important;}
-}           
+}
+/* ── Force nav buttons black — target by Streamlit's per-element key class ── */
+.st-key-nav_home    button,
+.st-key-nav_chat    button,
+.st-key-nav_campaigns button,
+.st-key-nav_updates button,
+.st-key-nav_trade   button,
+.st-key-nav_ecosystem button,
+.st-key-nav_pay     button,
+.st-key-nav_request button,
+.st-key-nav_network button,
+.st-key-nav_spns    button{
+    background:#EAEEFF !important;
+    background-color:#EAEEFF !important;
+    color:#000000 !important;
+    border:1px solid #C7D0FF !important;
+}
+.st-key-nav_home    button *,
+.st-key-nav_chat    button *,
+.st-key-nav_campaigns button *,
+.st-key-nav_updates button *,
+.st-key-nav_trade   button *,
+.st-key-nav_ecosystem button *,
+.st-key-nav_pay     button *,
+.st-key-nav_request button *,
+.st-key-nav_network button *,
+.st-key-nav_spns    button *{
+    color:#000000 !important;
+}
+.st-key-nav_home    button:hover,
+.st-key-nav_chat    button:hover,
+.st-key-nav_campaigns button:hover,
+.st-key-nav_updates button:hover,
+.st-key-nav_trade   button:hover,
+.st-key-nav_ecosystem button:hover,
+.st-key-nav_pay     button:hover,
+.st-key-nav_request button:hover,
+.st-key-nav_network button:hover,
+.st-key-nav_spns    button:hover{
+    background:#D8DFFF !important;
+    background-color:#D8DFFF !important;
+    color:#000000 !important;
+    border-color:#1A1AFF !important;
+}
+                       
 </style>
 """, unsafe_allow_html=True)
 
@@ -3535,12 +3586,12 @@ if st.session_state.page == "home":
         sym    = "▲" if chg >= 0 else "▼"
         cc     = "#1FA855" if chg >= 0 else "#E5484D"
         price_pill = (
-            f'<span style="font-size:11px;color:#9499A8;">$PROS&nbsp;</span>'
+            f'<span style="font-size:14px;color:#E8ECF5;font-family:Syne,sans-serif;font-weight:700;letter-spacing:0.04em;">$PROS&nbsp;</span>'
             f'<span style="font-size:13px;font-weight:700;color:#14141F;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
             f'<span style="font-size:11px;color:{cc};margin-left:4px;">{sym}{abs(chg):.2f}%</span>'
         )
     else:
-        price_pill = '<span style="font-size:11px;color:#9499A8;">$PROS loading…</span>'
+        price_pill = '<span style="font-size:14px;color:#E8ECF5;font-family:Syne,sans-serif;font-weight:700;letter-spacing:0.04em;">$PROS&nbsp;</span>'
 
     st.markdown(
         '<div class="hero">'
@@ -7105,17 +7156,17 @@ st.markdown(
     
     '<div style="text-align:center;padding:1rem 0 0.5rem 0;'
     'border-top:1px solid #D0D3E0;margin-top:1rem;">'
-    '<span style="font-size:12px;color:#7A7F96;">Built by&nbsp;</span>'
-    '<strong style="font-size:12px;color:#0C0C1A;">Echo</strong>'
-    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
-    '<span style="font-size:12px;color:#7A7F96;">Discord:&nbsp;</span>'
-    '<strong style="font-size:12px;color:#0C0C1A;">@echoplex99</strong>'
-    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
+    '<span style="font-size:15px;color:#FFFFFF;">Built by&nbsp;</span>'
+    '<strong style="font-size:15px;color:#0C0C1A;">Echo</strong>'
+    '<span style="font-size:15px;color:#FFFFFF;">&nbsp;·&nbsp;</span>'
+    '<span style="font-size:15px;color:#FFFFFF;">Discord:&nbsp;</span>'
+    '<strong style="font-size:15px;color:#0C0C1A;">@echoplex99</strong>'
+    '<span style="font-size:15px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
     '<a href="https://x.com/isharik99" target="_blank" '
-    'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">@isharik99 on X ↗</a>'
-    '<span style="font-size:12px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
+    'style="font-size:15px;font-weight:600;color:#1A1AFF;text-decoration:none;">@isharik99 on X ↗</a>'
+    '<span style="font-size:15px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
     '<a href="https://github.com/isharik/Pharos-Octobot" target="_blank" '
-    'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">'
+    'style="font-size:15px;font-weight:600;color:#1A1AFF;text-decoration:none;">'
     'GitHub ↗</a>'
     '</div>',
     unsafe_allow_html=True,
