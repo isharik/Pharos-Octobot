@@ -21,6 +21,42 @@ import streamlit.components.v1 as components
 from datetime import datetime, timezone
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
+import html
+from urllib.parse import urlparse
+
+# ─────────────────────────────────────────────
+# SECURITY HELPERS
+# Validation + escaping used across the app. These constrain untrusted
+# input (URL params, manual entry, remote API + LLM output) to safe
+# shapes and escape text before it is placed into HTML. They do not
+# change any feature behaviour for legitimate values.
+# ─────────────────────────────────────────────
+_ADDR_RE   = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_TXHASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+
+def esc(x) -> str:
+    """Escape any value before putting it in unsafe_allow_html / components.html."""
+    return html.escape(str(x if x is not None else ""), quote=True)
+
+def valid_addr(a):
+    a = (a or "").strip()
+    return a if _ADDR_RE.match(a) else None
+
+def valid_txhash(h):
+    h = (h or "").strip()
+    return h if _TXHASH_RE.match(h) else None
+
+def valid_amount(a):
+    try:
+        v = float(a)
+        return v if 0 < v < 1e12 else None
+    except (TypeError, ValueError):
+        return None
+
+def esc_url(u) -> str:
+    u = (u or "").strip()
+    p = urlparse(u)
+    return esc(u) if p.scheme in ("http", "https") else "#"
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -263,7 +299,7 @@ if _goto == "chat":
     st.query_params.clear()
 
 # Wallet connect widget → navigate back with address
-_wallet = st.query_params.get("wallet", "")
+_wallet = valid_addr(st.query_params.get("wallet", ""))
 if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.session_state.wallet_address = _wallet
     st.session_state.wallet_data    = None
@@ -272,16 +308,18 @@ if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.query_params.clear()
 
 # ── Incoming payment-request link handler ─────────────────────────────────
-_req_to   = st.query_params.get("req_to",   "")
-_req_amt  = st.query_params.get("req_amt",  "")
-_req_for  = st.query_params.get("req_for",  "")
-_req_from = st.query_params.get("req_from", "")
-_req_net  = st.query_params.get("req_net",  "mainnet")
-if _req_to and _req_amt:
+_req_to   = valid_addr(st.query_params.get("req_to", ""))
+_req_amt  = valid_amount(st.query_params.get("req_amt", ""))
+_req_for  = esc(st.query_params.get("req_for", "")[:120])
+_req_from = valid_addr(st.query_params.get("req_from", "")) or ""
+_req_net  = st.query_params.get("req_net", "mainnet")
+if _req_net not in ("mainnet", "testnet"):
+    _req_net = "mainnet"
+if _req_to and _req_amt is not None:
     st.session_state.page      = "request"
     st.session_state.req_draft = {
         "to":      _req_to,
-        "amount":  _req_amt,
+        "amount":  str(_req_amt),
         "note":    _req_for,
         "from":    _req_from,
         "network": _req_net,
@@ -291,7 +329,7 @@ if _req_to and _req_amt:
     
 
 # Voice query from mic widget
-_voice_q = st.query_params.get("voice_q", "")
+_voice_q = st.query_params.get("voice_q", "")[:300]
 if _voice_q:
     st.session_state["pending_q"] = _voice_q
     st.session_state.page = "chat"
@@ -492,6 +530,42 @@ def get_image_search_results(query: str) -> list:
     return images
 
 
+def render_qr_code(data: str, size: int = 168, key: str = "qr") -> None:
+    """
+    Render a QR code for `data` (display-only) using a client-side QR library
+    loaded from a CDN. No Python dependency; degrades to a link if the script
+    is unavailable. Used to make a generated payment-request link scannable.
+    """
+    safe = json.dumps(str(data))  # safely embed into JS as a quoted string
+    _h = int(size) + 8
+    html = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:transparent;display:flex;justify-content:center;}
+  #qr{display:flex;align-items:center;justify-content:center;}
+  #qr img,#qr canvas{display:block;border-radius:6px;}
+  #fb{font-family:'Inter',system-ui,sans-serif;font-size:11px;color:#68738C;
+      text-align:center;padding:10px;}
+</style></head><body>
+<div id="qr"></div>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+  (function(){
+    var data = __DATA__;
+    var el = document.getElementById('qr');
+    function fallback(){ el.innerHTML = '<div id="fb">QR unavailable — use the copy link below.</div>'; }
+    try{
+      if (typeof QRCode === 'undefined'){ fallback(); return; }
+      new QRCode(el, { text: data, width: __SZ__, height: __SZ__,
+        colorDark:'#0B1020', colorLight:'#FFFFFF',
+        correctLevel: QRCode.CorrectLevel.M });
+    }catch(e){ fallback(); }
+  })();
+</script></body></html>"""
+    html = html.replace("__DATA__", safe).replace("__SZ__", str(int(size)))
+    components.html(html, height=_h, scrolling=False)
+
+
 def render_copy_share_download(text: str, btn_key: str) -> None:
     """
     Renders Copy (shows pre-selected textarea), Share on X, and Download buttons.
@@ -592,8 +666,8 @@ def render_source_sidebar(sources: list, key: str) -> None:
 
     sources_html = "".join([
         f'<div class="source-item">'
-        f'<div class="source-item-title">{s["title"]}</div>'
-        f'<a class="source-item-url" href="{s["url"]}" target="_blank">{s["url"]}</a>'
+        f'<div class="source-item-title">{esc(s["title"])}</div>'
+        f'<a class="source-item-url" href="{esc_url(s["url"])}" target="_blank" rel="noopener noreferrer">{esc(s["url"])}</a>'
         f'</div>'
         for s in sources
     ])
@@ -1141,6 +1215,14 @@ PHAROS_TESTNET_CHAIN_ID_DEC = 688689
 PHAROS_TESTNET_RPC_URL       = "https://atlantic.dplabs-internal.com"
 PHAROS_TESTNET_EXPLORER_URL  = "https://atlantic.pharosscan.xyz"
 
+# Allowlist of RPC endpoints the server is permitted to call. Prevents an
+# attacker-supplied URL from redirecting outbound requests to internal hosts (SSRF).
+ALLOWED_RPCS = {
+    PHAROS_RPC_URL,
+    "https://pharos.drpc.org",
+    PHAROS_TESTNET_RPC_URL,
+}
+
 
 def render_wallet_connect_widget() -> None:
     """
@@ -1170,6 +1252,12 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
         "available":    False,
         "error":        None,
     }
+
+    if not valid_addr(address):
+        result["error"] = "Invalid address"
+        return result
+    if rpc_override and rpc_override not in ALLOWED_RPCS:
+        rpc_override = None
 
     rpc_candidates = [rpc_override] if rpc_override else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     headers = {"Content-Type": "application/json"}
@@ -1243,6 +1331,10 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
         "available":     False,
         "error":         None,
     }
+
+    if not valid_txhash(tx_hash):
+        result["error"] = "Invalid transaction hash"
+        return result
 
     rpc_candidates = [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     headers = {"Content-Type": "application/json"}
@@ -1491,7 +1583,8 @@ def load_octobot():
 # ─────────────────────────────────────────────
 st.markdown(
     '<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800'
-    '&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">',
+    '&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400'
+    '&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">',
     unsafe_allow_html=True,
 )
 
@@ -3511,7 +3604,363 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
 </style>
 """, unsafe_allow_html=True)
 
-_sailor = st.query_params.get("sailor", "")
+# ─────────────────────────────────────────────
+# LAYOUT REDESIGN — Pay / Request / SPN / Network
+# Structural-only: 8px spacing system, unified content
+# max-width, compact heroes, Inter for UI text, equal
+# card sizing. Scoped via :has() so other pages are
+# untouched. No functionality / logic / component change.
+# ─────────────────────────────────────────────
+def inject_redesign_css(page_marker: str) -> None:
+    st.markdown(
+        f'<div class="rd-marker rd-{page_marker}" style="height:0;margin:0;padding:0;overflow:hidden;"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("""
+<style>
+/* ===== Layout redesign — applies only to pages carrying a .rd-marker =====
+   IMPORTANT: do NOT change the main block container max-width here. The
+   sticky top nav lives in this same container, and changing its width makes
+   the fixed-weight nav columns reflow / wrap. Keep the container at the app
+   default so the nav is pixel-identical on every page; redesigned pages
+   compose their own width with inner columns instead. */
+[data-testid="stMainBlockContainer"]:has(.rd-marker){
+    margin:0 auto !important;
+}
+/* Consistent vertical rhythm on an 8px grid between top-level blocks */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    section[data-testid="stMain"] *,
+[data-testid="stMainBlockContainer"]:has(.rd-marker){}
+
+/* Typography: keep Syne for major titles (h1/h2), Inter for all UI text */
+[data-testid="stMainBlockContainer"]:has(.rd-marker) p,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) span,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) label,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) li,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) div,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) input,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) textarea,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) button{
+    font-family:'Inter','DM Sans',sans-serif;
+}
+/* Major titles keep the display font */
+[data-testid="stMainBlockContainer"]:has(.rd-marker) h1,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) h2{
+    font-family:'Syne',sans-serif !important;
+}
+/* Guard: keep the top nav untouched by the redesign cascade so its buttons
+   never change size/font/wrap across pages. */
+[data-testid="stMainBlockContainer"]:has(.rd-marker) [class*="st-key-nav_"] button,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) [class*="st-key-nav_"] button *{
+    font-family:'DM Sans',sans-serif !important;
+    min-height:0 !important;
+    white-space:nowrap !important;
+}
+
+/* Tighten the gap Streamlit puts between stacked blocks (8px grid) */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stVerticalBlock"]{
+    gap:0.5rem !important;
+}
+
+/* Inputs: consistent height + readable LIGHT text on the dark input fill.
+   (The app's input background is dark, so text must be near-white.) */
+[data-testid="stMainBlockContainer"]:has(.rd-marker) input,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) textarea{
+    min-height:44px;
+    font-size:14px !important;
+    color:#F4F7FF !important;
+    -webkit-text-fill-color:#F4F7FF !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker) textarea{
+    min-height:120px;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker) input::placeholder,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) textarea::placeholder{
+    color:rgba(244,247,255,0.45) !important;
+    -webkit-text-fill-color:rgba(244,247,255,0.45) !important;
+}
+/* Disabled Token field stays readable but clearly inert */
+[data-testid="stMainBlockContainer"]:has(.rd-marker) input:disabled{
+    color:#C7D2FE !important;
+    -webkit-text-fill-color:#C7D2FE !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stTextInput"] label p,
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stTextArea"] label p{
+    font-size:12.5px !important;
+    font-weight:600 !important;
+    color:#39445D !important;
+}
+/* Buttons: consistent height + weight.
+   Exclude the top-nav buttons (st-key-nav_*) and the CTA so the nav row is
+   pixel-identical to every other page. */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    .stButton:not([class*="st-key-nav_"]) button{
+    min-height:44px;
+    font-weight:600;
+}
+
+/* ---- Compact hero: trim the dark gradient banner padding ----
+   Original heroes use padding 2rem–2.2rem; cut ~25% to reduce
+   vertical whitespace while keeping the gradient/branding. */
+[data-testid="stMainBlockContainer"]:has(.rd-hero-compact)
+    [data-testid="stMarkdownContainer"]
+    > div[style*="linear-gradient(135deg,#0C0C1A"],
+[data-testid="stMainBlockContainer"]:has(.rd-hero-compact)
+    [data-testid="stMarkdownContainer"]
+    > div[style*="linear-gradient(135deg,#0A0A28"]{
+    padding-top:1.5rem !important;
+    padding-bottom:1.2rem !important;
+    margin-bottom:1rem !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-hero-compact) h2{
+    font-size:1.7rem !important;
+    margin-bottom:0.4rem !important;
+}
+
+/* Equal-height, lighter-padding metric / info cards on dashboard */
+[data-testid="stMainBlockContainer"]:has(.rd-network)
+    [data-testid="stMarkdownContainer"] div[style*="grid-template-columns:repeat(3,1fr)"]{
+    align-items:stretch !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-network)
+    [data-testid="stMarkdownContainer"] div[style*="grid-template-columns:repeat(3,1fr)"] > div{
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:flex-start !important;
+}
+
+@media (max-width:760px){
+  [data-testid="stMainBlockContainer"]:has(.rd-marker)
+      [data-testid="stMarkdownContainer"] div[style*="grid-template-columns:repeat(3,1fr)"],
+  [data-testid="stMainBlockContainer"]:has(.rd-marker)
+      [data-testid="stMarkdownContainer"] div[style*="grid-template-columns:repeat(4,1fr)"]{
+    grid-template-columns:1fr 1fr !important;
+  }
+}
+
+/* ======================================================================
+   DESIGN SYSTEM — shared component classes for the recomposed pages.
+   Real Streamlit widgets (st.columns / st.container) provide structure;
+   these classes provide the surface treatment so columns read as
+   designed panels, side rails, toolbars and consoles. Colours/tokens
+   are the existing palette — no new brand colours introduced.
+   ====================================================================== */
+
+/* Redesigned pages compose their own width via inner columns; the shared
+   container width is left at the app default so the nav never reflows. */
+[data-testid="stMainBlockContainer"]:has(.rd-wide){
+    /* intentionally no max-width override */
+}
+
+/* Bordered st.container → designed surface card.
+   Streamlit marks bordered containers with stVerticalBlockBorderWrapper.
+   Make them solid (not see-through), equal-height within a row, and padded. */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stVerticalBlockBorderWrapper"]{
+    background:#FFFFFF !important;
+    border:1px solid #E4E8F2 !important;
+    border-radius:18px !important;
+    box-shadow:0 4px 22px rgba(14,22,52,0.08) !important;
+    height:100% !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stVerticalBlockBorderWrapper"] > div{
+    padding:0.9rem 1.05rem !important;
+    height:100%;
+}
+
+/* Kill the app's translucent inner-block fill that makes cards see-through */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stVerticalBlockBorderWrapper"] > div
+    > div[data-testid="stVerticalBlock"]{
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+    padding:0 !important;
+    margin-bottom:0 !important;
+}
+
+/* Real gutter between side-by-side cards */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has([data-testid="stVerticalBlockBorderWrapper"])
+    > [data-testid="stColumn"]{
+    padding-left:8px !important;
+    padding-right:8px !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has([data-testid="stVerticalBlockBorderWrapper"])
+    > [data-testid="stColumn"]:first-child{ padding-left:0 !important; }
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has([data-testid="stVerticalBlockBorderWrapper"])
+    > [data-testid="stColumn"]:last-child{ padding-right:0 !important; }
+                
+/* Force the columns in a horizontal row to stretch to equal height so two
+   side-by-side cards always match, regardless of content length.
+   Excludes the nav row (it has no bordered cards, and must not be altered). */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has([data-testid="stVerticalBlockBorderWrapper"]),
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has(.rd-fillcard),
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has(.rd-stat){
+    align-items:stretch !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has([data-testid="stVerticalBlockBorderWrapper"])
+    > [data-testid="stColumn"],
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has(.rd-fillcard) > [data-testid="stColumn"],
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"]:has(.rd-stat) > [data-testid="stColumn"]{
+    display:flex !important;
+    flex-direction:column !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]
+    > [data-testid="stVerticalBlockBorderWrapper"]{
+    flex:1 1 auto !important;
+}
+/* Plain markdown cards (SPN use-case tiles, stat tiles) also fill the column
+   height so two cards in a row are always equal and never collide.
+   Constrained with :has() so only card columns are affected (not the nav). */
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.rd-fillcard)
+    > [data-testid="stVerticalBlock"],
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.rd-stat)
+    > [data-testid="stVerticalBlock"]{
+    height:90% !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]
+    [data-testid="stMarkdownContainer"]:has(> .rd-fillcard),
+[data-testid="stMainBlockContainer"]:has(.rd-marker)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]
+    [data-testid="stMarkdownContainer"]:has(> .rd-stat){
+    height:90% !important;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-marker) .rd-fillcard,
+[data-testid="stMainBlockContainer"]:has(.rd-marker) .rd-stat{
+    height:90% !important;
+}
+
+/* The hero "eyebrow" section label used at the top of recomposed columns */
+.rd-eyebrow{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:'Inter',sans-serif;font-size:10px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:#5B6B8C;
+    background:rgba(26,26,255,0.06);border:1px solid rgba(26,26,255,0.12);
+    border-radius:999px;padding:4px 11px;margin-bottom:0.55rem;
+}
+.rd-panel-title{
+    font-family:'Syne',sans-serif;font-size:15px;font-weight:800;
+    color:#0B1020;letter-spacing:-0.01em;margin:0 0 2px 0;display:flex;
+    align-items:center;gap:8px;
+}
+.rd-panel-sub{
+    font-family:'Inter',sans-serif;font-size:12px;color:#68738C;
+    line-height:1.55;margin:0 0 0.4rem 0;
+}
+.rd-divider{height:1px;background:#ECEEF6;margin:0.6rem 0;border:0;}
+
+/* Suggestion chips (Pay command examples) rendered as real buttons:
+   target the chip column group via a wrapper marker. */
+[data-testid="stMainBlockContainer"]:has(.rd-chiprow) .stButton button{
+    border-radius:999px !important;
+    background:rgba(26,26,255,0.04) !important;
+    border:1px solid rgba(26,26,255,0.14) !important;
+    color:#2B3656 !important;
+    font-size:12.5px !important;font-weight:500 !important;
+    min-height:38px !important;padding:0 14px !important;
+    text-align:left !important;justify-content:flex-start !important;
+    transition:all 160ms ease;
+}
+[data-testid="stMainBlockContainer"]:has(.rd-chiprow) .stButton button:hover{
+    background:rgba(26,26,255,0.10) !important;
+    border-color:rgba(26,26,255,0.30) !important;
+    transform:translateY(-1px);
+}
+
+/* Command surface: make the big Pay prompt textarea feel like the hero */
+[data-testid="stMainBlockContainer"]:has(.rd-command) textarea{
+    min-height:120px !important;font-size:16px !important;
+    line-height:1.5 !important;border-radius:14px !important;
+    padding:14px 16px !important;
+}
+
+/* Console panel (SPN results) — dark, monospaced artifact surface */
+.rd-console{
+    background:#0B1020;border:1px solid #1B2440;border-radius:16px;
+    padding:1rem 1.15rem;font-family:'DM Mono',ui-monospace,monospace;
+    color:#C7D2FE;font-size:12.5px;line-height:1.7;overflow-x:auto;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.rd-console .rd-con-bar{
+    display:flex;align-items:center;gap:6px;margin:-0.2rem 0 0.7rem 0;
+    padding-bottom:0.6rem;border-bottom:1px solid #1B2440;
+}
+.rd-console .rd-dot{width:10px;height:10px;border-radius:50%;}
+.rd-k{color:#7C8BB8;}.rd-v{color:#E6EBFF;font-weight:600;}
+
+/* Featured status card accent rail */
+.rd-featured{position:relative;overflow:hidden;}
+.rd-featured::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:linear-gradient(180deg,#1A1AFF,#6B8CFF);
+}
+
+/* Stat tile (dashboard) — used inside st.columns for equal sizing */
+.rd-stat{
+    background:#FFFFFF;border:1px solid #E4E8F2;border-radius:16px;
+    padding:1rem 1.15rem;box-shadow:0 2px 12px rgba(20,20,60,0.05);
+    height:100%;display:flex;flex-direction:column;
+}
+.rd-stat .rd-stat-top{display:flex;align-items:center;gap:8px;margin-bottom:0.5rem;}
+.rd-stat .rd-stat-ic{width:30px;height:30px;border-radius:9px;display:flex;
+    align-items:center;justify-content:center;font-size:15px;}
+.rd-stat .rd-stat-lbl{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:600;
+    letter-spacing:0.07em;text-transform:uppercase;color:#9499A8;}
+.rd-stat .rd-stat-val{font-family:'Syne',sans-serif;font-size:1.9rem;font-weight:800;
+    letter-spacing:-0.02em;line-height:1.05;}
+.rd-stat .rd-stat-sub{font-family:'Inter',sans-serif;font-size:10.5px;color:#9499A8;margin-top:3px;}
+
+/* Toolbar row (network selector / config bar) sits in a slim bar */
+.rd-toolbar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:rgba(255,255,255,0.7);border:1px solid #E4E8F2;
+    border-radius:12px;padding:7px 12px;margin-bottom:0.5rem;
+}
+.rd-toolbar .rd-tb-lbl{font-family:'Inter',sans-serif;font-size:10px;font-weight:700;
+    letter-spacing:0.08em;text-transform:uppercase;color:#7A7F96;}
+
+/* Make buttons inside a slim toolbar marker compact */
+[data-testid="stMainBlockContainer"]:has(.rd-toolbarrow) .stButton button{
+    min-height:38px !important;font-size:12.5px !important;padding:0 14px !important;
+}
+
+/* Side rail (Pay wallet / utilities) — subtle inset look */
+.rd-rail{
+    background:rgba(247,249,253,0.85);border:1px solid #E4E8F2;
+    border-radius:16px;padding:1rem 1.1rem;
+}
+.rd-util{
+    font-family:'Inter',sans-serif;font-size:11.5px;color:#68738C;
+    display:flex;align-items:center;gap:7px;
+}
+
+/* QR frame on the Request result */
+.rd-qr{
+    background:#FFFFFF;border:1px solid #E4E8F2;border-radius:14px;
+    padding:12px;display:inline-flex;box-shadow:0 2px 12px rgba(20,20,60,0.06);
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+_sailor = st.query_params.get("sailor", "")[:60]
 if _sailor:
     st.session_state.sailor_name = _sailor
     st.session_state.sailor_done = True
@@ -4218,7 +4667,7 @@ elif st.session_state.page == "memory":
                 key="manual_wallet_input", label_visibility="collapsed",
             )
             if st.button("🔎  View Profile", key="manual_wallet_btn", use_container_width=True):
-                if manual_addr.strip().startswith("0x") and len(manual_addr.strip()) == 42:
+                if valid_addr(manual_addr):
                     st.session_state.wallet_address = manual_addr.strip()
                     st.session_state.wallet_data    = None
                     st.session_state.wallet_profile = None
@@ -4244,7 +4693,7 @@ elif st.session_state.page == "memory":
                     f'justify-content:center;font-size:18px;flex-shrink:0;">🔗</div>'
                     f'<div><div style="font-size:10px;color:rgba(255,255,255,0.55);font-weight:700;'
                     f'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">Connected Wallet</div>'
-                    f'<div style="font-size:15px;color:#fff;font-weight:700;font-family:monospace;letter-spacing:0.01em;">{short_addr}</div>'
+                    f'<div style="font-size:15px;color:#fff;font-weight:700;font-family:monospace;letter-spacing:0.01em;">{esc(short_addr)}</div>'
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
@@ -4302,7 +4751,7 @@ elif st.session_state.page == "memory":
 
             tags_html = "".join([
                 f'<span class="tag" style="margin-right:6px;margin-bottom:6px;display:inline-block;'
-                f'font-weight:700;">{t}</span>'
+                f'font-weight:700;">{esc(t)}</span>'
                 for t in profile.get("tags", [])
             ])
             st.markdown(
@@ -4319,13 +4768,13 @@ elif st.session_state.page == "memory":
                 '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
                 'OctoBot says:</div></div>'
                 f'<div style="font-size:14.5px;color:#0C0C1A;line-height:1.7;font-style:italic;margin-bottom:1.1rem;position:relative;z-index:1;">'
-                f'"{profile.get("summary", "")}"</div>'
+                f'"{esc(profile.get("summary", ""))}"</div>'
                 f'<div style="margin-bottom:0.9rem;position:relative;z-index:1;">{tags_html}'
                 f'<span class="tag" style="background:rgba(31,168,85,0.12);border-color:rgba(31,168,85,0.35);'
-                f'color:#1FA855;display:inline-block;font-weight:700;">Risk: {profile.get("risk", "Unknown")}</span></div>'
+                f'color:#1FA855;display:inline-block;font-weight:700;">Risk: {esc(profile.get("risk", "Unknown"))}</span></div>'
                 f'<div style="font-size:13px;color:#42475A;background:rgba(255,255,255,0.7);'
                 f'border-radius:12px;padding:0.8rem 1rem;position:relative;z-index:1;">'
-                f'💡 <strong>Suggested next step:</strong> {profile.get("insight", "")}</div>'
+                f'💡 <strong>Suggested next step:</strong> {esc(profile.get("insight", ""))}</div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -4404,7 +4853,7 @@ elif st.session_state.page == "memory":
         )
         if st.button("🧠  Explain this transaction", key="explain_tx_btn", use_container_width=True):
             cleaned = tx_input.strip()
-            if cleaned.startswith("0x") and len(cleaned) == 66:
+            if valid_txhash(cleaned):
                 st.session_state.tx_hash_input  = cleaned
                 st.session_state.tx_data        = None
                 st.session_state.tx_explanation = None
@@ -4487,7 +4936,7 @@ elif st.session_state.page == "memory":
                 steps_html = "".join([
                     f'<div style="display:flex;align-items:flex-start;gap:8px;padding:0.4rem 0;'
                     f'border-bottom:1px solid rgba(255,255,255,0.5);font-size:12px;color:#42475A;">'
-                    f'<span style="color:#1A1AFF;flex-shrink:0;">→</span><span>{s}</span></div>'
+                    f'<span style="color:#1A1AFF;flex-shrink:0;">→</span><span>{esc(s)}</span></div>'
                     for s in explanation.get("plain_steps", [])
                 ])
                 st.markdown(
@@ -4504,9 +4953,9 @@ elif st.session_state.page == "memory":
                     '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
                     'OctoBot explains:</div></div>'
                     f'<div style="font-size:14px;color:#0C0C1A;line-height:1.65;font-style:italic;margin-bottom:0.9rem;position:relative;z-index:1;">'
-                    f'"{explanation.get("summary", "")}"</div>'
+                    f'"{esc(explanation.get("summary", ""))}"</div>'
                     f'<span class="tag" style="display:inline-block;margin-bottom:0.9rem;position:relative;z-index:1;">'
-                    f'{explanation.get("category", "Transaction")}</span>'
+                    f'{esc(explanation.get("category", "Transaction"))}</span>'
                     f'<div style="position:relative;z-index:1;">{steps_html}</div>'
                     '</div>',
                     unsafe_allow_html=True,
@@ -4828,7 +5277,7 @@ elif st.session_state.page == "chat":
                      else "Docs only mode: OctoBot answers strictly from verified Pharos documentation.")
         st.markdown(
             '<div class="welcome-card" style="animation:page-fadein 0.5s cubic-bezier(0.4,0,0.2,1) both;">'
-            '<h3>Hi ' + name + '! 👋 Welcome aboard</h3>'
+            '<h3>Hi ' + esc(name) + '! 👋 Welcome aboard</h3>'
             '<p>Ask me anything about Pharos Network — SPNs, Native Restaking, RWA, consensus, '
             'building on Pharos, or the $PROS token. <em>' + mode_note + '</em></p>'
             '<div class="tag-row">'
@@ -4923,26 +5372,26 @@ elif st.session_state.page == "chat":
             if bp and isinstance(bp, dict):
                 steps_html = "".join([
                     f'<div class="build-path-step">'
-                    f'<div class="build-step-num">{s["num"]}</div>'
-                    f'<div><div class="build-step-text">{s["title"]}</div>'
-                    f'<div class="build-step-sub">{s["desc"]}</div></div>'
+                    f'<div class="build-step-num">{esc(s["num"])}</div>'
+                    f'<div><div class="build-step-text">{esc(s["title"])}</div>'
+                    f'<div class="build-step-sub">{esc(s["desc"])}</div></div>'
                     f'</div>'
                     for s in bp.get("steps", [])
                 ])
                 docs_html = " · ".join([
-                    f'<a href="{d["url"]}" target="_blank" '
+                    f'<a href="{esc_url(d["url"])}" target="_blank" rel="noopener noreferrer" '
                     f'style="color:#1A1AFF;font-size:11px;font-weight:600;text-decoration:none;">'
-                    f'{d["title"]} ↗</a>'
+                    f'{esc(d["title"])} ↗</a>'
                     for d in bp.get("docs", [])
                 ])
                 actions_html = "".join([
-                    f'<a class="build-action-btn" href="{a["url"]}" target="_blank">{a["label"]} ↗</a>'
+                    f'<a class="build-action-btn" href="{esc_url(a["url"])}" target="_blank" rel="noopener noreferrer">{esc(a["label"])} ↗</a>'
                     for a in bp.get("actions", [])
                 ])
                 st.markdown(
                     f'<div class="build-path-card">'
                     f'<div class="build-path-title">Your Build Path</div>'
-                    f'<div class="build-path-goal">{bp.get("goal","")}</div>'
+                    f'<div class="build-path-goal">{esc(bp.get("goal",""))}</div>'
                     f'{steps_html}'
                     f'<div style="margin-top:0.7rem;font-size:11px;color:#7A7F96;margin-bottom:4px;">📄 Key Docs</div>'
                     f'<div style="display:flex;gap:8px;flex-wrap:wrap;">{docs_html}</div>'
@@ -5008,10 +5457,10 @@ elif st.session_state.page == "chat":
                         st.markdown(
                             f'<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
                             f'border-radius:0 8px 8px 0;padding:0.6rem 0.9rem;margin-bottom:0.5rem;">'
-                            f'<div style="font-size:13px;font-weight:600;color:#0C0C1A;margin-bottom:3px;">{s["title"]}</div>'
-                            f'<a href="{s["url"]}" target="_blank" '
+                            f'<div style="font-size:13px;font-weight:600;color:#0C0C1A;margin-bottom:3px;">{esc(s["title"])}</div>'
+                            f'<a href="{esc_url(s["url"])}" target="_blank" rel="noopener noreferrer" '
                             f'style="font-size:11px;color:#1A1AFF;text-decoration:none;word-break:break-all;">'
-                            f'{s["url"]}</a>'
+                            f'{esc(s["url"])}</a>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
@@ -5184,11 +5633,12 @@ elif st.session_state.page == "updates":
     UPDATE_BG = "linear-gradient(135deg,#EEF0FF,#E4E8FF)"
     all_updates_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.4rem;">'
     for n in cards_source:
-        title = n.get("title", "")
-        desc  = (n.get("description", "") or "")[:140]
-        link  = n.get("url", "#")
+        title = esc(n.get("title", ""))
+        desc  = esc((n.get("description", "") or "")[:140])
+        link  = esc_url(n.get("url", "#"))
         thumb = n.get("thumb", "")
-        date  = n.get("date", "")
+        thumb = esc_url(thumb) if thumb else ""
+        date  = esc(n.get("date", ""))
         all_updates_html += (
             f'<a href="{link}" target="_blank" '
             f'style="display:flex;flex-direction:column;'
@@ -5233,10 +5683,10 @@ elif st.session_state.page == "updates":
         for n in news_items[6:9]:
             timeline_html += (
                 '<div style="display:flex;align-items:flex-start;gap:10px;">'
-                f'<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">{n.get("date","") or "—"}</div>'
+                f'<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">{esc(n.get("date","")) or "—"}</div>'
                 '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
-                f'<div><div style="font-size:12px;font-weight:600;color:#14141F;">{n.get("title","")}</div>'
-                f'<div style="font-size:11px;color:#5B5F6E;">{(n.get("description","") or "")[:90]}</div></div>'
+                f'<div><div style="font-size:12px;font-weight:600;color:#14141F;">{esc(n.get("title",""))}</div>'
+                f'<div style="font-size:11px;color:#5B5F6E;">{esc((n.get("description","") or "")[:90])}</div></div>'
                 '</div>'
             )
         timeline_html += '</div></div>'
@@ -5437,6 +5887,8 @@ elif st.session_state.page == "ecosystem":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "pay":
 
+    inject_redesign_css("pay rd-hero-compact")
+
     # ════════════════════════════════════════════════════════
     # HELPERS — intent parsers
     # ════════════════════════════════════════════════════════
@@ -5539,6 +5991,44 @@ elif st.session_state.page == "pay":
                    amount_display, mode="send",
                    recipients_json="[]", approve_amount_hex="0x0", spender=""):
         """Render the components.html transaction widget for any tx type."""
+        # ── Security: constrain every value that gets interpolated into the
+        # signing JavaScript to a strict, breakout-proof shape. Legitimate
+        # values (addresses, hex amounts, chain ids) already match these.
+        _hex_re  = re.compile(r"^0x[0-9a-fA-F]+$")
+
+        def _safe_hex(h, default="0x0"):
+            h = str(h or "")
+            return h if _hex_re.match(h) else default
+
+        def _safe_num(n):
+            try:
+                return str(float(n))
+            except (TypeError, ValueError):
+                return "0"
+
+        recipient          = valid_addr(recipient) or ""
+        spender            = valid_addr(spender) or ""
+        amount_hex         = _safe_hex(amount_hex)
+        approve_amount_hex = _safe_hex(approve_amount_hex)
+        chain_id           = chain_id if _hex_re.match(str(chain_id or "")) else ""
+        amount_display     = _safe_num(amount_display)
+        pay_net_ss         = pay_net_ss if pay_net_ss in ("mainnet", "testnet") else "mainnet"
+        mode               = mode if mode in ("send", "batch", "approve") else "send"
+        explorer           = esc_url(explorer)
+
+        # recipients_json may be a JSON list of addresses — keep only valid ones
+        try:
+            _rlist = json.loads(recipients_json) if recipients_json else []
+            _rlist = [a for a in _rlist if valid_addr(a)]
+        except Exception:
+            _rlist = []
+        recipients_json = json.dumps(_rlist)
+
+        # For non-batch modes the destination must be a valid address.
+        if mode != "batch" and not recipient and not (mode == "approve" and spender):
+            st.error("Invalid recipient address — transaction aborted.")
+            return
+
         _tid = hashlib.md5(f"{recipient}{amount_hex}{chain_id}{mode}".encode()).hexdigest()[:8]
 
         if mode == "batch":
@@ -5705,26 +6195,14 @@ elif st.session_state.page == "pay":
         unsafe_allow_html=True,
     )
 
-    # ── Intent type legend ────────────────────────
-    st.markdown(
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">'
-        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
-        'color:#166016;background:#F0FFF4;border:1px solid #86EFAC;border-radius:20px;padding:5px 12px;">'
-        '➡️ Send — "Send 5 PROS to 0x1234…"</div>'
-        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
-        'color:#1414E8;background:#EEF0FF;border:1px solid #C7D2FE;border-radius:20px;padding:5px 12px;">'
-        '📦 Batch — "Send 1 PROS to 0xAAA…, 0xBBB…, 0xCCC…"</div>'
-        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'
-        'color:#7A5800;background:#FFFBEB;border:1px solid #FDE68A;border-radius:20px;padding:5px 12px;">'
-        '✅ Approve — "Approve 0xFaroswap to spend 100 PROS"</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Network selector ──────────────────────────
-    st.markdown('<div style="font-size:12px;font-weight:700;color:#7A7F96;margin-bottom:6px;letter-spacing:0.05em;text-transform:uppercase;">Select Network</div>', unsafe_allow_html=True)
-    net_col1, net_col2, net_spacer = st.columns([1, 1, 3])
-    with net_col1:
+    # ── Slim network toolbar ──────────────────────
+    st.markdown('<div class="rd-toolbarrow"></div>', unsafe_allow_html=True)
+    tb_lbl, tb_n1, tb_n2, tb_badge = st.columns([0.7, 0.9, 0.9, 2.2])
+    with tb_lbl:
+        st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
+                    'text-transform:uppercase;color:#7A7F96;padding-top:0.7rem;">Network</div>',
+                    unsafe_allow_html=True)
+    with tb_n1:
         mainnet_active = st.session_state.pay_network == "mainnet"
         if st.button(("● " if mainnet_active else "") + "🌐 Mainnet", key="pay_net_mainnet",
                      use_container_width=True, type="primary" if mainnet_active else "secondary"):
@@ -5733,7 +6211,7 @@ elif st.session_state.page == "pay":
                 st.session_state.pay_parsed  = None
                 st.session_state.pay_result  = None
                 st.rerun()
-    with net_col2:
+    with tb_n2:
         testnet_active = st.session_state.pay_network == "testnet"
         if st.button(("● " if testnet_active else "") + "🧪 Testnet", key="pay_net_testnet",
                      use_container_width=True, type="primary" if testnet_active else "secondary"):
@@ -5747,104 +6225,125 @@ elif st.session_state.page == "pay":
     _net = _pay_net_config(st.session_state.pay_network)
     net_badge_color = "#1414E8" if st.session_state.pay_network == "mainnet" else "#166016"
     net_badge_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
-    st.markdown(
-        f'<div style="display:inline-flex;align-items:center;gap:7px;background:{net_badge_bg};'
-        f'border:1px solid {net_badge_color}33;border-radius:10px;padding:5px 12px;margin-bottom:1rem;'
-        f'font-size:12px;font-weight:600;color:{net_badge_color};">'
-        f'{"🌐" if st.session_state.pay_network == "mainnet" else "🧪"} '
-        f'{_net["label"]} · Chain ID {_net["chain_id_dec"]} · {_net.get("symbol","PROS")} · {_net["rpc"][:32]}…</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Wallet connect ────────────────────────────
-    wallet_addr = st.session_state.get("wallet_address", "")
-    if not wallet_addr:
+    with tb_badge:
         st.markdown(
-            '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);border-radius:18px;'
-            'padding:1.4rem 1.7rem;margin-bottom:1.2rem;'
-            'box-shadow:0 6px 20px rgba(20,20,60,0.07),0 0 0 4px rgba(26,26,255,0.04);">'
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.6rem;">'
-            '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1414E8,#0C0C1A);'
-            'display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🔑</div>'
-            '<div><div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#0C0C1A;">Connect Your Wallet</div>'
-            '<div style="font-size:11.5px;color:#7A7F96;margin-top:1px;">Paste your wallet address — read-only, no signing</div>'
-            '</div></div>'
-            '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.55;margin-bottom:0.9rem;">'
-            'Enter your Pharos wallet address to enable the Payment Agent.</div>',
+            f'<div style="display:inline-flex;align-items:center;gap:7px;background:{net_badge_bg};'
+            f'border:1px solid {net_badge_color}33;border-radius:10px;padding:7px 12px;margin-top:0.35rem;'
+            f'font-size:11.5px;font-weight:600;color:{net_badge_color};white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;max-width:100%;">'
+            f'{"🌐" if st.session_state.pay_network == "mainnet" else "🧪"} '
+            f'{_net["label"]} · Chain {_net["chain_id_dec"]} · {_net.get("symbol","PROS")}</div>',
             unsafe_allow_html=True,
         )
-        _pwi = st.text_input("Your wallet address", placeholder="0x1234...your Pharos wallet address",
-                              key="pay_inline_wallet_input", label_visibility="collapsed")
-        pw1, pw2 = st.columns([2, 1])
-        with pw1:
-            if st.button("🔗 Connect Wallet", key="pay_inline_wallet_btn", use_container_width=True, type="primary"):
-                if _pwi.strip().startswith("0x") and len(_pwi.strip()) == 42:
-                    st.session_state.wallet_address = _pwi.strip()
+
+    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+
+    # ── Command center: prompt (left) + wallet rail (right) ──
+    wallet_addr = st.session_state.get("wallet_address", "")
+    cmd_col, side_col = st.columns([1.65, 1], gap="medium")
+
+    # ----- RIGHT: compact wallet side panel + utilities -----
+    with side_col:
+        with st.container(border=True):
+            if not wallet_addr:
+                st.markdown(
+                    '<div style="padding:0.4rem 0.5rem 0.2rem 0.6rem;">'
+                    '<span class="rd-eyebrow">🔑 Wallet</span>'
+                    '<div class="rd-panel-title" style="font-size:14px;color:#000000;">Connect wallet</div>'
+                    '<div class="rd-panel-sub" style="color:#FFFFFF;">Paste your address — read-only, no signing.</div></div>',
+                    unsafe_allow_html=True,
+                )
+                _pwi = st.text_input("Your wallet address", placeholder="0x1234…your Pharos address",
+                                     key="pay_inline_wallet_input", label_visibility="collapsed")
+                if st.button("🔗 Connect Wallet", key="pay_inline_wallet_btn",
+                             use_container_width=True, type="primary"):
+                    if valid_addr(_pwi):
+                        st.session_state.wallet_address = _pwi.strip()
+                        st.session_state.wallet_data    = None
+                        st.session_state.wallet_profile = None
+                        st.rerun()
+                    else:
+                        st.error("Enter a valid 0x… wallet address (42 characters).")
+            else:
+                _wa = wallet_addr; _ws = _wa[:6] + "…" + _wa[-4:]
+                st.markdown(
+                    '<div style="padding:0.4rem 0.5rem 0.2rem 0.6rem;">'
+                    '<span class="rd-eyebrow">🔗 Connected</span>'
+                    f'<div style="display:flex;align-items:center;gap:10px;'
+                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
+                    f'border-radius:12px;padding:0.65rem 0.9rem;margin:0.2rem 0 0.2rem 0;">'
+                    f'<span style="font-size:15px;">👛</span><div style="min-width:0;">'
+                    f'<div style="font-size:9px;color:rgba(255,255,255,0.5);font-weight:600;'
+                    f'letter-spacing:0.07em;text-transform:uppercase;">Connected wallet</div>'
+                    f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:DM Mono,monospace;">{_ws}</div>'
+                    f'</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("✕ Disconnect", key="pay_disconnect_wallet", use_container_width=True):
+                    st.session_state.wallet_address = ""
                     st.session_state.wallet_data    = None
                     st.session_state.wallet_profile = None
+                    st.session_state.pay_parsed     = None
+                    st.session_state.pay_result     = None
                     st.rerun()
-                else:
-                    st.error("Enter a valid 0x… wallet address (42 characters).")
-        with pw2:
+
+            st.markdown('<hr class="rd-divider"/>', unsafe_allow_html=True)
+            st.markdown('<div class="rd-util" style="margin-bottom:0.4rem;color:#FFFFFF;">🧰 Utilities</div>', unsafe_allow_html=True)
             if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
                 st.session_state.page = "memory"; st.rerun()
-        st.markdown('</div><div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
-    else:
-        _wa = wallet_addr; _ws = _wa[:6] + "…" + _wa[-4:]
-        wcol1, wcol2 = st.columns([4, 1])
-        with wcol1:
             st.markdown(
-                f'<div style="display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#0C0C1A,#1414E8);'
-                f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.7rem;">'
-                f'<span style="font-size:16px;">🔗</span><div>'
-                f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">Connected Wallet</div>'
-                f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
-                f'</div></div>', unsafe_allow_html=True)
-        with wcol2:
-            if st.button("✕ Disconnect", key="pay_disconnect_wallet", use_container_width=True):
-                st.session_state.wallet_address = ""
-                st.session_state.wallet_data    = None
-                st.session_state.wallet_profile = None
-                st.session_state.pay_parsed     = None
-                st.session_state.pay_result     = None
-                st.rerun()
+                '<div style="font-size:10.5px;color:#FFFFFF;line-height:1.5;margin-top:0.5rem;'
+                'padding:0 0.3rem;">Describe a payment in plain English — Send, Batch, or Approve. '
+                'Nothing moves without your signature.</div>',
+                unsafe_allow_html=True,
+            )
 
-    # ── Example prompts ───────────────────────────
+    # ----- LEFT: the AI command card (hero element of the page) -----
     EXAMPLE_PROMPTS = [
         ("➡️ Send",    "Send 10 PROS to 0xAbCd1234567890AbCd1234567890AbCd12345678"),
         ("📦 Batch",   "Send 1 PROS each to 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB, 0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
         ("✅ Approve", "Approve 0xFaroswap1111111111111111111111111111111111 to spend 100 PROS"),
     ]
-    st.markdown('<div style="font-size:12px;font-weight:600;color:#7A7F96;margin-bottom:6px;">Try an example:</div>', unsafe_allow_html=True)
-    ep_cols = st.columns(3)
-    for i, (ep_label, ep_text) in enumerate(EXAMPLE_PROMPTS):
-        with ep_cols[i]:
-            if st.button(ep_label, key=f"pay_ep_{i}", use_container_width=True):
-                st.session_state.pay_intent_raw = ep_text
-                st.session_state.pay_parsed     = None
-                st.session_state.pay_confirmed  = False
-                st.session_state.pay_result     = None
-                st.rerun()
+    with cmd_col:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="rd-command" style="padding:0.5rem 0.7rem 0.2rem 0.7rem;">'
+                '<span class="rd-eyebrow">🤖 AI Command</span>'
+                '<div class="rd-panel-title" style="font-size:17px;">What payment can I build for you?</div>'
+                '<div class="rd-panel-sub">Type an instruction in plain English, or start from an example.</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            # Example suggestion chips
+            st.markdown('<div class="rd-chiprow"></div>', unsafe_allow_html=True)
+            ep_cols = st.columns(3)
+            for i, (ep_label, ep_text) in enumerate(EXAMPLE_PROMPTS):
+                with ep_cols[i]:
+                    if st.button(ep_label, key=f"pay_ep_{i}", use_container_width=True):
+                        st.session_state.pay_intent_raw = ep_text
+                        st.session_state.pay_parsed     = None
+                        st.session_state.pay_confirmed  = False
+                        st.session_state.pay_result     = None
+                        st.rerun()
 
-    # ── Input + Parse ─────────────────────────────
-    st.markdown('<div style="margin-top:0.8rem;"></div>', unsafe_allow_html=True)
-    pay_input = st.text_input(
-        "Payment instruction in plain English",
-        value=st.session_state.pay_intent_raw,
-        placeholder='e.g. "Send 5 PROS to 0xAbCd…" or "Approve 0xContract to spend 100 PROS"',
-        key="pay_text_input",
-        label_visibility="collapsed",
-    )
-    parse_col, clear_col = st.columns([2, 1])
-    with parse_col:
-        parse_clicked = st.button("🔍 Parse Payment Intent", key="pay_parse_btn", use_container_width=True, type="primary")
-    with clear_col:
-        if st.button("✕ Clear", key="pay_clear_btn", use_container_width=True):
-            st.session_state.pay_intent_raw = ""
-            st.session_state.pay_parsed     = None
-            st.session_state.pay_confirmed  = False
-            st.session_state.pay_result     = None
-            st.rerun()
+            pay_input = st.text_area(
+                "Payment instruction in plain English",
+                value=st.session_state.pay_intent_raw,
+                placeholder='e.g. "Send 5 PROS to 0xAbCd…" or "Approve 0xContract to spend 100 PROS"',
+                key="pay_text_input",
+                label_visibility="collapsed",
+                height=120,
+            )
+            parse_col, clear_col = st.columns([2, 1])
+            with parse_col:
+                parse_clicked = st.button("🔍 Parse Payment Intent", key="pay_parse_btn", use_container_width=True, type="primary")
+            with clear_col:
+                if st.button("✕ Clear", key="pay_clear_btn", use_container_width=True):
+                    st.session_state.pay_intent_raw = ""
+                    st.session_state.pay_parsed     = None
+                    st.session_state.pay_confirmed  = False
+                    st.session_state.pay_result     = None
+                    st.rerun()
 
     if parse_clicked and pay_input.strip():
         st.session_state.pay_intent_raw = pay_input.strip()
@@ -5856,6 +6355,15 @@ elif st.session_state.page == "pay":
             if not parsed:
                 parsed = _parse_regex(pay_input.strip(), _intent)
         if parsed:
+            # Security: only trust addresses the user literally typed, and
+            # validate amounts. Blocks prompt-injection from redirecting funds.
+            _typed = set(re.findall(r"0x[0-9a-fA-F]{40}", pay_input))
+            if parsed.get("recipient") and parsed["recipient"] not in _typed:
+                parsed["recipient"] = None
+            if parsed.get("spender") and parsed["spender"] not in _typed:
+                parsed["spender"] = None
+            if isinstance(parsed.get("recipients"), list):
+                parsed["recipients"] = [a for a in parsed["recipients"] if a in _typed]
             parsed["_intent"] = _intent
             st.session_state.pay_parsed = parsed
         else:
@@ -5916,16 +6424,16 @@ elif st.session_state.page == "pay":
                 '</div></div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
                 + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
                 '</div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">To</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{recipient}</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(recipient)}</div>'
                 '</div>'
                 + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                    f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
                 '<div style="font-size:12px;color:#0C0C1A;">21,000 gas units</div>'
@@ -5980,19 +6488,19 @@ elif st.session_state.page == "pay":
                 '</div></div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
                 + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
                 '</div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:8px;">Recipients</div>' +
                 "".join([f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;padding:4px 0;border-bottom:1px solid #ECEEF4;">'
-                         f'<span style="color:#1414E8;font-weight:700;">{i+1}.</span> {addr} '
+                         f'<span style="color:#1414E8;font-weight:700;">{i+1}.</span> {esc(addr)} '
                          f'<span style="color:#7A7F96;">({amount_each:,.4f} {_sym})</span></div>'
                          for i, addr in enumerate(recipients)]) +
                 '</div>'
                 + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                    f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
                 f'<div style="font-size:12px;color:#0C0C1A;">21,000 × {len(recipients)} = {21000*len(recipients):,} gas units ({len(recipients)} separate transactions)</div>'
@@ -6055,16 +6563,16 @@ elif st.session_state.page == "pay":
                 '</div></div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Owner (Your Wallet)</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr or "⚠️ Not connected"}</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
                 + (f'<div style="font-size:11px;color:#7A7F96;margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}</div>' if sender_balance is not None else '') +
                 '</div>'
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Spender (Contract being approved)</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#1414E8;word-break:break-all;">{spender}</div>'
+                f'<div style="font-size:12px;font-weight:600;color:#1414E8;word-break:break-all;">{esc(spender)}</div>'
                 '</div>'
                 + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
                    f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Note</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{reason}</div></div>' if reason else '') +
+                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
                 '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
                 '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
                 '<div style="font-size:12px;color:#0C0C1A;">~62,000 gas units (ERC-20 approve)</div>'
@@ -6096,12 +6604,16 @@ elif st.session_state.page == "pay":
             st.rerun()
 
     # ── Handle tx hash returned via query param ───
-    _pay_tx   = st.query_params.get("pay_tx", "")
-    _pay_to   = st.query_params.get("pay_to", "")
-    _pay_amt  = st.query_params.get("pay_amt", "")
+    _pay_tx   = valid_txhash(st.query_params.get("pay_tx", "")) or ("batch" if st.query_params.get("pay_tx", "") == "batch" else "")
+    _pay_to   = valid_addr(st.query_params.get("pay_to", "")) or ""
+    _pay_amt  = valid_amount(st.query_params.get("pay_amt", ""))
     _pay_net  = st.query_params.get("pay_net", "mainnet")
+    if _pay_net not in ("mainnet", "testnet"):
+        _pay_net = "mainnet"
     _pay_mode = st.query_params.get("pay_mode", "send")
-    if _pay_tx and _pay_to and _pay_amt:
+    if _pay_mode not in ("send", "batch", "approve"):
+        _pay_mode = "send"
+    if _pay_tx and _pay_to and _pay_amt is not None:
         try:
             amt_float = float(_pay_amt)
         except Exception:
@@ -6140,10 +6652,10 @@ elif st.session_state.page == "pay":
             f'🎉 {_m} Complete!</div>'
             f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Type:</strong> {_m}</div>'
             f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Amount:</strong> {r["amount"]:,.4f} {_sym}</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Address:</strong> {r["recipient"]}</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {r.get("network","Pharos")}</div>'
-            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:4px;"><strong>Tx Hash:</strong> {r["tx_hash"]}</div>'
-            f'<a href="{_exp}/tx/{r["tx_hash"]}" target="_blank" '
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Address:</strong> {esc(r["recipient"])}</div>'
+            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {esc(r.get("network","Pharos"))}</div>'
+            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:4px;"><strong>Tx Hash:</strong> {esc(r["tx_hash"])}</div>'
+            f'<a href="{esc_url(_exp)}/tx/{esc(r["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
             'style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;'
             'color:#1A1AFF;margin-top:4px;text-decoration:none;">View on Pharosscan ↗</a>'
             '</div>',
@@ -6175,9 +6687,9 @@ elif st.session_state.page == "pay":
                 'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
                 'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
                 f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
-                f'{_mode_icon} {_h_mode} · {h["amount"]:,.4f} {_h_sym} → {h["recipient"][:16]}…</div>'
-                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">{h.get("timestamp","")} · {_h_net} · {tx_short}</div></div>'
-                f'<a href="{_h_exp}/tx/{h["tx_hash"]}" target="_blank" '
+                f'{_mode_icon} {_h_mode} · {h["amount"]:,.4f} {_h_sym} → {esc(h["recipient"][:16])}…</div>'
+                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(tx_short)}</div></div>'
+                f'<a href="{esc_url(_h_exp)}/tx/{esc(h["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
                 'style="font-size:11.5px;font-weight:600;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
                 '</div>',
                 unsafe_allow_html=True,
@@ -6190,6 +6702,8 @@ elif st.session_state.page == "pay":
 # ═════════════════════════════════════════════════════════════
 elif st.session_state.page == "request":
 
+
+    inject_redesign_css("request rd-hero-compact rd-wide")
 
     def _req_net_config(network: str) -> dict:
         if network == "testnet":
@@ -6218,6 +6732,21 @@ elif st.session_state.page == "request":
 
     def _pay_invoice_widget(chain_id, chain_name, rpc_url, explorer,
                             net_symbol, recipient, amount_hex, pay_net_ss, amount_display):
+        # Security: constrain every value interpolated into the signing JS.
+        _hex_re = re.compile(r"^0x[0-9a-fA-F]+$")
+        recipient      = valid_addr(recipient) or ""
+        amount_hex     = amount_hex if _hex_re.match(str(amount_hex or "")) else "0x0"
+        chain_id       = chain_id if _hex_re.match(str(chain_id or "")) else ""
+        pay_net_ss     = pay_net_ss if pay_net_ss in ("mainnet", "testnet") else "mainnet"
+        explorer       = esc_url(explorer)
+        rpc_url        = esc_url(rpc_url)
+        try:
+            amount_display = str(float(amount_display))
+        except (TypeError, ValueError):
+            amount_display = "0"
+        if not recipient:
+            st.error("Invalid recipient address — payment aborted.")
+            return
         _tid = hashlib.md5(f"req{recipient}{amount_hex}{chain_id}".encode()).hexdigest()[:8]
         html = f"""<!DOCTYPE html>
 <html><head>
@@ -6296,17 +6825,19 @@ elif st.session_state.page == "request":
         components.html(html, height=140, scrolling=False)
 
     # ── Handle paid-invoice return from wallet ──
-    _rpaid_tx  = st.query_params.get("req_paid_tx",  "")
-    _rpaid_to  = st.query_params.get("req_paid_to",  "")
-    _rpaid_amt = st.query_params.get("req_paid_amt", "")
+    _rpaid_tx  = valid_txhash(st.query_params.get("req_paid_tx", "")) or ""
+    _rpaid_to  = valid_addr(st.query_params.get("req_paid_to", "")) or ""
+    _rpaid_amt = valid_amount(st.query_params.get("req_paid_amt", ""))
     _rpaid_net = st.query_params.get("req_paid_net", "mainnet")
+    if _rpaid_net not in ("mainnet", "testnet"):
+        _rpaid_net = "mainnet"
     if _rpaid_tx and _rpaid_to:
         _rn_cfg = _req_net_config(_rpaid_net)
         _paid_entry = {
             "type":      "paid",
             "tx_hash":   _rpaid_tx,
             "to":        _rpaid_to,
-            "amount":    _rpaid_amt,
+            "amount":    str(_rpaid_amt) if _rpaid_amt is not None else "0",
             "network":   _rn_cfg["label"],
             "explorer":  _rn_cfg["explorer"],
             "symbol":    _rn_cfg.get("symbol", "PROS"),
@@ -6402,7 +6933,7 @@ elif st.session_state.page == "request":
             ) +
             '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
             '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Pay to</div>'
-            f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{inv_to}</div>'
+            f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(inv_to)}</div>'
             '</div></div>'
             + (
                 '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
@@ -6432,7 +6963,7 @@ elif st.session_state.page == "request":
             with rw1:
                 if st.button("🔗 Connect Wallet", key="req_pay_wallet_btn",
                              use_container_width=True, type="primary"):
-                    if _ri.strip().startswith("0x") and len(_ri.strip()) == 42:
+                    if valid_addr(_ri):
                         st.session_state.wallet_address = _ri.strip()
                         st.rerun()
                     else:
@@ -6497,8 +7028,9 @@ elif st.session_state.page == "request":
     # MODE C — CREATE REQUEST (default)
     # ══════════════════════════════════════════════
     else:
-        # ── Network selector ──────────────────
-        st.markdown('<div style="font-size:12px;font-weight:700;color:#7A7F96;margin-bottom:6px;letter-spacing:0.05em;text-transform:uppercase;">Network</div>', unsafe_allow_html=True)
+        # ── Slim network toolbar ──────────────
+        st.markdown('<div class="rd-toolbarrow"></div>', unsafe_allow_html=True)
+        st.markdown('<span class="rd-tb-lbl" style="display:block;margin-bottom:4px;">Network</span>', unsafe_allow_html=True)
         rn1, rn2, rn_sp = st.columns([1, 1, 3])
         with rn1:
             _mn_active = st.session_state.pay_network == "mainnet"
@@ -6521,14 +7053,14 @@ elif st.session_state.page == "request":
         nb_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
         st.markdown(
             f'<div style="display:inline-flex;align-items:center;gap:7px;background:{nb_bg};'
-            f'border:1px solid {nb_color}33;border-radius:10px;padding:5px 12px;margin-bottom:1rem;'
+            f'border:1px solid {nb_color}33;border-radius:10px;padding:5px 12px;margin-bottom:0.8rem;'
             f'font-size:12px;font-weight:600;color:{nb_color};">'
             f'{"🌐" if st.session_state.pay_network=="mainnet" else "🧪"} '
             f'{_rn["label"]} · {_rsym} · Chain ID {_rn["chain_id_dec"]}</div>',
             unsafe_allow_html=True,
         )
 
-        # ── Wallet connect ────────────────────
+        # ── Wallet setup (top of workspace) ───
         if not wallet_addr:
             st.markdown(
                 '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
@@ -6545,7 +7077,7 @@ elif st.session_state.page == "request":
             with cw1:
                 if st.button("🔗 Set My Address", key="req_create_wallet_btn",
                              use_container_width=True, type="primary"):
-                    if _cwi.strip().startswith("0x") and len(_cwi.strip()) == 42:
+                    if valid_addr(_cwi):
                         st.session_state.wallet_address = _cwi.strip()
                         st.rerun()
                     else:
@@ -6575,23 +7107,60 @@ elif st.session_state.page == "request":
                     st.session_state.wallet_address = ""
                     st.rerun()
 
-        st.markdown('<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;margin:0.4rem 0 0.7rem 0;">Create Payment Request</div>', unsafe_allow_html=True)
+        # ── Workspace body: Request Card (left) + summary rail (right) ──
+        form_col, sum_col = st.columns([1.5, 1], gap="medium")
 
-        fc1, fc2 = st.columns([1, 1])
-        with fc1:
-            req_amount = st.text_input(f"Amount ({_rsym})", placeholder="e.g. 10", key="req_amount_input")
-        with fc2:
-            req_payer = st.text_input("Payer wallet address (optional)",
-                                      placeholder="0x… leave blank for anyone",
-                                      key="req_payer_input")
-        req_note = st.text_input("Note / What is this for?",
-                                 placeholder='"Design work", "Hackathon bounty", "Invoice #001"',
-                                 key="req_note_input")
+        with form_col:
+            with st.container(border=True):
+                st.markdown(
+                    '<div style="padding:0.4rem 0.6rem 0.2rem 0.7rem;">'
+                    '<span class="rd-eyebrow">🧾 New request</span>'
+                    '<div class="rd-panel-title">Create payment request</div>'
+                    '<div class="rd-panel-sub">Fill in the details, then generate a shareable link.</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                fc1, fc2 = st.columns([1, 1])
+                with fc1:
+                    req_amount = st.text_input(f"Amount ({_rsym})", placeholder="e.g. 10", key="req_amount_input")
+                with fc2:
+                    st.text_input("Token", value=_rsym, disabled=True, key="req_token_display")
+                req_payer = st.text_input("Payer wallet address (optional)",
+                                          placeholder="0x… leave blank for anyone",
+                                          key="req_payer_input")
+                req_note = st.text_input("Note / What is this for?",
+                                         placeholder='"Design work", "Hackathon bounty", "Invoice #001"',
+                                         key="req_note_input")
+                gen_clicked = st.button("🔗 Generate Payment Link", key="req_generate_btn",
+                                        use_container_width=True, type="primary")
 
-        gen_col, _ = st.columns([1, 2])
-        with gen_col:
-            gen_clicked = st.button("🔗 Generate Payment Link", key="req_generate_btn",
-                                    use_container_width=True, type="primary")
+        with sum_col:
+            with st.container(border=True):
+                _amt_prev = (st.session_state.get("req_amount_input") or "").strip()
+                _note_prev = (st.session_state.get("req_note_input") or "").strip()
+                _to_prev = (wallet_addr[:6] + "…" + wallet_addr[-4:]) if wallet_addr else "Not set"
+                st.markdown(
+                    '<div style="padding:0.4rem 0.6rem 0.3rem 0.7rem;">'
+                    '<span class="rd-eyebrow">👁 Summary</span>'
+                    '<div class="rd-panel-title">Request summary</div>'
+                    '<hr class="rd-divider"/>'
+                    '<div style="display:flex;flex-direction:column;gap:0.7rem;">'
+                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
+                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Amount</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#0B1020;">'
+                    f'{esc(_amt_prev) if _amt_prev else "—"} <span style="font-size:0.8rem;color:#68738C;">{_rsym}</span></div></div>'
+                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
+                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Receive to</div>'
+                    f'<div style="font-family:DM Mono,monospace;font-size:12.5px;font-weight:600;color:#2B3656;">{esc(_to_prev)}</div></div>'
+                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
+                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Network</div>'
+                    f'<div style="font-size:12.5px;font-weight:600;color:#2B3656;">{_rn["label"]}</div></div>'
+                    + (f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
+                       f'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Note</div>'
+                       f'<div style="font-size:12.5px;color:#2B3656;">{esc(_note_prev)}</div></div>' if _note_prev else '')
+                    + '</div></div>',
+                    unsafe_allow_html=True,
+                )
 
         if gen_clicked:
             _err = None
@@ -6639,54 +7208,74 @@ elif st.session_state.page == "request":
                 if price_info.get("available") and price_info.get("price_usd") and st.session_state.pay_network == "mainnet":
                     usd_val = _amt_f * price_info["price_usd"]
 
-                st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
+                # ── Generated request card (result) ──
+                st.markdown('<div style="margin-top:1.1rem;"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
-                    'padding:1.6rem 1.8rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);margin-bottom:1rem;">'
-                    '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
-                    'color:#0C0C1A;margin-bottom:1rem;">🧾 Invoice Preview</div>'
-                    '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
-                    'border-radius:14px;padding:1rem 1.2rem;margin-bottom:0.9rem;text-align:center;">'
-                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
-                    f'<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#0C0C1A;">{_amt_f:,.4f} {_rsym}</div>'
-                    + (f'<div style="font-size:12px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
-                    '</div>'
-                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
-                    '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Receive to</div>'
-                    f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;">{wallet_addr}</div>'
-                    '</div>'
-                    '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                    '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Network</div>'
-                    f'<div style="font-size:13px;font-weight:700;color:#0C0C1A;">{_rn["label"]}</div>'
-                    f'<div style="font-size:11px;color:#7A7F96;margin-top:1px;">Chain ID {_rn["chain_id_dec"]}</div>'
-                    '</div></div>'
-                    + (
-                        '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
-                        'padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">For</div>'
-                        f'<div style="font-size:13px;font-weight:500;color:#0C0C1A;">{req_note.strip()}</div>'
-                        '</div>' if req_note.strip() else ''
-                    ) +
-                    '</div>',
+                    '<div style="display:inline-flex;align-items:center;gap:7px;background:#F0FFF4;'
+                    'border:1px solid #86EFAC;border-radius:999px;padding:4px 12px;font-size:11px;'
+                    'font-weight:700;color:#15803D;margin-bottom:0.6rem;">✓ Request created · ready to share</div>',
                     unsafe_allow_html=True,
                 )
+                res_main, res_qr = st.columns([1.5, 1], gap="medium")
+
+                with res_main:
+                    st.markdown(
+                        '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
+                        'padding:1.5rem 1.7rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);">'
+                        '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
+                        'color:#0C0C1A;margin-bottom:1rem;">🧾 Payment Request</div>'
+                        '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
+                        'border-radius:14px;padding:1rem 1.2rem;margin-bottom:0.9rem;text-align:center;">'
+                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
+                        f'<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#0C0C1A;">{_amt_f:,.4f} {_rsym}</div>'
+                        + (f'<div style="font-size:12px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+                        '</div>'
+                        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+                        '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Receive to</div>'
+                        f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr)}</div>'
+                        '</div>'
+                        '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
+                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Network</div>'
+                        f'<div style="font-size:13px;font-weight:700;color:#0C0C1A;">{_rn["label"]}</div>'
+                        f'<div style="font-size:11px;color:#7A7F96;margin-top:1px;">Chain ID {_rn["chain_id_dec"]}</div>'
+                        '</div></div>'
+                        + (
+                            '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
+                            'padding:0.75rem 0.9rem;">'
+                            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">For</div>'
+                            f'<div style="font-size:13px;font-weight:500;color:#0C0C1A;">{esc(req_note.strip())}</div>'
+                            '</div>' if req_note.strip() else ''
+                        ) +
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                with res_qr:
+                    st.markdown(
+                        '<div style="text-align:center;margin-bottom:0.4rem;">'
+                        '<div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
+                        'text-transform:uppercase;color:#7A7F96;margin-bottom:0.5rem;">Scan to pay</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_qr_code(_link, size=168, key="req_qr")
 
                 st.markdown(
                     '<div style="background:#F0FFF4;border:1.5px solid #22C55E;border-radius:14px;'
-                    'padding:1rem 1.2rem;margin-bottom:0.8rem;">'
+                    'padding:1rem 1.2rem;margin:0.8rem 0 0.4rem 0;">'
                     '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;'
                     'color:#15803D;margin-bottom:0.5rem;">🔗 Shareable Payment Link</div>'
                     '<div style="font-size:11px;color:#166534;margin-bottom:0.6rem;">'
                     'Send this link to the payer. They open it, see the invoice, and pay with one click.</div>'
                     f'<div style="background:#FFFFFF;border:1px solid #86EFAC;border-radius:8px;'
                     f'padding:8px 12px;font-size:11px;font-family:monospace;color:#0C0C1A;'
-                    f'word-break:break-all;line-height:1.6;">{_link}</div>'
+                    f'word-break:break-all;line-height:1.6;">{esc(_link)}</div>'
                     '</div>',
                     unsafe_allow_html=True,
                 )
                 st.code(_link, language=None)
                 st.caption("👆 Copy the link above and send it via Telegram, Discord, or email.")
+
 
     # ── Invoice History ───────────────────────────
     if _mode == "create" and st.session_state.req_invoices:
@@ -6707,14 +7296,14 @@ elif st.session_state.page == "request":
                 'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
                 'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
                 f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
-                f'{_icon} {_label} · {_inv.get("amount","?")} {_i_sym}'
-                + (f' · {_inv.get("note","")}' if _inv.get("note") else '') +
+                f'{_icon} {_label} · {esc(_inv.get("amount","?"))} {esc(_i_sym)}'
+                + (f' · {esc(_inv.get("note",""))}' if _inv.get("note") else '') +
                 f'</div>'
                 f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">'
-                f'{_inv.get("timestamp","")} · {_i_net} · {_addr[:16]}…</div></div>'
+                f'{esc(_inv.get("timestamp",""))} · {esc(_i_net)} · {esc(_addr[:16])}…</div></div>'
                 + (
-                    f'<a href="{_inv.get("explorer",PHAROS_EXPLORER_URL)}/tx/{_inv.get("tx_hash","")}" '
-                    f'target="_blank" style="font-size:11.5px;font-weight:600;color:#1A1AFF;'
+                    f'<a href="{esc_url(_inv.get("explorer",PHAROS_EXPLORER_URL))}/tx/{esc(_inv.get("tx_hash",""))}" '
+                    f'target="_blank" rel="noopener noreferrer" style="font-size:11.5px;font-weight:600;color:#1A1AFF;'
                     f'white-space:nowrap;text-decoration:none;">Tx ↗</a>'
                     if _it == "paid" and _inv.get("tx_hash") else ''
                 ) +
@@ -6729,6 +7318,8 @@ elif st.session_state.page == "request":
 # PAGE: NETWORK DASHBOARD
 # ═════════════════════════════════════════════
 elif st.session_state.page == "network":
+
+    inject_redesign_css("network rd-hero-compact rd-wide")
 
     # ── Live RPC stats fetcher ────────────────
     def _fetch_net_stats() -> dict:
@@ -6793,13 +7384,14 @@ elif st.session_state.page == "network":
         unsafe_allow_html=True,
     )
 
-    rc1, rc2, _ = st.columns([1, 2, 4])
+    # ── Refresh controls (integrated with hero, right-aligned) ──
+    rc_sp, rc1, rc2 = st.columns([5, 1.5, 1.6])
     with rc1:
         if st.button("🔄 Refresh", key="net_refresh", use_container_width=True, type="primary"):
             st.session_state["net_stats_cache"] = {}
             st.rerun()
     with rc2:
-        st.markdown('<div style="font-size:11px;color:#7A7F96;padding:0.55rem 0;">Auto-refresh every 15s</div>',
+        st.markdown('<div style="font-size:11px;color:#39445D;padding:0.7rem 0;text-align:left;">🟢 Live · auto 15s</div>',
                     unsafe_allow_html=True)
 
     ns = _fetch_net_stats()
@@ -6812,20 +7404,6 @@ elif st.session_state.page == "network":
             unsafe_allow_html=True,
         )
     else:
-        def _card(label, value, sub, icon, c="#1414E8", bg="#EEF0FF"):
-            return (
-                f'<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
-                f'padding:1.2rem 1.4rem;box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
-                f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.5rem;">'
-                f'<div style="width:36px;height:36px;border-radius:10px;background:{bg};'
-                f'display:flex;align-items:center;justify-content:center;font-size:18px;">{icon}</div>'
-                f'<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-                f'text-transform:uppercase;color:#7A7F96;">{label}</div></div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:1.55rem;font-weight:800;'
-                f'color:{c};letter-spacing:-0.02em;line-height:1.1;">{value}</div>'
-                f'<div style="font-size:11px;color:#9499A8;margin-top:3px;">{sub}</div></div>'
-            )
-
         bts  = f'{ns["block_time_s"]}s'  if ns["block_time_s"]     is not None else "—"
         gwei = f'{ns["gas_price_gwei"]} Gwei' if ns["gas_price_gwei"] is not None else "—"
         blkn = f'{ns["block_number"]:,}' if ns["block_number"]      is not None else "—"
@@ -6833,84 +7411,111 @@ elif st.session_state.page == "network":
         cid  = str(ns["chain_id"])        if ns["chain_id"]          is not None else "—"
         pc   = str(ns["peer_count"])      if ns["peer_count"]        is not None else "N/A"
 
-        st.markdown(
-            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:1.4rem;">'
-            + _card("Block Height",   blkn, "Latest confirmed block",              "📦", "#1414E8", "#EEF0FF")
-            + _card("Block Time",     bts,  "Seconds between last two blocks",     "⏱️", "#166016", "#F0FFF4")
-            + _card("Txs in Block",   txct, "Transactions in latest block",        "📋", "#7A5800", "#FFFBEB")
-            + _card("Gas Price",      gwei, "Current network gas price",           "⛽", "#5B2D8C", "#F3EEFF")
-            + _card("Chain ID",       cid,  "Pharos Pacific Mainnet identifier",   "🔗", "#0C6E8A", "#E8F8FF")
-            + _card("Peer Count",     pc,   "Connected RPC peers (if exposed)",    "🤝", "#B94A00", "#FFF4EE")
-            + '</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Network info strip ────────────────────
-    st.markdown(
-        '<div style="background:linear-gradient(90deg,#0C0C1A,#0A1A6E);border-radius:14px;'
-        'padding:1rem 1.4rem;margin-bottom:1.2rem;">'
-        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
-        + "".join([
-            f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
-            f'color:rgba(255,255,255,0.4);margin-bottom:3px;">{k}</div>'
-            f'<div style="font-size:12.5px;font-weight:600;color:#FFFFFF;font-family:{"monospace" if "RPC" in k else "inherit"};">{v}</div></div>'
-            for k, v in [
-                ("Network",     "Pharos Pacific Mainnet"),
-                ("RPC URL",     PHAROS_RPC_URL),
-                ("Symbol",      "PROS"),
-                ("Status",      "🟢 Online"),
-            ]
-        ])
-        + '</div></div>',
-        unsafe_allow_html=True,
+        def _stat_tile(label, value, sub, icon, c, bg):
+          return (
+               f'<div class="rd-stat" style="margin-bottom:18px;">'
+               f'<div class="rd-stat-top">'
+               f'<div class="rd-stat-ic" style="background:{bg};">{icon}</div>'
+               f'<div class="rd-stat-lbl">{label}</div></div>'
+               f'<div class="rd-stat-val" style="color:{c};">{value}</div>'
+               f'<div class="rd-stat-sub">{sub}</div></div>'
     )
 
-    # ── Links ─────────────────────────────────
-    st.markdown(
-        f'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-        f'<a href="{PHAROS_EXPLORER_URL}" target="_blank" '
-        f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
-        f'border-radius:10px;padding:0.6rem 1.2rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
-        f'🔍 Pharosscan Explorer ↗</a>'
-        f'<a href="{PHAROS_DOCS_URL}" target="_blank" '
-        f'style="display:inline-flex;align-items:center;gap:6px;background:#EEF0FF;color:#1414E8;'
-        f'border-radius:10px;padding:0.6rem 1.2rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
-        f'📖 Pharos Docs ↗</a>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+        _tiles = [
+            _stat_tile("Block Height", blkn, "Latest confirmed block",          "📦", "#1414E8", "#EEF0FF"),
+            _stat_tile("Block Time",   bts,  "Between last two blocks",          "⏱️", "#166016", "#F0FFF4"),
+            _stat_tile("Txs in Block", txct, "Transactions in latest block",     "📋", "#7A5800", "#FFFBEB"),
+            _stat_tile("Gas Price",    gwei, "Current network gas price",        "⛽", "#5B2D8C", "#F3EEFF"),
+            _stat_tile("Chain ID",     cid,  "Pacific Mainnet identifier",       "🔗", "#0C6E8A", "#E8F8FF"),
+            _stat_tile("Peer Count",   pc,   "Connected RPC peers",              "🤝", "#B94A00", "#FFF4EE"),
+        ]
+        # Large responsive metrics grid — two rows of three equal tiles.
+        for _row in (0, 3):
+            mc = st.columns(3, gap="large")
+            for _i, _col in enumerate(mc):
+                with _col:
+                    st.markdown(_tiles[_row + _i], unsafe_allow_html=True)
+        st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
 
-    # ── Atlantic Testnet ──────────────────────
-    st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
-        'color:#0C0C1A;margin:1.6rem 0 0.6rem 0;">🧪 Atlantic Testnet</div>'
-        '<div style="background:linear-gradient(135deg,#F0FFF4,#E8F5FF);'
-        'border:1.5px solid #86EFAC;border-radius:14px;padding:1rem 1.4rem;">'
-        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:0.8rem;">'
-        + "".join([
-            f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
-            f'color:#7A7F96;margin-bottom:3px;">{k}</div>'
-            f'<div style="font-size:12.5px;font-weight:700;color:#0C0C1A;font-family:{"monospace" if "RPC" in k else "inherit"};">{v}</div></div>'
-            for k, v in [
-                ("Network",   "Pharos Atlantic"),
-                ("Chain ID",  str(PHAROS_TESTNET_CHAIN_ID_DEC)),
-                ("Symbol",    "PHRS"),
-                ("RPC URL",   PHAROS_TESTNET_RPC_URL),
-            ]
-        ])
-        + '</div>'
-        f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
-        f'style="font-size:12px;font-weight:700;color:#166016;text-decoration:none;">'
-        f'🔍 Atlantic Pharosscan ↗</a>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    # ── Featured Mainnet status card + Available Networks (side by side) ──
+    st.markdown('<div style="height:0.8rem;"></div>', unsafe_allow_html=True)
+    feat_col, side_col = st.columns([1.45, 1], gap="large")
+
+    with feat_col:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="padding:0.4rem 0.5rem 0.2rem 0.7rem;">'
+                '<span class="rd-eyebrow">⭐ Featured · Mainnet</span>'
+                '<div class="rd-panel-title">Pharos Pacific Mainnet</div>'
+                '<div class="rd-panel-sub">Primary production network · live and online.</div>'
+                '<hr class="rd-divider"/>'
+                '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px;">'
+                + "".join([
+                    f'<div style="min-width:0;"><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
+                    f'text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">{k}</div>'
+                    f'<div style="font-size:13px;font-weight:600;color:#0B1020;word-break:break-all;'
+                    f'font-family:{"DM Mono,monospace" if "RPC" in k else "Inter,sans-serif"};">{v}</div></div>'
+                    for k, v in [
+                        ("Chain ID", str(PHAROS_CHAIN_ID_DEC)),
+                        ("Symbol",   "PROS"),
+                        ("RPC URL",  PHAROS_RPC_URL),
+                        ("Status",   "🟢 Online"),
+                    ]
+                ])
+                + '</div><hr class="rd-divider"/>'
+                '<div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:0.3rem;margin-top:-9px;margin-left:-6px;">'
+                f'<a href="{PHAROS_EXPLORER_URL}" target="_blank" '
+                f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
+                f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
+                f'🔍 Explorer ↗</a>'
+                f'<a href="{PHAROS_DOCS_URL}" target="_blank" '
+                f'style="display:inline-flex;align-items:center;gap:6px;background:#EEF0FF;color:#1414E8;'
+                f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
+                f'📖 Documentation ↗</a>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    with side_col:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="padding:0.4rem 0.5rem 0.2rem 0.7rem;">'
+                '<span class="rd-eyebrow">🧪 Available · Testnet</span>'
+                '<div class="rd-panel-title">Pharos Atlantic</div>'
+                '<div class="rd-panel-sub">Public testnet for development.</div>'
+                '<hr class="rd-divider"/>'
+                '<div style="display:grid;grid-template-columns:1fr;gap:10px;">'
+                + "".join([
+                    f'<div style="min-width:0;"><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
+                    f'text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">{k}</div>'
+                    f'<div style="font-size:13px;font-weight:600;color:#0B1020;word-break:break-all;'
+                    f'font-family:{"DM Mono,monospace" if "RPC" in k else "Inter,sans-serif"};">{v}</div></div>'
+                    for k, v in [
+                        ("Chain ID", str(PHAROS_TESTNET_CHAIN_ID_DEC)),
+                        ("Symbol",   "PHRS"),
+                        ("RPC URL",  PHAROS_TESTNET_RPC_URL),
+                        ("Status",   "🟢 Online"),
+                    ]
+                ])
+                + '</div><hr class="rd-divider"/>'
+                f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
+                f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
+                f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;'
+                f'text-decoration:none;margin-left:-13px;margin-top:-13px;">'
+                f'🔍 Explorer ↗</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+
 
 
 # ═════════════════════════════════════════════
 # PAGE: SPN EXPLORER
 # ═════════════════════════════════════════════
 elif st.session_state.page == "spns":
+
+    inject_redesign_css("spns rd-hero-compact rd-wide")
 
     # ── SPN data — sourced strictly from official Pharos docs and pharos.xyz ──
     # Source: https://docs.pharos.xyz (About Pharos, SPN docs)
@@ -7025,7 +7630,7 @@ elif st.session_state.page == "spns":
         },
     ]
 
-    # ── Header ────────────────────────────────
+    # ── Hero (compacted via CSS) ──────────────
     st.markdown(
         '<div style="background:linear-gradient(135deg,#0A0A28 0%,#1414E8 100%);'
         'border-radius:20px;padding:2rem 2.4rem 1.6rem 2.4rem;margin-bottom:1.4rem;'
@@ -7046,30 +7651,23 @@ elif st.session_state.page == "spns":
         unsafe_allow_html=True,
     )
 
-    # ── What is an SPN ────────────────────────
+    # ── Console toolbar strip ─────────────────
     st.markdown(
-        '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
-        'padding:1.2rem 1.6rem;margin-bottom:1.2rem;box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
-        '<div style="display:flex;align-items:flex-start;gap:14px;">'
-        '<div style="width:44px;height:44px;border-radius:12px;background:#EEF0FF;'
-        'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">💡</div>'
-        '<div>'
-        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
-        'color:#0C0C1A;margin-bottom:6px;">How SPNs work — from the official docs</div>'
-        '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;margin-bottom:6px;">'
-        'Validators stake P Tokens on the Primary Network. Each staked token generates a certificate '
-        '(stP) which can be restaked into an SPN for additional rewards. SPNs set their own validator '
-        'requirements, hardware needs, and soft/hard caps on stP. The Primary Network automatically '
-        'initiates SPN creation once conditions are met.</div>'
-        '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;">'
-        'Cross-SPN communication uses the Cross-SPN Interoperability Protocol: transactions are '
-        'initiated in one SPN, relayed via the Primary Network Mailbox, verified, then executed in '
-        'the destination SPN — enabling atomic cross-SPN interactions.</div>'
-        '</div></div></div>',
+        '<div class="rd-toolbar" style="justify-content:space-between;">'
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+        '<span class="rd-tb-lbl">Console</span>'
+        '<span style="font-family:DM Mono,monospace;font-size:12px;color:#2B3656;">spn://pharos-mainnet</span>'
+        '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;'
+        'color:#166016;background:#F0FFF4;border:1px solid #86EFAC;border-radius:999px;padding:2px 10px;">'
+        '● docs synced</span>'
+        '</div>'
+        f'<a href="{PHAROS_DOCS_URL}" target="_blank" style="font-family:Inter,sans-serif;font-size:12px;'
+        'font-weight:700;color:#1414E8;text-decoration:none;">SDK Docs ↗</a>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
-    # ── SPN Architecture facts strip ──────────
+    # ── Two-column: protocol readout + architecture registry ──
     _arch_facts = [
         ("SPN Manager",    "Manages SPN creation, destruction, message communication, and asset transfer"),
         ("Registry",       "Responsible for SPN registration and management on the Primary Network"),
@@ -7078,64 +7676,109 @@ elif st.session_state.page == "spns":
         ("SPN Network Hub","Facilitates message and event communication across all SPNs"),
         ("SPN Adapter",    "Handles incoming messages from the Primary Network within each SPN"),
     ]
-    st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:800;'
-        'color:#0C0C1A;margin:0.4rem 0 0.7rem 0;">SPN Architecture Components</div>'
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.2rem;">'
-        + "".join([
-            f'<div style="background:#F4F5FF;border-radius:12px;padding:0.75rem 0.9rem;">'
-            f'<div style="font-size:11px;font-weight:800;color:#1414E8;margin-bottom:3px;">{k}</div>'
-            f'<div style="font-size:11px;color:#5B5F6E;line-height:1.5;">{v}</div></div>'
-            for k, v in _arch_facts
-        ])
-        + '</div>',
-        unsafe_allow_html=True,
-    )
 
-    # ── Use case cards ────────────────────────
-    st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:800;'
-        'color:#0C0C1A;margin:0 0 0.7rem 0;">Confirmed SPN Use Cases</div>',
-        unsafe_allow_html=True,
-    )
+    spn_left, spn_right = st.columns([1, 1], gap="large")
 
-    for spn in PHAROS_SPNS:
+    with spn_left:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="padding:0.4rem 0.6rem 0.3rem 0.7rem;">'
+                '<span class="rd-eyebrow">📖 Protocol</span>'
+                '<div class="rd-panel-title">How SPNs work</div>'
+                '<div class="rd-panel-sub">Sourced from the official Pharos documentation.</div>'
+                '<div class="rd-console" style="margin-top:0.5rem;">'
+                '<div class="rd-con-bar">'
+                '<span class="rd-dot" style="background:#FF5F56;"></span>'
+                '<span class="rd-dot" style="background:#FFBD2E;"></span>'
+                '<span class="rd-dot" style="background:#27C93F;"></span>'
+                '<span style="margin-left:6px;font-size:11px;color:#7C8BB8;">staking-and-restaking.md</span>'
+                '</div>'
+                '<div style="margin-bottom:0.7rem;"><span class="rd-k"># </span>'
+                'Validators stake P Tokens on the Primary Network. Each staked token generates a '
+                'certificate (<span class="rd-v">stP</span>) which can be restaked into an SPN for '
+                'additional rewards. SPNs set their own validator requirements, hardware needs, and '
+                'soft/hard caps on stP. The Primary Network automatically initiates SPN creation once '
+                'conditions are met.</div>'
+                '<div><span class="rd-k"># </span>'
+                'Cross-SPN communication uses the <span class="rd-v">Cross-SPN Interoperability '
+                'Protocol</span>: transactions are initiated in one SPN, relayed via the Primary '
+                'Network Mailbox, verified, then executed in the destination SPN — enabling atomic '
+                'cross-SPN interactions.</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    with spn_right:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="padding:0.4rem 0.6rem 0.4rem 0.7rem;">'
+                '<span class="rd-eyebrow">🧩 Architecture</span>'
+                '<div class="rd-panel-title">Core components</div>'
+                '<div class="rd-panel-sub">The registry of SPN system contracts.</div>'
+                '<div style="display:flex;flex-direction:column;gap:8px;margin-top:0.5rem;">'
+                + "".join([
+                    f'<div style="display:flex;gap:10px;align-items:flex-start;background:#F4F5FF;'
+                    f'border:1px solid #E4E8F2;border-radius:10px;padding:0.6rem 0.8rem;">'
+                    f'<div style="font-family:DM Mono,monospace;font-size:10px;font-weight:700;color:#1414E8;'
+                    f'background:#FFFFFF;border:1px solid #C7D2FE;border-radius:6px;padding:2px 6px;'
+                    f'white-space:nowrap;margin-top:1px;">{i:02d}</div>'
+                    f'<div style="min-width:0;"><div style="font-size:12px;font-weight:800;color:#0B1020;">{k}</div>'
+                    f'<div style="font-size:11px;color:#5B5F6E;line-height:1.5;">{v}</div></div></div>'
+                    for i, (k, v) in enumerate(_arch_facts, start=1)
+                ])
+                + '</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Builder catalog: confirmed use cases (2-col grid) ──
+    st.markdown(
+    '<div style="margin-top:0.2rem;"><span class="rd-eyebrow">⚙️ Templates</span>'
+    '<div class="rd-panel-title" style="font-size:16px;margin-top:-5.5px;">Confirmed SPN use cases</div>'
+    '<div class="rd-panel-sub">Deployment patterns validators can build on excess compute.</div></div>',
+    unsafe_allow_html=True,
+)
+
+    def _spn_card_html(spn):
         _feats = "".join([
             f'<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;'
             f'font-weight:600;color:{spn["tagcol"]};background:{spn["tagbg"]};'
             f'border-radius:20px;padding:3px 10px;margin-right:5px;margin-bottom:5px;">✓ {f}</span>'
             for f in spn["features"]
         ])
-        st.markdown(
-            f'<div style="background:#FFFFFF;border:1.5px solid #ECEEF4;border-radius:18px;'
-            f'padding:1.4rem 1.6rem;margin-bottom:0.9rem;'
-            f'box-shadow:0 3px 14px rgba(20,20,60,0.07);position:relative;overflow:hidden;">'
-            f'<div style="position:absolute;left:0;top:0;bottom:0;width:4px;'
-            f'background:{spn["color"]};border-radius:18px 0 0 18px;"></div>'
-            f'<div style="padding-left:0.5rem;">'
-            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:0.8rem;flex-wrap:wrap;">'
-            f'<div style="width:46px;height:46px;border-radius:12px;background:{spn["bg"]};'
-            f'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">'
+        return (
+            f'<div class="rd-fillcard" style="background:#FFFFFF;border:1px solid #E4E8F2;border-radius:16px;'
+            f'padding:1.2rem 1.3rem;height:100%;box-shadow:0 3px 14px rgba(20,20,60,0.06);'
+            f'position:relative;overflow:hidden;box-sizing:border-box;margin-bottom:18px;">'
+            f'<div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:{spn["color"]};"></div>'
+            f'<div style="padding-left:0.4rem;">'
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:0.7rem;flex-wrap:wrap;">'
+            f'<div style="width:42px;height:42px;border-radius:11px;background:{spn["bg"]};'
+            f'display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'
             f'{spn["emoji"]}</div>'
-            f'<div>'
-            f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#0C0C1A;">'
+            f'<div><div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;">'
             f'{spn["name"]}</div>'
-            f'<div style="font-size:10.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
-            f'color:{spn["tagcol"]};margin-top:2px;">{spn["category"]}</div>'
-            f'</div></div>'
-            f'<div style="font-size:12.5px;color:#5B5F6E;line-height:1.65;margin-bottom:0.8rem;">'
+            f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
+            f'color:{spn["tagcol"]};margin-top:2px;">{spn["category"]}</div></div></div>'
+            f'<div style="font-size:12px;color:#5B5F6E;line-height:1.6;margin-bottom:0.7rem;">'
             f'{spn["desc"]}</div>'
-            f'<div style="margin-bottom:0.7rem;">{_feats}</div>'
-            f'<div style="font-size:10.5px;color:#9499A8;">📄 Source: {spn["source"]}</div>'
-            f'</div></div>',
-            unsafe_allow_html=True,
+            f'<div style="margin-bottom:0.6rem;">{_feats}</div>'
+            f'<div style="font-size:10.5px;color:#9499A8;border-top:1px solid #ECEEF4;padding-top:0.5rem;">'
+            f'📄 {spn["source"]}</div>'
+            f'</div></div>'
         )
+
+    for _i in range(0, len(PHAROS_SPNS), 2):
+        _pair = PHAROS_SPNS[_i:_i+2]
+        _cols = st.columns(2, gap="large")
+        for _c, _spn in zip(_cols, _pair):
+            with _c:
+                st.markdown(_spn_card_html(_spn), unsafe_allow_html=True)
 
     # ── CTA ───────────────────────────────────
     st.markdown(
         '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);border-radius:16px;'
         'padding:1.4rem 1.8rem;display:flex;align-items:center;justify-content:space-between;'
-        'flex-wrap:wrap;gap:12px;margin-top:0.8rem;">'
+        'flex-wrap:wrap;gap:12px;margin-top:1rem;">'
         '<div>'
         '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
         'color:#FFFFFF;margin-bottom:4px;">Build your own SPN on Pharos</div>'
@@ -7149,6 +7792,8 @@ elif st.session_state.page == "spns":
         '</div>',
         unsafe_allow_html=True,
     )
+
+
 
 
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
