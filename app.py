@@ -1999,15 +1999,15 @@ section[data-testid="stMain"] > div {
 .hero-logo-wrap .fi{font-size:36px;line-height:80px;}
 /* hero-ring and hero-orbit removed — replaced by Neural Pulse canvas */
 .hero-eyebrow{
-    display:inline-flex;align-items:center;gap:7px;
-    font-size:16px;font-weight:700;letter-spacing:0.02em;
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:14px;font-weight:700;letter-spacing:0.02em;
     color:#FFFFFF;background:#0C0C1A;border:none;
     border-radius:30px;padding:7px 16px;margin-bottom:0.1rem;margin-top:2rem;
     align-self:center;
     box-shadow:0 4px 14px rgba(12,12,26,0.18);
 }
 .hero-eyebrow .live-dot{
-    width:6px;height:6px;border-radius:50%;background:var(--green);
+    width:5px;height:5px;border-radius:50%;background:var(--green);
     box-shadow:0 0 5px var(--green);animation:blink 2s ease-in-out infinite;
 }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
@@ -4035,12 +4035,12 @@ if st.session_state.page == "home":
         sym    = "▲" if chg >= 0 else "▼"
         cc     = "#1FA855" if chg >= 0 else "#E5484D"
         price_pill = (
-            f'<span style="font-size:14px;color:#E8ECF5;font-family:Syne,sans-serif;font-weight:700;letter-spacing:0.04em;">$PROS&nbsp;</span>'
-            f'<span style="font-size:13px;font-weight:700;color:#14141F;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
-            f'<span style="font-size:11px;color:{cc};margin-left:4px;">{sym}{abs(chg):.2f}%</span>'
+            f'<span style="font-size:15px;color:#1A6AFF;font-family:Syne,sans-serif;font-weight:500;letter-spacing:0.04em;">$PROS&nbsp;</span>'
+            f'<span style="font-size:15px;font-weight:700;color:#14141F;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
+            f'<span style="font-size:15px;color:{cc};margin-left:4px;">{sym}{abs(chg):.2f}%</span>'
         )
     else:
-        price_pill = '<span style="font-size:14px;color:#E8ECF5;font-family:Syne,sans-serif;font-weight:700;letter-spacing:0.04em;">$PROS&nbsp;</span>'
+        price_pill = '<span style="font-size:15px;color:#1A6AFF;font-family:Syne,sans-serif;font-weight:500;letter-spacing:0.04em;">$PROS&nbsp;</span>'
 
     st.markdown(
         '<div class="hero">'
@@ -6250,7 +6250,7 @@ elif st.session_state.page == "pay":
                     '<div style="padding:0.4rem 0.5rem 0.2rem 0.6rem;">'
                     '<span class="rd-eyebrow">🔑 Wallet</span>'
                     '<div class="rd-panel-title" style="font-size:14px;color:#000000;">Connect wallet</div>'
-                    '<div class="rd-panel-sub" style="color:#FFFFFF;">Paste your address — read-only, no signing.</div></div>',
+                    '<div class="rd-panel-sub" style="color:#000000;">Paste your address — read-only, no signing.</div></div>',
                     unsafe_allow_html=True,
                 )
                 _pwi = st.text_input("Your wallet address", placeholder="0x1234…your Pharos address",
@@ -6292,7 +6292,7 @@ elif st.session_state.page == "pay":
             if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
                 st.session_state.page = "memory"; st.rerun()
             st.markdown(
-                '<div style="font-size:10.5px;color:#FFFFFF;line-height:1.5;margin-top:0.5rem;'
+                '<div style="font-size:10.5px;color:#000000;line-height:1.5;margin-top:0.5rem;'
                 'padding:0 0.3rem;">Describe a payment in plain English — Send, Batch, or Approve. '
                 'Nothing moves without your signature.</div>',
                 unsafe_allow_html=True,
@@ -6954,7 +6954,7 @@ elif st.session_state.page == "request":
                 '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
                 'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:0.9rem;">'
                 '<div style="font-size:13px;font-weight:700;color:#0C0C1A;margin-bottom:0.5rem;">🔑 Connect your wallet to pay</div>'
-                '<div style="font-size:12px;color:#5B5F6E;margin-bottom:0.8rem;">Paste your wallet address — read-only, no signing required just to connect.</div>',
+                '<div style="font-size:12px;color:#FFFFFF;margin-bottom:0.8rem;">Paste your wallet address — read-only, no signing required just to connect.</div>',
                 unsafe_allow_html=True,
             )
             _ri = st.text_input("Your wallet address", placeholder="0x…",
