@@ -291,6 +291,12 @@ if "req_invoices"    not in st.session_state: st.session_state.req_invoices    =
 if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
 if "net_stats_cache" not in st.session_state: st.session_state.net_stats_cache = {}
 if "spn_filter"      not in st.session_state: st.session_state.spn_filter      = "all"
+# ── x402 pay-per-call state ──
+if "x402_enabled"    not in st.session_state: st.session_state.x402_enabled    = False   # premium mode toggle (free is default)
+if "x402_challenge"  not in st.session_state: st.session_state.x402_challenge  = None    # active 402 challenge awaiting payment
+if "x402_unlocked"   not in st.session_state: st.session_state.x402_unlocked   = {}      # resource_id -> verified tx hash
+if "x402_receipts"   not in st.session_state: st.session_state.x402_receipts   = []      # list of settled premium calls
+if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "")  # user-set receiving address
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -1400,6 +1406,167 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
 
     result["error"] = last_error
     return result
+
+
+# ═════════════════════════════════════════════════════════════
+# x402 — Pay-per-call AI (HTTP 402 "Payment Required" for OctoBot)
+# ─────────────────────────────────────────────────────────────
+# Faithful model of the x402 flow Pharos Research built:
+#   1. Client requests a PREMIUM resource (a deep OctoBot answer).
+#   2. Server replies 402 Payment Required + payment details (this is the
+#      "challenge": pay-to address, amount, resource id, nonce).
+#   3. Client pays the micro-amount on-chain (Pharos testnet/mainnet).
+#   4. Client returns the tx hash as proof; server VERIFIES it on-chain
+#      (recipient + amount + success) using the existing read-only RPC.
+#   5. Server settles the request and returns the premium answer.
+#
+# Free answering is completely unaffected — this path only runs when the
+# user explicitly opts into a premium (x402) call. All verification is
+# read-only; the app never holds keys or moves funds itself.
+# ═════════════════════════════════════════════════════════════
+
+# Where micro-payments are sent for the demo. Override via env if you want
+# to point at your own receiving address. This is a PUBLIC pay-to address;
+# no private key lives in the app.
+X402_PAYTO_ADDRESS = os.getenv(
+    "X402_PAYTO_ADDRESS",
+    "0x000000000000000000000000000000000000dEaD",  # placeholder demo sink
+)
+X402_PRICE_PROS   = 0.05      # price per premium call, in native units
+X402_TOLERANCE    = 0.10      # accept payments within 10% under (gas/rounding)
+
+def x402_get_payto() -> str:
+    """Resolve the active pay-to address: a UI-set address (validated) takes
+    precedence, otherwise the env/default constant. Always returns a string."""
+    try:
+        import streamlit as _st
+        ui_addr = _st.session_state.get("x402_payto", "")
+        v = valid_addr(ui_addr)
+        if v:
+            return v
+    except Exception:
+        pass
+    return X402_PAYTO_ADDRESS
+
+def x402_make_challenge(question: str) -> dict:
+    """Build the 402 'Payment Required' challenge for a premium question.
+    Deterministic resource id + nonce so the same paid tx maps to one answer.
+    """
+    nonce = hashlib.sha256(
+        (question + str(int(time.time() // 3600))).encode("utf-8")
+    ).hexdigest()[:16]
+    resource_id = "octobot/premium/" + hashlib.sha256(
+        question.encode("utf-8")
+    ).hexdigest()[:12]
+    return {
+        "status":      402,
+        "resource":    resource_id,
+        "pay_to":      x402_get_payto(),
+        "amount_pros": X402_PRICE_PROS,
+        "nonce":       nonce,
+        "scheme":      "exact",
+        "network":     "pharos",
+        "question":    question,
+    }
+
+def x402_payment_uri(challenge: dict, chain_id_dec: int) -> str:
+    """EIP-681 ethereum: URI so a wallet can fulfil the 402 by scanning a QR.
+    Encodes recipient, value (wei), and chainId. Display-only; the user's
+    wallet performs the actual signing/sending.
+    """
+    try:
+        wei = int(round(float(challenge["amount_pros"]) * 1e18))
+    except Exception:
+        wei = 0
+    pay_to = challenge.get("pay_to", "")
+    return "ethereum:" + pay_to + "@" + str(chain_id_dec) + "?value=" + str(wei)
+
+def x402_verify_payment(tx_hash: str, challenge: dict) -> dict:
+    """Verify an on-chain payment settles the 402 challenge.
+    Reuses fetch_pharos_transaction (read-only). Confirms:
+      • tx exists and succeeded
+      • recipient matches the required pay-to address
+      • value paid >= required amount (within tolerance)
+    Returns {ok, reason, tx} — never raises.
+    """
+    out = {"ok": False, "reason": None, "tx": None}
+
+    th = valid_txhash(tx_hash)
+    if not th:
+        out["reason"] = "That doesn't look like a valid Pharos transaction hash."
+        return out
+
+    tx = fetch_pharos_transaction(th)
+    out["tx"] = tx
+
+    if not tx.get("available") or tx.get("error"):
+        out["reason"] = tx.get("error") or "Could not read that transaction yet — it may still be pending."
+        return out
+    if tx.get("status") == "failed":
+        out["reason"] = "That transaction failed on-chain, so the payment didn't settle."
+        return out
+    if tx.get("status") is None:
+        out["reason"] = "That transaction is still pending — wait for it to confirm, then try again."
+        return out
+
+    want_to = (challenge.get("pay_to") or "").lower()
+    got_to  = (tx.get("to_addr") or "").lower()
+    if want_to and got_to and want_to != got_to:
+        out["reason"] = "That payment went to a different address than the one required."
+        return out
+
+    need = float(challenge.get("amount_pros", 0)) * (1.0 - X402_TOLERANCE)
+    paid = tx.get("value_pros")
+    if paid is None or paid < need:
+        out["reason"] = (
+            "The amount paid (" + (("%.4f" % paid) if paid is not None else "0")
+            + " PROS) is less than the required " + ("%.4f" % float(challenge.get("amount_pros", 0))) + " PROS."
+        )
+        return out
+
+    out["ok"] = True
+    return out
+
+def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") -> str:
+    """Generate the ENHANCED (premium) answer that the paid call unlocks.
+    Uses docs context from the bot, then asks Gemini for a deeper, structured
+    response. Falls back to the standard bot answer if Gemini is unavailable
+    so a paid call never returns nothing.
+    """
+    # Pull docs grounding from the existing RAG bot.
+    try:
+        base_answer, _ = bot.ask(question)
+    except Exception:
+        base_answer = ""
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return base_answer or "Premium answer unavailable (no model configured)."
+
+    lang_instruction = (
+        ("CRITICAL: respond entirely in " + sel_lang + ". ")
+        if sel_lang and sel_lang != "English" else "Respond in English. "
+    )
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash", temperature=0.5,
+            google_api_key=api_key,
+        )
+        prompt = (
+            "You are OctoBot Premium, an expert analyst on the Pharos blockchain. "
+            "A user has paid a micro-payment (x402) to unlock a deeper, higher-effort answer. "
+            "Give a thorough, well-structured response: lead with a direct answer, then add "
+            "expert context, concrete next steps, and any relevant Pharos-specific detail "
+            "(SPNs, restaking, RWA/RealFi, PROS, x402). Keep PROS, SPN, RWA, EVM in English.\n"
+            + lang_instruction +
+            "\nGrounding notes from Pharos docs (may be empty):\n" + (base_answer or "(none)") +
+            "\n\nUser question: " + question
+        )
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        return resp.content or base_answer or "Premium answer unavailable."
+    except Exception:
+        return base_answer or "Premium answer unavailable right now."
+
 
 
 def explain_transaction(tx_data: dict) -> dict:
@@ -5058,6 +5225,78 @@ elif st.session_state.page == "chat":
         st.session_state.show_sources = st.toggle("🔍 Show sources", value=st.session_state.show_sources)
         st.session_state.voice_reply  = st.toggle("🗣 Read aloud",   value=st.session_state.voice_reply)
 
+        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+
+        # ── x402 — Pay-per-call premium ──────────────────────────
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">⚡ Premium · x402</div>',
+            unsafe_allow_html=True,
+        )
+        st.session_state.x402_enabled = st.toggle(
+            "Pay-per-call answers",
+            value=st.session_state.x402_enabled,
+            help=("When ON, your next question is a premium (x402) call: OctoBot returns an "
+                  "HTTP 402 payment challenge, you settle a tiny PROS micro-payment on-chain, "
+                  "and the verified payment unlocks a deeper answer. Free answering stays on when this is OFF."),
+        )
+        st.markdown(
+            '<div style="font-size:10.5px;color:#7A7F96;line-height:1.5;margin:2px 0 4px 0;">'
+            + ("⚡ <b>Premium mode ON</b> — next question costs ~"
+               + ("%.2f" % X402_PRICE_PROS) + " PROS via x402."
+               if st.session_state.x402_enabled
+               else "Free mode — questions are answered at no cost. Toggle on to try the x402 flow.")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Receiving (pay-to) address — settable from the UI ──
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
+            'letter-spacing:0.06em;text-transform:uppercase;margin:6px 0 3px 0;">Receiving wallet</div>',
+            unsafe_allow_html=True,
+        )
+        _payto_in = st.text_input(
+            "x402 pay-to address",
+            value=st.session_state.get("x402_payto", ""),
+            key="x402_payto_input",
+            placeholder="0x… your wallet address",
+            label_visibility="collapsed",
+            help="Premium micro-payments are sent here. Paste your own wallet address. "
+                 "Leave blank to use the safe placeholder (a burn address).",
+        )
+        # Persist only when it changed, validating the shape.
+        if _payto_in != st.session_state.get("x402_payto", ""):
+            _clean = (_payto_in or "").strip()
+            if _clean == "" or valid_addr(_clean):
+                st.session_state.x402_payto = _clean
+            else:
+                st.warning("That doesn't look like a valid 0x… address — keeping the previous one.")
+        _active_payto = x402_get_payto()
+        _is_custom = bool(valid_addr(st.session_state.get("x402_payto", "")))
+        st.markdown(
+            '<div style="font-size:10px;color:'
+            + ("#15803D" if _is_custom else "#9499A8") + ';line-height:1.5;margin:3px 0 2px 0;'
+            'word-break:break-all;">'
+            + ("✓ Payments go to: " if _is_custom
+               else "Using placeholder (set your address above): ")
+            + '<span style="font-family:DM Mono,monospace;">' + esc(_active_payto) + '</span></div>',
+            unsafe_allow_html=True,
+        )
+
+        if st.session_state.x402_receipts:
+            with st.expander("🧾 x402 receipts · " + str(len(st.session_state.x402_receipts)), expanded=False):
+                for _r in reversed(st.session_state.x402_receipts[-8:]):
+                    st.markdown(
+                        '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
+                        'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
+                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
+                        + esc(_r.get("amount", "")) + ' PROS · settled</div>'
+                        '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
+                        + esc(_r.get("tx", "")[:22]) + '…</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
         st.markdown('<hr style="border:none;border-top:2px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
 
         # Build Path Generator entry
@@ -5315,6 +5554,124 @@ elif st.session_state.page == "chat":
         with st.chat_message("user", avatar="👤"):
             st.markdown(question)
 
+        # ── x402 GATE ────────────────────────────────────────────
+        # Only engages when premium mode is ON and this resource isn't
+        # already paid-for. Free mode skips this entirely.
+        _x402_ch = x402_make_challenge(question)
+        _x402_premium = bool(st.session_state.get("x402_enabled"))
+        _x402_paid = _x402_ch["resource"] in st.session_state.get("x402_unlocked", {})
+
+        if _x402_premium and not _x402_paid:
+            st.session_state.x402_challenge = _x402_ch
+            # Rebuild the few network fields we need directly so this never
+            # depends on the pay page's helper or page execution order.
+            _is_testnet = st.session_state.get("pay_network", "mainnet") == "testnet"
+            _chain_dec  = PHAROS_TESTNET_CHAIN_ID_DEC if _is_testnet else PHAROS_CHAIN_ID_DEC
+            _explorer   = PHAROS_TESTNET_EXPLORER_URL if _is_testnet else PHAROS_EXPLORER_URL
+            _net_label  = "Pharos Atlantic (testnet)" if _is_testnet else "Pharos Mainnet"
+            _uri        = x402_payment_uri(_x402_ch, _chain_dec)
+
+            with st.chat_message("assistant", avatar="🐙"):
+                st.markdown(
+                    '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);'
+                    'border-radius:16px;padding:1.1rem 1.3rem;color:#fff;margin-bottom:0.6rem;">'
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+                    '<span style="font-family:DM Mono,monospace;font-size:11px;font-weight:700;'
+                    'background:rgba(255,255,255,0.16);border-radius:6px;padding:2px 8px;">HTTP 402</span>'
+                    '<span style="font-size:13px;font-weight:800;">Payment Required</span></div>'
+                    '<div style="font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.55;">'
+                    'This is a <b>premium (x402)</b> OctoBot call. Settle a small on-chain micro-payment '
+                    'to unlock a deeper, expert answer. Your wallet does the signing — OctoBot only '
+                    'verifies the payment on-chain.</div>'
+                    '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:0.7rem;font-size:12px;">'
+                    '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
+                    'letter-spacing:0.05em;">Amount</div><div style="font-weight:800;">'
+                    + ("%.2f" % _x402_ch["amount_pros"]) + ' PROS</div></div>'
+                    '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
+                    'letter-spacing:0.05em;">Network</div><div style="font-weight:700;">' + esc(_net_label) + '</div></div>'
+                    '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
+                    'text-transform:uppercase;letter-spacing:0.05em;">Pay&nbsp;to</div>'
+                    '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
+                    + esc(_x402_ch["pay_to"]) + '</div></div>'
+                    '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
+                    'text-transform:uppercase;letter-spacing:0.05em;">Resource</div>'
+                    '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
+                    + esc(_x402_ch["resource"]) + '</div></div>'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+                _qcol, _vcol = st.columns([1, 1.3], gap="large")
+                with _qcol:
+                    st.markdown(
+                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
+                        '📲 Scan to pay (EIP-681)</div>', unsafe_allow_html=True)
+                    render_qr_code(_uri, size=150, key="x402_qr_" + _x402_ch["nonce"])
+                    st.markdown(
+                        '<div style="font-size:10px;color:#7A7F96;word-break:break-all;margin-top:4px;">'
+                        + esc(_uri) + '</div>', unsafe_allow_html=True)
+
+                with _vcol:
+                    st.markdown(
+                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
+                        '✅ Settle the 402 challenge</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div style="font-size:11.5px;color:#42475A;line-height:1.55;margin-bottom:6px;">'
+                        'Pay from your wallet, then paste the transaction hash. OctoBot verifies it '
+                        'on-chain (recipient + amount + success) before unlocking.</div>',
+                        unsafe_allow_html=True)
+                    _txh = st.text_input(
+                        "Transaction hash", key="x402_txh_" + _x402_ch["nonce"],
+                        placeholder="0x… your payment tx hash",
+                        label_visibility="collapsed",
+                    )
+                    _bcol1, _bcol2 = st.columns(2)
+                    with _bcol1:
+                        if st.button("🔓 Verify & unlock", key="x402_verify_" + _x402_ch["nonce"],
+                                     use_container_width=True):
+                            _res = x402_verify_payment(_txh, _x402_ch)
+                            if _res["ok"]:
+                                st.session_state.x402_unlocked[_x402_ch["resource"]] = (_txh or "").strip()
+                                st.session_state.x402_receipts.append({
+                                    "amount": "%.2f" % _x402_ch["amount_pros"],
+                                    "tx":     (_txh or "").strip(),
+                                    "resource": _x402_ch["resource"],
+                                })
+                                st.session_state.x402_challenge = None
+                                st.session_state["pending_q"] = question
+                                st.rerun()
+                            else:
+                                st.error("Payment not verified: " + str(_res.get("reason", "unknown error")))
+                    with _bcol2:
+                        if st.button("🧪 Simulate (demo)", key="x402_sim_" + _x402_ch["nonce"],
+                                     use_container_width=True,
+                                     help="Demo only — marks the call as paid WITHOUT a real on-chain payment. "
+                                          "Use to preview the unlocked answer flow."):
+                            st.session_state.x402_unlocked[_x402_ch["resource"]] = "SIMULATED"
+                            st.session_state.x402_receipts.append({
+                                "amount": "%.2f" % _x402_ch["amount_pros"],
+                                "tx":     "SIMULATED (demo)",
+                                "resource": _x402_ch["resource"],
+                            })
+                            st.session_state.x402_challenge = None
+                            st.session_state["pending_q"] = question
+                            st.rerun()
+                    if _explorer:
+                        st.markdown(
+                            '<a href="' + esc_url(_explorer) + '" target="_blank" rel="noopener noreferrer" '
+                            'style="font-size:11px;color:#1A1AFF;text-decoration:none;font-weight:600;">'
+                            'Open Pharos explorer ↗</a>', unsafe_allow_html=True)
+
+            # Record a short assistant note so the transcript stays coherent,
+            # then halt this run — the payment UI above persists via session_state.
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": "⚡ **402 Payment Required** — this premium question is waiting for an x402 "
+                           "micro-payment of " + ("%.2f" % _x402_ch["amount_pros"]) + " PROS to unlock.",
+            })
+            st.session_state.sources_history.append([])
+            st.stop()
+
         with st.chat_message("assistant", avatar="🐙"):
             # ── Thinking orb (feature 1) ──────────────
             orb_slot = st.empty()
@@ -5323,32 +5680,39 @@ elif st.session_state.page == "chat":
 
             with st.spinner(""):
                 try:
-                    # General mode: try docs first, fall back to Gemini if not found
-                    answer, sources = bot.ask(guided_question)
-                    if (st.session_state.chat_mode == "general"
-                            and "I could not find that information" in answer):
-                        fallback_llm = ChatGoogleGenerativeAI(
-                            model="gemini-2.5-flash", temperature=0.5,
-                            google_api_key=os.getenv("GEMINI_API_KEY"),
-                        )
-                        lang_instruction = (
-                            f"CRITICAL: You MUST respond entirely in {sel_lang}. "
-                            f"Do not use any other language. "
-                            if sel_lang != "English"
-                            else "Always respond in English. "
-                        )
-                        fb_answer = fallback_llm.invoke([
-                            HumanMessage(content=
-                                "You are OctoBot, a helpful AI assistant for the Pharos blockchain community. "
-                                "Answer this question helpfully and accurately. "
-                                "If relevant, mention that Pharos is a Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n"
-                                + lang_instruction +
-                                "Keep technical terms (PROS, SPN, RWA, L1, EVM) in their original English form.\n\n"
-                                "Question: " + question
-                            )
-                        ])
-                        answer  = fb_answer.content
+                    # x402: if this question's resource was paid for, generate
+                    # the ENHANCED premium answer instead of the standard one.
+                    _x402_ch_now = x402_make_challenge(question)
+                    if _x402_ch_now["resource"] in st.session_state.get("x402_unlocked", {}):
+                        answer  = x402_generate_premium_answer(question, bot, sel_lang)
                         sources = []
+                    else:
+                        # General mode: try docs first, fall back to Gemini if not found
+                        answer, sources = bot.ask(guided_question)
+                        if (st.session_state.chat_mode == "general"
+                                and "I could not find that information" in answer):
+                            fallback_llm = ChatGoogleGenerativeAI(
+                                model="gemini-2.5-flash", temperature=0.5,
+                                google_api_key=os.getenv("GEMINI_API_KEY"),
+                            )
+                            lang_instruction = (
+                                f"CRITICAL: You MUST respond entirely in {sel_lang}. "
+                                f"Do not use any other language. "
+                                if sel_lang != "English"
+                                else "Always respond in English. "
+                            )
+                            fb_answer = fallback_llm.invoke([
+                                HumanMessage(content=
+                                    "You are OctoBot, a helpful AI assistant for the Pharos blockchain community. "
+                                    "Answer this question helpfully and accurately. "
+                                    "If relevant, mention that Pharos is a Layer 1 blockchain focused on RWA tokenization and institutional DeFi.\n"
+                                    + lang_instruction +
+                                    "Keep technical terms (PROS, SPN, RWA, L1, EVM) in their original English form.\n\n"
+                                    "Question: " + question
+                                )
+                            ])
+                            answer  = fb_answer.content
+                            sources = []
                 except Exception as e:
                     answer  = "An error occurred: " + str(e)
                     sources = []
@@ -5356,6 +5720,19 @@ elif st.session_state.page == "chat":
             # ── Orb: done state ───────────────────────
             with orb_slot.container():
                 render_thinking_orb("done")
+
+            if x402_make_challenge(question)["resource"] in st.session_state.get("x402_unlocked", {}):
+                _rec_tx = st.session_state.get("x402_unlocked", {}).get(
+                    x402_make_challenge(question)["resource"], "")
+                _sim = (_rec_tx == "SIMULATED")
+                st.markdown(
+                    '<div style="display:inline-flex;align-items:center;gap:7px;'
+                    'background:linear-gradient(135deg,#1414E8,#7c3aed);color:#fff;'
+                    'border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;'
+                    'margin-bottom:8px;">⚡ Premium · x402 settled'
+                    + ('  ·  demo' if _sim else '') + '</div>',
+                    unsafe_allow_html=True,
+                )
 
             st.markdown(answer)
 
