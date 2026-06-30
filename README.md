@@ -120,6 +120,21 @@ OctoBot says:
 
 ---
 
+## ⚡ Premium · x402 section 
+
+In the Chat sidebar with a "Pay-per-call answers" toggle. It's off by default, so everything answers free exactly as before — that path is untouched. When you flip it on, your next question becomes a premium x402 call:
+
+Instead of answering, OctoBot returns a real HTTP 402 "Payment Required" card showing the amount (0.05 PROS), the network, the pay-to address, and the resource ID — the actual 402 challenge made visible.
+
+You get a scannable EIP-681 QR code (reusing your existing QR helper) plus the raw ethereum: URI, so a wallet can fulfill the payment.
+
+You pay from your wallet, paste the transaction hash, and hit Verify & unlock. OctoBot verifies the payment on-chain using your existing fetch_pharos_transaction — it confirms the tx succeeded, went to the right address, and paid enough (with a small tolerance for 
+
+gas/rounding). This is genuine on-chain settlement verification, not a mock.
+
+Once verified, it generates an enhanced premium answer (deeper, structured, via Gemini grounded in your docs), shows an "⚡ Premium · x402 settled" badge, and logs an x402 receipt in the sidebar
+
+<img width="1261" height="415" alt="Screenshot 2026-06-30 130534" src="https://github.com/user-attachments/assets/80f27920-56f1-4ad3-9fc0-7927344f1e9f" />
 
 
 ## Transaction simulation/explainer
