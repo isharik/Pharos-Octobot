@@ -1568,6 +1568,138 @@ def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") 
         return base_answer or "Premium answer unavailable right now."
 
 
+def x402_render_pending_gate() -> bool:
+    """Render the 402 payment gate from session_state (NOT from the transient
+    `question` variable). This fixes the bug where pasting a tx hash and clicking
+    Verify did nothing: the old gate lived inside `if question:`, so the rerun a
+    button click triggers — where chat_input is empty — skipped the whole block
+    and the button handler never ran. By rendering from st.session_state.x402_challenge,
+    the gate (and its buttons) persist across reruns. Returns True if a gate is shown.
+    """
+    import streamlit as st
+    _x402_ch = st.session_state.get("x402_challenge")
+    if not _x402_ch:
+        return False
+    # Already paid? clear and let normal generation proceed.
+    if _x402_ch.get("resource") in st.session_state.get("x402_unlocked", {}):
+        st.session_state.x402_challenge = None
+        return False
+
+    _is_testnet = st.session_state.get("pay_network", "mainnet") == "testnet"
+    _chain_dec  = PHAROS_TESTNET_CHAIN_ID_DEC if _is_testnet else PHAROS_CHAIN_ID_DEC
+    _explorer   = PHAROS_TESTNET_EXPLORER_URL if _is_testnet else PHAROS_EXPLORER_URL
+    _net_label  = "Pharos Atlantic (testnet)" if _is_testnet else "Pharos Mainnet"
+    _uri        = x402_payment_uri(_x402_ch, _chain_dec)
+    _question   = _x402_ch.get("question", "")
+    _k          = _x402_ch.get("nonce", "x")
+
+    with st.chat_message("assistant", avatar="🐙"):
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);'
+            'border-radius:16px;padding:1.1rem 1.3rem;color:#fff;margin-bottom:0.6rem;">'
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+            '<span style="font-family:DM Mono,monospace;font-size:11px;font-weight:700;'
+            'background:rgba(255,255,255,0.16);border-radius:6px;padding:2px 8px;">HTTP 402</span>'
+            '<span style="font-size:13px;font-weight:800;">Payment Required</span></div>'
+            '<div style="font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.55;">'
+            'This is a <b>premium (x402)</b> OctoBot call. Settle a small on-chain micro-payment '
+            'to unlock a deeper, expert answer. Your wallet does the signing — OctoBot only '
+            'verifies the payment on-chain.</div>'
+            '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:0.7rem;font-size:12px;">'
+            '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
+            'letter-spacing:0.05em;">Amount</div><div style="font-weight:800;">'
+            + ("%.2f" % _x402_ch["amount_pros"]) + ' PROS</div></div>'
+            '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
+            'letter-spacing:0.05em;">Network</div><div style="font-weight:700;">' + esc(_net_label) + '</div></div>'
+            '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
+            'text-transform:uppercase;letter-spacing:0.05em;">Pay&nbsp;to</div>'
+            '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
+            + esc(_x402_ch["pay_to"]) + '</div></div>'
+            '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
+            'text-transform:uppercase;letter-spacing:0.05em;">Resource</div>'
+            '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
+            + esc(_x402_ch["resource"]) + '</div></div>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        _qcol, _vcol = st.columns([1, 1.3], gap="large")
+        with _qcol:
+            st.markdown(
+                '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
+                '📲 Scan to pay (EIP-681)</div>', unsafe_allow_html=True)
+            render_qr_code(_uri, size=150, key="x402_qr_" + _k)
+            st.markdown(
+                '<div style="font-size:10px;color:#7A7F96;word-break:break-all;margin-top:4px;">'
+                + esc(_uri) + '</div>', unsafe_allow_html=True)
+
+        with _vcol:
+            st.markdown(
+                '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
+                '✅ Settle the 402 challenge</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:11.5px;color:#42475A;line-height:1.55;margin-bottom:6px;">'
+                'Pay from your wallet, then paste the transaction hash. OctoBot verifies it '
+                'on-chain (recipient + amount + success) before unlocking.</div>',
+                unsafe_allow_html=True)
+            _txh = st.text_input(
+                "Transaction hash", key="x402_txh_" + _k,
+                placeholder="0x… your payment tx hash",
+                label_visibility="collapsed",
+            )
+            _bcol1, _bcol2 = st.columns(2)
+            with _bcol1:
+                if st.button("🔓 Verify & unlock", key="x402_verify_" + _k,
+                             use_container_width=True):
+                    # Read the hash live from the widget's own session_state store
+                    # so we never rely on a stale local variable.
+                    _hash_now = st.session_state.get("x402_txh_" + _k, _txh) or _txh
+                    with st.spinner("Verifying payment on-chain…"):
+                        _res = x402_verify_payment(_hash_now, _x402_ch)
+                    if _res["ok"]:
+                        st.session_state.x402_unlocked[_x402_ch["resource"]] = (_hash_now or "").strip()
+                        st.session_state.x402_receipts.append({
+                            "amount": "%.2f" % _x402_ch["amount_pros"],
+                            "tx":     (_hash_now or "").strip(),
+                            "resource": _x402_ch["resource"],
+                        })
+                        st.session_state.x402_challenge = None
+                        st.session_state["pending_q"] = _question
+                        st.rerun()
+                    else:
+                        st.session_state["x402_last_error"] = str(_res.get("reason", "unknown error"))
+                        st.rerun()
+            with _bcol2:
+                if st.button("🧪 Simulate (demo)", key="x402_sim_" + _k,
+                             use_container_width=True,
+                             help="Demo only — marks the call as paid WITHOUT a real on-chain payment. "
+                                  "Use to preview the unlocked answer flow."):
+                    st.session_state.x402_unlocked[_x402_ch["resource"]] = "SIMULATED"
+                    st.session_state.x402_receipts.append({
+                        "amount": "%.2f" % _x402_ch["amount_pros"],
+                        "tx":     "SIMULATED (demo)",
+                        "resource": _x402_ch["resource"],
+                    })
+                    st.session_state.x402_challenge = None
+                    st.session_state["pending_q"] = _question
+                    st.rerun()
+
+            _err = st.session_state.pop("x402_last_error", None)
+            if _err:
+                st.error("Payment not verified: " + _err)
+
+            if _explorer:
+                st.markdown(
+                    '<a href="' + esc_url(_explorer) + '" target="_blank" rel="noopener noreferrer" '
+                    'style="font-size:11px;color:#1A1AFF;text-decoration:none;font-weight:600;">'
+                    'Open Pharos explorer ↗</a>', unsafe_allow_html=True)
+
+            if st.button("✕ Cancel premium call", key="x402_cancel_" + _k):
+                st.session_state.x402_challenge = None
+                st.rerun()
+
+    return True
+
 
 def explain_transaction(tx_data: dict) -> dict:
     """
@@ -1869,12 +2001,13 @@ html,body,[class*="css"]{font-family:var(--fb)!important;background-color:#9DAAB
             transparent 82px,
             transparent 160px
         );
-    animation: wave-shift 22s cubic-bezier(0.4,0,0.2,1) infinite;
+    animation: wave-shift 12s cubic-bezier(0.4,0,0.2,1) infinite;
 }
 
  /* Snappy global baseline — overrides Streamlit's slower defaults */
 *, *::before, *::after {
-    transition-duration: 120ms !important;
+    transition-duration: 140ms !important;
+    transition-timing-function: cubic-bezier(0.22,1,0.36,1) !important;
 }
 button, a, .stButton>button, [data-testid="stTextInput"] input,
 .cex-card, .dapp-card, .camp-card, .news-card {
@@ -1908,16 +2041,25 @@ button, a, .stButton>button, [data-testid="stTextInput"] input,
    use pointer-events:none so nothing is ever unclickable.
 ═══════════════════════════════════════════════════════════ */
 @keyframes auraDrift1{
-    0%,100%{ transform:translate(0,0) scale(1); }
-    50%{ transform:translate(46px,-34px) scale(1.16); }
+    0%{ transform:translate(0,0) scale(1); }
+    25%{ transform:translate(40px,-44px) scale(1.12); }
+    50%{ transform:translate(70px,-52px) scale(1.22); }
+    75%{ transform:translate(34px,-22px) scale(1.10); }
+    100%{ transform:translate(0,0) scale(1); }
 }
 @keyframes auraDrift2{
-    0%,100%{ transform:translate(0,0) scale(1); }
-    50%{ transform:translate(-54px,42px) scale(1.12); }
+    0%{ transform:translate(0,0) scale(1); }
+    25%{ transform:translate(-46px,38px) scale(1.09); }
+    50%{ transform:translate(-82px,64px) scale(1.18); }
+    75%{ transform:translate(-40px,30px) scale(1.08); }
+    100%{ transform:translate(0,0) scale(1); }
 }
 @keyframes auraDrift3{
-    0%,100%{ transform:translate(0,0) scale(1); }
-    50%{ transform:translate(34px,32px) scale(1.2); }
+    0%{ transform:translate(0,0) scale(1); }
+    25%{ transform:translate(32px,30px) scale(1.14); }
+    50%{ transform:translate(54px,50px) scale(1.26); }
+    75%{ transform:translate(28px,26px) scale(1.12); }
+    100%{ transform:translate(0,0) scale(1); }
 }
 /* dotsFloat — was animating background-position across 4 layered dot
    patterns simultaneously (CPU repaint every frame). Converted to a
@@ -1954,9 +2096,9 @@ button, a, .stButton>button, [data-testid="stTextInput"] input,
         radial-gradient(circle 640px at 46% 90%, rgba(8,8,90,0.44) 0%, transparent 72%),
         radial-gradient(circle 480px at 70% 60%, rgba(14,14,110,0.36) 0%, transparent 70%);
     animation:
-        auraDrift1 16s ease-in-out infinite,
-        auraDrift2 20s ease-in-out infinite,
-        auraDrift3 24s ease-in-out infinite;
+        auraDrift1 9s ease-in-out infinite,
+        auraDrift2 11s ease-in-out infinite,
+        auraDrift3 13s ease-in-out infinite;
 }
 
 /* Layer 2 — sparse field of soft dots, now a subtle accent rather than
@@ -1980,7 +2122,7 @@ button, a, .stButton>button, [data-testid="stTextInput"] input,
         480px 480px, 560px 560px, 620px 620px, 700px 700px;
     background-position:
         40px 60px, 280px 180px, 140px 380px, 460px 80px;
-    animation: dotsFloat 56s linear infinite;
+    animation: dotsFloat 34s linear infinite;
 }
 
 /* Keep every real Streamlit block above both background layers */
@@ -5225,78 +5367,6 @@ elif st.session_state.page == "chat":
         st.session_state.show_sources = st.toggle("🔍 Show sources", value=st.session_state.show_sources)
         st.session_state.voice_reply  = st.toggle("🗣 Read aloud",   value=st.session_state.voice_reply)
 
-        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
-
-        # ── x402 — Pay-per-call premium ──────────────────────────
-        st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">⚡ Premium · x402</div>',
-            unsafe_allow_html=True,
-        )
-        st.session_state.x402_enabled = st.toggle(
-            "Pay-per-call answers",
-            value=st.session_state.x402_enabled,
-            help=("When ON, your next question is a premium (x402) call: OctoBot returns an "
-                  "HTTP 402 payment challenge, you settle a tiny PROS micro-payment on-chain, "
-                  "and the verified payment unlocks a deeper answer. Free answering stays on when this is OFF."),
-        )
-        st.markdown(
-            '<div style="font-size:10.5px;color:#7A7F96;line-height:1.5;margin:2px 0 4px 0;">'
-            + ("⚡ <b>Premium mode ON</b> — next question costs ~"
-               + ("%.2f" % X402_PRICE_PROS) + " PROS via x402."
-               if st.session_state.x402_enabled
-               else "Free mode — questions are answered at no cost. Toggle on to try the x402 flow.")
-            + '</div>',
-            unsafe_allow_html=True,
-        )
-
-        # ── Receiving (pay-to) address — settable from the UI ──
-        st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.06em;text-transform:uppercase;margin:6px 0 3px 0;">Receiving wallet</div>',
-            unsafe_allow_html=True,
-        )
-        _payto_in = st.text_input(
-            "x402 pay-to address",
-            value=st.session_state.get("x402_payto", ""),
-            key="x402_payto_input",
-            placeholder="0x… your wallet address",
-            label_visibility="collapsed",
-            help="Premium micro-payments are sent here. Paste your own wallet address. "
-                 "Leave blank to use the safe placeholder (a burn address).",
-        )
-        # Persist only when it changed, validating the shape.
-        if _payto_in != st.session_state.get("x402_payto", ""):
-            _clean = (_payto_in or "").strip()
-            if _clean == "" or valid_addr(_clean):
-                st.session_state.x402_payto = _clean
-            else:
-                st.warning("That doesn't look like a valid 0x… address — keeping the previous one.")
-        _active_payto = x402_get_payto()
-        _is_custom = bool(valid_addr(st.session_state.get("x402_payto", "")))
-        st.markdown(
-            '<div style="font-size:10px;color:'
-            + ("#15803D" if _is_custom else "#9499A8") + ';line-height:1.5;margin:3px 0 2px 0;'
-            'word-break:break-all;">'
-            + ("✓ Payments go to: " if _is_custom
-               else "Using placeholder (set your address above): ")
-            + '<span style="font-family:DM Mono,monospace;">' + esc(_active_payto) + '</span></div>',
-            unsafe_allow_html=True,
-        )
-
-        if st.session_state.x402_receipts:
-            with st.expander("🧾 x402 receipts · " + str(len(st.session_state.x402_receipts)), expanded=False):
-                for _r in reversed(st.session_state.x402_receipts[-8:]):
-                    st.markdown(
-                        '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
-                        'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
-                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
-                        + esc(_r.get("amount", "")) + ' PROS · settled</div>'
-                        '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
-                        + esc(_r.get("tx", "")[:22]) + '…</div></div>',
-                        unsafe_allow_html=True,
-                    )
-
         st.markdown('<hr style="border:none;border-top:2px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
 
         # Build Path Generator entry
@@ -5391,6 +5461,83 @@ elif st.session_state.page == "chat":
     with mc2:
         if st.button("🌐 Docs + General", key="mode_general", use_container_width=True):
             st.session_state.chat_mode = "general"; st.rerun()
+
+    # ── x402 Premium control — relocated from sidebar to the chat command bar ──
+    _x402_on = bool(st.session_state.get("x402_enabled"))
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:12px;margin:0.4rem 0 0.7rem 0;'
+        'background:' + ("linear-gradient(135deg,#0A0A28,#1A1AFF)" if _x402_on else "#F0F1F8") + ';'
+        'border:1.5px solid ' + ("#1A1AFF" if _x402_on else "#D0D3E0") + ';border-radius:12px;'
+        'padding:0.7rem 1.05rem;box-shadow:' + ("0 6px 18px rgba(26,26,255,0.22)" if _x402_on else "none") + ';">'
+        '<span style="font-size:20px;line-height:1;">💠</span>'
+        '<div style="min-width:0;flex:1;">'
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        '<span style="font-family:Syne,sans-serif;font-size:13.5px;font-weight:800;'
+        'color:' + ("#FFFFFF" if _x402_on else "#0C0C1A") + ';">Premium · x402</span>'
+        '<span style="font-size:9.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
+        'border-radius:999px;padding:2px 9px;'
+        + ("background:rgba(255,255,255,0.18);color:#FFFFFF;" if _x402_on
+           else "background:#FFFFFF;color:#7A7F96;border:1px solid #D0D3E0;")
+        + '">' + ("ON · pay-per-call" if _x402_on else "OFF · free mode") + '</span>'
+        '</div>'
+        '<div style="font-size:11px;line-height:1.5;margin-top:2px;'
+        'color:' + ("rgba(255,255,255,0.72)" if _x402_on else "#7A7F96") + ';">'
+        + (("Next question costs ~" + ("%.2f" % X402_PRICE_PROS) + " PROS — settle on-chain to unlock a deeper answer.")
+           if _x402_on else
+           "Answers are free. Turn on to settle a tiny PROS micro-payment for an expert, in-depth reply.")
+        + '</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    _xc1, _xc2 = st.columns([1.1, 2.6], gap="medium")
+    with _xc1:
+        st.markdown("""<style>[data-testid="stWidgetLabel"] p{color:#0C0C1A !important;}</style>""", unsafe_allow_html=True)
+        st.session_state.x402_enabled = st.toggle(
+            "💠 Pay-per-call answers",
+            value=st.session_state.x402_enabled,
+            key="x402_enabled_toggle_main",
+            help=("When ON, your next question is a premium (x402) call: OctoBot returns an "
+                  "HTTP 402 payment challenge, you settle a tiny PROS micro-payment on-chain, "
+                  "and the verified payment unlocks a deeper answer. Free answering stays on when this is OFF."),
+        )
+    with _xc2:
+        _payto_in = st.text_input(
+            "x402 pay-to address",
+            value=st.session_state.get("x402_payto", ""),
+            key="x402_payto_input",
+            placeholder="💳 Receiving wallet — 0x… (blank = safe placeholder)",
+            label_visibility="collapsed",
+            help="Premium micro-payments are sent here. Paste your own wallet address. "
+                 "Leave blank to use the safe placeholder (a burn address).",
+        )
+        if _payto_in != st.session_state.get("x402_payto", ""):
+            _clean = (_payto_in or "").strip()
+            if _clean == "" or valid_addr(_clean):
+                st.session_state.x402_payto = _clean
+            else:
+                st.warning("That doesn't look like a valid 0x… address — keeping the previous one.")
+    _active_payto = x402_get_payto()
+    _is_custom = bool(valid_addr(st.session_state.get("x402_payto", "")))
+    st.markdown(
+        '<div style="font-size:10.5px;color:'
+        + ("#15803D" if _is_custom else "#000000") + ';line-height:1.5;margin:-2px 0 6px 2px;'
+        'word-break:break-all;">'
+        + ("✓ Payments go to: " if _is_custom
+           else "Using placeholder (set your address above): ")
+        + '<span style="font-family:DM Mono,monospace;">' + esc(_active_payto) + '</span></div>',
+        unsafe_allow_html=True,
+    )
+    if st.session_state.x402_receipts:
+        with st.expander("🧾 x402 receipts · " + str(len(st.session_state.x402_receipts)), expanded=False):
+            for _r in reversed(st.session_state.x402_receipts[-8:]):
+                st.markdown(
+                    '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
+                    'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
+                    '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
+                    + esc(_r.get("amount", "")) + ' PROS · settled</div>'
+                    '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
+                    + esc(_r.get("tx", "")[:22]) + '…</div></div>',
+                    unsafe_allow_html=True,
+                )
 
     # ── Name gate — blocks chat until name entered ──
     if not st.session_state.sailor_done:
@@ -5531,6 +5678,13 @@ elif st.session_state.page == "chat":
         )
 
 
+    # ── x402: render any pending payment gate FIRST (persists across reruns) ──
+    # Its Verify/Simulate buttons live here, not inside `if question:`, so a
+    # button click — which reruns with empty chat_input — still finds the gate.
+    if st.session_state.get("x402_challenge"):
+        if x402_render_pending_gate():
+            st.stop()
+
     # ── Chat input + answer ────────────────────
     pending    = st.session_state.pop("pending_q", None)
     sel_lang   = st.session_state.get("octobot_lang", "English")
@@ -5554,123 +5708,26 @@ elif st.session_state.page == "chat":
         with st.chat_message("user", avatar="👤"):
             st.markdown(question)
 
-        # ── x402 GATE ────────────────────────────────────────────
-        # Only engages when premium mode is ON and this resource isn't
-        # already paid-for. Free mode skips this entirely.
+        # ── x402 GATE (trigger only) ─────────────────────────────
+        # If premium mode is ON and this resource isn't paid yet, persist a
+        # challenge and rerun. The gate is rendered by x402_render_pending_gate()
+        # at the top of the chat page, so its Verify/Simulate buttons survive the
+        # rerun a click triggers (this fixes the "tx hash does nothing" bug).
+        # Free mode skips this entirely.
         _x402_ch = x402_make_challenge(question)
         _x402_premium = bool(st.session_state.get("x402_enabled"))
         _x402_paid = _x402_ch["resource"] in st.session_state.get("x402_unlocked", {})
 
         if _x402_premium and not _x402_paid:
+            _x402_ch["question"] = question
             st.session_state.x402_challenge = _x402_ch
-            # Rebuild the few network fields we need directly so this never
-            # depends on the pay page's helper or page execution order.
-            _is_testnet = st.session_state.get("pay_network", "mainnet") == "testnet"
-            _chain_dec  = PHAROS_TESTNET_CHAIN_ID_DEC if _is_testnet else PHAROS_CHAIN_ID_DEC
-            _explorer   = PHAROS_TESTNET_EXPLORER_URL if _is_testnet else PHAROS_EXPLORER_URL
-            _net_label  = "Pharos Atlantic (testnet)" if _is_testnet else "Pharos Mainnet"
-            _uri        = x402_payment_uri(_x402_ch, _chain_dec)
-
-            with st.chat_message("assistant", avatar="🐙"):
-                st.markdown(
-                    '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);'
-                    'border-radius:16px;padding:1.1rem 1.3rem;color:#fff;margin-bottom:0.6rem;">'
-                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-                    '<span style="font-family:DM Mono,monospace;font-size:11px;font-weight:700;'
-                    'background:rgba(255,255,255,0.16);border-radius:6px;padding:2px 8px;">HTTP 402</span>'
-                    '<span style="font-size:13px;font-weight:800;">Payment Required</span></div>'
-                    '<div style="font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.55;">'
-                    'This is a <b>premium (x402)</b> OctoBot call. Settle a small on-chain micro-payment '
-                    'to unlock a deeper, expert answer. Your wallet does the signing — OctoBot only '
-                    'verifies the payment on-chain.</div>'
-                    '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:0.7rem;font-size:12px;">'
-                    '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
-                    'letter-spacing:0.05em;">Amount</div><div style="font-weight:800;">'
-                    + ("%.2f" % _x402_ch["amount_pros"]) + ' PROS</div></div>'
-                    '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
-                    'letter-spacing:0.05em;">Network</div><div style="font-weight:700;">' + esc(_net_label) + '</div></div>'
-                    '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
-                    'text-transform:uppercase;letter-spacing:0.05em;">Pay&nbsp;to</div>'
-                    '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
-                    + esc(_x402_ch["pay_to"]) + '</div></div>'
-                    '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
-                    'text-transform:uppercase;letter-spacing:0.05em;">Resource</div>'
-                    '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
-                    + esc(_x402_ch["resource"]) + '</div></div>'
-                    '</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-                _qcol, _vcol = st.columns([1, 1.3], gap="large")
-                with _qcol:
-                    st.markdown(
-                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
-                        '📲 Scan to pay (EIP-681)</div>', unsafe_allow_html=True)
-                    render_qr_code(_uri, size=150, key="x402_qr_" + _x402_ch["nonce"])
-                    st.markdown(
-                        '<div style="font-size:10px;color:#7A7F96;word-break:break-all;margin-top:4px;">'
-                        + esc(_uri) + '</div>', unsafe_allow_html=True)
-
-                with _vcol:
-                    st.markdown(
-                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
-                        '✅ Settle the 402 challenge</div>', unsafe_allow_html=True)
-                    st.markdown(
-                        '<div style="font-size:11.5px;color:#42475A;line-height:1.55;margin-bottom:6px;">'
-                        'Pay from your wallet, then paste the transaction hash. OctoBot verifies it '
-                        'on-chain (recipient + amount + success) before unlocking.</div>',
-                        unsafe_allow_html=True)
-                    _txh = st.text_input(
-                        "Transaction hash", key="x402_txh_" + _x402_ch["nonce"],
-                        placeholder="0x… your payment tx hash",
-                        label_visibility="collapsed",
-                    )
-                    _bcol1, _bcol2 = st.columns(2)
-                    with _bcol1:
-                        if st.button("🔓 Verify & unlock", key="x402_verify_" + _x402_ch["nonce"],
-                                     use_container_width=True):
-                            _res = x402_verify_payment(_txh, _x402_ch)
-                            if _res["ok"]:
-                                st.session_state.x402_unlocked[_x402_ch["resource"]] = (_txh or "").strip()
-                                st.session_state.x402_receipts.append({
-                                    "amount": "%.2f" % _x402_ch["amount_pros"],
-                                    "tx":     (_txh or "").strip(),
-                                    "resource": _x402_ch["resource"],
-                                })
-                                st.session_state.x402_challenge = None
-                                st.session_state["pending_q"] = question
-                                st.rerun()
-                            else:
-                                st.error("Payment not verified: " + str(_res.get("reason", "unknown error")))
-                    with _bcol2:
-                        if st.button("🧪 Simulate (demo)", key="x402_sim_" + _x402_ch["nonce"],
-                                     use_container_width=True,
-                                     help="Demo only — marks the call as paid WITHOUT a real on-chain payment. "
-                                          "Use to preview the unlocked answer flow."):
-                            st.session_state.x402_unlocked[_x402_ch["resource"]] = "SIMULATED"
-                            st.session_state.x402_receipts.append({
-                                "amount": "%.2f" % _x402_ch["amount_pros"],
-                                "tx":     "SIMULATED (demo)",
-                                "resource": _x402_ch["resource"],
-                            })
-                            st.session_state.x402_challenge = None
-                            st.session_state["pending_q"] = question
-                            st.rerun()
-                    if _explorer:
-                        st.markdown(
-                            '<a href="' + esc_url(_explorer) + '" target="_blank" rel="noopener noreferrer" '
-                            'style="font-size:11px;color:#1A1AFF;text-decoration:none;font-weight:600;">'
-                            'Open Pharos explorer ↗</a>', unsafe_allow_html=True)
-
-            # Record a short assistant note so the transcript stays coherent,
-            # then halt this run — the payment UI above persists via session_state.
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": "⚡ **402 Payment Required** — this premium question is waiting for an x402 "
                            "micro-payment of " + ("%.2f" % _x402_ch["amount_pros"]) + " PROS to unlock.",
             })
             st.session_state.sources_history.append([])
-            st.stop()
+            st.rerun()
 
         with st.chat_message("assistant", avatar="🐙"):
             # ── Thinking orb (feature 1) ──────────────
