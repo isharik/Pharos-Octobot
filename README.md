@@ -120,19 +120,51 @@ OctoBot says:
 
 ---
 
-## ⚡ Premium · x402 section 
+## Premium · x402
 
-In the Chat sidebar with a "Pay-per-call answers" toggle. It's off by default, so everything answers free exactly as before — that path is untouched. When you flip it on, your next question becomes a premium x402 call:
+OctoBot includes a **Premium · x402** mode that enables pay-per-call AI responses using native on-chain payments.
 
-Instead of answering, OctoBot returns a real HTTP 402 "Payment Required" card showing the amount (0.05 PROS), the network, the pay-to address, and the resource ID — the actual 402 challenge made visible.
+### How it Works
 
-You get a scannable EIP-681 QR code (reusing your existing QR helper) plus the raw ethereum: URI, so a wallet can fulfill the payment.
+1. **Enable Premium Mode**
 
-You pay from your wallet, paste the transaction hash, and hit Verify & unlock. OctoBot verifies the payment on-chain using your existing fetch_pharos_transaction — it confirms the tx succeeded, went to the right address, and paid enough (with a small tolerance for 
+   * A **"Pay-per-call answers"** toggle is available in the chat sidebar.
+   * It is **disabled by default**, so all existing free chat functionality remains unchanged.
+   * When enabled, your next prompt becomes a **Premium x402** request.
 
-gas/rounding). This is genuine on-chain settlement verification, not a mock.
+2. **HTTP 402 Payment Challenge**
 
-Once verified, it generates an enhanced premium answer (deeper, structured, via Gemini grounded in your docs), shows an "⚡ Premium · x402 settled" badge, and logs an x402 receipt in the sidebar
+   * Instead of generating an answer immediately, OctoBot returns a genuine **HTTP 402 – Payment Required** challenge displaying:
+
+     * Payment amount (**0.05 PROS**)
+     * Network
+     * Pay-to address
+     * Resource ID
+
+3. **Complete the Payment**
+
+   * Scan the generated **EIP-681 QR code** or use the provided `ethereum:` payment URI.
+   * Pay directly from your wallet.
+
+4. **Verify On-chain**
+
+   * Paste the transaction hash and click **Verify & Unlock**.
+   * OctoBot verifies the payment on-chain using `fetch_pharos_transaction`, ensuring:
+
+     * The transaction succeeded
+     * The payment was sent to the correct address
+     * The required amount was paid (with a small tolerance for gas/rounding)
+
+   This is **real on-chain settlement verification**, not a simulated payment flow.
+
+5. **Unlock Premium Response**
+
+   * After successful verification, OctoBot:
+
+     * Generates a richer, more structured premium response powered by Gemini and grounded in your documentation.
+     * Displays an **⚡ Premium · x402 Settled** badge.
+     * Logs an **x402 payment receipt** in the chat sidebar.
+
 
 <img width="1261" height="415" alt="Screenshot 2026-06-30 130534" src="https://github.com/user-attachments/assets/80f27920-56f1-4ad3-9fc0-7927344f1e9f" />
 
