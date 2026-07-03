@@ -110,13 +110,13 @@ CAMPAIGNS = [
         "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
    {
-        "title": "Create Like a PRO",
+        "title": "Create Like a PRO Phase 2",
         "tag":   "LIVE · Agent Carnival",
         "desc":  "Join the Alpha Summer. Build Skills. Launch Agents. Earn PROS",
         "link":  "https://port.pharos.xyz/agent-carnival/",
         "cta":   "Join",
         "color": "#1A1AFF",
-        "logo":  "blob:https://port.pharos.xyz/90ba42b1-05e3-461b-9e24-ff9b320651f6",
+        "logo":  "https://pbs.twimg.com/profile_images/2035669028132503552/q2Dd5GoS.png",
         "icon":  "🏆",
         "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
@@ -6059,6 +6059,7 @@ elif st.session_state.page == "updates":
     else:
         cards_source = [
             {"title": "Ist project of the Pharos Incubator ⚓", "description": "Excited to announce @Farooxyz as the FIRST project of the Pharos Incubator.", "url": PHAROS_MAIN_URL, "thumb": "https://pbs.twimg.com/profile_images/2016345161756717057/IFCtt1bF_400x400.jpg", "date": ""},
+            {"title": "The next allocation window for pALPHA Stage 2 is almost here.", "description": "Following a fully subscribed $50M first round, the next opportunity opens on July 10–16.", "url": "https://app.yieldnetwork.io/pharos-2/", "thumb": "https://res.cloudinary.com/dhkxvwmjd/image/upload/v1781750528/Pharos_onrmbe.jpg", "date": ""},
             {"title": "Cross-chain access is expanding on Pharos", "description": "@StargateFinance now supports Pharos, enabling users to transfer and swap assets across EVM chains", "url": "https://x.com/pharos_network/status/2067208187615576378?s=20", "thumb": "https://pbs.twimg.com/profile_images/1928147506699145217/n7-KQGNJ_400x400.png", "date": ""},
             {"title": "Pharos is partnering with @avalonfinance and @FunctionBTC", "description": " To expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019?s=20", "thumb": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "date": ""},
             {"title": "The Builders Harbor on Pharos has been upgraded", "description": "New tools, templates, and technical resources.", "url": "https://www.pharos.xyz/devhub", "thumb": "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64", "date": ""},
