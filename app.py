@@ -99,13 +99,24 @@ CEX_LINKS = [
 
 CAMPAIGNS = [
     {
-        "title": "AI Agent Carnival — Phase 1",
-        "tag":   "LIVE · Skill Hackathon",
-        "desc":  "Build reusable Skill modules on Pharos and win from a 150,000 PROS prize pool. Phase 1 closes Jun 15.",
-        "link":  "https://dorahacks.io/hackathon/pharos-phase1",
-        "cta":   "Submit your Skill",
+        "title": "$PROS X Faroo ⚡",
+        "tag":   "LIVE ·Pre Mint ",
+        "desc":  "Earn before stPROS native yield goes live.",
+        "link":  "https://app.faroo.xyz/pre-mint",
+        "cta":   "Join",
         "color": "#1A1AFF",
-        "logo":  "https://www.google.com/s2/favicons?domain=dorahacks.io&sz=64",
+        "logo":  "https://app.faroo.xyz/img/tokens/stPROS-dark.svg",
+        "icon":  "🏆",
+        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+    },
+   {
+        "title": "Create Like a PRO",
+        "tag":   "LIVE · Agent Carnival",
+        "desc":  "Join the Alpha Summer. Build Skills. Launch Agents. Earn PROS",
+        "link":  "https://port.pharos.xyz/agent-carnival/",
+        "cta":   "Join",
+        "color": "#1A1AFF",
+        "logo":  "blob:https://port.pharos.xyz/90ba42b1-05e3-461b-9e24-ff9b320651f6",
         "icon":  "🏆",
         "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
@@ -6047,11 +6058,10 @@ elif st.session_state.page == "updates":
         cards_source = news_items[:6]
     else:
         cards_source = [
+            {"title": "Ist project of the Pharos Incubator ⚓", "description": "Excited to announce @Farooxyz as the FIRST project of the Pharos Incubator.", "url": PHAROS_MAIN_URL, "thumb": "https://pbs.twimg.com/profile_images/2016345161756717057/IFCtt1bF_400x400.jpg", "date": ""},
             {"title": "Cross-chain access is expanding on Pharos", "description": "@StargateFinance now supports Pharos, enabling users to transfer and swap assets across EVM chains", "url": "https://x.com/pharos_network/status/2067208187615576378?s=20", "thumb": "https://pbs.twimg.com/profile_images/1928147506699145217/n7-KQGNJ_400x400.png", "date": ""},
-            {"title": "Pharos is partnering with @avalonfinance and @FunctionBTC", "description": " To expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019?s=20", "thumb": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "date": ""},
-            {"title": "AI Agent Carnival Phase 1 is LIVE", "description": "150,000 PROS prize pool · Submit Skills by June 15 on DoraHacks", "url": "https://dorahacks.io/hackathon/pharos-phase1", "thumb": "https://www.google.com/s2/favicons?domain=dorahacks.io&sz=64", "date": ""},
+            {"title": "Pharos is partnering with @avalonfinance and @FunctionBTC", "description": " To expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019?s=20", "thumb": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "date": ""},", "date": ""},
             {"title": "The Builders Harbor on Pharos has been upgraded", "description": "New tools, templates, and technical resources.", "url": "https://www.pharos.xyz/devhub", "thumb": "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64", "date": ""},
-            {"title": "USDC + CCTP integration live", "description": "Pharos integrates Circle's USDC and CCTP for real-time RealFi settlement.", "url": PHAROS_MAIN_URL, "thumb": "https://www.google.com/s2/favicons?domain=circle.com&sz=64", "date": ""},
             {"title": "Expedition Season 2 ongoing", "description": "Particpate in the Ecosystem.", "url": "https://discord.gg/pharos", "thumb": "https://www.google.com/s2/favicons?domain=discord.com&sz=64", "date": ""},
             {"title": "Pharos x XLayer & OKX", "description": "Fellow partners in bringing World Cup outcomes onchain.", "url": "https://x.com/pharos_network/status/2065362220851335650", "thumb": "https://www.google.com/s2/favicons?domain=okx.com&sz=64", "date": ""},
             {"title": "Follow Pharos on X for more updates", "description": "Also join Discord for more insights.", "url": "https://x.com/pharos_network", "thumb": "https://pbs.twimg.com/profile_images/2005491865450430464/ta6znFqT_400x400.jpg", "date": ""},
