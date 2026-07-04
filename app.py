@@ -6006,7 +6006,7 @@ elif st.session_state.page == "campaigns":
         '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">AI Agent Carnival — Phase Timeline</div>'
         '<div style="display:flex;flex-direction:column;gap:8px;">'
         '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">Pre-Season</div>'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">Pre-Season ✓</div>'
         '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
         '<div><div style="font-size:12px;font-weight:600;color:#14141F;">May 25 – Jun 8</div>'
         '<div style="font-size:11px;color:#5B5F6E;">Discord Skill building warm-up · 5,000 PROS for 10 winners</div></div>'
@@ -6029,7 +6029,7 @@ elif st.session_state.page == "campaigns":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.link_button("Submit on DoraHacks ↗", "https://dorahacks.io/hackathon/pharos-phase1", use_container_width=True)
+        st.link_button("Submit Agents here ↗", "https://dorahacks.io/hackathon/pharos-phase1", use_container_width=True)
     with col2:
         st.link_button("Join Pharos Discord ↗", PHAROS_DISCORD_URL, use_container_width=True)
 
