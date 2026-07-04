@@ -6006,7 +6006,7 @@ elif st.session_state.page == "campaigns":
         '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">AI Agent Carnival — Phase Timeline</div>'
         '<div style="display:flex;flex-direction:column;gap:8px;">'
         '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#14141F;font-weight:700;padding-top:1px;">Pre-Season ✓</div>'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:700;padding-top:1px;">Pre-Season ✓</div>'
         '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
         '<div><div style="font-size:12px;font-weight:600;color:#14141F;">May 25 – Jun 8</div>'
         '<div style="font-size:11px;color:#5B5F6E;">Discord Skill building warm-up · 5,000 PROS for 10 winners</div></div>'
@@ -7946,7 +7946,7 @@ elif st.session_state.page == "network":
                 f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
                 f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
                 f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;'
-                f'text-decoration:none;margin-left:-13px;margin-top:-13px;">'
+                f'text-decoration:none;margin-left:-15px;margin-top:-15px;">'
                 f'🔍 Explorer ↗</a>'
                 '</div>',
                 unsafe_allow_html=True,
