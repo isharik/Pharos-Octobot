@@ -120,6 +120,18 @@ CAMPAIGNS = [
         "icon":  "🏆",
         "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
+   {
+        "title": "TopNod Million Cup",
+        "tag":   "LIVE · Prediction",
+        "desc":  "Predict the football winners and Earn $PROS",
+        "link":  "https://t.co/DuJ9z62x4V",
+        "cta":   "Join",
+        "color": "#1A1AFF",
+        "logo":  "https://pbs.twimg.com/profile_images/1953370784698937344/b7j3JHqn_400x400.jpg",
+        "icon":  "🏆",
+        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+    },
+  
     {
         "title": "Pharos Expedition Season 2",
         "tag":   "LIVE · Post Mainnet Voyage",
