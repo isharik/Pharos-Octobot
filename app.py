@@ -7946,7 +7946,7 @@ elif st.session_state.page == "network":
                 f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
                 f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
                 f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;'
-                f'text-decoration:none;margin-left:-15px;margin-top:-15px;">'
+                f'text-decoration:none;margin-left:-20px;margin-top:-15px;">'
                 f'🔍 Explorer ↗</a>'
                 '</div>',
                 unsafe_allow_html=True,
