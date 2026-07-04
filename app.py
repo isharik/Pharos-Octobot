@@ -131,6 +131,18 @@ CAMPAIGNS = [
         "icon":  "🏆",
         "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
     },
+    
+   {
+        "title": "Pharos Inner Circle",
+        "tag":   "# Make a Million, Become a PRO",
+        "desc":  "Merit-based initiative designed to recognize and reward the most committed Pharos supporters",
+        "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
+        "cta":   "Grow with Us",
+        "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
+        "icon":  "👑",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+    },
   
     {
         "title": "Pharos Expedition Season 2",
@@ -154,17 +166,7 @@ CAMPAIGNS = [
         "icon":  "✍️",
         "bg":    "linear-gradient(135deg,#F0FFF4,#E0F8E8)",
     },
-    {
-        "title": "Pharos Inner Circle",
-        "tag":   "# Make a Million, Become a PRO",
-        "desc":  "Merit-based initiative designed to recognize and reward the most committed Pharos supporters",
-        "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
-        "cta":   "Grow with Us",
-        "color": "#1A1AFF",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
-        "icon":  "👑",
-        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
-    },
+    
 ]
 
 
