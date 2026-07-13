@@ -1903,6 +1903,417 @@ def load_octobot():
         return None, str(e)
 
 # ─────────────────────────────────────────────
+# MARKET & COMMUNITY PULSE — helpers
+# Additive feature: live market data (CoinMarketCap when a key is
+# configured, CoinGecko as the automatic fallback), AI community
+# sentiment + discussion summary + trending topics (Gemini, with a
+# deterministic fallback built from the REAL market numbers — same
+# philosophy as explain_transaction / synthesize_wallet_profile).
+# ─────────────────────────────────────────────
+PULSE_CACHE = 300
+PULSE_AI_CACHE = 600
+
+def fetch_market_pulse() -> dict:
+    """Live PROS market snapshot. CoinMarketCap first (if CMC_API_KEY /
+    COINMARKETCAP_API_KEY is set), CoinGecko otherwise. Cached 5 min."""
+    now = time.time()
+    cached = st.session_state.get("pulse_market_cache", {})
+    if cached.get("data") and now - cached.get("fetched_at", 0) < PULSE_CACHE:
+        return cached["data"]
+
+    data = {"available": False, "source": ""}
+
+    cmc_key = os.getenv("CMC_API_KEY") or os.getenv("COINMARKETCAP_API_KEY")
+    if cmc_key:
+        try:
+            r = requests.get(
+                "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
+                params={"slug": "pharos-network", "convert": "USD"},
+                headers={"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"},
+                timeout=6,
+            )
+            if r.status_code == 200:
+                raw = r.json().get("data", {})
+                coin = next(iter(raw.values()), None)
+                if isinstance(coin, list):
+                    coin = coin[0] if coin else None
+                if coin:
+                    q = coin.get("quote", {}).get("USD", {})
+                    data = {
+                        "available": True, "source": "CoinMarketCap",
+                        "price":  q.get("price"),
+                        "chg24":  q.get("percent_change_24h"),
+                        "chg7d":  q.get("percent_change_7d"),
+                        "chg30d": q.get("percent_change_30d"),
+                        "mcap":   q.get("market_cap"),
+                        "vol24":  q.get("volume_24h"),
+                        "rank":   coin.get("cmc_rank"),
+                        "supply": coin.get("circulating_supply"),
+                        "ath": None, "ath_chg": None,
+                    }
+        except Exception:
+            pass
+
+    if not data.get("available"):
+        try:
+            r = requests.get(
+                "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID,
+                params={
+                    "localization": "false", "tickers": "false",
+                    "market_data": "true", "community_data": "false",
+                    "developer_data": "false", "sparkline": "false",
+                },
+                headers={"Accept": "application/json"}, timeout=6,
+            )
+            if r.status_code == 200:
+                md = r.json().get("market_data", {})
+                data = {
+                    "available": True, "source": "CoinGecko",
+                    "price":  (md.get("current_price") or {}).get("usd"),
+                    "chg24":  md.get("price_change_percentage_24h"),
+                    "chg7d":  md.get("price_change_percentage_7d"),
+                    "chg30d": md.get("price_change_percentage_30d"),
+                    "mcap":   (md.get("market_cap") or {}).get("usd"),
+                    "vol24":  (md.get("total_volume") or {}).get("usd"),
+                    "rank":   md.get("market_cap_rank") or r.json().get("market_cap_rank"),
+                    "supply": md.get("circulating_supply"),
+                    "ath":    (md.get("ath") or {}).get("usd"),
+                    "ath_chg": (md.get("ath_change_percentage") or {}).get("usd"),
+                }
+        except Exception:
+            pass
+
+    if data.get("available"):
+        st.session_state["pulse_market_cache"] = {"data": data, "fetched_at": now}
+    return data if data.get("available") else (cached.get("data") or data)
+
+
+def compute_community_pulse(market: dict, news: list) -> dict:
+    """Sentiment (Bullish/Neutral/Bearish + 0-100 score), an AI summary of
+    recent discussion, and trending topics. Gemini-refined when available,
+    ALWAYS falls back to a deterministic read of the real market numbers."""
+    now = time.time()
+    cached = st.session_state.get("pulse_ai_cache", {})
+    if cached.get("data") and now - cached.get("fetched_at", 0) < PULSE_AI_CACHE:
+        return cached["data"]
+
+    chg24 = (market or {}).get("chg24") or 0.0
+    chg7d = (market or {}).get("chg7d") or 0.0
+    price = (market or {}).get("price")
+
+    def deterministic_pulse():
+        score = max(2, min(98, round(50 + chg24 * 3.0 + chg7d * 1.2)))
+        label = "Bullish" if score >= 60 else ("Bearish" if score <= 40 else "Neutral")
+        d24 = ("up " if chg24 >= 0 else "down ") + f"{abs(chg24):.2f}% over 24h"
+        d7  = ("up " if chg7d >= 0 else "down ") + f"{abs(chg7d):.2f}% on the week"
+        px  = f"${price:,.4f}" if price else "its current level"
+        summary = (
+            "Community discussion is tracking price action closely: $PROS is trading at "
+            + px + ", " + d24 + " and " + d7 + ". "
+            + ("Momentum is constructive and conversations lean toward accumulation, SPN restaking "
+               "yields and new campaign rewards." if label == "Bullish" else
+               ("Sentiment is cautious — traders are watching support levels while builders keep "
+                "shipping on SPNs and RWA integrations." if label == "Bearish" else
+                "The tone is balanced — traders are range-watching while attention rotates toward "
+                "SPNs, x402 payments and active campaigns."))
+        )
+        topics = ["$PROS price action", "SPNs & restaking", "RWA / RealFi", "x402 payments", "Active campaigns"]
+        for art in (news or [])[:3]:
+            t = (art.get("title") or "").strip()
+            if t and len(t) < 46 and t not in topics:
+                topics.insert(2, t)
+        return {"label": label, "score": score, "summary": summary, "topics": topics[:6], "ai": False}
+
+    result = deterministic_pulse()
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        try:
+            titles = "; ".join([(a.get("title") or "")[:90] for a in (news or [])[:6]]) or "(none)"
+            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.4, google_api_key=api_key)
+            prompt = (
+                "You are a crypto community analyst for the Pharos Network ($PROS). "
+                "Given the live data below, respond with ONLY a JSON object (no markdown, no backticks) "
+                'shaped exactly like {"label":"Bullish|Neutral|Bearish","score":0-100,'
+                '"summary":"2-3 sentence summary of recent community discussion, grounded in the data",'
+                '"topics":["5 short trending topic strings"]}.\n'
+                f"Price: {price} USD; 24h change: {chg24:.2f}%; 7d change: {chg7d:.2f}%. "
+                "Recent headlines: " + titles
+            )
+            resp = llm.invoke([HumanMessage(content=prompt)])
+            raw = (resp.content or "").strip()
+            raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
+            parsed = json.loads(raw)
+            label = str(parsed.get("label", "")).title()
+            score = int(parsed.get("score", result["score"]))
+            if label in ("Bullish", "Neutral", "Bearish") and 0 <= score <= 100:
+                topics = [str(t)[:60] for t in (parsed.get("topics") or []) if str(t).strip()][:6]
+                result = {
+                    "label": label, "score": score,
+                    "summary": str(parsed.get("summary", ""))[:600] or result["summary"],
+                    "topics": topics or result["topics"],
+                    "ai": True,
+                }
+        except Exception:
+            pass
+
+    st.session_state["pulse_ai_cache"] = {"data": result, "fetched_at": now}
+    return result
+
+
+def render_sentiment_orb() -> None:
+    """Floating, glossy 3D crystal-orb shortcut on the Home page that
+    opens the Market & Community Pulse page. GSAP-animated (cdnjs):
+    slow float, pulsing live glow, orbiting up-arrow, hover parallax
+    tilt + 1.08x scale, click ripple, then a fluid page transition via
+    the parent-document __pnavGo helper (falls back to a direct click
+    on the hidden nav_pulse button). Honors prefers-reduced-motion."""
+    components.html(
+        """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:transparent;overflow:hidden;}
+.stage{
+    width:100%;height:108px;
+    display:flex;align-items:flex-start;justify-content:center;
+    padding:6px 0 0 0;
+    perspective:600px;-webkit-tap-highlight-color:transparent;
+    user-select:none;
+}
+.col{
+    display:flex;flex-direction:column;align-items:center;
+    width:108px;cursor:pointer;
+}
+.orb3d{position:relative;width:48px;height:48px;transform-style:preserve-3d;will-change:transform;}
+/* pulsing outer glow — signals live updates */
+.glowring{
+    position:absolute;inset:-10px;border-radius:50%;
+    background:radial-gradient(circle,
+        rgba(26,26,255,0.45) 0%,
+        rgba(107,140,255,0.26) 42%,
+        rgba(107,140,255,0) 72%);
+    will-change:transform,opacity;pointer-events:none;
+}
+/* the glossy crystal orb */
+.orb{
+    position:absolute;inset:5px;border-radius:50%;
+    background:
+        radial-gradient(circle at 32% 26%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 26%),
+        radial-gradient(circle at 66% 78%, rgba(107,140,255,0.85) 0%, rgba(107,140,255,0) 46%),
+        conic-gradient(from 210deg,
+            rgba(255,255,255,0.16) 0deg, rgba(255,255,255,0) 55deg,
+            rgba(255,255,255,0.10) 130deg, rgba(255,255,255,0) 200deg,
+            rgba(255,255,255,0.14) 300deg, rgba(255,255,255,0) 360deg),
+        radial-gradient(circle at 50% 46%, #6B8CFF 0%, #2D2DE0 52%, #0C0CB4 100%);
+    box-shadow:
+        0 8px 20px rgba(26,26,255,0.34),
+        inset 0 -7px 13px rgba(6,6,90,0.55),
+        inset 0 5px 9px rgba(255,255,255,0.35),
+        inset 0 0 0 1px rgba(255,255,255,0.18);
+    will-change:transform;
+}
+/* crisp specular highlight — the "glass" read */
+.spec{
+    position:absolute;left:34%;top:16%;width:34%;height:22%;
+    border-radius:50%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0));
+    filter:blur(1.5px);transform:rotate(-18deg);pointer-events:none;
+}
+/* soft contact shadow under the floating orb */
+.shadow{
+    position:absolute;left:50%;bottom:-7px;width:30px;height:6px;
+    transform:translateX(-50%);border-radius:50%;
+    background:radial-gradient(ellipse,rgba(12,12,60,0.28) 0%,rgba(12,12,60,0) 70%);
+    will-change:transform,opacity;pointer-events:none;
+}
+/* orbiting up-arrow — market movement */
+.orbit{position:absolute;inset:-2px;will-change:transform;pointer-events:none;}
+.arrowchip{
+    position:absolute;top:-2px;left:50%;margin-left:-7px;
+    width:14px;height:14px;border-radius:50%;
+    background:linear-gradient(160deg,#2BE080,#0FA860);
+    box-shadow:0 3px 10px rgba(20,190,110,0.45),inset 0 1px 0 rgba(255,255,255,0.4);
+    display:flex;align-items:center;justify-content:center;
+    will-change:transform;
+}
+.arrowchip svg{width:8px;height:8px;display:block;}
+/* ripple on click */
+.ripple{
+    position:absolute;inset:5px;border-radius:50%;
+    border:2px solid rgba(107,140,255,0.9);
+    opacity:0;transform:scale(1);pointer-events:none;will-change:transform,opacity;
+}
+/* label */
+.label{
+    margin-top:9px;font-family:'Syne',sans-serif;
+    font-size:9px;font-weight:800;letter-spacing:0.03em;white-space:nowrap;
+    color:#0C0C1A;opacity:1;
+    display:flex;align-items:center;gap:5px;
+    background:rgba(255,255,255,0.92);
+    border:1px solid #E2E4EE;border-radius:8px;
+    padding:3px 8px;
+    box-shadow:0 2px 8px rgba(20,20,60,0.10);
+    transition:letter-spacing 220ms cubic-bezier(0.4,0,0.2,1),box-shadow 220ms ease;
+}
+.label .live{
+    width:4px;height:4px;border-radius:50%;background:#1FA855;
+    box-shadow:0 0 5px #1FA855;
+}
+.col:hover .label{letter-spacing:0.06em;box-shadow:0 4px 14px rgba(26,26,255,0.22);}
+.sub{
+    margin-top:3px;font-family:'DM Sans',sans-serif;font-size:8px;font-weight:600;
+    color:#3D4358;white-space:nowrap;
+    background:rgba(255,255,255,0.75);border-radius:6px;padding:1px 6px;
+}
+@media (prefers-reduced-motion: reduce){
+    .glowring{opacity:0.5;}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+ <div class="col" id="stage" role="button" aria-label="Check Sentiment — open Market and Community Pulse" title="Market &amp; Community Pulse">
+  <div class="orb3d" id="orb3d">
+    <div class="glowring" id="glow"></div>
+    <div class="orb" id="orb"><div class="spec"></div></div>
+    <div class="ripple" id="ripple"></div>
+    <div class="orbit" id="orbit">
+      <div class="arrowchip" id="chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19V5"></path><path d="M5.5 11.5 12 5l6.5 6.5"></path>
+        </svg>
+      </div>
+    </div>
+    <div class="shadow" id="shadow"></div>
+  </div>
+  <div class="label"><span class="live"></span>Check Sentiment</div>
+  <div class="sub">Market &amp; Community Pulse</div>
+ </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+(function(){
+  /* Pin this component to the extreme top-left corner of the viewport
+     (fixed, out of the page flow) by styling its own iframe container
+     from the inside — inline styles, no selector guessing, so the
+     Home hero and cards keep their original positions. */
+  window.__isOrb = true;   /* identity flag: lets the parent-side cleaner
+                              verify that a pinned container still hosts
+                              THIS orb (Streamlit recycles DOM nodes across
+                              pages, so pins must be validated, not trusted) */
+  try{
+    var fe = window.frameElement;
+    if (fe){
+      fe.style.width = '112px';
+      fe.style.height = '112px';
+      var holder = (fe.closest && fe.closest('[data-testid="stElementContainer"]')) || fe.parentElement;
+      if (holder){
+        holder.setAttribute('data-orb-holder', '1');
+        holder.style.position = 'fixed';
+        holder.style.width  = '112px';
+        holder.style.height = '112px';
+        holder.style.zIndex = '901';
+        holder.style.margin = '0';
+        holder.style.padding = '0';
+        var pw = window.parent;
+        var mq = (pw && pw.matchMedia) ? pw.matchMedia('(max-width: 900px)') : null;
+        var place = function(){
+          if (mq && mq.matches){
+            holder.style.top = 'auto'; holder.style.bottom = '12px'; holder.style.left = '0px';
+          } else {
+            holder.style.bottom = 'auto'; holder.style.top = '94px'; holder.style.left = '0px';
+          }
+        };
+        place();
+        if (mq && mq.addEventListener) mq.addEventListener('change', place);
+      }
+    }
+  }catch(e){}
+
+  var stage  = document.getElementById('stage');
+  var orb3d  = document.getElementById('orb3d');
+  var glow   = document.getElementById('glow');
+  var orbit  = document.getElementById('orbit');
+  var chip   = document.getElementById('chip');
+  var shadow = document.getElementById('shadow');
+  var ripple = document.getElementById('ripple');
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var floatTl = null, rotX = null, rotY = null;
+
+  if (window.gsap && !reduced){
+    /* slow vertical float (intensified on hover) */
+    floatTl = gsap.to(orb3d, {y:-4, duration:2.6, ease:'sine.inOut', yoyo:true, repeat:-1});
+    /* pulsing live glow */
+    gsap.to(glow, {scale:1.16, opacity:0.55, duration:1.9, ease:'sine.inOut', yoyo:true, repeat:-1});
+    /* shadow breathes opposite the float */
+    gsap.to(shadow, {scale:0.82, opacity:0.6, duration:2.6, ease:'sine.inOut', yoyo:true, repeat:-1});
+    /* up-arrow orbits the orb; chip counter-rotates so the arrow stays upright */
+    gsap.to(orbit, {rotation:360, duration:7, ease:'none', repeat:-1});
+    gsap.to(chip,  {rotation:-360, duration:7, ease:'none', repeat:-1});
+    /* hover parallax tilt (snappy, 60fps quickTo) */
+    rotX = gsap.quickTo(orb3d, 'rotationX', {duration:0.4, ease:'power2.out'});
+    rotY = gsap.quickTo(orb3d, 'rotationY', {duration:0.4, ease:'power2.out'});
+  }
+
+  stage.addEventListener('mousemove', function(e){
+    if (!rotX) return;
+    var r = orb3d.getBoundingClientRect();
+    var nx = ((e.clientX - r.left) / r.width  - 0.5) * 2;
+    var ny = ((e.clientY - r.top ) / r.height - 0.5) * 2;
+    rotX(-ny * 10); rotY(nx * 10);
+  });
+  stage.addEventListener('mouseenter', function(){
+    if (!window.gsap || reduced) return;
+    gsap.to(orb3d, {scale:1.08, duration:0.32, ease:'back.out(2)'});
+    gsap.to(glow,  {opacity:1, duration:0.3, ease:'power2.out'});
+    if (floatTl) floatTl.timeScale(1.7);
+  });
+  stage.addEventListener('mouseleave', function(){
+    if (!window.gsap || reduced){ return; }
+    gsap.to(orb3d, {scale:1, rotationX:0, rotationY:0, duration:0.45, ease:'power3.out'});
+    gsap.to(glow,  {opacity:0.8, duration:0.5, ease:'power2.out'});
+    if (floatTl) floatTl.timeScale(1);
+  });
+
+  function navigate(){
+    var done = false;
+    try{
+      if (window.parent && typeof window.parent.__pnavGo === 'function'){
+        window.parent.__pnavGo('pulse'); done = true;
+      }
+    }catch(e){}
+    if (!done){
+      try{
+        var btn = window.parent.document.querySelector('[class*="st-key-nav_pulse"] button');
+        if (btn) btn.click();
+      }catch(e2){}
+    }
+  }
+  stage.addEventListener('click', function(){
+    if (window.gsap && !reduced){
+      gsap.fromTo(ripple, {scale:1, opacity:0.9},
+        {scale:2.1, opacity:0, duration:0.55, ease:'power2.out'});
+      gsap.to(orb3d, {scale:0.94, duration:0.09, ease:'power2.in', yoyo:true, repeat:1});
+      setTimeout(navigate, 180);
+    } else {
+      navigate();
+    }
+  });
+})();
+</script>
+</body>
+</html>
+        """,
+        height=112,
+        scrolling=False,
+    )
+
+
+# ─────────────────────────────────────────────
 # FONTS
 # ─────────────────────────────────────────────
 st.markdown(
@@ -3052,6 +3463,42 @@ section[data-testid="stMain"] > div {
 .camp-card:hover,.cex-card:hover{
     transform:translateY(-2px)!important;
     box-shadow:var(--shadow-blue)!important;
+}
+
+/* ── SCROLL REVEAL (3D) ──
+   Below-the-fold blocks enter with a subtle 3D tilt-up as you scroll.
+   Classes are applied and removed by the bootstrap script; after the
+   entrance finishes ALL classes and transforms are stripped, so no
+   permanent transform lingers (permanent transforms would hijack any
+   position:fixed descendant). */
+.sr-pre{
+    opacity:0 !important;
+    transform:perspective(900px) translateY(26px) rotateX(7deg) scale(0.99) !important;
+    will-change:opacity,transform;
+}
+.sr-in{
+    opacity:1 !important;
+    transform:perspective(900px) translateY(0) rotateX(0deg) scale(1) !important;
+    transition:opacity 460ms cubic-bezier(0.22,0.9,0.3,1),
+               transform 560ms cubic-bezier(0.22,0.9,0.3,1) !important;
+}
+
+/* ── HOVER-LIFT CARDS ──
+   Campaign, Updates and Ecosystem cards previously used inline
+   onmouseover/onmouseout handlers, which Streamlit's markdown renderer
+   ignores — so only cards accidentally matched by href-based rules got
+   a hover. This class gives every card the same reliable CSS hover. */
+.hover-lift{
+    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 220ms cubic-bezier(0.4,0,0.2,1),
+               border-color 180ms ease!important;
+    transform:translateZ(0);
+}
+.hover-lift:hover{
+    transform:translateY(-6px)!important;
+    box-shadow:0 18px 44px rgba(26,26,255,0.16),
+               0 0 0 1.5px rgba(26,26,255,0.20)!important;
+    border-color:rgba(26,26,255,0.28)!important;
 }
 
 /* ── SMOOTH PAGE REVEAL ── */
@@ -4319,40 +4766,676 @@ NAV_PAGES = [
     ("🌐", "Network",   "network"),
     ("⚡", "SPNs",      "spns"),
 ]
-st.markdown('<div style="display:flex;justify-content:center;margin-bottom:0.5rem;">', unsafe_allow_html=True)
-# Columns: logo | 10 nav pages (equal) | spacer | CTA
-# Total = 1 + 10 + 1 + 1 = 13 columns → indices 0..12
-nav_cols = st.columns([2.2, 1.4, 1.4, 1.8, 1.6, 1.4, 1.8, 1.2, 1.6, 1.6, 1.2, 0.2, 2.2])
+# ── Hidden functional nav buttons ────────────────────────────
+# These are the REAL Streamlit navigation actions — identical keys and
+# identical behaviour to the previous nav buttons (st.session_state is
+# preserved on every click, exactly as before). They are visually hidden
+# by the CSS below; the new HTML nav bar triggers them through a
+# delegated click handler installed once in the parent document by the
+# height-0 bootstrap component further down. No page dispatch logic,
+# session handling, or routing behaviour changes.
+for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("📡", "Pulse", "pulse")]:
+    if st.button(_n_label, key="nav_" + _n_key):
+        st.session_state.page = _n_key
+        st.rerun()
 
-with nav_cols[0]:
-    if logo_b64:
-        st.markdown(
-            '<div style="display:flex;align-items:center;gap:7px;padding:8px 0;">'
-            '<img src="' + logo_b64 + '" style="width:26px;height:26px;border-radius:50%;" />'
-            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
-            '</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(
-            '<div style="display:flex;align-items:center;gap:6px;padding:8px 0;">'
-            '<span style="font-size:20px;">🐙</span>'
-            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#14141F;">OctoBot</span>'
-            '</div>', unsafe_allow_html=True)
+# ── New top navigation bar (replicates the reference design) ─
+# Layout: [orange logo tile] [v1.2 badge] [Products ⌄ · Campaigns ·
+# Updates · Explore ⌄] ... [🔍 Quick search  ⌘K] [X] [GitHub] [Discord]
+# Rendered once at module level → identical appearance, dimensions and
+# fixed position on every page of the app.
+_pg = st.session_state.page
+_PNAV_GITHUB_URL = "https://github.com/isharik/Pharos-Octobot"
 
-for col_idx, (icon, label, page_key) in enumerate(NAV_PAGES):
-    with nav_cols[col_idx + 1]:
-        is_active = st.session_state.page == page_key
-        st.markdown('<div class="nav-wrap' + (" active" if is_active else "") + '">', unsafe_allow_html=True)
-        if st.button(label, key="nav_" + page_key, use_container_width=True):
-            st.session_state.page = page_key
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+_pnav_dd_products = [
+    ("💬", "Chat",    "chat"),
+    ("📊", "Trade",   "trade"),
+    ("💸", "Pay",     "pay"),
+    ("🧾", "Request", "request"),
+    ("⚡", "SPNs",    "spns"),
+]
+_pnav_dd_explore = [
+    ("🧩", "Ecosystem",     "ecosystem"),
+    ("🌐", "Network",       "network"),
+    ("📡", "Market Pulse",  "pulse"),
+    ("🧠", "Memory Ledger", "memory"),
+]
 
-with nav_cols[12]:
-    st.markdown('<div class="nav-cta">', unsafe_allow_html=True)
-    st.link_button("↗ Pharos Network", PHAROS_MAIN_URL, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('<hr style="border:none;border-top:1px solid #E3E5EA;margin:0 0 1rem 0;">', unsafe_allow_html=True)
+def _pnav_dd_items(items):
+    out = ""
+    for _ic, _lb, _pk in items:
+        out += (
+            '<div class="pnav-dd-item' + (" on" if _pg == _pk else "") + '" data-pnav-go="' + _pk + '">'
+            '<span class="pnav-dd-ico">' + _ic + '</span><span>' + _lb + '</span></div>'
+        )
+    return out
+
+_PNAV_CSS = """
+<style>
+/* ── NEW TOP NAV (reference replica) ─────────────────────── */
+/* Hide the hidden functional nav buttons (real navigation actions). */
+div[class*="st-key-nav_"]{display:none!important;}
+/* Hide the height-0 bootstrap component's container so it adds no gap. */
+div[data-testid="stElementContainer"]:has(iframe[height="0"]){display:none!important;}
+
+/* Offset page content below the fixed nav (identical on every page). */
+section[data-testid="stMain"] > div{padding-top:124px !important;}
+
+.pnav-fixed{
+    position:fixed;top:14px;left:0;right:0;z-index:1000;
+    display:flex;justify-content:center;
+    pointer-events:none;padding:0 1.25rem;
+}
+/* Frosted scrim: masks content scrolling behind the floating pill so
+   nothing ever visually collides with the nav (fills the transparent
+   strip above/around the pill, fading out below it). */
+.pnav-fixed::before{
+    content:'';position:absolute;left:0;right:0;top:-14px;height:88px;
+    background:linear-gradient(180deg,
+        rgba(238,241,249,0.60) 0%,
+        rgba(238,241,249,0.35) 55%,
+        rgba(238,241,249,0) 100%);
+    backdrop-filter:blur(7px);
+    -webkit-backdrop-filter:blur(7px);
+    pointer-events:none;z-index:-1;
+}
+.pnav{
+    pointer-events:auto;
+    transform:translateZ(0);backface-visibility:hidden;
+    display:flex;align-items:center;
+    width:100%;max-width:1180px;height:64px;
+    background:rgba(255,255,255,0.97);
+    border:1px solid #E7E8EE;border-radius:16px;
+    padding:0 12px;
+    box-shadow:0 2px 14px rgba(20,20,60,0.09),0 1px 2px rgba(20,20,60,0.05);
+    backdrop-filter:blur(14px) saturate(150%);
+    -webkit-backdrop-filter:blur(14px) saturate(150%);
+    font-family:'DM Sans','Inter',sans-serif;
+}
+/* Orange logo tile → Home */
+.pnav-logo{
+    width:40px;height:40px;border-radius:11px;flex-shrink:0;
+    background:linear-gradient(145deg,#FF6A2B 0%,#F04A12 100%);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 2px 8px rgba(240,74,18,0.35),inset 0 1px 0 rgba(255,255,255,0.28);
+    transition:transform 160ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 160ms ease;
+}
+.pnav-logo:hover{
+    transform:translateY(-1px) scale(1.04);
+    box-shadow:0 5px 14px rgba(240,74,18,0.45),inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.pnav-logo img{width:26px;height:26px;border-radius:50%;display:block;}
+.pnav-logo-emoji{font-size:20px;line-height:1;}
+/* Version badge */
+.pnav-ver{
+    display:inline-flex;align-items:center;gap:6px;margin-left:10px;flex-shrink:0;
+    font-size:12.5px;font-weight:600;color:#52525B;
+    background:#FFFFFF;border:1px solid #E4E4E9;border-radius:9px;
+    padding:5px 9px;user-select:none;
+}
+/* Chevron caret */
+.pnav-caret{
+    width:7px;height:7px;flex-shrink:0;
+    border-right:1.5px solid #A1A1AA;border-bottom:1.5px solid #A1A1AA;
+    transform:rotate(45deg);margin-top:-3px;
+    transition:transform 180ms cubic-bezier(0.4,0,0.2,1),margin 180ms cubic-bezier(0.4,0,0.2,1),border-color 150ms ease;
+}
+/* Center links */
+.pnav-links{display:flex;align-items:center;gap:26px;margin-left:30px;min-width:0;}
+.pnav-item{
+    position:relative;display:flex;align-items:center;gap:6px;
+    font-size:14px;font-weight:500;color:#3F3F46;
+    cursor:pointer;padding:20px 0;user-select:none;white-space:nowrap;
+    transition:color 150ms ease;
+}
+.pnav-item:hover{color:#0C0C1A;}
+.pnav-item.on{color:#0C0C1A;font-weight:700;}
+.pnav-item:hover > .pnav-caret{transform:rotate(-135deg);margin-top:3px;border-color:#0C0C1A;}
+/* Hover dropdowns */
+.pnav-dd{
+    will-change:opacity,transform;
+    position:absolute;top:calc(100% - 8px);left:-12px;min-width:198px;
+    background:#FFFFFF;border:1px solid #E7E8EE;border-radius:13px;padding:6px;
+    box-shadow:0 14px 38px rgba(20,20,60,0.13),0 2px 8px rgba(20,20,60,0.06);
+    opacity:0;visibility:hidden;transform:translateY(7px) scale(0.985);transform-origin:top left;
+    transition:opacity 170ms cubic-bezier(0.4,0,0.2,1),
+               transform 170ms cubic-bezier(0.34,1.3,0.64,1),
+               visibility 0s linear 170ms;
+    z-index:1002;
+}
+.pnav-item:hover .pnav-dd{
+    opacity:1;visibility:visible;transform:translateY(0) scale(1);
+    transition:opacity 170ms cubic-bezier(0.4,0,0.2,1),
+               transform 170ms cubic-bezier(0.34,1.3,0.64,1),
+               visibility 0s;
+}
+.pnav-dd-item{
+    display:flex;align-items:center;gap:9px;
+    font-size:13px;font-weight:500;color:#3F3F46;
+    border-radius:9px;padding:8px 10px;cursor:pointer;
+    transition:background 130ms ease,color 130ms ease;
+}
+.pnav-dd-item:hover{background:#F4F5F9;color:#0C0C1A;}
+.pnav-dd-item.on{background:#EEF0FF;color:#1414E8;font-weight:700;}
+.pnav-dd-ico{font-size:14px;line-height:1;width:18px;text-align:center;flex-shrink:0;}
+/* Tiny dot separator */
+.pnav-dot{width:3px;height:3px;border-radius:50%;background:#D4D4DB;margin:0 18px 0 auto;flex-shrink:0;}
+/* Quick search pill (→ Chat, also bound to ⌘K / Ctrl+K) */
+.pnav-search{
+    display:flex;align-items:center;gap:8px;
+    height:40px;width:300px;min-width:0;flex-shrink:1;
+    background:#F4F4F6;border:1px solid #ECECF1;border-radius:11px;
+    padding:0 8px 0 12px;color:#9AA0AE;cursor:pointer;
+    transition:border-color 150ms ease,background 150ms ease,box-shadow 150ms ease;
+}
+.pnav-search:hover{background:#FFFFFF;border-color:#D9DBE4;box-shadow:0 2px 8px rgba(20,20,60,0.06);}
+.pnav-mag{width:15px;height:15px;flex-shrink:0;color:#9AA0AE;}
+.pnav-search-ph{font-size:13.5px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pnav-kbd{
+    font-size:11px;font-weight:600;color:#6B7280;flex-shrink:0;
+    background:#FFFFFF;border:1px solid #E4E4E9;border-radius:6px;
+    padding:3px 6px;box-shadow:0 1px 0 rgba(20,20,60,0.05);
+}
+/* Circular social icon buttons */
+.pnav-socials{display:flex;align-items:center;gap:8px;margin-left:12px;flex-shrink:0;}
+.pnav-icirc{
+    width:40px;height:40px;border-radius:50%;
+    background:#F4F4F6;border:1px solid #ECECF1;
+    display:flex;align-items:center;justify-content:center;
+    color:#17181C;text-decoration:none;
+    transition:transform 150ms cubic-bezier(0.34,1.4,0.64,1),
+               background 150ms ease,border-color 150ms ease,box-shadow 150ms ease;
+}
+.pnav-icirc:hover{
+    background:#FFFFFF;border-color:#D9DBE4;color:#000;
+    transform:translateY(-1px);box-shadow:0 4px 10px rgba(20,20,60,0.10);
+}
+.pnav-icirc svg{width:17px;height:17px;display:block;}
+/* Responsive — degrade gracefully, never overlap or clip */
+@media (max-width:1120px){
+    .pnav-search{width:220px;}
+    .pnav-links{gap:20px;margin-left:22px;}
+}
+@media (max-width:980px){
+    .pnav-kbd{display:none;}
+    .pnav-search{width:44px;padding:0;justify-content:center;}
+    .pnav-search-ph{display:none;}
+}
+@media (max-width:860px){
+    .pnav-ver{display:none;}
+    .pnav-links{gap:16px;margin-left:16px;}
+}
+@media (max-width:700px){
+    .pnav-dot{display:none;}
+    .pnav-socials .pnav-icirc:nth-child(2){display:none;}
+}
+/* Home sentiment orb: pinned to the extreme left corner by its own
+   script (frameElement inline styles, validated + cleaned up by the
+   parent bootstrap when Streamlit recycles the container node). */
+
+@media (max-width:600px){
+    .pnav-socials .pnav-icirc:not(:last-child){display:none;}
+    .pnav{height:58px;border-radius:14px;padding:0 10px;}
+    .pnav-fixed{top:10px;padding:0 0.75rem;}
+    .pnav-fixed::before{top:-10px;height:84px;}
+    .pnav-item{font-size:13px;padding:17px 0;}
+    section[data-testid="stMain"] > div{padding-top:106px !important;}
+}
+</style>
+"""
+
+_PNAV_X_SVG = (
+    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68'
+    'l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117'
+    'l11.966 15.644z"/></svg>'
+)
+_PNAV_GH_SVG = (
+    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56'
+    '0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71'
+    '1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68'
+    '0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39'
+    'c.98 0 1.97.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09'
+    '0 4.41-2.69 5.38-5.25 5.66.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.68.8.56'
+    'A10.52 10.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>'
+)
+_PNAV_DC_SVG = (
+    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25'
+    'a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37'
+    'a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03'
+    'a.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892'
+    'a.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0'
+    'a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892'
+    'a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03'
+    'a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33'
+    'c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42'
+    '0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419'
+    '1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>'
+)
+
+if logo_b64:
+    _pnav_logo_inner = '<img src="' + logo_b64 + '" alt="OctoBot" />'
+else:
+    _pnav_logo_inner = '<span class="pnav-logo-emoji">🐙</span>'
+
+_pnav_html = (
+    '<div class="pnav-fixed"><nav class="pnav">'
+    '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
+    '<div class="pnav-ver">v1.2<span class="pnav-caret"></span></div>'
+    '<div class="pnav-links">'
+    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
+    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
+    '</div>'
+    '<div class="pnav-item' + (" on" if _pg == "campaigns" else "") + '" data-pnav-go="campaigns">Campaigns</div>'
+    '<div class="pnav-item' + (" on" if _pg == "updates" else "") + '" data-pnav-go="updates">Updates</div>'
+    '<div class="pnav-item' + (" on" if _pg in ("ecosystem", "network", "memory", "pulse") else "") + '">Explore<span class="pnav-caret"></span>'
+    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_explore) + '</div>'
+    '</div>'
+    '</div>'
+    '<span class="pnav-dot"></span>'
+    '<div class="pnav-search" data-pnav-go="chat" title="Quick search · ask OctoBot (Ctrl/Cmd + K)">'
+    '<svg class="pnav-mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>'
+    '<span class="pnav-search-ph">Quick search...</span>'
+    '<span class="pnav-kbd">⌘K</span>'
+    '</div>'
+    '<div class="pnav-socials">'
+    '<a class="pnav-icirc" href="' + PHAROS_X_URL + '" target="_blank" rel="noopener" title="X / Twitter">' + _PNAV_X_SVG + '</a>'
+    '<a class="pnav-icirc" href="' + _PNAV_GITHUB_URL + '" target="_blank" rel="noopener" title="GitHub">' + _PNAV_GH_SVG + '</a>'
+    '<a class="pnav-icirc" href="' + PHAROS_DISCORD_URL + '" target="_blank" rel="noopener" title="Discord">' + _PNAV_DC_SVG + '</a>'
+    '</div>'
+    '</nav></div>'
+)
+st.markdown(_PNAV_CSS + _pnav_html, unsafe_allow_html=True)
+
+# ── Bootstrap: GSAP + nav wiring + ⌘K + fluid transitions + Aura Swirl ─
+# A height-0 component that injects a one-time script INTO THE PARENT
+# DOCUMENT (same idempotent, same-origin pattern already used by the
+# assistant-bubble navigation above). Running in the parent realm means
+# the handlers and animations survive Streamlit reruns.
+#
+#  1. Loads GSAP 3.12 from cdnjs into the parent page. Every animation
+#     below uses GSAP when available and falls back to equivalent
+#     vanilla easing if the CDN is unreachable — navigation itself
+#     never depends on GSAP.
+#  2. window.__pnavGo(page): fluid page transition (quick GSAP fade/
+#     lift of the main content) and then a click on the matching hidden
+#     Streamlit nav button → navigation keeps using st.session_state
+#     exactly like before (no reloads, no session loss).
+#  3. Delegated handler: any element with data-pnav-go="<page>" routes
+#     through __pnavGo. Cmd/Ctrl+K → Chat (matches the ⌘K pill).
+#  4. AURA SWIRL — a fixed, pointer-events:none canvas inserted inside
+#     stAppViewContainer at z-index:0: it paints ABOVE the existing
+#     wave/aura/dot background layers (same z-index, later in DOM) but
+#     BELOW all real content (z-index:1), so it reads as embedded in
+#     the background rather than layered on top. Three logarithmic
+#     spiral arms + depth-sorted particles are drawn on a mouse-tilted
+#     3D plane; energy is tweened with GSAP (power3.out in — snappy;
+#     long power2 fade out) and only animates on hover/scroll. The rAF
+#     loop fully stops at rest → zero idle cost. Colours are sampled
+#     from the existing scheme (#1A1AFF / #6B6BFF / periwinkle).
+#     Honors prefers-reduced-motion.
+components.html(
+    """
+<script>
+(function(){
+  function PNAV_PARENT_MAIN(){
+    if (window.__pnavBoot) return;
+    window.__pnavBoot = true;
+    var doc = document;
+
+    /* ── GSAP loader (graceful) ─────────────────────────── */
+    var gsapReady = false;
+    (function(){
+      if (window.gsap){ gsapReady = true; return; }
+      var g = doc.createElement('script');
+      g.src = 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js';
+      g.async = true;
+      g.onload = function(){ gsapReady = !!window.gsap; };
+      doc.head.appendChild(g);
+    })();
+
+    /* Keep the fixed nav OUTSIDE the app container: if any page applies
+       a transform/filter to the main content (e.g. the fluid page
+       transition), position:fixed inside it would anchor to that
+       container instead of the viewport — the "nav stuck to the top"
+       bug on some pages. Relocating the freshly rendered nav node to
+       document.body makes its positioning identical on every page. */
+    /* Streamlit recycles DOM nodes when switching pages: a container that
+       hosted the Home orb (pinned with fixed/96px inline styles) can be
+       reused for ordinary text on another page, breaking its layout.
+       Validate every pinned holder: it must still contain the live orb
+       iframe (identified by window.__isOrb inside it) or it gets fully
+       unpinned. Runs on every DOM mutation via the observer below. */
+    /* ── Scroll-reveal engine (3D entrances) ─────────────
+       Any main-column element that first appears below the fold gets a
+       one-shot 3D tilt-up entrance when scrolled into view. Fully
+       self-cleaning: classes are removed after the transition so no
+       transform or stacking context is left behind. New elements from
+       Streamlit reruns are picked up by the same mutation observer
+       that maintains the nav. */
+    var srIO = null;
+    try{
+      srIO = new IntersectionObserver(function(entries){
+        for (var qi = 0; qi < entries.length; qi++){
+          var en2 = entries[qi];
+          if (!en2.isIntersecting) continue;
+          var el2 = en2.target;
+          srIO.unobserve(el2);
+          el2.classList.add('sr-in');
+          (function(node){
+            var done = function(){
+              node.classList.remove('sr-pre');
+              node.classList.remove('sr-in');
+              node.style.willChange = '';
+              node.removeEventListener('transitionend', done);
+            };
+            node.addEventListener('transitionend', done);
+            setTimeout(done, 750);   /* fallback */
+          })(el2);
+        }
+      }, {rootMargin: '0px 0px -6% 0px'});
+    }catch(e){}
+
+    function scanReveal(){
+      if (!srIO) return;
+      try{
+        var els = doc.querySelectorAll(
+          'section[data-testid="stMain"] div[data-testid="stElementContainer"]:not([data-sr])');
+        var vh = window.innerHeight;
+        for (var ei = 0; ei < els.length; ei++){
+          var el3 = els[ei];
+          el3.setAttribute('data-sr', '1');
+          var rc = el3.getBoundingClientRect();
+          /* only below-the-fold, visible-sized blocks get an entrance */
+          if (rc.height < 8 || rc.width < 8) continue;
+          if (rc.top < vh * 0.92) continue;
+          el3.classList.add('sr-pre');
+          srIO.observe(el3);
+        }
+      }catch(e){}
+    }
+
+    function orbCleanup(){
+      try{
+        var holders = doc.querySelectorAll('[data-orb-holder]');
+        for (var h = 0; h < holders.length; h++){
+          var el = holders[h];
+          var fr = el.querySelector('iframe');
+          var ok = false;
+          try{ ok = !!(fr && fr.contentWindow && fr.contentWindow.__isOrb === true); }catch(e){}
+          if (!ok){
+            el.removeAttribute('data-orb-holder');
+            el.style.position = '';
+            el.style.top = ''; el.style.bottom = ''; el.style.left = '';
+            el.style.width = ''; el.style.height = '';
+            el.style.zIndex = ''; el.style.margin = ''; el.style.padding = '';
+            if (fr){ fr.style.width = ''; fr.style.height = ''; }
+          }
+        }
+      }catch(e){}
+    }
+
+    function relocateNav(){
+      orbCleanup();
+      scanReveal();
+      try{
+        var navs = Array.prototype.slice.call(doc.querySelectorAll('.pnav-fixed'));
+        if (!navs.length) return;
+        var inside = navs.filter(function(n){ return !n.__pnavMoved; });
+        if (!inside.length) return;
+        var fresh = inside[inside.length - 1];
+        navs.forEach(function(n){ if (n !== fresh && n.__pnavMoved) n.remove(); });
+        fresh.__pnavMoved = true;
+        doc.body.appendChild(fresh);
+      }catch(e){}
+    }
+    relocateNav();
+    try{
+      var appRoot = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
+      new MutationObserver(function(){ relocateNav(); }).observe(appRoot, {childList:true, subtree:true});
+    }catch(e){}
+
+    function navButton(key){
+      return doc.querySelector('[class*="st-key-nav_' + key + '"] button');
+    }
+    function mainEl(){
+      return doc.querySelector('section[data-testid="stMain"] > div');
+    }
+
+    /* ── Fluid page transition + navigation ─────────────── */
+    var navBusy = false;
+    window.__pnavGo = function(key){
+      var btn = navButton(key);
+      if (!btn) return;
+      if (navBusy){ btn.click(); return; }
+      var m = mainEl();
+      if (gsapReady && window.gsap && m){
+        navBusy = true;
+        window.gsap.to(m, {opacity:0.18, duration:0.14, ease:'power2.in',
+          onComplete:function(){
+            btn.click();
+            setTimeout(function(){
+              window.gsap.fromTo(m, {opacity:0.18},
+                {opacity:1, duration:0.28, ease:'power3.out', clearProps:'opacity',
+                 onComplete:function(){ navBusy = false; }});
+            }, 240);
+          }});
+      } else if (m){
+        navBusy = true;
+        m.style.transition = 'opacity 140ms ease';
+        m.style.opacity = '0.25';
+        setTimeout(function(){
+          btn.click();
+          setTimeout(function(){
+            m.style.opacity = '1';
+            setTimeout(function(){ m.style.transition=''; navBusy=false; }, 260);
+          }, 240);
+        }, 140);
+      } else {
+        btn.click();
+      }
+    };
+
+    /* Delegated nav clicks */
+    doc.addEventListener('click', function(e){
+      var t = e.target && e.target.closest ? e.target.closest('[data-pnav-go]') : null;
+      if (!t) return;
+      var k = t.getAttribute('data-pnav-go');
+      if (k) window.__pnavGo(k);
+    }, true);
+
+    /* Cmd/Ctrl + K -> Chat */
+    doc.addEventListener('keydown', function(e){
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')){
+        e.preventDefault();
+        window.__pnavGo('chat');
+      }
+    }, true);
+
+    /* ── AURA · cursor fog + zero-latency dot ──
+       A crisp ink dot rides the RAW cursor coordinates — no smoothing,
+       no spring, drawn at the exact pointer position every frame on a
+       desynchronized canvas (the lowest-latency path a web page has).
+       Around it, a soft volumetric fog of five drifting blobs follows
+       on a very stiff spring: effectively glued to the cursor but with
+       an organic, breathing quality. Clicks puff the fog outward with
+       an elastic spring impulse plus a soft expanding mist ring. All
+       motion is delta-time spring physics → identical feel at 60/120/
+       144 Hz, buttery fades, zero per-frame allocations. */
+    try{
+      var host = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
+      var cv = doc.createElement('canvas');
+      cv.id = 'aura-3d-canvas';
+      cv.setAttribute('aria-hidden', 'true');
+      cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;';
+      host.appendChild(cv);
+      var ctx = null;
+      try{ ctx = cv.getContext('2d', {alpha:true, desynchronized:true}); }catch(e){}
+      if (!ctx) ctx = cv.getContext('2d');
+      var DPR = Math.min(window.devicePixelRatio || 1, 2);
+      function fit(){
+        cv.width  = (window.innerWidth  * DPR) | 0;
+        cv.height = (window.innerHeight * DPR) | 0;
+      }
+      fit();
+      window.addEventListener('resize', fit, {passive:true});
+
+      /* spring helper: k = stiffness, d = damping (2*sqrt(k) = critical) */
+      function Spr(v, k, d){ return {x:v, v:0, t:v, k:k, d:d}; }
+      function step(s, dt){
+        var a = (s.t - s.x) * s.k - s.v * s.d;
+        s.v += a * dt;
+        s.x += s.v * dt;
+        return s.x;
+      }
+
+      var mx = window.innerWidth * 0.5, my = window.innerHeight * 0.45; /* RAW cursor */
+      var fx = Spr(mx, 560, 46);   /* fog center: near-instant, organic */
+      var fy = Spr(my, 560, 46);
+      var en = Spr(0, 55, 14);     /* presence: fast attack, smooth fade */
+      var pu = Spr(0, 170, 10);    /* click puff: springy overshoot */
+      var drift = [0, 1.7, 3.1, 4.4, 5.6];        /* fog blob phases  */
+      var DRS   = [0.42, -0.33, 0.51, -0.27, 0.38]; /* blob drift speeds */
+      var puffs = [{r:0,a:0,x:0,y:0},{r:0,a:0,x:0,y:0},{r:0,a:0,x:0,y:0}];
+      var pi2 = 0;                 /* puff pool cursor — no allocations */
+      var running = false, lastT = 0, idleTimer = null;
+      var TAU = Math.PI * 2;
+
+      function wake(){
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(function(){ en.t = 0; }, 1200);
+        en.t = 1;
+        if (!running){ running = true; lastT = 0; requestAnimationFrame(tick); }
+      }
+      doc.addEventListener('mousemove', function(e){
+        mx = e.clientX; my = e.clientY;
+        fx.t = mx; fy.t = my;
+        wake();
+      }, {passive:true});
+      doc.addEventListener('scroll', function(){ wake(); }, {passive:true, capture:true});
+      doc.addEventListener('touchmove', function(e){
+        if (e.touches && e.touches[0]){
+          mx = e.touches[0].clientX; my = e.touches[0].clientY;
+          fx.t = mx; fy.t = my;
+        }
+        wake();
+      }, {passive:true});
+      doc.addEventListener('click', function(e){
+        if (!e.isTrusted) return;
+        mx = e.clientX; my = e.clientY;
+        fx.t = mx; fy.t = my;
+        pu.v += 10;                       /* elastic fog puff */
+        en.x = Math.max(en.x, 0.6);       /* instant partial wake */
+        var p = puffs[pi2]; pi2 = (pi2 + 1) % puffs.length;
+        p.x = mx; p.y = my; p.r = 26; p.a = 0.85;
+        wake();
+      }, {passive:true, capture:true});
+
+      function tick(t){
+        if (!lastT) lastT = t;
+        var dt = Math.min(0.033, (t - lastT) / 1000 || 0.008);
+        lastT = t;
+
+        var E = step(en, dt);
+        var P = step(pu, dt);  pu.t = 0;
+        var X = step(fx, dt);
+        var Y = step(fy, dt);
+
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        var i, p, puffsLive = false;
+        for (i = 0; i < puffs.length; i++){ if (puffs[i].a > 0.01){ puffsLive = true; break; } }
+        if (E < 0.008 && en.t === 0 && Math.abs(P) < 0.01 && !puffsLive){
+          running = false; return;
+        }
+        if (!cv.isConnected){ host.appendChild(cv); }
+
+        var swell = 1 + 0.22 * P;
+
+        /* ── volumetric fog: five drifting soft blobs around the cursor ── */
+        for (i = 0; i < 5; i++){
+          drift[i] += DRS[i] * (0.5 + E) * dt;
+          var ph = drift[i];
+          var orbR = (26 + i * 14) * swell;
+          var bx = X + Math.cos(ph) * orbR;
+          var by = Y + Math.sin(ph * 1.3) * orbR * 0.7;
+          var depth = 0.6 + 0.4 * Math.sin(ph * 0.9 + i);    /* breathing depth */
+          var R = (70 + i * 22) * swell * (0.85 + 0.15 * depth);
+          var g = ctx.createRadialGradient(bx, by, 0, bx, by, R);
+          var a1 = (i % 2 === 0)
+            ? (0.115 * E * depth)
+            : (0.085 * E * depth);
+          var col = (i % 2 === 0) ? '20,24,92' : '58,68,150';
+          g.addColorStop(0,    'rgba(' + col + ',' + a1 + ')');
+          g.addColorStop(0.55, 'rgba(' + col + ',' + (a1 * 0.5) + ')');
+          g.addColorStop(1,    'rgba(' + col + ',0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU); ctx.fill();
+        }
+        /* faint bright heart so the fog reads volumetric, not flat */
+        var hg = ctx.createRadialGradient(X, Y, 0, X, Y, 46 * swell);
+        hg.addColorStop(0, 'rgba(214,220,248,' + (0.24 * E) + ')');
+        hg.addColorStop(1, 'rgba(214,220,248,0)');
+        ctx.fillStyle = hg;
+        ctx.beginPath(); ctx.arc(X, Y, 46 * swell, 0, TAU); ctx.fill();
+
+        /* ── click puffs: soft expanding mist rings (pooled) ── */
+        for (i = 0; i < puffs.length; i++){
+          p = puffs[i];
+          if (p.a <= 0.01) continue;
+          p.r += 300 * dt;
+          p.a -= dt * 1.1;
+          if (p.a <= 0.01){ p.a = 0; continue; }
+          var pg = ctx.createRadialGradient(p.x, p.y, p.r * 0.55, p.x, p.y, p.r);
+          pg.addColorStop(0,   'rgba(58,68,150,0)');
+          pg.addColorStop(0.7, 'rgba(58,68,150,' + (p.a * 0.55) + ')');
+          pg.addColorStop(1,   'rgba(58,68,150,0)');
+          ctx.fillStyle = pg;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(16,20,80,' + (p.a * 0.8) + ')';
+          ctx.lineWidth = 1.8;
+          ctx.arc(p.x, p.y, p.r * 0.86, 0, TAU); ctx.stroke();
+        }
+
+        /* ── the dot: RAW cursor coordinates, zero smoothing ── */
+        if (E > 0.02){
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(14,18,72,' + (0.95 * E) + ')';
+          ctx.arc(mx, my, 3.2, 0, TAU); ctx.fill();
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(58,68,150,' + (0.75 * E) + ')';
+          ctx.lineWidth = 1;
+          ctx.arc(mx, my, 6.5 + 1.5 * P, 0, TAU); ctx.stroke();
+        }
+
+        requestAnimationFrame(tick);
+      }
+    }catch(err){ /* background effect is decorative — never break the app */ }
+  }
+
+  /* Inject once into the parent realm so it survives Streamlit reruns
+     (same same-origin parent-document pattern used elsewhere in app). */
+  try{
+    var PW = window.parent;
+    if (PW && !PW.__pnavBoot){
+      var s = PW.document.createElement('script');
+      s.id = 'pnav-aura-bootstrap';
+      s.textContent = '(' + PNAV_PARENT_MAIN.toString() + ')();';
+      PW.document.body.appendChild(s);
+    }
+  }catch(e){}
+})();
+</script>
+    """,
+    height=0,
+    scrolling=False,
+)
+
 
 # ═════════════════════════════════════════════
 # PAGE: HOME
@@ -5991,8 +7074,7 @@ elif st.session_state.page == "campaigns":
             f'overflow:hidden;text-decoration:none;'
             f'box-shadow:0 2px 10px rgba(20,20,60,0.05);'
             f'transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease,border-color 180ms ease;"'
-            f' onmouseover="this.style.transform=\'translateY(-6px)\';this.style.boxShadow=\'0 18px 44px rgba(26,26,255,0.16)\';"'
-            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 2px 10px rgba(20,20,60,0.05)\';">'
+            f' class="hover-lift">'
             # Top media block — colored gradient with large icon
             f'<div style="background:{c["bg"]};height:140px;'
             f'display:flex;align-items:center;justify-content:center;position:relative;">'
@@ -6105,8 +7187,7 @@ elif st.session_state.page == "updates":
             f'overflow:hidden;text-decoration:none;'
             f'box-shadow:0 2px 10px rgba(20,20,60,0.05);'
             f'transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease,border-color 180ms ease;"'
-            f' onmouseover="this.style.transform=\'translateY(-6px)\';this.style.boxShadow=\'0 18px 44px rgba(26,26,255,0.16)\';"'
-            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 2px 10px rgba(20,20,60,0.05)\';">'
+            f' class="hover-lift">'
             # Top media block — same 140px height as campaign cards
             f'<div style="background:{UPDATE_BG};height:140px;'
             f'display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">'
@@ -6318,8 +7399,7 @@ elif st.session_state.page == "ecosystem":
             f'padding:1.2rem 1.3rem;display:flex;flex-direction:column;align-items:center;gap:0;'
             f'text-align:center;text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);'
             f'transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease,border-color 180ms ease;cursor:pointer;"'
-            f' onmouseover="this.style.transform=\'translateY(-5px) scale(1.010)\';this.style.boxShadow=\'0 14px 40px rgba(26,26,255,0.13),0 0 0 1.5px rgba(26,26,255,0.22)\';"'
-            f' onmouseout="this.style.transform=\'translateZ(0)\';this.style.boxShadow=\'0 1px 4px rgba(20,20,60,0.05)\';">'
+            f' class="hover-lift">'
             # Logo circle
             f'<div style="margin-bottom:0.75rem;">{logo_html}</div>'
             f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;'
@@ -8253,6 +9333,200 @@ elif st.session_state.page == "spns":
     )
 
 
+
+
+# ═════════════════════════════════════════════
+# PAGE: MARKET & COMMUNITY PULSE
+# ═════════════════════════════════════════════
+elif st.session_state.page == "pulse":
+
+    _mp   = fetch_market_pulse()
+    _pn   = get_pharos_news()
+    _cp   = compute_community_pulse(_mp, _pn)
+
+    # ── Hero ──────────────────────────────────
+    st.markdown(
+        '<div class="section-dark">'
+        '<div style="display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;'
+        'letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.85);'
+        'background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);'
+        'border-radius:20px;padding:5px 13px;margin-bottom:0.9rem;">'
+        '<span style="width:6px;height:6px;border-radius:50%;background:#2BE080;'
+        'box-shadow:0 0 6px #2BE080;display:inline-block;"></span>📡 Live · updates every 5 min</div>'
+        '<h2 style="font-family:Syne,sans-serif;font-size:1.9rem;font-weight:800;color:#FFFFFF;'
+        'margin:0 0 0.4rem 0;letter-spacing:-0.01em;">Market &amp; Community Pulse</h2>'
+        '<div style="font-size:13px;color:rgba(255,255,255,0.65);max-width:560px;line-height:1.6;">'
+        'Live $PROS market data, AI-read community sentiment, trending topics and the latest '
+        'official Pharos announcements — in one glance.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Live market stat cards ────────────────
+    def _pulse_stat_card(label, value, sub="", sub_color="#7A7F96"):
+        return (
+            '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:16px;'
+            'padding:1rem 1.1rem;box-shadow:0 2px 10px rgba(20,20,60,0.05);height:100%;box-sizing:border-box;">'
+            '<div style="font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;'
+            'color:#9499A8;margin-bottom:6px;">' + label + '</div>'
+            '<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:#0C0C1A;'
+            'line-height:1.15;">' + value + '</div>'
+            + ('<div style="font-size:11.5px;font-weight:600;color:' + sub_color + ';margin-top:4px;">' + sub + '</div>' if sub else '')
+            + '</div>'
+        )
+
+    if _mp.get("available"):
+        _p24  = _mp.get("chg24") or 0
+        _p7   = _mp.get("chg7d") or 0
+        _c24  = "#1FA855" if _p24 >= 0 else "#E5484D"
+        _c7   = "#1FA855" if _p7 >= 0 else "#E5484D"
+        _s24  = ("▲ " if _p24 >= 0 else "▼ ") + f"{abs(_p24):.2f}% · 24h"
+        _s7   = ("▲ " if _p7 >= 0 else "▼ ") + f"{abs(_p7):.2f}% · 7d"
+        _mcap = _mp.get("mcap")
+        _vol  = _mp.get("vol24")
+        _rank = _mp.get("rank")
+        _sc1, _sc2, _sc3, _sc4 = st.columns(4, gap="small")
+        with _sc1:
+            st.markdown(_pulse_stat_card(
+                "$PROS Price",
+                (f"${_mp['price']:,.4f}" if _mp.get("price") else "—"),
+                _s24, _c24), unsafe_allow_html=True)
+        with _sc2:
+            st.markdown(_pulse_stat_card(
+                "7-Day Move",
+                f"{_p7:+.2f}%",
+                _s7, _c7), unsafe_allow_html=True)
+        with _sc3:
+            st.markdown(_pulse_stat_card(
+                "Market Cap",
+                (f"${_mcap/1e6:,.1f}M" if _mcap else "—"),
+                (("Rank #" + str(_rank)) if _rank else "")), unsafe_allow_html=True)
+        with _sc4:
+            st.markdown(_pulse_stat_card(
+                "24h Volume",
+                (f"${_vol/1e6:,.1f}M" if _vol else "—"),
+                "via " + esc(_mp.get("source", ""))), unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div style="background:rgba(255,255,255,0.92);border:1px dashed #D0D3E0;border-radius:16px;'
+            'padding:1rem 1.2rem;font-size:12.5px;color:#7A7F96;">Live market data is temporarily '
+            'unavailable — the pulse below is computed from the most recent cached figures.</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div style="margin-bottom:0.9rem;"></div>', unsafe_allow_html=True)
+
+    # ── Chart + sentiment side by side ────────
+    _pc_left, _pc_right = st.columns([1.45, 1], gap="medium")
+
+    with _pc_left:
+        st.markdown(
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.2rem;">'
+            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;">'
+            '📈 $PROS · Interactive chart</div></div>',
+            unsafe_allow_html=True,
+        )
+        _pulse_range = st.radio(
+            "Chart range", ["24H", "7D", "30D", "1Y"],
+            horizontal=True, key="pulse_range", label_visibility="collapsed",
+        )
+        _pulse_days = {"24H": "1", "7D": "7", "30D": "30", "1Y": "365"}[_pulse_range]
+        render_price_chart(get_price_chart_df(_pulse_days), chart_key="pulse_chart", days=_pulse_days)
+
+    with _pc_right:
+        _lbl   = _cp.get("label", "Neutral")
+        _score = int(_cp.get("score", 50))
+        _lcol  = {"Bullish": "#1FA855", "Neutral": "#B58A1F", "Bearish": "#E5484D"}.get(_lbl, "#B58A1F")
+        _lico  = {"Bullish": "🐂", "Neutral": "⚖️", "Bearish": "🐻"}.get(_lbl, "⚖️")
+        st.markdown(
+            '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:18px;'
+            'padding:1.2rem 1.3rem;box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
+            '<div style="font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;'
+            'color:#9499A8;margin-bottom:8px;">Community sentiment</div>'
+            '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">'
+            '<span style="font-size:24px;line-height:1;">' + _lico + '</span>'
+            '<span style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:' + _lcol + ';">'
+            + esc(_lbl) + '</span>'
+            '<span style="font-size:12px;font-weight:700;color:#9499A8;">' + str(_score) + '/100</span>'
+            '</div>'
+            # gradient meter with needle
+            '<div style="position:relative;height:8px;border-radius:6px;'
+            'background:linear-gradient(90deg,#E5484D 0%,#E8C34A 50%,#1FA855 100%);'
+            'box-shadow:inset 0 1px 2px rgba(20,20,60,0.18);margin-bottom:14px;">'
+            '<div style="position:absolute;top:-4px;left:' + str(_score) + '%;width:4px;height:16px;'
+            'transform:translateX(-50%);border-radius:3px;background:#0C0C1A;'
+            'box-shadow:0 1px 4px rgba(12,12,26,0.4);"></div>'
+            '</div>'
+            '<div style="font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;'
+            'color:#9499A8;margin-bottom:6px;">'
+            + ("🤖 AI discussion summary" if _cp.get("ai") else "Discussion summary") + '</div>'
+            '<div style="font-size:12.5px;color:#39445D;line-height:1.65;">'
+            + esc(_cp.get("summary", "")) + '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
+
+    # ── Trending topics ───────────────────────
+    _chips = ""
+    for _tp in _cp.get("topics", []):
+        _chips += (
+            '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;'
+            'color:#1414E8;background:rgba(26,26,255,0.07);border:1px solid rgba(26,26,255,0.18);'
+            'border-radius:20px;padding:6px 14px;">🔥 ' + esc(_tp) + '</span>'
+        )
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
+        'margin-bottom:0.6rem;">🔥 Trending topics</div>'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.3rem;">' + _chips + '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Latest official announcements ─────────
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
+        'margin-bottom:0.6rem;">📰 Latest announcements</div>',
+        unsafe_allow_html=True,
+    )
+    if _pn:
+        for _art in _pn[:4]:
+            st.markdown(
+                '<a href="' + esc_url(_art.get("url")) + '" target="_blank" style="text-decoration:none;display:block;">'
+                '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:14px;'
+                'padding:0.85rem 1.1rem;margin-bottom:8px;display:flex;align-items:center;gap:12px;'
+                'transition:border-color 150ms ease,box-shadow 150ms ease;">'
+                '<span style="font-size:16px;flex-shrink:0;">🗞️</span>'
+                '<div style="min-width:0;">'
+                '<div style="font-size:13px;font-weight:700;color:#0C0C1A;line-height:1.4;overflow:hidden;'
+                'text-overflow:ellipsis;white-space:nowrap;">' + esc(_art.get("title", "")) + '</div>'
+                '<div style="font-size:11px;color:#9499A8;margin-top:2px;">'
+                + esc(_art.get("source", "")) + '</div>'
+                '</div></div></a>',
+                unsafe_allow_html=True,
+            )
+    else:
+        st.markdown(
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+            '<a href="' + PHAROS_X_URL + '" target="_blank" style="text-decoration:none;flex:1;min-width:180px;">'
+            '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:14px;'
+            'padding:0.9rem 1.1rem;font-size:12.5px;font-weight:700;color:#0C0C1A;">𝕏 Official X updates ↗</div></a>'
+            '<a href="' + PHAROS_DISCORD_URL + '" target="_blank" style="text-decoration:none;flex:1;min-width:180px;">'
+            '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:14px;'
+            'padding:0.9rem 1.1rem;font-size:12.5px;font-weight:700;color:#0C0C1A;">💬 Discord announcements ↗</div></a>'
+            '<a href="' + PHAROS_DOCS_URL + '" target="_blank" style="text-decoration:none;flex:1;min-width:180px;">'
+            '<div style="background:rgba(255,255,255,0.92);border:1px solid #E7E8EE;border-radius:14px;'
+            'padding:0.9rem 1.1rem;font-size:12.5px;font-weight:700;color:#0C0C1A;">📖 Pharos docs ↗</div></a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div style="margin-bottom:0.6rem;"></div>', unsafe_allow_html=True)
+    if st.button("↻ Refresh pulse", key="pulse_refresh"):
+        st.session_state.pop("pulse_market_cache", None)
+        st.session_state.pop("pulse_ai_cache", None)
+        st.session_state.pop("pharos_news_cache", None)
+        st.rerun()
 
 
 st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
