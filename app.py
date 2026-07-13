@@ -2381,6 +2381,294 @@ body {
         linear-gradient(180deg, var(--bg1), var(--bg), var(--bg2));
 }
 html,body,[class*="css"]{font-family:var(--fb)!important;background-color:#9DAABF!important;color:var(--t1)!important;font-size:14px!important;}
+
+/* ══════════════════════════════════════════════════════════
+   DARK MODE — data-theme="dark" on <html>, toggled from the nav.
+   Re-points design tokens + re-skins hard-coded light surfaces.
+   ══════════════════════════════════════════════════════════ */
+html[data-theme="dark"]{
+    --bg:      #0B0E1A;
+    --bg1:     #10131F;
+    --bg2:     #080A14;
+    --glass:   rgba(24,28,44,0.72);
+    --border:  #262B3E;
+    --border2: #2E3448;
+    --t1:      #EDEFF7;
+    --t2:      #AEB4C8;
+    --t3:      #7B8199;
+    --shadow:      0 8px 28px rgba(0,0,0,0.45);
+    --shadow-md:   0 16px 44px rgba(0,0,0,0.55);
+    --shadow-blue: 0 10px 36px rgba(60,80,255,0.30);
+}
+html[data-theme="dark"] body{
+    background:
+        radial-gradient(circle at 15% 20%, rgba(60,80,255,.16), transparent 38%),
+        radial-gradient(circle at 85% 30%, rgba(60,90,200,.12), transparent 42%),
+        radial-gradient(circle at 50% 100%, rgba(30,40,90,.30), transparent 55%),
+        linear-gradient(180deg, #10131F, #0B0E1A, #070912) !important;
+    background-color:#0B0E1A !important;
+}
+html[data-theme="dark"] .stApp{ background-color:#0B0E1A !important; }
+html[data-theme="dark"], html[data-theme="dark"] body,
+html[data-theme="dark"] [class*="css"]{ background-color:#0B0E1A !important; color:var(--t1)!important; }
+
+/* Nav pill */
+html[data-theme="dark"] .pnav{
+    background:rgba(18,21,34,0.94);
+    border-color:#262B3E;
+    box-shadow:0 2px 18px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] .pnav-ver{background:#181C2C;border-color:#2A3044;color:#C4C9DC;}
+html[data-theme="dark"] .pnav-item{color:#C4C9DC;}
+html[data-theme="dark"] .pnav-item:hover,html[data-theme="dark"] .pnav-item.on{color:#FFFFFF;}
+html[data-theme="dark"] .pnav-search{background:#12151F;border-color:#252A3B;color:#8A90A6;}
+html[data-theme="dark"] .pnav-search:hover{background:#181C2A;border-color:#333A50;}
+html[data-theme="dark"] .pnav-kbd{background:#1B1F30;border-color:#2C3247;color:#AEB4C8;}
+html[data-theme="dark"] .pnav-icirc{background:#1B1F2E;border-color:#2E3448;color:#F2F4FB;}
+html[data-theme="dark"] .pnav-icirc svg{color:#F2F4FB;fill:#F2F4FB;}
+html[data-theme="dark"] .pnav-icirc:hover{background:#242A3C;border-color:#454E68;color:#FFFFFF;}
+html[data-theme="dark"] .pnav-icirc:hover svg{color:#FFFFFF;fill:#FFFFFF;}
+html[data-theme="dark"] .pnav-dd{background:#141826;border-color:#262B3E;box-shadow:0 14px 40px rgba(0,0,0,0.6);}
+html[data-theme="dark"] .pnav-dd-item{color:#C4C9DC;}
+html[data-theme="dark"] .pnav-dd-item:hover{background:#1C2132;color:#FFFFFF;}
+html[data-theme="dark"] .pnav-dd-item.on{background:rgba(60,80,255,0.18);color:#9FB0FF;}
+html[data-theme="dark"] .pnav-caret{border-color:#8A90A6;}
+
+/* Sidebar */
+html[data-theme="dark"] section[data-testid="stSidebar"]{
+    background:#0C0F1A !important;border-right:1px solid #1E2333 !important;
+}
+html[data-theme="dark"] section[data-testid="stSidebar"]{
+    background:#0C0F1A !important;border-right:1px solid #1E2333 !important;
+}
+html[data-theme="dark"] [data-testid="stSidebar"]{
+    background:#0C0F1A !important;border-right:1px solid #1E2333 !important;
+}
+/* Override the sidebar's hard-coded light !important text colours */
+html[data-theme="dark"] [data-testid="stSidebar"] label,
+html[data-theme="dark"] [data-testid="stSidebar"] p,
+html[data-theme="dark"] [data-testid="stSidebar"] div,
+html[data-theme="dark"] [data-testid="stSidebar"] span,
+html[data-theme="dark"] [data-testid="stSidebar"] h1,
+html[data-theme="dark"] [data-testid="stSidebar"] h2,
+html[data-theme="dark"] [data-testid="stSidebar"] h3{
+    color:#DDE0EE !important;
+}
+/* Sidebar buttons → dark surface, readable text */
+html[data-theme="dark"] [data-testid="stSidebar"] .stButton>button{
+    color:#DDE0EE !important;
+    background:#161A28 !important;
+    border:1px solid #2A3044 !important;
+}
+html[data-theme="dark"] [data-testid="stSidebar"] .stButton>button:hover{
+    background:rgba(90,110,255,0.14) !important;
+    border-color:#5A6EFF !important;color:#9FB0FF !important;
+}
+html[data-theme="dark"] [data-testid="stSidebar"] .stButton>button *{color:inherit !important;}
+/* Sidebar dividers/rules blend into the dark panel */
+html[data-theme="dark"] [data-testid="stSidebar"] hr{border-color:#1E2333 !important;}
+/* Uppercase section captions ("CONVERSATION", "SETTINGS", etc.) */
+html[data-theme="dark"] [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] *{color:#C4C9DC !important;}
+
+/* Generic light surfaces → dark glass. Global (not markdown-scoped) so
+   every inline white/near-white card is re-skinned wherever it lives. */
+html[data-theme="dark"] [style*="background:#FFFFFF"],
+html[data-theme="dark"] [style*="background: #FFFFFF"],
+html[data-theme="dark"] [style*="background:#fff"],
+html[data-theme="dark"] [style*="background: #fff"],
+html[data-theme="dark"] [style*="background:#FFF"],
+html[data-theme="dark"] [style*="background:#F4F5F8"],
+html[data-theme="dark"] [style*="background:#F7F8FA"],
+html[data-theme="dark"] [style*="background:#F8FAFF"],
+html[data-theme="dark"] [style*="background:#FAFBFF"]{
+    background:#141826 !important;
+    border-color:#262B3E !important;
+}
+/* Any element inside a dark-skinned card that still has near-black text
+   flips to light — but only these dark inks, never coloured accents.
+   .camp-title/.camp-desc use --t1/--t2 which are already re-pointed. */
+html[data-theme="dark"] .camp-title,
+html[data-theme="dark"] .cex-name,
+html[data-theme="dark"] .dapp-name,
+html[data-theme="dark"] .news-title,
+html[data-theme="dark"] .news-title a{ color:#EDEFF7 !important; }
+html[data-theme="dark"] .camp-desc,
+html[data-theme="dark"] .dapp-desc{ color:#AEB4C8 !important; }
+
+/* Streamlit-native widget text: toggle/checkbox labels, captions,
+   alerts, expander headers, strong/em inside markdown. These inherit
+   colour rather than carrying an inline style, so target them directly. */
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] strong,
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] em,
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] a,
+html[data-theme="dark"] [data-testid="stWidgetLabel"] *,
+html[data-theme="dark"] [data-testid="stToggle"] label,
+html[data-theme="dark"] [data-testid="stCheckbox"] label,
+html[data-theme="dark"] [data-baseweb="checkbox"] *,
+html[data-theme="dark"] [data-testid="stCaptionContainer"],
+html[data-theme="dark"] [data-testid="stCaptionContainer"] *,
+html[data-theme="dark"] .stRadio label,
+html[data-theme="dark"] .stSelectbox label,
+html[data-theme="dark"] summary,
+html[data-theme="dark"] [data-testid="stExpander"] summary *{
+    color:#DDE0EE !important;
+}
+/* Keep hyperlink accents visibly blue (not washed to grey) */
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] a[href]{
+    color:#8FA6FF !important;
+}
+/* Alerts (st.warning/info/error) — readable text on their tinted bg */
+html[data-theme="dark"] [data-testid="stAlert"],
+html[data-theme="dark"] [data-testid="stAlert"] *,
+html[data-theme="dark"] [data-testid="stNotification"] *{
+    color:#F2F4FB !important;
+}
+html[data-theme="dark"] .notice{ color:#F2F4FB !important; }
+/* Compact chat control panel — dark skin */
+
+
+/* Remaining light card / panel backgrounds → dark glass */
+html[data-theme="dark"] [style*="background:#F9FAFC"],
+html[data-theme="dark"] [style*="background:#F5F6FA"],
+html[data-theme="dark"] [style*="background:#EEF0F5"],
+html[data-theme="dark"] [style*="background:#E8EBF2"],
+html[data-theme="dark"] [style*="background:#ECEEF4"],
+html[data-theme="dark"] [style*="background:#F0F2F8"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255"]{
+    background:#141826 !important;
+    border-color:#262B3E !important;
+}
+/* Dark input fields on the payment/wallet panels */
+html[data-theme="dark"] [style*="background:#1A1F30"]{ color:#DDE0EE !important; }
+
+html[data-theme="dark"] .glass-card,html[data-theme="dark"] .welcome-card,
+html[data-theme="dark"] .camp-card,html[data-theme="dark"] .cex-card,
+html[data-theme="dark"] .dapp-card,html[data-theme="dark"] .news-card,
+html[data-theme="dark"] .build-path-card,html[data-theme="dark"] .chat-showcase{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+
+/* Campaign / Update / Ecosystem cards are <a class="hover-lift"> anchors
+   with inline white backgrounds. Force those dark + their text light. */
+html[data-theme="dark"] a.hover-lift[style*="background:#FFFFFF"],
+html[data-theme="dark"] a.hover-lift{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+html[data-theme="dark"] .camp-title,
+html[data-theme="dark"] .news-title,
+html[data-theme="dark"] .news-title a,
+html[data-theme="dark"] .dapp-name,
+html[data-theme="dark"] .cex-name{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+html[data-theme="dark"] .camp-desc,
+html[data-theme="dark"] .dapp-desc,
+html[data-theme="dark"] .cex-sub,
+html[data-theme="dark"] .news-desc{
+    color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important;
+}
+/* Camp tag pills readable on dark */
+html[data-theme="dark"] .camp-tag{
+    background:rgba(90,110,255,0.14) !important;
+    border-color:rgba(90,110,255,0.30) !important;
+    color:#9FB0FF !important;
+}
+/* Campaign timeline / info cards (inline #FFFFFF divs on these pages) */
+html[data-theme="dark"] [style*="background:#FFFFFF;border:1px solid #E3E5EA"]{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+/* Divider lines used in timelines */
+html[data-theme="dark"] [style*="background:#E3E5EA"]{ background:#2A3044 !important; }
+html[data-theme="dark"] .hover-lift:hover{
+    box-shadow:0 18px 44px rgba(0,0,0,0.55),0 0 0 1.5px rgba(90,110,255,0.35)!important;
+    border-color:rgba(90,110,255,0.4)!important;
+}
+
+/* Inputs / textareas / Streamlit buttons */
+html[data-theme="dark"] input,html[data-theme="dark"] textarea,
+html[data-theme="dark"] [data-baseweb="input"],html[data-theme="dark"] [data-baseweb="textarea"]{
+    background:#12151F !important;color:#EDEFF7 !important;border-color:#262B3E !important;
+}
+html[data-theme="dark"] [data-testid="stChatInput"]{background:#12151F !important;border-color:#262B3E !important;}
+html[data-theme="dark"] .stButton>button{
+    background:#161A28 !important;color:#DDE0EE !important;border:1px solid #2A3044 !important;
+}
+html[data-theme="dark"] .stButton>button:hover{
+    background:#1D2233 !important;border-color:#3A4260 !important;color:#FFFFFF !important;
+}
+/* Keep the aura canvas dots readable on dark */
+html[data-theme="dark"] #aura-3d-canvas{mix-blend-mode:lighten;}
+
+/* ══════════════════════════════════════════════════════════
+   DARK MODE · automatic text-contrast adjust
+   Near-black inline text (the app hard-codes #0C0C1A / #000 /
+   #0B1020 / #1A1F30 in hundreds of inline styles) is flipped to a
+   light ink in dark mode. Colored accents are left alone. Secondary
+   greys are lifted so they stay readable. Reverses automatically in
+   light mode (these rules simply don't apply). */
+html[data-theme="dark"] [style*="color:#0C0C1A"],
+html[data-theme="dark"] [style*="color: #0C0C1A"],
+html[data-theme="dark"] [style*="color:#000000"],
+html[data-theme="dark"] [style*="color: #000000"],
+html[data-theme="dark"] [style*="color:#000;"],
+html[data-theme="dark"] [style*="color:#000 "],
+html[data-theme="dark"] [style*="color:#0B1020"],
+html[data-theme="dark"] [style*="color: #0B1020"],
+html[data-theme="dark"] [style*="color:#1A1F30"],
+html[data-theme="dark"] [style*="color: #1A1F30"],
+html[data-theme="dark"] [style*="color:#0c0c1a"],
+html[data-theme="dark"] [style*="color:#14141F"],
+html[data-theme="dark"] [style*="color: #14141F"],
+html[data-theme="dark"] [style*="color:#14181F"],
+html[data-theme="dark"] [style*="color:#1A1F30"],
+html[data-theme="dark"] [style*="color:#17181C"],
+html[data-theme="dark"] [style*="color:#2B3656"],
+html[data-theme="dark"] [style*="color:#2C3247"],
+html[data-theme="dark"] [style*="color:#262B3E"],
+html[data-theme="dark"] [style*="color:#0B0E1A"],
+html[data-theme="dark"] [style*="color:#1C1C28"],
+html[data-theme="dark"] [style*="color:#111"]{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+/* Secondary / muted greys → lighter greys for readability */
+html[data-theme="dark"] [style*="color:#39445D"],
+html[data-theme="dark"] [style*="color:#42475A"],
+html[data-theme="dark"] [style*="color:#3D4358"],
+html[data-theme="dark"] [style*="color:#5B5F6E"],
+html[data-theme="dark"] [style*="color:#68738C"],
+html[data-theme="dark"] [style*="color:#4A4F60"],
+html[data-theme="dark"] [style*="color:#52525B"],
+html[data-theme="dark"] [style*="color:#7A7F96"],
+html[data-theme="dark"] [style*="color:#9499A8"],
+html[data-theme="dark"] [style*="color:#9AA0AE"],
+html[data-theme="dark"] [style*="color:#6B7280"],
+html[data-theme="dark"] [style*="color:#7C8BB8"],
+html[data-theme="dark"] [style*="color:#3F3F46"],
+html[data-theme="dark"] [style*="color:#5B5F6E"],
+html[data-theme="dark"] [style*="color:#B0B4C4"],
+html[data-theme="dark"] [style*="color:#8A90A6"]{
+    color:#AEB4C8 !important;
+}
+/* Base Streamlit text nodes + headings that inherit --t1 */
+html[data-theme="dark"] [data-testid="stMarkdownContainer"],
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] p,
+html[data-theme="dark"] [data-testid="stMarkdownContainer"] li,
+html[data-theme="dark"] h1,html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,html[data-theme="dark"] h4,
+html[data-theme="dark"] label,html[data-theme="dark"] p{
+    color:#EDEFF7;
+}
+/* Light-grey chip/pill backgrounds that used dark text → dark chips */
+html[data-theme="dark"] [style*="background:#F2F3F8"],
+html[data-theme="dark"] [style*="background:#F4F4F6"],
+html[data-theme="dark"] [style*="background:#F4F5F9"],
+html[data-theme="dark"] [style*="background:#EEF0FF"],
+html[data-theme="dark"] [style*="background:#F6F8FF"],
+html[data-theme="dark"] [style*="background:#EAEEFF"]{
+    background:#1B2030 !important;border-color:#2A3044 !important;
+}
+
+
 .stApp{
     background-color: #B8C4D8!important;
     position:relative;
@@ -2604,7 +2892,11 @@ div[style*="height:0"][style*="overflow:hidden"][style*="visibility:hidden"]{
 }
 [data-testid="collapsedControl"]{display:none!important;}
 
-/* Force Streamlit main block to allow true centering */
+/* Force Streamlit main block to allow true centering.
+   NOTE: this container (stMainBlockContainer) is what actually holds
+   page content — the nav clearance MUST live here, not on the outer
+   wrapper, or the floating nav overlaps the first rows (chat language
+   pills, New Conversation, etc.). */
 [data-testid="stMainBlockContainer"] {
     max-width: 1200px !important;
     padding-left: 2rem !important;
@@ -2616,7 +2908,7 @@ section[data-testid="stMain"] > div {
     padding-left: 2rem !important;
     padding-right: 2rem !important;
     padding-top: 0 !important;
-    margin-top: -2rem !important;
+    margin-top: 0 !important;
 }
 /* Center markdown blocks that contain hero */
 [data-testid="stMarkdownContainer"] {
@@ -4104,6 +4396,25 @@ section[data-testid="stMain"]{
     scroll-behavior:smooth!important;
     -webkit-overflow-scrolling:touch!important;
     overscroll-behavior-y:contain!important;
+    /* Single source of truth for nav clearance. Lives on the OUTER
+       section, which no inner container rule touches — so page banners
+       can never tuck under the floating nav regardless of the cascade
+       inside stMainBlockContainer. */
+    padding-top:84px !important;
+}
+@media (max-width:600px){
+    section[data-testid="stMain"]{ padding-top:74px !important; }
+}
+/* Pages with a sidebar (Chat) render main content higher — add extra
+   clearance so the first row (language pills) never hides under the
+   floating nav. Combined with the in-page .chat-top-spacer, the first
+   row is guaranteed to sit clear on the chat page. */
+.stApp:has(section[data-testid="stSidebar"]) section[data-testid="stMain"]{
+    padding-top:38px !important;
+}
+/* Belt & braces: the first content block also carries scroll/anchor margin. */
+section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > div:first-child{
+    scroll-margin-top:110px;
 }
 section[data-testid="stMain"] > div{
     scroll-behavior:smooth!important;
@@ -4407,6 +4718,7 @@ def inject_redesign_css(page_marker: str) -> None:
    compose their own width with inner columns instead. */
 [data-testid="stMainBlockContainer"]:has(.rd-marker){
     margin:0 auto !important;
+    padding-top:0 !important;
 }
 /* Consistent vertical rhythm on an 8px grid between top-level blocks */
 [data-testid="stMainBlockContainer"]:has(.rd-marker)
@@ -4737,6 +5049,76 @@ def inject_redesign_css(page_marker: str) -> None:
     background:#FFFFFF;border:1px solid #E4E8F2;border-radius:14px;
     padding:12px;display:inline-flex;box-shadow:0 2px 12px rgba(20,20,60,0.06);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE for redesigned (.rd-marker) pages — Pay, Request,
+   Network, Trade, SPNs, Ecosystem, Memory Ledger. These pages use
+   hard-coded light rd-* surfaces + dark text with high specificity,
+   so they need matching-specificity dark overrides here.
+   ═══════════════════════════════════════════════════════════ */
+html[data-theme="dark"] .rd-panel,
+html[data-theme="dark"] .rd-stat,
+html[data-theme="dark"] .rd-toolbar,
+html[data-theme="dark"] .rd-qr,
+html[data-theme="dark"] .rd-card,
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [data-testid="stVerticalBlockBorderWrapper"]{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+/* Titles / values → light */
+html[data-theme="dark"] .rd-panel-title,
+html[data-theme="dark"] .rd-stat-val,
+html[data-theme="dark"] .rd-h,
+html[data-theme="dark"] .rd-title,
+html[data-theme="dark"] .rd-v{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+/* Sub / label / muted → readable grey */
+html[data-theme="dark"] .rd-panel-sub,
+html[data-theme="dark"] .rd-stat-lbl,
+html[data-theme="dark"] .rd-stat-sub,
+html[data-theme="dark"] .rd-k,
+html[data-theme="dark"] .rd-label,
+html[data-theme="dark"] .rd-sub{
+    color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important;
+}
+html[data-theme="dark"] .rd-divider{background:#262B3E !important;}
+/* Chip buttons */
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-chiprow) .stButton button{
+    background:rgba(90,110,255,0.10) !important;border-color:rgba(90,110,255,0.28) !important;
+    color:#C4C9DC !important;
+}
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-chiprow) .stButton button:hover{
+    background:rgba(90,110,255,0.18) !important;border-color:rgba(90,110,255,0.45) !important;
+}
+/* Broad safety net: on rd-marker pages, force near-black inline text light
+   and lift muted greys — highest-specificity so nothing stays stranded. */
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#000000"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#0C0C1A"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#0B1020"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#0B0E1A"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#14141F"]{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#7A7F96"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#9499A8"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#68738C"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#5B5F6E"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#7C8BB8"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="color:#2B3656"]{
+    color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important;
+}
+/* Light inline surfaces on rd-marker pages → dark */
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#FFFFFF"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#F9F9FC"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#F4F5FF"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#EEF0FF"],
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#F9FBFF"]{
+    background:#161A28 !important;border-color:#262B3E !important;
+}
+/* Tinted status blocks on rd pages */
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#F0FFF4"]{background:rgba(31,168,85,0.10) !important;}
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#FFF0F0"]{background:rgba(229,72,77,0.10) !important;}
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [style*="background:#FFFBEB"]{background:rgba(200,150,30,0.10) !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -4819,26 +5201,15 @@ div[class*="st-key-nav_"]{display:none!important;}
 div[data-testid="stElementContainer"]:has(iframe[height="0"]){display:none!important;}
 
 /* Offset page content below the fixed nav (identical on every page). */
-section[data-testid="stMain"] > div{padding-top:124px !important;}
+section[data-testid="stMain"] > div{padding-top:0 !important;}
 
 .pnav-fixed{
     position:fixed;top:14px;left:0;right:0;z-index:1000;
     display:flex;justify-content:center;
     pointer-events:none;padding:0 1.25rem;
 }
-/* Frosted scrim: masks content scrolling behind the floating pill so
-   nothing ever visually collides with the nav (fills the transparent
-   strip above/around the pill, fading out below it). */
-.pnav-fixed::before{
-    content:'';position:absolute;left:0;right:0;top:-14px;height:88px;
-    background:linear-gradient(180deg,
-        rgba(238,241,249,0.60) 0%,
-        rgba(238,241,249,0.35) 55%,
-        rgba(238,241,249,0) 100%);
-    backdrop-filter:blur(7px);
-    -webkit-backdrop-filter:blur(7px);
-    pointer-events:none;z-index:-1;
-}
+/* (Frosted scrim removed — the nav floats directly over the page
+   background; content clears it via the container's top padding.) */
 .pnav{
     pointer-events:auto;
     transform:translateZ(0);backface-visibility:hidden;
@@ -4951,6 +5322,69 @@ section[data-testid="stMain"] > div{padding-top:124px !important;}
     transform:translateY(-1px);box-shadow:0 4px 10px rgba(20,20,60,0.10);
 }
 .pnav-icirc svg{width:17px;height:17px;display:block;}
+.pnav-icirc svg path{fill:currentColor;}
+.pnav-icirc[title="Discord"]:hover{color:#5865F2;border-color:#5865F2;}
+.pnav-icirc[title="X / Twitter"]:hover{color:#000;}
+.pnav-icirc[title="GitHub"]:hover{color:#000;}
+html[data-theme="dark"] .pnav-icirc[title="Discord"]:hover{color:#7C88FF;border-color:#5865F2;}
+html[data-theme="dark"] .pnav-icirc[title="X / Twitter"]:hover,
+html[data-theme="dark"] .pnav-icirc[title="GitHub"]:hover{color:#FFFFFF;}
+.pnav-theme{cursor:pointer;padding:0;}
+.pnav-theme svg{position:absolute;width:17px;height:17px;transition:opacity 200ms ease,transform 300ms cubic-bezier(0.34,1.4,0.64,1);}
+.pnav-theme .ic-moon{opacity:0;transform:rotate(-40deg) scale(0.6);}
+.pnav-theme .ic-sun{opacity:1;transform:rotate(0) scale(1);}
+html[data-theme="dark"] .pnav-theme .ic-sun{opacity:0;transform:rotate(40deg) scale(0.6);}
+html[data-theme="dark"] .pnav-theme .ic-moon{opacity:1;transform:rotate(0) scale(1);}
+.pnav-theme{position:relative;overflow:hidden;}
+
+/* ── COMMAND PALETTE ─────────────────────────────────────── */
+#octo-palette{position:fixed;inset:0;z-index:100000;display:none;}
+#octo-palette.open{display:block;}
+#octo-palette .op-backdrop{
+    position:absolute;inset:0;background:rgba(12,14,26,0.42);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    animation:opFade 160ms ease;
+}
+#octo-palette .op-modal{
+    position:absolute;top:14vh;left:50%;transform:translateX(-50%);
+    width:min(600px,92vw);
+    background:rgba(255,255,255,0.98);border:1px solid #E7E8EE;border-radius:16px;
+    box-shadow:0 24px 70px rgba(12,14,40,0.34);
+    overflow:hidden;font-family:'DM Sans',sans-serif;
+    animation:opPop 200ms cubic-bezier(0.34,1.3,0.64,1);
+}
+@keyframes opFade{from{opacity:0;}to{opacity:1;}}
+@keyframes opPop{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.98);}
+                 to{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}}
+#octo-palette .op-search{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #ECEDF3;}
+#octo-palette .op-search svg{width:18px;height:18px;color:#9AA0AE;flex-shrink:0;}
+#octo-palette #op-input{
+    flex:1;border:none;outline:none;background:transparent;
+    font-size:15px;font-weight:500;color:#0C0C1A;font-family:inherit;
+}
+#octo-palette #op-input::placeholder{color:#9AA0AE;}
+#octo-palette .op-esc{font-size:10px;font-weight:700;color:#9AA0AE;background:#F2F3F8;border:1px solid #E4E4E9;border-radius:5px;padding:3px 6px;}
+#octo-palette .op-list{max-height:46vh;overflow-y:auto;padding:6px;}
+#octo-palette .op-group{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9AA0AE;padding:8px 10px 4px;}
+#octo-palette .op-row{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;cursor:pointer;}
+#octo-palette .op-row.on{background:#EEF0FF;}
+#octo-palette .op-ico{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+#octo-palette .op-title{font-size:13.5px;font-weight:600;color:#1A1F30;flex:1;}
+#octo-palette .op-row.on .op-title{color:#1414E8;}
+#octo-palette .op-tag{font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6B7280;background:#F2F3F8;border:1px solid #E4E4E9;border-radius:5px;padding:2px 6px;}
+#octo-palette .op-empty{padding:26px;text-align:center;color:#9AA0AE;font-size:13px;}
+#octo-palette .op-foot{display:flex;gap:16px;padding:9px 16px;border-top:1px solid #ECEDF3;font-size:10.5px;font-weight:600;color:#9AA0AE;}
+/* dark */
+html[data-theme="dark"] #octo-palette .op-modal{background:#14172250;background:#141722;border-color:#262B3E;box-shadow:0 24px 70px rgba(0,0,0,0.6);}
+html[data-theme="dark"] #octo-palette .op-search{border-color:#242A3B;}
+html[data-theme="dark"] #octo-palette #op-input{color:#EDEFF7;}
+html[data-theme="dark"] #octo-palette .op-esc{background:#1B1F30;border-color:#2C3247;color:#AEB4C8;}
+html[data-theme="dark"] #octo-palette .op-row.on{background:rgba(60,80,255,0.16);}
+html[data-theme="dark"] #octo-palette .op-title{color:#DDE0EE;}
+html[data-theme="dark"] #octo-palette .op-row.on .op-title{color:#9FB0FF;}
+html[data-theme="dark"] #octo-palette .op-tag{background:#1B1F30;border-color:#2C3247;color:#AEB4C8;}
+html[data-theme="dark"] #octo-palette .op-foot{border-color:#242A3B;}
+
 /* Responsive — degrade gracefully, never overlap or clip */
 @media (max-width:1120px){
     .pnav-search{width:220px;}
@@ -4977,9 +5411,8 @@ section[data-testid="stMain"] > div{padding-top:124px !important;}
     .pnav-socials .pnav-icirc:not(:last-child){display:none;}
     .pnav{height:58px;border-radius:14px;padding:0 10px;}
     .pnav-fixed{top:10px;padding:0 0.75rem;}
-    .pnav-fixed::before{top:-10px;height:84px;}
     .pnav-item{font-size:13px;padding:17px 0;}
-    section[data-testid="stMain"] > div{padding-top:106px !important;}
+    section[data-testid="stMain"] > div{padding-top:0 !important;}
 }
 </style>
 """
@@ -4999,6 +5432,15 @@ _PNAV_GH_SVG = (
     'c.98 0 1.97.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09'
     '0 4.41-2.69 5.38-5.25 5.66.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.68.8.56'
     'A10.52 10.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>'
+)
+_PNAV_SUN_SVG = (
+    '<svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="12" cy="12" r="4"></circle>'
+    '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>'
+)
+_PNAV_MOON_SVG = (
+    '<svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
 )
 _PNAV_DC_SVG = (
     '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
@@ -5035,12 +5477,13 @@ _pnav_html = (
     '</div>'
     '</div>'
     '<span class="pnav-dot"></span>'
-    '<div class="pnav-search" data-pnav-go="chat" title="Quick search · ask OctoBot (Ctrl/Cmd + K)">'
+    '<div class="pnav-search" id="pnav-search-pill" title="Search — pages, actions, docs (Ctrl/Cmd + K)">'
     '<svg class="pnav-mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
     '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>'
     '<span class="pnav-search-ph">Quick search...</span>'
     '<span class="pnav-kbd">⌘K</span>'
     '</div>'
+    '<button class="pnav-icirc pnav-theme" id="pnav-theme-btn" title="Toggle dark mode" aria-label="Toggle dark mode">' + _PNAV_SUN_SVG + _PNAV_MOON_SVG + '</button>'
     '<div class="pnav-socials">'
     '<a class="pnav-icirc" href="' + PHAROS_X_URL + '" target="_blank" rel="noopener" title="X / Twitter">' + _PNAV_X_SVG + '</a>'
     '<a class="pnav-icirc" href="' + _PNAV_GITHUB_URL + '" target="_blank" rel="noopener" title="GitHub">' + _PNAV_GH_SVG + '</a>'
@@ -5247,24 +5690,168 @@ components.html(
       if (k) window.__pnavGo(k);
     }, true);
 
-    /* Cmd/Ctrl + K -> Chat */
-    doc.addEventListener('keydown', function(e){
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')){
-        e.preventDefault();
-        window.__pnavGo('chat');
-      }
+    /* ── THEME TOGGLE (dark mode) ─────────────────────────
+       Persisted in localStorage; applied to <html data-theme>. */
+    function applyTheme(mode){
+      try{ doc.documentElement.setAttribute('data-theme', mode === 'dark' ? 'dark' : 'light'); }catch(e){}
+    }
+    (function(){
+      var saved = 'light';
+      try{ saved = localStorage.getItem('octobot-theme') || 'light'; }catch(e){}
+      applyTheme(saved);
+    })();
+    doc.addEventListener('click', function(e){
+      var tb = e.target && e.target.closest ? e.target.closest('#pnav-theme-btn') : null;
+      if (!tb) return;
+      var cur = doc.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      var next = cur === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try{ localStorage.setItem('octobot-theme', next); }catch(e){}
     }, true);
 
-    /* ── AURA · cursor fog + zero-latency dot ──
-       A crisp ink dot rides the RAW cursor coordinates — no smoothing,
-       no spring, drawn at the exact pointer position every frame on a
-       desynchronized canvas (the lowest-latency path a web page has).
-       Around it, a soft volumetric fog of five drifting blobs follows
-       on a very stiff spring: effectively glued to the cursor but with
-       an organic, breathing quality. Clicks puff the fog outward with
-       an elastic spring impulse plus a soft expanding mist ring. All
-       motion is delta-time spring physics → identical feel at 60/120/
-       144 Hz, buttery fades, zero per-frame allocations. */
+    /* ── COMMAND PALETTE (⌘K / Ctrl+K) ────────────────────
+       Fuzzy search across pages, quick actions and docs topics.
+       Built once, lives in the parent document, survives reruns. */
+    var PALETTE = [
+      {t:'Home',            s:'dashboard start command center', k:'home',      i:'🏠', g:'Page'},
+      {t:'Chat with OctoBot', s:'ask ai assistant question help', k:'chat',   i:'💬', g:'Page'},
+      {t:'Trade $PROS',     s:'buy sell exchange price cex',    k:'trade',     i:'📊', g:'Page'},
+      {t:'Pay',             s:'send pros payment transfer x402', k:'pay',      i:'💸', g:'Page'},
+      {t:'Request Payment', s:'invoice receive request pros',   k:'request',   i:'🧾', g:'Page'},
+      {t:'SPNs',            s:'staking restaking native yield',  k:'spns',     i:'⚡', g:'Page'},
+      {t:'Campaigns',       s:'quests rewards events active',    k:'campaigns', i:'🎯', g:'Page'},
+      {t:'Updates',         s:'news announcements blog latest',  k:'updates',   i:'📰', g:'Page'},
+      {t:'Ecosystem',       s:'dapps projects apps defi rwa',    k:'ecosystem', i:'🧩', g:'Page'},
+      {t:'Network',         s:'stats validators tps chain',      k:'network',   i:'🌐', g:'Page'},
+      {t:'Market Pulse',    s:'sentiment community bullish bearish market', k:'pulse', i:'📡', g:'Page'},
+      {t:'Memory Ledger',   s:'wallet on-chain intelligence profile', k:'memory', i:'🧠', g:'Page'},
+      {t:'Toggle dark mode', s:'theme light dark night appearance', act:'theme', i:'🌓', g:'Action'},
+      {t:'What is Pharos?',       s:'docs learn intro l1 blockchain', k:'chat', q:'What is Pharos?', i:'📖', g:'Docs'},
+      {t:'What is the $PROS token?', s:'docs tokenomics utility', k:'chat', q:'What is the PROS token?', i:'📖', g:'Docs'},
+      {t:'How do I build on Pharos?', s:'docs developer sdk build deploy', k:'chat', q:'How do I build on Pharos?', i:'📖', g:'Docs'},
+      {t:'Explain Native Restaking', s:'docs spn restake security', k:'chat', q:'Explain Native Restaking on Pharos', i:'📖', g:'Docs'},
+      {t:'What is RWA on Pharos?', s:'docs real world assets realfi', k:'chat', q:'What is RWA on Pharos?', i:'📖', g:'Docs'}
+    ];
+
+    function fuzzy(q, item){
+      q = q.toLowerCase().trim();
+      if (!q) return 1;
+      var hay = (item.t + ' ' + item.s + ' ' + item.g).toLowerCase();
+      var qi = 0, score = 0, streak = 0;
+      for (var hi = 0; hi < hay.length && qi < q.length; hi++){
+        if (hay[hi] === q[qi]){ qi++; streak++; score += streak; }
+        else streak = 0;
+      }
+      if (qi < q.length) return 0;
+      if (hay.indexOf(q) !== -1) score += 40;      /* substring bonus */
+      if (item.t.toLowerCase().indexOf(q) === 0) score += 30; /* prefix on title */
+      return score + 1;
+    }
+
+    var pal = null, palInput = null, palList = null, palSel = 0, palRows = [];
+    function buildPalette(){
+      if (pal) return;
+      pal = doc.createElement('div');
+      pal.id = 'octo-palette';
+      pal.innerHTML =
+        '<div class="op-backdrop"></div>' +
+        '<div class="op-modal" role="dialog" aria-label="Command palette">' +
+          '<div class="op-search">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>' +
+            '<input id="op-input" placeholder="Search pages, actions, docs…" autocomplete="off" spellcheck="false"/>' +
+            '<span class="op-esc">ESC</span>' +
+          '</div>' +
+          '<div class="op-list" id="op-list"></div>' +
+          '<div class="op-foot"><span>↑↓ navigate</span><span>↵ open</span><span>⌘K toggle</span></div>' +
+        '</div>';
+      doc.body.appendChild(pal);
+      palInput = pal.querySelector('#op-input');
+      palList  = pal.querySelector('#op-list');
+      pal.querySelector('.op-backdrop').addEventListener('click', closePalette);
+      palInput.addEventListener('input', renderPalette);
+      palInput.addEventListener('keydown', paletteKeys);
+    }
+    function runItem(it){
+      closePalette();
+      if (it.act === 'theme'){
+        var cur = doc.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        var next = cur === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        try{ localStorage.setItem('octobot-theme', next); }catch(e){}
+        return;
+      }
+      if (it.q){ try{ sessionStorage.setItem('octobot-prefill', it.q); }catch(e){} }
+      if (it.k){ window.__pnavGo(it.k); }
+    }
+    function renderPalette(){
+      var q = palInput ? palInput.value : '';
+      var scored = [];
+      for (var i = 0; i < PALETTE.length; i++){
+        var sc = fuzzy(q, PALETTE[i]);
+        if (sc > 0) scored.push([sc, PALETTE[i]]);
+      }
+      scored.sort(function(a,b){ return b[0] - a[0]; });
+      palRows = scored.map(function(x){ return x[1]; }).slice(0, 8);
+      palSel = 0;
+      var html = '';
+      if (!palRows.length){ html = '<div class="op-empty">No matches</div>'; }
+      var lastG = '';
+      for (var r = 0; r < palRows.length; r++){
+        var it = palRows[r];
+        if (it.g !== lastG){ html += '<div class="op-group">' + it.g + '</div>'; lastG = it.g; }
+        html += '<div class="op-row' + (r === 0 ? ' on' : '') + '" data-idx="' + r + '">' +
+                  '<span class="op-ico">' + it.i + '</span>' +
+                  '<span class="op-title">' + it.t + '</span>' +
+                  (it.g === 'Docs' ? '<span class="op-tag">ask</span>' : '') +
+                '</div>';
+      }
+      palList.innerHTML = html;
+      var rows = palList.querySelectorAll('.op-row');
+      for (var j = 0; j < rows.length; j++){
+        rows[j].addEventListener('mouseenter', function(){ setSel(+this.getAttribute('data-idx')); });
+        rows[j].addEventListener('click', function(){ runItem(palRows[+this.getAttribute('data-idx')]); });
+      }
+    }
+    function setSel(n){
+      palSel = n;
+      var rows = palList.querySelectorAll('.op-row');
+      for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('on', i === palSel);
+      var cur = rows[palSel];
+      if (cur && cur.scrollIntoView) cur.scrollIntoView({block:'nearest'});
+    }
+    function paletteKeys(e){
+      if (e.key === 'ArrowDown'){ e.preventDefault(); if (palRows.length) setSel((palSel+1)%palRows.length); }
+      else if (e.key === 'ArrowUp'){ e.preventDefault(); if (palRows.length) setSel((palSel-1+palRows.length)%palRows.length); }
+      else if (e.key === 'Enter'){ e.preventDefault(); if (palRows[palSel]) runItem(palRows[palSel]); }
+      else if (e.key === 'Escape'){ e.preventDefault(); closePalette(); }
+    }
+    function openPalette(){
+      buildPalette();
+      pal.classList.add('open');
+      palInput.value = '';
+      renderPalette();
+      setTimeout(function(){ palInput.focus(); }, 30);
+    }
+    function closePalette(){ if (pal) pal.classList.remove('open'); }
+    function togglePalette(){ if (pal && pal.classList.contains('open')) closePalette(); else openPalette(); }
+
+    doc.addEventListener('keydown', function(e){
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')){
+        e.preventDefault(); togglePalette();
+      }
+    }, true);
+    doc.addEventListener('click', function(e){
+      var sp = e.target && e.target.closest ? e.target.closest('#pnav-search-pill') : null;
+      if (sp){ e.preventDefault(); openPalette(); }
+    }, true);
+
+    /* ── AMBIENT · glassy perspective grid room ──
+       Four grid-lined walls (floor, ceiling, left, right) projected to a
+       central vanishing point — a wireframe room seen head-on, like the
+       reference. Very faint, glassy, almost transparent. Depth lines
+       scroll toward the viewer so the room feels alive without being
+       busy. Theme-aware, delta-time, pauses when hidden, vanishing point
+       drifts gently. Zero per-frame allocations beyond the closing glow. */
     try{
       var host = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
       var cv = doc.createElement('canvas');
@@ -5283,139 +5870,145 @@ components.html(
       fit();
       window.addEventListener('resize', fit, {passive:true});
 
-      /* spring helper: k = stiffness, d = damping (2*sqrt(k) = critical) */
-      function Spr(v, k, d){ return {x:v, v:0, t:v, k:k, d:d}; }
-      function step(s, dt){
-        var a = (s.t - s.x) * s.k - s.v * s.d;
-        s.v += a * dt;
-        s.x += s.v * dt;
-        return s.x;
-      }
+      function isDark(){ return doc.documentElement.getAttribute('data-theme') === 'dark'; }
 
-      var mx = window.innerWidth * 0.5, my = window.innerHeight * 0.45; /* RAW cursor */
-      var fx = Spr(mx, 560, 46);   /* fog center: near-instant, organic */
-      var fy = Spr(my, 560, 46);
-      var en = Spr(0, 55, 14);     /* presence: fast attack, smooth fade */
-      var pu = Spr(0, 170, 10);    /* click puff: springy overshoot */
-      var drift = [0, 1.7, 3.1, 4.4, 5.6];        /* fog blob phases  */
-      var DRS   = [0.42, -0.33, 0.51, -0.27, 0.38]; /* blob drift speeds */
-      var puffs = [{r:0,a:0,x:0,y:0},{r:0,a:0,x:0,y:0},{r:0,a:0,x:0,y:0}];
-      var pi2 = 0;                 /* puff pool cursor — no allocations */
-      var running = false, lastT = 0, idleTimer = null;
-      var TAU = Math.PI * 2;
+      var t0 = 0, running = true;
+      var CELLS = 12;     /* grid divisions along each wall edge */
+      var DEPTH = 14;     /* number of scrolling depth lines      */
 
-      function wake(){
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(function(){ en.t = 0; }, 1200);
-        en.t = 1;
-        if (!running){ running = true; lastT = 0; requestAnimationFrame(tick); }
+      /* click glows — a small pool of ripples, no per-frame allocation */
+      var glows = [{x:0,y:0,life:0},{x:0,y:0,life:0},{x:0,y:0,life:0},{x:0,y:0,life:0}];
+      var gi = 0;
+      function paintGlow(gx, gy, e){
+        var grow = (1 - e);
+        var R = 20 + grow * 150;
+        var bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, R);
+        bg.addColorStop(0,   'rgba(' + rgbGlow + ',' + (0.30 * e) + ')');
+        bg.addColorStop(0.55,'rgba(' + rgbGlow + ',' + (0.12 * e) + ')');
+        bg.addColorStop(1,   'rgba(' + rgbGlow + ',0)');
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(' + rgbGlow + ',' + (0.50 * e) + ')';
+        ctx.lineWidth = 1.6;
+        ctx.arc(gx, gy, R * 0.8, 0, Math.PI * 2); ctx.stroke();
       }
-      doc.addEventListener('mousemove', function(e){
-        mx = e.clientX; my = e.clientY;
-        fx.t = mx; fy.t = my;
-        wake();
-      }, {passive:true});
-      doc.addEventListener('scroll', function(){ wake(); }, {passive:true, capture:true});
-      doc.addEventListener('touchmove', function(e){
-        if (e.touches && e.touches[0]){
-          mx = e.touches[0].clientX; my = e.touches[0].clientY;
-          fx.t = mx; fy.t = my;
-        }
-        wake();
-      }, {passive:true});
-      doc.addEventListener('click', function(e){
-        if (!e.isTrusted) return;
-        mx = e.clientX; my = e.clientY;
-        fx.t = mx; fy.t = my;
-        pu.v += 10;                       /* elastic fog puff */
-        en.x = Math.max(en.x, 0.6);       /* instant partial wake */
-        var p = puffs[pi2]; pi2 = (pi2 + 1) % puffs.length;
-        p.x = mx; p.y = my; p.r = 26; p.a = 0.85;
-        wake();
+      /* pointerdown fires earlier than click → lower perceived latency;
+         we paint the first frame synchronously so feedback is immediate. */
+      doc.addEventListener('pointerdown', function(e){
+        if (e.isTrusted === false) return;
+        var g = glows[gi]; gi = (gi + 1) % glows.length;
+        g.x = e.clientX; g.y = e.clientY; g.life = 1;
+        var dark = isDark();
+        var rgbGlow = dark ? '150,168,255' : '30,40,120';
+        try{ paintGlow(g.x, g.y, 1); }catch(_){}   /* instant first frame */
+        if (!running){ running = true; t0 = 0; requestAnimationFrame(tick); }
       }, {passive:true, capture:true});
 
+      doc.addEventListener('visibilitychange', function(){
+        if (doc.hidden){ running = false; }
+        else if (!running){ running = true; t0 = 0; requestAnimationFrame(tick); }
+      });
+
       function tick(t){
-        if (!lastT) lastT = t;
-        var dt = Math.min(0.033, (t - lastT) / 1000 || 0.008);
-        lastT = t;
-
-        var E = step(en, dt);
-        var P = step(pu, dt);  pu.t = 0;
-        var X = step(fx, dt);
-        var Y = step(fy, dt);
-
+        if (!running) return;
+        if (!t0) t0 = t;
+        var time = (t - t0) / 1000;
+        var dt = Math.min(0.05, (t - (tick._prev || t)) / 1000 || 0.016);
+        tick._prev = t;
+        var W = window.innerWidth, H = window.innerHeight;
         ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-        var i, p, puffsLive = false;
-        for (i = 0; i < puffs.length; i++){ if (puffs[i].a > 0.01){ puffsLive = true; break; } }
-        if (E < 0.008 && en.t === 0 && Math.abs(P) < 0.01 && !puffsLive){
-          running = false; return;
-        }
+        ctx.clearRect(0, 0, W, H);
         if (!cv.isConnected){ host.appendChild(cv); }
 
-        var swell = 1 + 0.22 * P;
+        var dark = isDark();
+        var rgb = dark ? '150,168,255' : '52,64,130';   /* darker light-mode lines */
+        var rgbGlow = dark ? '150,168,255' : '30,40,120';
+        /* glassy but clearly visible */
+        var aLine = dark ? 0.13 : 0.16;
 
-        /* ── volumetric fog: five drifting soft blobs around the cursor ── */
-        for (i = 0; i < 5; i++){
-          drift[i] += DRS[i] * (0.5 + E) * dt;
-          var ph = drift[i];
-          var orbR = (26 + i * 14) * swell;
-          var bx = X + Math.cos(ph) * orbR;
-          var by = Y + Math.sin(ph * 1.3) * orbR * 0.7;
-          var depth = 0.6 + 0.4 * Math.sin(ph * 0.9 + i);    /* breathing depth */
-          var R = (70 + i * 22) * swell * (0.85 + 0.15 * depth);
-          var g = ctx.createRadialGradient(bx, by, 0, bx, by, R);
-          var a1 = (i % 2 === 0)
-            ? (0.115 * E * depth)
-            : (0.085 * E * depth);
-          var col = (i % 2 === 0) ? '20,24,92' : '58,68,150';
-          g.addColorStop(0,    'rgba(' + col + ',' + a1 + ')');
-          g.addColorStop(0.55, 'rgba(' + col + ',' + (a1 * 0.5) + ')');
-          g.addColorStop(1,    'rgba(' + col + ',0)');
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU); ctx.fill();
-        }
-        /* faint bright heart so the fog reads volumetric, not flat */
-        var hg = ctx.createRadialGradient(X, Y, 0, X, Y, 46 * swell);
-        hg.addColorStop(0, 'rgba(214,220,248,' + (0.24 * E) + ')');
-        hg.addColorStop(1, 'rgba(214,220,248,0)');
-        ctx.fillStyle = hg;
-        ctx.beginPath(); ctx.arc(X, Y, 46 * swell, 0, TAU); ctx.fill();
+        /* vanishing point — near centre, drifting gently */
+        var vx = W * 0.5 + Math.cos(time * 0.12) * W * 0.03;
+        var vy = H * 0.5 + Math.sin(time * 0.10) * H * 0.03;
 
-        /* ── click puffs: soft expanding mist rings (pooled) ── */
-        for (i = 0; i < puffs.length; i++){
-          p = puffs[i];
-          if (p.a <= 0.01) continue;
-          p.r += 300 * dt;
-          p.a -= dt * 1.1;
-          if (p.a <= 0.01){ p.a = 0; continue; }
-          var pg = ctx.createRadialGradient(p.x, p.y, p.r * 0.55, p.x, p.y, p.r);
-          pg.addColorStop(0,   'rgba(58,68,150,0)');
-          pg.addColorStop(0.7, 'rgba(58,68,150,' + (p.a * 0.55) + ')');
-          pg.addColorStop(1,   'rgba(58,68,150,0)');
-          ctx.fillStyle = pg;
-          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+        ctx.lineWidth = 1;
+
+        /* Each wall edge on the near (screen) plane is the full viewport
+           rectangle; every point converges to (vx,vy). We draw:
+             • perspective "depth" rectangles scrolling outward
+             • straight grid rails from near-plane divisions to the VP */
+
+        /* ── depth rectangles (scrolling toward viewer) ── */
+        var speed = 0.22;
+        var phase = (time * speed) % 1;
+        for (var r = 0; r < DEPTH; r++){
+          var depth = (r + phase) / DEPTH;      /* 0 far … 1 near */
+          var d = Math.pow(depth, 1.9);          /* perspective spacing */
+          if (d < 0.045) continue;               /* keep a clear open centre — no collapse to a point */
+          var x0 = vx + (0     - vx) * d;
+          var y0 = vy + (0     - vy) * d;
+          var x1 = vx + (W     - vx) * d;
+          var y1 = vy + (H     - vy) * d;
           ctx.beginPath();
-          ctx.strokeStyle = 'rgba(16,20,80,' + (p.a * 0.8) + ')';
-          ctx.lineWidth = 1.8;
-          ctx.arc(p.x, p.y, p.r * 0.86, 0, TAU); ctx.stroke();
+          ctx.rect(x0, y0, x1 - x0, y1 - y0);
+          ctx.strokeStyle = 'rgba(' + rgb + ',' + (aLine * (0.4 + 0.6 * depth)) + ')';
+          ctx.stroke();
         }
 
-        /* ── the dot: RAW cursor coordinates, zero smoothing ── */
-        if (E > 0.02){
-          ctx.beginPath();
-          ctx.fillStyle = 'rgba(14,18,72,' + (0.95 * E) + ')';
-          ctx.arc(mx, my, 3.2, 0, TAU); ctx.fill();
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(58,68,150,' + (0.75 * E) + ')';
-          ctx.lineWidth = 1;
-          ctx.arc(mx, my, 6.5 + 1.5 * P, 0, TAU); ctx.stroke();
+        /* ── grid rails: each fades to transparent BEFORE reaching the
+           centre, so there is no starburst convergence point — the lines
+           read as a continuous flowing grid rather than emerging from a
+           hole. `stop` = fraction of the way to the VP where the line
+           ends; a per-rail gradient makes the fade smooth. ── */
+        var stop = 0.82;   /* rails end 82% of the way in → open centre */
+        function rail(sx, sy){
+          var ex = sx + (vx - sx) * stop;
+          var ey = sy + (vy - sy) * stop;
+          var g = ctx.createLinearGradient(sx, sy, ex, ey);
+          g.addColorStop(0,   'rgba(' + rgb + ',' + aLine + ')');
+          g.addColorStop(0.7, 'rgba(' + rgb + ',' + (aLine * 0.6) + ')');
+          g.addColorStop(1,   'rgba(' + rgb + ',0)');
+          ctx.strokeStyle = g;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        }
+        for (var c = 0; c <= CELLS; c++){
+          var fx = (c / CELLS) * W;
+          var fy = (c / CELLS) * H;
+          rail(fx, 0);   /* ceiling */
+          rail(fx, H);   /* floor   */
+          rail(0,  fy);  /* left    */
+          rail(W,  fy);  /* right   */
         }
 
+        /* ── click glows: a soft expanding ring + warm bloom, sleek and
+           quick, tinted to the grid colour ── */
+        var anyGlow = false;
+        for (var gk = 0; gk < glows.length; gk++){
+          var gg = glows[gk];
+          if (gg.life <= 0.001) continue;
+          anyGlow = true;
+          gg.life -= dt / 0.5;   /* full fade in ~0.5s — snappy */
+          if (gg.life < 0) gg.life = 0;
+          var e = gg.life;                 /* 1 → 0 */
+          var grow = (1 - e);              /* 0 → 1 */
+          var R = 20 + grow * 150;
+          /* soft radial bloom */
+          var bg = ctx.createRadialGradient(gg.x, gg.y, 0, gg.x, gg.y, R);
+          bg.addColorStop(0,   'rgba(' + rgbGlow + ',' + (0.30 * e) + ')');
+          bg.addColorStop(0.55,'rgba(' + rgbGlow + ',' + (0.12 * e) + ')');
+          bg.addColorStop(1,   'rgba(' + rgbGlow + ',0)');
+          ctx.fillStyle = bg;
+          ctx.beginPath(); ctx.arc(gg.x, gg.y, R, 0, Math.PI * 2); ctx.fill();
+          /* crisp expanding ring */
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(' + rgbGlow + ',' + (0.50 * e) + ')';
+          ctx.lineWidth = 1.6;
+          ctx.arc(gg.x, gg.y, R * 0.8, 0, Math.PI * 2); ctx.stroke();
+        }
         requestAnimationFrame(tick);
       }
-    }catch(err){ /* background effect is decorative — never break the app */ }
+      requestAnimationFrame(tick);
+    }catch(err){ /* ambient background is decorative — never break the app */ }
   }
 
   /* Inject once into the parent realm so it survives Streamlit reruns
@@ -6503,116 +7096,323 @@ elif st.session_state.page == "chat":
                 st.session_state["pending_q"] = q
                 st.rerun()
 
-    # ── Language selector ─────────────────────────────────────────
-    LANG_OPTIONS = {
-        "English":    "🇬🇧",
-        "Hindi":      "🇮🇳",
-        "Spanish":    "🇪🇸",
-        "Arabic":     "🇸🇦",
-        "Chinese":    "🇨🇳",
-        "Japanese":   "🇯🇵",
-    }
-    cur_lang   = st.session_state.octobot_lang
-    cur_flag   = LANG_OPTIONS.get(cur_lang, "🌐")
-    lang_pills = "".join([
-        f'<span style="display:inline-flex;align-items:center;gap:4px;'
-        f'font-size:12px;font-weight:{"700" if lang==cur_lang else "500"};'
-        f'padding:4px 11px;border-radius:20px;cursor:pointer;'
-        f'background:{"#1A1AFF" if lang==cur_lang else "#FFFFFF"};'
-        f'color:{"#FFFFFF" if lang==cur_lang else "#42475A"};'
-        f'border:1px solid {"#1A1AFF" if lang==cur_lang else "#D0D3E0"};'
-        f'margin-right:4px;">{flag} {lang}</span>'
-        for lang, flag in LANG_OPTIONS.items()
-    ])
+    # ── Top spacer: guarantees the first row clears the fixed nav on the
+    #    chat page regardless of sidebar layout timing / CSS cascade ──
+    st.markdown('<div class="chat-top-spacer" style="height:0px;"></div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════
+    #  CHAT CONTROL DECK  —  rebuilt from scratch
+    #  One cohesive glass card, compact and left-anchored, holding the
+    #  language selector, answer-mode segmented control, and the x402
+    #  premium row. Display markup is inside a single .cdeck card; the
+    #  functional Streamlit widgets (buttons/toggle/input) are styled to
+    #  sit flush inside it. Fully theme-aware.
+    # ══════════════════════════════════════════════════════════
+    st.markdown('<div class="cdeck-anchor"></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
-        'margin-bottom:0.7rem;padding:0.6rem 0.9rem;'
-        'background:#F4F5F8;border:1px solid #D0D3E0;border-radius:10px;">'
-        '<span style="font-size:11px;font-weight:700;color:#0C0C1A;'
-        'letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;'
-        'margin-right:4px;">🌐 Language:</span>'
-        + lang_pills +
+        """
+<style>
+.cdeck-anchor{height:0;margin:0;padding:0;}
+
+/* ── The control deck card ─────────────────────────────────── */
+[data-testid="stMainBlockContainer"]:has(.cdeck-anchor) .cdeck{
+    max-width:600px;margin:0 0 0.9rem 0;
+    background:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,248,252,0.96));
+    border:1px solid #E1E4EE;border-radius:16px;
+    box-shadow:0 4px 20px rgba(20,20,60,0.06);
+    padding:1rem 1.1rem 0.5rem;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
+.cdeck-hd{display:flex;align-items:center;gap:8px;margin-bottom:0.85rem;}
+.cdeck-hd .dot{width:7px;height:7px;border-radius:50%;background:#1FA855;box-shadow:0 0 6px #1FA855;}
+.cdeck-hd .ttl{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:#0C0C1A;letter-spacing:-0.01em;}
+.cdeck-hd .sub{font-size:10.5px;font-weight:600;color:#9AA0AE;margin-left:auto;white-space:nowrap;}
+.cdeck-sec{font-size:9.5px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;
+    color:#5B6178;margin:0.35rem 0 6px 1px;display:flex;align-items:center;gap:5px;}
+
+/* ── Language flag buttons ─────────────────────────────────── */
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English){
+    max-width:600px;margin:0 0 0.9rem 0 !important;gap:5px !important;
+}
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English) [data-testid="stColumn"]{padding:0 !important;}
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button{
+    min-height:38px !important;height:38px !important;padding:0 !important;
+    font-size:12px !important;font-weight:700 !important;line-height:1.1 !important;border-radius:9px !important;
+    color:#2A3050 !important;
+    background:#FFFFFF !important;border:1px solid #E1E4EE !important;
+    transition:transform 140ms ease,border-color 140ms ease,box-shadow 140ms ease !important;
+}
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button p,
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button div{
+    color:#2A3050 !important;
+}
+[data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button:hover{
+    transform:translateY(-1px) !important;border-color:#B9C0FF !important;
+    box-shadow:0 4px 12px rgba(26,26,255,0.12) !important;
+}
+
+/* ── Mode segmented control ────────────────────────────────── */
+[data-testid="stHorizontalBlock"]:has(.st-key-mode_docs){
+    max-width:600px;margin:0 0 0.9rem 0 !important;gap:6px !important;
+}
+[data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button{
+    min-height:38px !important;font-size:12.5px !important;font-weight:600 !important;
+    border-radius:10px !important;background:#FFFFFF !important;border:1px solid #E1E4EE !important;color:#2A3050 !important;
+    transition:transform 140ms ease,border-color 140ms ease,box-shadow 140ms ease !important;
+}
+[data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button p,
+[data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button div{ color:#2A3050 !important; }
+[data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button:hover{
+    transform:translateY(-1px) !important;border-color:#B9C0FF !important;
+    box-shadow:0 4px 12px rgba(26,26,255,0.12) !important;
+}
+
+/* ── x402 toggle + wallet row ──────────────────────────────── */
+[data-testid="stHorizontalBlock"]:has(.st-key-x402_enabled_toggle_main){
+    max-width:600px;margin:0 0 0.3rem 0 !important;align-items:center !important;
+}
+
+/* ══ DARK MODE ══ */
+html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.cdeck-anchor) .cdeck{
+    background:#141722;border-color:#262B3E;box-shadow:0 4px 20px rgba(0,0,0,0.45);
+}
+html[data-theme="dark"] .cdeck-hd .ttl{color:#EDEFF7;}
+html[data-theme="dark"] .cdeck-hd .sub{color:#7B8199;}
+html[data-theme="dark"] .cdeck-sec{color:#7B8199;}
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button,
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button{
+    background:#181C2A !important;border-color:#2A3044 !important;color:#C4C9DC !important;
+}
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button p,
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button div,
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button p,
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button div{ color:#C4C9DC !important; }
+html[data-theme="dark"] .cdeck-sec{color:#8891A8 !important;}
+/* Extra dark-mode contrast safety net */
+html[data-theme="dark"] [style*="color:#3A4055"],
+html[data-theme="dark"] [style*="color:#2A3050"],
+html[data-theme="dark"] [style*="color:#3A4050"],
+html[data-theme="dark"] [style*="color:#2A3040"]{ color:#DDE0EE !important; }
+html[data-theme="dark"] [style*="color:#8A90A6"],
+html[data-theme="dark"] [style*="color:#8891A8"]{ color:#AEB4C8 !important; }
+/* Toggle & radio tracks readable on dark */
+html[data-theme="dark"] [data-baseweb="checkbox"] div[role="checkbox"]{border-color:#3A4260 !important;}
+html[data-theme="dark"] [data-testid="stChatInput"] textarea{color:#EDEFF7 !important;}
+html[data-theme="dark"] [data-testid="stChatInput"] textarea::placeholder{color:#7B8199 !important;}
+/* Dropdown menus / popovers / tooltips (render at <body> root) */
+html[data-theme="dark"] [data-baseweb="popover"] [role="listbox"],
+html[data-theme="dark"] [data-baseweb="menu"],
+html[data-theme="dark"] ul[role="listbox"]{
+    background:#161A28 !important;border:1px solid #2A3044 !important;
+}
+html[data-theme="dark"] [data-baseweb="popover"] li,
+html[data-theme="dark"] [role="option"]{ color:#DDE0EE !important;background:transparent !important; }
+html[data-theme="dark"] [role="option"]:hover,
+html[data-theme="dark"] [aria-selected="true"][role="option"]{ background:rgba(90,110,255,0.14) !important; }
+html[data-theme="dark"] [data-baseweb="tooltip"]{ background:#1B1F2E !important;color:#EDEFF7 !important;border:1px solid #2A3044 !important; }
+/* Selectbox / text-input display value */
+html[data-theme="dark"] [data-baseweb="select"] *{ color:#DDE0EE !important; }
+html[data-theme="dark"] [data-baseweb="input"],
+html[data-theme="dark"] [data-baseweb="base-input"]{ background:#12151F !important; }
+
+
+/* ══ DARK MODE · comprehensive inline light-surface coverage ══
+   These pages (Campaigns, Updates, Ecosystem, Network, Memory Ledger,
+   Pay, Request) render cards with inline light backgrounds + light
+   gradient icon headers. In dark mode those stayed light while their
+   text flipped light → invisible. Re-skin every light inline surface. */
+html[data-theme="dark"] [style*="background:#F9F9FC"],
+html[data-theme="dark"] [style*="background:#F4F5FF"],
+html[data-theme="dark"] [style*="background:#EEF0FF"],
+html[data-theme="dark"] [style*="background:#F2F3F8"],
+html[data-theme="dark"] [style*="background:#F4F5F8"],
+html[data-theme="dark"] [style*="background:#F4F4F6"],
+html[data-theme="dark"] [style*="background:#ECEEF4"],
+html[data-theme="dark"] [style*="background:#E3E5EA"],
+html[data-theme="dark"] [style*="background:#F4F5F9"],
+html[data-theme="dark"] [style*="background:#EAEEFF"],
+html[data-theme="dark"] [style*="background:#FAFBFF"],
+html[data-theme="dark"] [style*="background:#F9FAFC"],
+html[data-theme="dark"] [style*="background:#F8FAFF"],
+html[data-theme="dark"] [style*="background:#F8F9FF"],
+html[data-theme="dark"] [style*="background:#F7F8FA"],
+html[data-theme="dark"] [style*="background:#F6F8FF"],
+html[data-theme="dark"] [style*="background:#F5F6FA"],
+html[data-theme="dark"] [style*="background:#F5F6FB"],
+html[data-theme="dark"] [style*="background:#F0F2F8"],
+html[data-theme="dark"] [style*="background:#EEF0F5"],
+html[data-theme="dark"] [style*="background:#ECEEF6"],
+html[data-theme="dark"] [style*="background:#EAECF4"],
+html[data-theme="dark"] [style*="background:#E8EBF2"],
+html[data-theme="dark"] [style*="background:#D8DFFF"],
+html[data-theme="dark"] [style*="background:#E4E8FF"],
+html[data-theme="dark"] [style*="background:#F9FBFF"]{
+    background:#161A28 !important;border-color:#262B3E !important;
+}
+/* Translucent-white cards (Market Pulse, some panels) */
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.92)"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.95)"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.97)"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.9)"],
+html[data-theme="dark"] [style*="background:rgba(255, 255, 255, 0.92)"]{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+/* Light borders used as dividers → dark */
+html[data-theme="dark"] [style*="border-top:1px solid #E3E5EA"],
+html[data-theme="dark"] [style*="border-top:1px solid #ECEEF4"],
+html[data-theme="dark"] [style*="border-bottom:1px solid #E3E5EA"],
+html[data-theme="dark"] [style*="border:1px solid #ECEDF3"]{
+    border-color:#262B3E !important;
+}
+/* Light gradient icon headers → subtle dark gradient */
+html[data-theme="dark"] [style*="linear-gradient(135deg,#EEF0FF,#E4E8FF)"]{
+    background:linear-gradient(135deg,#1B2030,#181C2A) !important;
+}
+/* Tinted status backgrounds (success/warn/danger) → muted dark tints */
+html[data-theme="dark"] [style*="background:#F0FFF4"]{ background:rgba(31,168,85,0.10) !important;border-color:rgba(31,168,85,0.28) !important; }
+html[data-theme="dark"] [style*="background:#FFFBEB"]{ background:rgba(200,150,30,0.10) !important;border-color:rgba(200,150,30,0.28) !important; }
+html[data-theme="dark"] [style*="background:#FFF0F0"],
+html[data-theme="dark"] [style*="background:#FFF6F6"]{ background:rgba(229,72,77,0.10) !important;border-color:rgba(229,72,77,0.28) !important; }
+
+/* Force ALL near-black inline heading/label text light in dark mode.
+   (Broad catch so no card title, stat label, or form label is stranded.) */
+html[data-theme="dark"] [style*="color:#0C0C1A"],
+html[data-theme="dark"] [style*="color:#0C0C1a"],
+html[data-theme="dark"] [style*="color: #0C0C1A"],
+html[data-theme="dark"] [style*="color:#14141F"],
+html[data-theme="dark"] [style*="color:#0B1020"],
+html[data-theme="dark"] [style*="color:#111827"],
+html[data-theme="dark"] [style*="color:#1A1A3A"]{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+/* Uppercase field labels (#7A7F96 / #9499A8) → readable grey */
+html[data-theme="dark"] [style*="color:#7A7F96"],
+html[data-theme="dark"] [style*="color:#9499A8"]{ color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important; }
+html[data-theme="dark"] [style*="color:#42475A"],
+html[data-theme="dark"] [style*="color:#39445D"],
+html[data-theme="dark"] [style*="color:#3D4358"],
+html[data-theme="dark"] [style*="color:#5B5F6E"],
+html[data-theme="dark"] [style*="color:#68738C"],
+html[data-theme="dark"] [style*="color:#4A4F60"],
+html[data-theme="dark"] [style*="color:#6B7280"],
+html[data-theme="dark"] [style*="color:#52525B"]{ color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important; }
+/* Success-green and other dark-on-tint accent text stays legible */
+html[data-theme="dark"] [style*="color:#15803D"],
+html[data-theme="dark"] [style*="color:#166534"]{ color:#4ADE80 !important;-webkit-text-fill-color:#4ADE80 !important; }
+html[data-theme="dark"] [style*="color:#B91C1C"]{ color:#F87171 !important;-webkit-text-fill-color:#F87171 !important; }
+
+/* Card titles that use var(--t1) inherit the dark token already, but a
+   few use gradient text-fill — force those readable too. */
+html[data-theme="dark"] .camp-title,
+html[data-theme="dark"] .news-title,
+html[data-theme="dark"] .news-title a,
+html[data-theme="dark"] .dapp-name,
+html[data-theme="dark"] .cex-name,
+html[data-theme="dark"] .stat-value,
+html[data-theme="dark"] .rd-stat-val{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+/* Dark inputs on these pages: readable text + placeholder */
+html[data-theme="dark"] [style*="background:#0"] input,
+html[data-theme="dark"] input[style*="background:#1"],
+html[data-theme="dark"] textarea[style*="background:#1"]{ color:#EDEFF7 !important; }
+
+
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-lang_English) button:hover,
+html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs) button:hover{
+    border-color:#3A4260 !important;box-shadow:0 4px 12px rgba(60,80,255,0.22) !important;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    LANG_OPTIONS = {
+        "English":  "🇬🇧", "Hindi": "🇮🇳", "Spanish": "🇪🇸",
+        "Arabic":   "🇸🇦", "Chinese": "🇨🇳", "Japanese": "🇯🇵",
+    }
+    cur_lang = st.session_state.octobot_lang
+    cur_flag = LANG_OPTIONS.get(cur_lang, "🌐")
+    current_mode = st.session_state.chat_mode
+    is_general   = current_mode == "general"
+    _x402_on     = bool(st.session_state.get("x402_enabled"))
+
+    st.markdown(
+        '<div class="cdeck">'
+        '<div class="cdeck-hd">'
+        '<span class="dot"></span>'
+        '<span class="ttl">OctoBot Console</span>'
+        '<span class="sub">' + cur_flag + ' ' + esc(cur_lang)
+        + ' \u00b7 ' + ('Docs + General' if is_general else 'Docs Only') + '</span>'
+        '</div>'
+        '<div class="cdeck-sec">\U0001F310 Response language</div>'
         '</div>',
         unsafe_allow_html=True,
     )
+
+    LANG_CODE = {"English":"EN","Hindi":"HI","Spanish":"ES","Arabic":"AR","Chinese":"ZH","Japanese":"JA"}
     lang_cols = st.columns(len(LANG_OPTIONS))
     for li, (lang, flag) in enumerate(LANG_OPTIONS.items()):
         with lang_cols[li]:
-            if st.button(
-                flag + " " + lang,
-                key="lang_" + lang,
-                use_container_width=True,
-            ):
+            _code = LANG_CODE.get(lang, lang[:2].upper())
+            _lbl = flag + " " + _code + ("  \u2713" if lang == cur_lang else "")
+            if st.button(_lbl, key="lang_" + lang, use_container_width=True, help=lang):
                 st.session_state.octobot_lang = lang
                 st.rerun()
 
-    # ── Mode toggle — big, visible, above chat ──────────────────
-    current_mode = st.session_state.chat_mode
-    is_general   = current_mode == "general"
-    mode_desc    = (
-        "🌐 Docs + General — answers from docs, falls back to Gemini for anything else"
-        if is_general else
-        "📚 Docs Only — answers strictly from verified Pharos documentation"
-    )
-    st.markdown(
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;'
-        'background:#F0F1F8;border:1.5px solid #D0D3E0;border-radius:10px;padding:0.65rem 1rem;">'
-        '<span style="font-size:13px;font-weight:800;color:#0C0C1A;white-space:nowrap;">Mode:</span>'
-        '<span style="font-size:12px;font-weight:500;color:#42475A;">' + mode_desc + '</span>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    mc1, mc2, mc3 = st.columns([1, 1, 4])
+    st.markdown('<div class="cdeck-sec">\u2699\ufe0f Answer mode</div>', unsafe_allow_html=True)
+    mc1, mc2 = st.columns(2)
     with mc1:
-        if st.button("📚 Docs Only",      key="mode_docs",    use_container_width=True):
-            st.session_state.chat_mode = "docs";    st.rerun()
+        _dl = "\U0001F4DA Docs Only" + ("  \u2713" if not is_general else "")
+        if st.button(_dl, key="mode_docs", use_container_width=True):
+            st.session_state.chat_mode = "docs"; st.rerun()
     with mc2:
-        if st.button("🌐 Docs + General", key="mode_general", use_container_width=True):
+        _gl = "\U0001F310 Docs + General" + ("  \u2713" if is_general else "")
+        if st.button(_gl, key="mode_general", use_container_width=True):
             st.session_state.chat_mode = "general"; st.rerun()
 
-    # ── x402 Premium control — relocated from sidebar to the chat command bar ──
-    _x402_on = bool(st.session_state.get("x402_enabled"))
+    st.markdown('<div class="cdeck-sec">\U0001F4A0 Premium answers \u00b7 x402</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="display:flex;align-items:center;gap:12px;margin:0.4rem 0 0.7rem 0;'
-        'background:' + ("linear-gradient(135deg,#0A0A28,#1A1AFF)" if _x402_on else "#F0F1F8") + ';'
-        'border:1.5px solid ' + ("#1A1AFF" if _x402_on else "#D0D3E0") + ';border-radius:12px;'
-        'padding:0.7rem 1.05rem;box-shadow:' + ("0 6px 18px rgba(26,26,255,0.22)" if _x402_on else "none") + ';">'
-        '<span style="font-size:20px;line-height:1;">💠</span>'
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.7rem;'
+        'background:' + ("linear-gradient(135deg,#0A0A28,#1A1AFF)" if _x402_on else "#F5F6FB") + ';'
+        'border:1px solid ' + ("#1A1AFF" if _x402_on else "#E1E4EE") + ';border-radius:12px;'
+        'padding:0.7rem 0.95rem;box-shadow:' + ("0 6px 16px rgba(26,26,255,0.22)" if _x402_on else "none") + ';">'
+        '<span style="font-size:19px;line-height:1;">\U0001F4A0</span>'
         '<div style="min-width:0;flex:1;">'
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-        '<span style="font-family:Syne,sans-serif;font-size:13.5px;font-weight:800;'
-        'color:' + ("#FFFFFF" if _x402_on else "#0C0C1A") + ';">Premium · x402</span>'
-        '<span style="font-size:9.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
-        'border-radius:999px;padding:2px 9px;'
+        '<span style="font-family:Syne,sans-serif;font-size:12.5px;font-weight:800;'
+        'color:' + ("#FFFFFF" if _x402_on else "#0C0C1A") + ';">Premium \u00b7 x402</span>'
+        '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
+        'border-radius:999px;padding:2px 8px;'
         + ("background:rgba(255,255,255,0.18);color:#FFFFFF;" if _x402_on
-           else "background:#FFFFFF;color:#7A7F96;border:1px solid #D0D3E0;")
-        + '">' + ("ON · pay-per-call" if _x402_on else "OFF · free mode") + '</span>'
+           else "background:#FFFFFF;color:#9AA0AE;border:1px solid #E1E4EE;")
+        + '">' + ("ON \u00b7 pay-per-call" if _x402_on else "OFF \u00b7 free mode") + '</span>'
         '</div>'
-        '<div style="font-size:11px;line-height:1.5;margin-top:2px;'
-        'color:' + ("rgba(255,255,255,0.72)" if _x402_on else "#7A7F96") + ';">'
-        + (("Next question costs ~" + ("%.2f" % X402_PRICE_PROS) + " PROS — settle on-chain to unlock a deeper answer.")
+        '<div style="font-size:10.5px;line-height:1.5;margin-top:2px;'
+        'color:' + ("rgba(255,255,255,0.75)" if _x402_on else "#8A90A6") + ';">'
+        + (("Next question ~" + ("%.2f" % X402_PRICE_PROS) + " PROS \u2014 settle on-chain for a deeper answer.")
            if _x402_on else
-           "Answers are free. Turn on to settle a tiny PROS micro-payment for an expert, in-depth reply.")
+           "Answers are free. Enable to settle a tiny PROS micro-payment for an expert, in-depth reply.")
         + '</div></div></div>',
         unsafe_allow_html=True,
     )
-    _xc1, _xc2 = st.columns([1.1, 2.6], gap="medium")
+
+    _xc1, _xc2 = st.columns([1, 2], gap="small")
     with _xc1:
-        st.markdown("""<style>[data-testid="stWidgetLabel"] p{color:#0C0C1A !important;}</style>""", unsafe_allow_html=True)
         st.session_state.x402_enabled = st.toggle(
-            "💠 Pay-per-call answers",
+            "Pay-per-call",
             value=st.session_state.x402_enabled,
             key="x402_enabled_toggle_main",
             help=("When ON, your next question is a premium (x402) call: OctoBot returns an "
                   "HTTP 402 payment challenge, you settle a tiny PROS micro-payment on-chain, "
-                  "and the verified payment unlocks a deeper answer. Free answering stays on when this is OFF."),
+                  "and the verified payment unlocks a deeper answer. Free answering stays on when OFF."),
         )
     with _xc2:
         _payto_in = st.text_input(
             "x402 pay-to address",
             value=st.session_state.get("x402_payto", ""),
             key="x402_payto_input",
-            placeholder="💳 Receiving wallet — 0x… (blank = safe placeholder)",
+            placeholder="\U0001F4B3 Wallet 0x\u2026 (blank = safe placeholder)",
             label_visibility="collapsed",
             help="Premium micro-payments are sent here. Paste your own wallet address. "
                  "Leave blank to use the safe placeholder (a burn address).",
@@ -6622,28 +7422,28 @@ elif st.session_state.page == "chat":
             if _clean == "" or valid_addr(_clean):
                 st.session_state.x402_payto = _clean
             else:
-                st.warning("That doesn't look like a valid 0x… address — keeping the previous one.")
+                st.warning("That doesn\'t look like a valid 0x\u2026 address \u2014 keeping the previous one.")
+
     _active_payto = x402_get_payto()
     _is_custom = bool(valid_addr(st.session_state.get("x402_payto", "")))
     st.markdown(
-        '<div style="font-size:10.5px;color:'
-        + ("#15803D" if _is_custom else "#000000") + ';line-height:1.5;margin:-2px 0 6px 2px;'
-        'word-break:break-all;">'
-        + ("✓ Payments go to: " if _is_custom
-           else "Using placeholder (set your address above): ")
+        '<div style="font-size:9.5px;color:'
+        + ("#15803D" if _is_custom else "#9AA0AE") + ';line-height:1.45;margin:2px 0 2px 2px;'
+        'word-break:break-all;max-width:600px;">'
+        + ("\u2713 Payments go to: " if _is_custom else "Using placeholder: ")
         + '<span style="font-family:DM Mono,monospace;">' + esc(_active_payto) + '</span></div>',
         unsafe_allow_html=True,
     )
     if st.session_state.x402_receipts:
-        with st.expander("🧾 x402 receipts · " + str(len(st.session_state.x402_receipts)), expanded=False):
+        with st.expander("\U0001F9FE x402 receipts \u00b7 " + str(len(st.session_state.x402_receipts)), expanded=False):
             for _r in reversed(st.session_state.x402_receipts[-8:]):
                 st.markdown(
                     '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
                     'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
                     '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
-                    + esc(_r.get("amount", "")) + ' PROS · settled</div>'
+                    + esc(_r.get("amount", "")) + ' PROS \u00b7 settled</div>'
                     '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
-                    + esc(_r.get("tx", "")[:22]) + '…</div></div>',
+                    + esc(_r.get("tx", "")[:22]) + '\u2026</div></div>',
                     unsafe_allow_html=True,
                 )
 
@@ -6655,17 +7455,17 @@ elif st.session_state.page == "chat":
         div[data-testid="stDecoration"]{display:none!important;}
         .gate-wrap{
             display:flex;flex-direction:column;align-items:center;
-            justify-content:center;min-height:30vh;padding:2rem 1rem 0 1rem;
+            justify-content:flex-start;min-height:auto;padding:0.4rem 1rem 0 1rem;
         }
         .gate-card{
             background:#FFFFFF;
             border:1.5px solid rgba(26,26,255,0.15);
-            border-radius:28px;
-            padding:2.8rem 2.8rem 2rem 2.8rem;
-            width:100%;max-width:400px;
+            border-radius:18px;
+            padding:1.7rem 1.9rem 1.5rem 1.9rem;
+            width:100%;max-width:330px;
             text-align:center;
-            box-shadow:0 32px 80px rgba(26,26,255,0.14),
-                       0 8px 24px rgba(0,0,0,0.08);
+            box-shadow:0 24px 60px rgba(26,26,255,0.13),
+                       0 6px 18px rgba(0,0,0,0.07);
             position:relative;overflow:hidden;
             animation:card-pop 0.6s cubic-bezier(0.34,1.5,0.64,1) 0.1s both;
         }
@@ -6692,12 +7492,12 @@ elif st.session_state.page == "chat":
             100%{opacity:1;transform:scale(1) rotate(0deg);}
         }
         .gate-title{
-            font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
-            color:#0C0C1A;margin-bottom:0.4rem;letter-spacing:-0.025em;
+            font-family:'Syne',sans-serif;font-size:21px;font-weight:800;
+            color:#0C0C1A;margin-bottom:0.3rem;letter-spacing:-0.025em;
             animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.65s both;
         }
         .gate-sub{
-            font-size:13.5px;color:#7A7F96;line-height:1.65;margin-bottom:0.5rem;
+            font-size:12px;color:#7A7F96;line-height:1.6;margin-bottom:0.4rem;
             animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.78s both;
         }
         .gate-divider{
@@ -6802,6 +7602,38 @@ elif st.session_state.page == "chat":
         else f"Ask OctoBot in {sel_lang} 🌐"
     )
     user_input = st.chat_input(placeholder)
+
+    # Palette "docs" items land here with a prefilled question stashed by
+    # the command palette; drop it into the chat box for the user to send.
+    components.html(
+        """
+<script>
+(function(){
+  try{
+    var PW = window.parent;
+    var q = PW.sessionStorage.getItem('octobot-prefill');
+    if (!q) return;
+    PW.sessionStorage.removeItem('octobot-prefill');
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      var ta = PW.document.querySelector('[data-testid="stChatInput"] textarea');
+      if (ta){
+        var setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype,'value').set;
+        setter.call(ta, q);
+        ta.dispatchEvent(new Event('input', {bubbles:true}));
+        ta.focus();
+        clearInterval(iv);
+      }
+      if (tries > 40) clearInterval(iv);
+    }, 80);
+  }catch(e){}
+})();
+</script>
+        """,
+        height=0,
+    )
+
     question   = pending or user_input
 
     if question:
@@ -9422,7 +10254,7 @@ elif st.session_state.page == "pulse":
     with _pc_left:
         st.markdown(
             '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.2rem;">'
-            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;">'
+            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#FFFFFF;">'
             '📈 $PROS · Interactive chart</div></div>',
             unsafe_allow_html=True,
         )
