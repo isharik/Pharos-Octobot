@@ -98,6 +98,18 @@ CEX_LINKS = [
 ]
 
 CAMPAIGNS = [
+     {
+        "title": "Pharos X AnvitaFlow 🌊",
+        "tag":   "LIVE · Ist Anniversary ",
+        "desc":  "Community Co-Creation Campaign.",
+        "link":  "https://port.pharos.xyz/agent-carnival/",
+        "cta":   "Join",
+        "color": "#1A1AFF",
+        "logo":  "https://pbs.twimg.com/profile_images/2035669028132503552/q2Dd5GoS_400x400.png",
+        "icon":  "🏆",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+    },
+
     {
         "title": "$PROS X Faroo ⚡",
         "tag":   "LIVE ·Pre Mint ",
@@ -107,7 +119,7 @@ CAMPAIGNS = [
         "color": "#1A1AFF",
         "logo":  "https://app.faroo.xyz/img/tokens/stPROS-dark.svg",
         "icon":  "🏆",
-        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
    {
         "title": "Create Like a PRO Phase 2",
@@ -118,7 +130,7 @@ CAMPAIGNS = [
         "color": "#1A1AFF",
         "logo":  "https://pbs.twimg.com/profile_images/2035669028132503552/q2Dd5GoS.png",
         "icon":  "🏆",
-        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
    {
         "title": "TopNod Million Cup",
@@ -129,7 +141,7 @@ CAMPAIGNS = [
         "color": "#1A1AFF",
         "logo":  "https://pbs.twimg.com/profile_images/1953370784698937344/b7j3JHqn_400x400.jpg",
         "icon":  "🏆",
-        "bg":    "linear-gradient(135deg,#EEF0FF,#E4E8FF)",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
     
    {
@@ -153,7 +165,7 @@ CAMPAIGNS = [
         "color": "#1A1AFF",
         "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
         "icon":  "🚀",
-        "bg":    "linear-gradient(135deg,#E8F4FF,#DCEEff)",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
     {
         "title": "Storyteller Program 2.0",
@@ -164,7 +176,7 @@ CAMPAIGNS = [
         "color": "#1A1AFF",
         "logo":  "https://www.google.com/s2/favicons?domain=notion.so&sz=64",
         "icon":  "✍️",
-        "bg":    "linear-gradient(135deg,#F0FFF4,#E0F8E8)",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
     
 ]
@@ -1082,9 +1094,33 @@ canvas{
   }
 
   // ── Main draw loop ─────────────────────────
-  function draw(){
-    requestAnimationFrame(draw);
-    t++;
+  // rAF handle + visibility state so the loop fully stops when the tab
+  // is hidden (no wasted CPU/GPU, and — crucially — no backlog of
+  // catch-up frames firing all at once on refocus, which is a classic
+  // source of a visible stutter burst). `t` is advanced by real
+  // elapsed frames rather than a raw ++ so the animation phase never
+  // jumps after a pause, keeping motion perfectly continuous.
+  let rafId   = 0;
+  let running = false;
+  let lastTs  = 0;
+
+  function draw(ts){
+    rafId = requestAnimationFrame(draw);
+
+    // Advance the frame counter by elapsed real time normalised to a
+    // 60fps baseline. On a steady 60Hz display this is ~1 per frame
+    // (identical to the previous behaviour); on higher-refresh or
+    // uneven frames it keeps the visual speed constant instead of
+    // running faster/stuttering. Clamped so a long pause can't produce
+    // a giant jump.
+    if (lastTs){
+      const dt = ts - lastTs;
+      t += Math.min(dt / 16.6667, 4);
+    } else {
+      t += 1;
+    }
+    lastTs = ts;
+
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
     const c = getCenter();
@@ -1168,7 +1204,25 @@ canvas{
   }
 
   // Start after a short delay so DOM is ready
-  setTimeout(()=>{ lastPulse=performance.now(); draw(); }, 100);
+  function startLoop(){
+    if (running) return;
+    running = true;
+    lastTs  = 0;                 // reset delta baseline after any pause
+    rafId   = requestAnimationFrame(draw);
+  }
+  function stopLoop(){
+    running = false;
+    if (rafId){ cancelAnimationFrame(rafId); rafId = 0; }
+  }
+  setTimeout(()=>{ lastPulse=performance.now(); startLoop(); }, 100);
+
+  // Fully pause the ambient animation while the tab is backgrounded and
+  // resume cleanly when it returns — no CPU spent off-screen, no
+  // stutter burst on refocus.
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden){ stopLoop(); }
+    else { lastPulse = performance.now(); startLoop(); }
+  });
 
   // ── Bubble logic ─────────────────────────────
   window.toggleBubble = function(){
@@ -2582,6 +2636,57 @@ html[data-theme="dark"] [style*="background:#E3E5EA"]{ background:#2A3044 !impor
 html[data-theme="dark"] .hover-lift:hover{
     box-shadow:0 18px 44px rgba(0,0,0,0.55),0 0 0 1.5px rgba(90,110,255,0.35)!important;
     border-color:rgba(90,110,255,0.4)!important;
+}
+
+/* ── Ecosystem DApp cards — theme-aware (light + dark) ── */
+.eco-card{
+    background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;
+    padding:1.2rem 1.3rem;display:flex;flex-direction:column;align-items:center;gap:0;
+    text-align:center;text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);
+    transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease,border-color 180ms ease;
+    cursor:pointer;
+}
+.eco-name{
+    font-family:Syne,sans-serif;font-size:15px;font-weight:700;
+    color:#0C0C1A;margin-bottom:0.4rem;line-height:1.2;
+}
+.eco-desc{
+    font-size:12px;color:#5B5F6E;line-height:1.6;margin-bottom:0.75rem;flex:1;
+}
+.eco-tag{
+    display:inline-block;font-size:11px;font-weight:500;color:#42475A;
+    background:#F2F3F8;border:1px solid #E3E5EA;border-radius:6px;padding:3px 9px;
+}
+html[data-theme="dark"] .eco-card{
+    background:#141826 !important;border-color:#262B3E !important;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .eco-name{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+html[data-theme="dark"] .eco-desc{
+    color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important;
+}
+html[data-theme="dark"] .eco-tag{
+    background:rgba(90,110,255,0.14) !important;
+    border-color:rgba(90,110,255,0.30) !important;
+    color:#9FB0FF !important;
+}
+/* Home hero live-price value — readable in both themes */
+.hero-price-val{ color:#14141F; }
+html[data-theme="dark"] .hero-price-val{ color:#EDEFF7 !important; }
+
+/* ── Memory Ledger body cards — reinforce dark skinning for the inline
+   #FFFFFF cards that carry explicit light borders (the global #FFFFFF
+   rule skins the fill; these lock the borders + white quote panels). ── */
+html[data-theme="dark"] [style*="border:1.5px solid #E3E5EA"]{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+html[data-theme="dark"] [style*="border:1px solid #E3E5EA"]{
+    border-color:#262B3E !important;
+}
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.7)"]{
+    background:rgba(255,255,255,0.06) !important;
 }
 
 /* Inputs / textareas / Streamlit buttons */
@@ -4387,6 +4492,51 @@ html{scroll-behavior:smooth!important;}
 }
 
 /* ═══════════════════════════════════════════
+   SMOOTHNESS & INPUT-LATENCY LAYER
+   Internal performance polish only — no visual, layout, colour, or
+   behaviour change. Purely improves scroll feel, tap responsiveness
+   and paint stability.
+═══════════════════════════════════════════ */
+
+/* Prevent scroll-chaining jitter (rubber-band bleed into the parent /
+   browser chrome) and stop iOS from silently re-scaling text on
+   orientation change — both cause perceptible layout jumps. */
+html{
+    overscroll-behavior-y:contain;
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+}
+
+/* Remove the ~300ms mobile tap delay so clicks register instantly,
+   while still allowing normal pinch-zoom. Applied only to genuinely
+   interactive controls so text selection is unaffected. */
+button,a,[role="button"],
+.stButton>button,
+.pnav-logo,.pnav-item,.pnav-dd-item,
+[data-testid="stTextInput"] input{
+    touch-action:manipulation;
+}
+
+/* Note: the floating nav is already GPU-promoted (translateZ + will-change
+   on .pnav) so it composites independently during scroll. We deliberately
+   do NOT add CSS `contain` to .pnav-fixed / .pnav here — the hover
+   dropdowns (.pnav-dd) are absolutely positioned BELOW the bar and would
+   be clipped by paint containment. */
+
+/* Reduced-motion: also collapse one-shot entrance + interaction
+   transitions to a snap, so users who opt out get an instant,
+   jank-free UI rather than half-running animations. */
+@media (prefers-reduced-motion: reduce){
+    .reveal-up,.section-dark,.dapp-section-hdr,
+    .sr-pre,.sr-in{
+        animation:none !important;
+        transition:none !important;
+        opacity:1 !important;
+        transform:none !important;
+    }
+}
+
+/* ═══════════════════════════════════════════
    PREMIUM MOTION SYSTEM — scroll reveal + stagger
    Apple × Linear × Arc quality, GPU accelerated
 ═══════════════════════════════════════════ */
@@ -5876,34 +6026,68 @@ components.html(
       var CELLS = 12;     /* grid divisions along each wall edge */
       var DEPTH = 14;     /* number of scrolling depth lines      */
 
-      /* click glows — a small pool of ripples, no per-frame allocation */
-      var glows = [{x:0,y:0,life:0},{x:0,y:0,life:0},{x:0,y:0,life:0},{x:0,y:0,life:0}];
+      /* click glows — a small pool of ripples, no per-frame allocation.
+         Each glow carries its own colour so paintGlow is self-contained
+         (no reliance on an outer rgbGlow), which is what lets the first
+         frame paint synchronously on pointerdown for instant feedback. */
+      function glowRGB(){ return isDark() ? '150,168,255' : '30,40,120'; }
+      var glows = [
+        {x:0,y:0,life:0,rgb:'30,40,120'},
+        {x:0,y:0,life:0,rgb:'30,40,120'},
+        {x:0,y:0,life:0,rgb:'30,40,120'},
+        {x:0,y:0,life:0,rgb:'30,40,120'},
+        {x:0,y:0,life:0,rgb:'30,40,120'},
+        {x:0,y:0,life:0,rgb:'30,40,120'}
+      ];
       var gi = 0;
-      function paintGlow(gx, gy, e){
-        var grow = (1 - e);
-        var R = 20 + grow * 150;
-        var bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, R);
-        bg.addColorStop(0,   'rgba(' + rgbGlow + ',' + (0.30 * e) + ')');
-        bg.addColorStop(0.55,'rgba(' + rgbGlow + ',' + (0.12 * e) + ')');
-        bg.addColorStop(1,   'rgba(' + rgbGlow + ',0)');
+      /* One click impact: a bright core that punches in, a soft bloom,
+         and TWO concentric expanding rings offset in phase so the click
+         reads as a quick wavy ripple pressed into the screen. e=life 1→0 */
+      function paintGlow(gx, gy, e, rgb){
+        var grow = 1 - e;
+        var ease = 1 - Math.pow(e, 2.2);   /* fast-out radius easing */
+        var R = 14 + ease * 190;           /* outer ripple radius    */
+
+        var bloomR = 26 + grow * 90;
+        var bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, bloomR);
+        bg.addColorStop(0,   'rgba(' + rgb + ',' + (0.34 * e) + ')');
+        bg.addColorStop(0.5, 'rgba(' + rgb + ',' + (0.14 * e) + ')');
+        bg.addColorStop(1,   'rgba(' + rgb + ',0)');
         ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(' + rgbGlow + ',' + (0.50 * e) + ')';
-        ctx.lineWidth = 1.6;
-        ctx.arc(gx, gy, R * 0.8, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(gx, gy, bloomR, 0, Math.PI * 2); ctx.fill();
+
+        if (e > 0.55){                      /* bright core snap */
+          var core = (e - 0.55) / 0.45;
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(' + rgb + ',' + (0.42 * core) + ')';
+          ctx.arc(gx, gy, 10 * core + 4, 0, Math.PI * 2); ctx.fill();
+        }
+
+        ctx.beginPath();                    /* ripple ring 1 (leading) */
+        ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.55 * e) + ')';
+        ctx.lineWidth = 2.0 * e + 0.4;
+        ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.stroke();
+
+        ctx.beginPath();                    /* ripple ring 2 (trailing) */
+        ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.30 * e) + ')';
+        ctx.lineWidth = 1.4 * e + 0.3;
+        ctx.arc(gx, gy, R * 0.62, 0, Math.PI * 2); ctx.stroke();
       }
       /* pointerdown fires earlier than click → lower perceived latency;
          we paint the first frame synchronously so feedback is immediate. */
+      function spawnGlow(cx, cy){
+        var g = glows[gi]; gi = (gi + 1) % glows.length;
+        g.x = cx; g.y = cy; g.life = 1; g.rgb = glowRGB();
+        try{ paintGlow(g.x, g.y, 1, g.rgb); }catch(_){}   /* instant first frame */
+        if (!running){ running = true; t0 = 0; requestAnimationFrame(tick); }
+      }
       doc.addEventListener('pointerdown', function(e){
         if (e.isTrusted === false) return;
-        var g = glows[gi]; gi = (gi + 1) % glows.length;
-        g.x = e.clientX; g.y = e.clientY; g.life = 1;
-        var dark = isDark();
-        var rgbGlow = dark ? '150,168,255' : '30,40,120';
-        try{ paintGlow(g.x, g.y, 1); }catch(_){}   /* instant first frame */
-        if (!running){ running = true; t0 = 0; requestAnimationFrame(tick); }
+        spawnGlow(e.clientX, e.clientY);
       }, {passive:true, capture:true});
+      /* Bridge for ripples triggered from inside Streamlit iframes. */
+      try{ window.parent.__octoRipple = spawnGlow; }catch(_e){}
+      window.__octoRipple = spawnGlow;
 
       doc.addEventListener('visibilitychange', function(){
         if (doc.hidden){ running = false; }
@@ -5987,23 +6171,9 @@ components.html(
           var gg = glows[gk];
           if (gg.life <= 0.001) continue;
           anyGlow = true;
-          gg.life -= dt / 0.5;   /* full fade in ~0.5s — snappy */
+          gg.life -= dt / 0.42;   /* full fade in ~0.42s — snappy & wavy */
           if (gg.life < 0) gg.life = 0;
-          var e = gg.life;                 /* 1 → 0 */
-          var grow = (1 - e);              /* 0 → 1 */
-          var R = 20 + grow * 150;
-          /* soft radial bloom */
-          var bg = ctx.createRadialGradient(gg.x, gg.y, 0, gg.x, gg.y, R);
-          bg.addColorStop(0,   'rgba(' + rgbGlow + ',' + (0.30 * e) + ')');
-          bg.addColorStop(0.55,'rgba(' + rgbGlow + ',' + (0.12 * e) + ')');
-          bg.addColorStop(1,   'rgba(' + rgbGlow + ',0)');
-          ctx.fillStyle = bg;
-          ctx.beginPath(); ctx.arc(gg.x, gg.y, R, 0, Math.PI * 2); ctx.fill();
-          /* crisp expanding ring */
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(' + rgbGlow + ',' + (0.50 * e) + ')';
-          ctx.lineWidth = 1.6;
-          ctx.arc(gg.x, gg.y, R * 0.8, 0, Math.PI * 2); ctx.stroke();
+          paintGlow(gg.x, gg.y, gg.life, gg.rgb);
         }
         requestAnimationFrame(tick);
       }
@@ -6046,7 +6216,7 @@ if st.session_state.page == "home":
         cc     = "#1FA855" if chg >= 0 else "#E5484D"
         price_pill = (
             f'<span style="font-size:15px;color:#1A6AFF;font-family:Syne,sans-serif;font-weight:500;letter-spacing:0.04em;">$PROS&nbsp;</span>'
-            f'<span style="font-size:15px;font-weight:700;color:#14141F;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
+            f'<span class="hero-price-val" style="font-size:15px;font-weight:700;font-family:Syne,sans-serif;">${p["price_usd"]:.4f}</span>'
             f'<span style="font-size:15px;color:{cc};margin-left:4px;">{sym}{abs(chg):.2f}%</span>'
         )
     else:
@@ -6455,7 +6625,39 @@ elif st.session_state.page == "memory":
             from{ opacity:0; transform:translateY(16px); }
             to{ opacity:1; transform:translateY(0); }
         }
+        /* Dark-mode overrides — this header lives in its own iframe and
+           cannot inherit the parent <html data-theme>, so we mirror the
+           theme onto this iframe's own <html> (see script below) and
+           re-skin the hard-coded light inks. */
+        html[data-theme="dark"] .ml-title{ color:#EDEFF7; }
+        html[data-theme="dark"] .ml-sub{ color:#AEB4C8; }
+        html[data-theme="dark"] .ml-badge{
+            background:linear-gradient(90deg,#1B1F2E,#2A2AF0);
+            box-shadow:0 6px 18px rgba(0,0,0,0.4);
+        }
         </style>
+        <script>
+        /* Mirror the parent app's theme onto this iframe so the header
+           text stays readable in dark mode. Reads the same localStorage
+           key the nav toggle writes, and also polls the parent <html>
+           so it updates live when the user flips the switch. */
+        (function(){
+          function parentTheme(){
+            try{
+              var pt = window.parent.document.documentElement.getAttribute('data-theme');
+              if(pt) return pt;
+            }catch(e){}
+            try{ return localStorage.getItem('octobot-theme') || 'light'; }catch(e){}
+            return 'light';
+          }
+          function apply(){
+            var mode = parentTheme() === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', mode);
+          }
+          apply();
+          setInterval(apply, 400);
+        })();
+        </script>
 
         <div class="ml-wrap">
          <div class="ml-brain-wrap" style="width:180px;height:200px;cursor:pointer;position:relative;" id="octo-mem" onclick="octoSquish()">
@@ -8212,9 +8414,7 @@ elif st.session_state.page == "ecosystem":
     cards_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:1.4rem;">'
     for dapp in filtered_dapps:
         tags_html = "".join(
-            f'<span style="display:inline-block;font-size:11px;font-weight:500;color:#42475A;'
-            f'background:#F2F3F8;border:1px solid #E3E5EA;border-radius:6px;'
-            f'padding:3px 9px;margin-right:4px;">{t}</span>'
+            f'<span class="eco-tag">{t}</span>'
             for t in dapp["cat"]
         )
         logo_html = (
@@ -8226,19 +8426,11 @@ elif st.session_state.page == "ecosystem":
             f'justify-content:center;font-size:22px;&quot;></div>\'"/>'
         )
         cards_html += (
-            f'<a href="{dapp["url"]}" target="_blank" '
-            f'style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:16px;'
-            f'padding:1.2rem 1.3rem;display:flex;flex-direction:column;align-items:center;gap:0;'
-            f'text-align:center;text-decoration:none;box-shadow:0 1px 4px rgba(20,20,60,0.05);'
-            f'transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 200ms ease,border-color 180ms ease;cursor:pointer;"'
-            f' class="hover-lift">'
-            # Logo circle
+            f'<a href="{dapp["url"]}" target="_blank" class="eco-card hover-lift">'
             f'<div style="margin-bottom:0.75rem;">{logo_html}</div>'
-            f'<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;'
-            f'color:#0C0C1A;margin-bottom:0.4rem;line-height:1.2;">{dapp["name"]}</div>'
-            f'<div style="font-size:12px;color:#5B5F6E;line-height:1.6;'
-            f'margin-bottom:0.75rem;flex:1;">{dapp["desc"]}</div>'
-            f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{tags_html}</div>'
+            f'<div class="eco-name">{dapp["name"]}</div>'
+            f'<div class="eco-desc">{dapp["desc"]}</div>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">{tags_html}</div>'
             f'</a>'
         )
     cards_html += '</div>'
