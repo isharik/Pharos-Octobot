@@ -12,7 +12,7 @@ Architecture: single-page with st.session_state["page"] router.
 All CSS in plain triple-quoted strings (no f-prefix).
 """
 
-import os, time, base64, json, re, hashlib, urllib.parse
+import os, time, base64, json, re, hashlib, urllib.parse, threading
 import requests
 import pandas as pd
 import plotly.graph_objects as go
@@ -312,6 +312,9 @@ if "build_path_data" not in st.session_state: st.session_state.build_path_data =
 if "sailor_name"     not in st.session_state: st.session_state.sailor_name     = ""
 if "sailor_done"     not in st.session_state: st.session_state.sailor_done     = False
 if "wallet_address"  not in st.session_state: st.session_state.wallet_address  = ""
+if "w3_address"      not in st.session_state: st.session_state.w3_address      = ""     # live EIP-1193 account
+if "w3_chain"        not in st.session_state: st.session_state.w3_chain        = ""     # hex chain id
+if "w3_label"        not in st.session_state: st.session_state.w3_label        = ""     # wallet name
 if "wallet_data"     not in st.session_state: st.session_state.wallet_data     = None
 if "wallet_profile"  not in st.session_state: st.session_state.wallet_profile  = None
 if "wallet_loading"  not in st.session_state: st.session_state.wallet_loading  = False
@@ -349,6 +352,35 @@ if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.session_state.wallet_profile = None
     st.session_state.page = "memory"
     st.query_params.clear()
+
+# ── Global EIP-1193 wallet bridge (browser → Python) ──────────
+# The connect button lives in the parent document and talks to the real
+# injected provider (MetaMask / OKX / Rabby / Coinbase / any EVM wallet).
+# It reports state back by setting query params and re-running the app.
+# Only well-formed values are accepted; everything is validated here.
+_w3_addr  = valid_addr(st.query_params.get("w3_addr", ""))
+_w3_chain = st.query_params.get("w3_chain", "")[:12]
+_w3_label = st.query_params.get("w3_label", "")[:24]
+_w3_act   = st.query_params.get("w3_act", "")[:12]
+
+if _w3_act == "disconnect":
+    st.session_state.w3_address = ""
+    st.session_state.w3_chain   = ""
+    st.session_state.w3_label   = ""
+    st.query_params.clear()
+elif _w3_addr:
+    _changed = (_w3_addr.lower() != (st.session_state.w3_address or "").lower()
+                or _w3_chain != st.session_state.w3_chain)
+    if _changed:
+        st.session_state.w3_address = _w3_addr
+        st.session_state.w3_chain   = _w3_chain if re.match(r"^0x[0-9a-fA-F]{1,8}$", _w3_chain or "") else ""
+        st.session_state.w3_label   = re.sub(r"[^A-Za-z0-9 ]", "", _w3_label or "") or "Wallet"
+        # A connected wallet is the app's single source of identity: keep
+        # the read-only address views in sync so every page agrees.
+        st.session_state.wallet_address = _w3_addr
+        st.session_state.wallet_data    = None
+        st.session_state.wallet_profile = None
+        st.query_params.clear()
 
 # ── Incoming payment-request link handler ─────────────────────────────────
 _req_to   = valid_addr(st.query_params.get("req_to", ""))
@@ -439,6 +471,287 @@ def get_pharos_news() -> list:
         pass
     st.session_state["pharos_news_cache"] = {"items": items, "fetched_at": now}
     return items
+
+# ─────────────────────────────────────────────
+# LIVE X (TWITTER) FEED — @pharos_network
+# Layered sources, all read-only and rate-limit friendly:
+#   1. Official X API v2 (if X_BEARER_TOKEN / TWITTER_BEARER_TOKEN is
+#      configured in env or st.secrets) — post text, timestamp, media.
+#   2. Public Nitter RSS mirrors (no key required).
+#   3. Curated latest-known official updates as a graceful fallback so
+#      the Updates page is never empty.
+# Cached briefly so the feed refreshes automatically.
+# ─────────────────────────────────────────────
+X_FEED_CACHE     = 120          # seconds — feed auto-refreshes
+PHAROS_X_HANDLE  = "pharos_network"
+PHAROS_X_AVATAR  = "https://pbs.twimg.com/profile_images/2005491865450430464/ta6znFqT_400x400.jpg"
+_NITTER_MIRRORS  = [
+    "https://nitter.net",
+    "https://nitter.poast.org",
+    "https://nitter.privacyredirect.com",
+    "https://nitter.tiekoetter.com",
+]
+
+def _x_bearer_token():
+    for k in ("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN"):
+        v = os.environ.get(k)
+        if v:
+            return v.strip()
+    try:
+        for k in ("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN"):
+            v = st.secrets.get(k)
+            if v:
+                return str(v).strip()
+    except Exception:
+        pass
+    return None
+
+def _x_rel_time(dt):
+    """'2h ago' style relative timestamp (UTC-safe)."""
+    try:
+        now = datetime.now(timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        s = max(0, int((now - dt).total_seconds()))
+        if s < 60:        return "just now"
+        if s < 3600:      return f"{s // 60}m ago"
+        if s < 86400:     return f"{s // 3600}h ago"
+        if s < 86400 * 7: return f"{s // 86400}d ago"
+        return dt.strftime("%b %d")
+    except Exception:
+        return ""
+
+def _fetch_x_api_v2(token) -> list:
+    """Official X API v2 — most reliable when a bearer token is set."""
+    h = {"Authorization": "Bearer " + token, "Accept": "application/json"}
+    uid = st.session_state.get("_pharos_x_uid")
+    if not uid:
+        r = requests.get(
+            "https://api.twitter.com/2/users/by/username/" + PHAROS_X_HANDLE,
+            headers=h, timeout=8,
+        )
+        r.raise_for_status()
+        uid = r.json().get("data", {}).get("id")
+        if not uid:
+            return []
+        st.session_state["_pharos_x_uid"] = uid
+    r = requests.get(
+        f"https://api.twitter.com/2/users/{uid}/tweets",
+        params={
+            "max_results": "10",
+            "exclude": "replies",
+            "tweet.fields": "created_at,text",
+            "expansions": "attachments.media_keys",
+            "media.fields": "url,preview_image_url,type",
+        },
+        headers=h, timeout=8,
+    )
+    r.raise_for_status()
+    body   = r.json()
+    media  = {m.get("media_key"): (m.get("url") or m.get("preview_image_url") or "")
+              for m in body.get("includes", {}).get("media", [])}
+    items  = []
+    for t in body.get("data", []) or []:
+        tid = t.get("id", "")
+        try:
+            dt = datetime.fromisoformat((t.get("created_at") or "").replace("Z", "+00:00"))
+        except Exception:
+            dt = None
+        keys  = (t.get("attachments") or {}).get("media_keys") or []
+        thumb = next((media.get(k) for k in keys if media.get(k)), "")
+        items.append({
+            "text":  t.get("text", ""),
+            "url":   f"https://x.com/{PHAROS_X_HANDLE}/status/{tid}",
+            "media": thumb,
+            "dt":    dt,
+            "rel":   _x_rel_time(dt) if dt else "",
+        })
+    return items
+
+def _fetch_nitter_rss() -> list:
+    """Key-free fallback: parse the public Nitter RSS mirror of the account."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    for base in _NITTER_MIRRORS:
+        try:
+            r = requests.get(
+                f"{base}/{PHAROS_X_HANDLE}/rss", timeout=6,
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/rss+xml,application/xml"},
+            )
+            if r.status_code != 200 or "<rss" not in r.text[:2000]:
+                continue
+            root  = ET.fromstring(r.text)
+            items = []
+            for it in root.iter("item"):
+                title = (it.findtext("title") or "").strip()
+                link  = (it.findtext("link") or "").strip()
+                desc  = it.findtext("description") or ""
+                pub   = it.findtext("pubDate") or ""
+                # Rewrite the mirror link back to the original X post
+                try:
+                    pr = urlparse(link)
+                    link = "https://x.com" + pr.path.split("#")[0]
+                except Exception:
+                    pass
+                m     = re.search(r'<img[^>]+src="([^"]+)"', desc)
+                thumb = m.group(1) if m else ""
+                try:
+                    dt = parsedate_to_datetime(pub)
+                except Exception:
+                    dt = None
+                items.append({
+                    "text":  title,
+                    "url":   link,
+                    "media": thumb,
+                    "dt":    dt,
+                    "rel":   _x_rel_time(dt) if dt else "",
+                })
+                if len(items) >= 10:
+                    break
+            if items:
+                return items
+        except Exception:
+            continue
+    return []
+
+# Curated latest-known official updates — shown only if every live
+# source is unreachable, so the section never dead-ends.
+_PHAROS_X_FALLBACK = [
+    {"text": "Excited to announce @Farooxyz as the FIRST project of the Pharos Incubator ⚓", "url": "https://x.com/pharos_network", "media": PHAROS_X_AVATAR, "dt": None, "rel": ""},
+    {"text": "The next allocation window for pALPHA Stage 2 is almost here — following a fully subscribed $50M first round, the next opportunity opens July 10–16.", "url": "https://app.yieldnetwork.io/pharos-2/", "media": "https://res.cloudinary.com/dhkxvwmjd/image/upload/v1781750528/Pharos_onrmbe.jpg", "dt": None, "rel": ""},
+    {"text": "Cross-chain access is expanding on Pharos — @StargateFinance now supports Pharos, enabling users to transfer and swap assets across EVM chains.", "url": "https://x.com/pharos_network/status/2067208187615576378", "media": "https://pbs.twimg.com/profile_images/1928147506699145217/n7-KQGNJ_400x400.png", "dt": None, "rel": ""},
+    {"text": "Pharos is partnering with @avalonfinance and @FunctionBTC to expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019", "media": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "dt": None, "rel": ""},
+    {"text": "The Builders Harbor on Pharos has been upgraded — new tools, templates, and technical resources.", "url": "https://www.pharos.xyz/devhub", "media": "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64", "dt": None, "rel": ""},
+    {"text": "Expedition Season 2 is ongoing — participate in the ecosystem.", "url": "https://discord.gg/pharos", "media": "https://www.google.com/s2/favicons?domain=discord.com&sz=64", "dt": None, "rel": ""},
+    {"text": "Pharos x XLayer & OKX — fellow partners in bringing World Cup outcomes onchain.", "url": "https://x.com/pharos_network/status/2065362220851335650", "media": "https://www.google.com/s2/favicons?domain=okx.com&sz=64", "dt": None, "rel": ""},
+    {"text": "Follow @pharos_network on X for announcements, ecosystem launches, partnerships, campaigns and protocol updates.", "url": "https://x.com/pharos_network", "media": PHAROS_X_AVATAR, "dt": None, "rel": ""},
+]
+
+_X_PRIORITY_TERMS = (
+    "announc", "launch", "partner", "campaign", "protocol", "upgrade",
+    "mainnet", "testnet", "incubator", "ecosystem", "integrat", "stake",
+    "expedition", "live", "reward",
+)
+
+# ─────────────────────────────────────────────
+# VERIFIED PHAROS MAINNET CONTRACTS
+# Source of truth: the official Pharos documentation
+#   · https://docs.pharos.xyz/getting-started/token-registry.md
+#   · https://docs.pharos.xyz/getting-started/canonical-contracts.md
+# Every address below is copied from those pages. Nothing here is
+# guessed or inferred. If an address is not published by Pharos, it is
+# NOT in this file — the corresponding feature deep-links to the
+# official protocol UI instead of calling an unverified contract.
+# ─────────────────────────────────────────────
+PHAROS_TOKENS = [
+    # (symbol, address, decimals, label)
+    ("WPROS", "0x52c48d4213107b20bc583832b0d951fb9ca8f0b0", 18, "Wrapped PROS"),
+    ("USDC",  "0xc879c018db60520f4355c26ed1a6d572cdac1815",  6, "USDC (Circle)"),
+    ("WETH",  "0x1f4b7011Ee3d53969bb67F59428a9ec0477856E9", 18, "Wrapped ETH"),
+    ("LINK",  "0x51e2A24742Db77604B881d6781Ee16B5b8fcBE29", 18, "Chainlink"),
+]
+MULTICALL3_ADDR = "0xcA11bde05977b3631167028862bE2a173976CA11"  # canonical
+PERMIT2_ADDR    = "0x000000000022D473030F116dDEE9F6B43aC78BA3"  # canonical
+
+# Official ecosystem destinations (verified from pharos.xyz / project sites).
+PHAROS_PORT_URL      = "https://port.pharos.xyz"
+PHAROS_ECOSYSTEM_URL = "https://port.pharos.xyz/ecosystem"
+PHAROS_DEVHUB_URL    = "https://www.pharos.xyz/devhub"
+PHAROS_BLOG_URL      = "https://www.pharos.xyz/resources"
+FAROSWAP_URL         = "https://faroswap.xyz"
+FAROSWAP_DOCS_URL    = "https://docs.faroswap.xyz"
+
+# NOTE FOR FUTURE MAINTAINERS
+# ---------------------------
+# A PROS staking contract (stPROS) and a FaroSwap mainnet router are NOT
+# published in the Pharos docs at the time of writing, and stPROS is
+# described publicly as "not yet live". They are therefore intentionally
+# absent. To enable native staking/swap transactions later, add the
+# verified addresses here and implement the calls in the DeFi page —
+# do not populate these from blog posts or third-party sites.
+PROS_STAKING_ADDR = None   # ← set to the official address once published
+FAROSWAP_ROUTER   = None   # ← set to the official address once published
+
+
+def get_pharos_x_posts() -> list:
+    """Latest posts from the official Pharos Network X account.
+    Live-source layered fetch, briefly cached, official-news-first."""
+    now    = time.time()
+    cached = st.session_state.get("pharos_x_cache", {})
+    if cached.get("items") and now - cached.get("fetched_at", 0) < X_FEED_CACHE:
+        return cached["items"]
+
+    items, live = [], False
+    token = _x_bearer_token()
+    if token:
+        try:
+            items = _fetch_x_api_v2(token)
+        except Exception:
+            items = []
+    if not items:
+        items = _fetch_nitter_rss()
+    live = bool(items)
+    if not items:
+        # Keep serving the previous good fetch if the network blips.
+        prev = cached.get("items")
+        if prev:
+            st.session_state["pharos_x_cache"] = {"items": prev, "fetched_at": now, "live": cached.get("live", False)}
+            return prev
+        items = list(_PHAROS_X_FALLBACK)
+
+    # Prioritise official announcements / launches / partnerships /
+    # campaigns / protocol updates (stable sort keeps recency order).
+    def _prio(p):
+        t = (p.get("text") or "").lower()
+        return 0 if any(k in t for k in _X_PRIORITY_TERMS) else 1
+    items = sorted(items, key=_prio)
+
+    st.session_state["pharos_x_cache"] = {"items": items, "fetched_at": now, "live": live}
+    return items
+
+# ─────────────────────────────────────────────
+# LIVE RWA MARKET SNAPSHOT — public CoinGecko, cached, key-free
+# ─────────────────────────────────────────────
+RWA_CACHE  = 300
+RWA_ASSETS = [
+    ("ondo-finance", "ONDO",  "Ondo Finance",   "Tokenised treasuries"),
+    ("pax-gold",     "PAXG",  "Pax Gold",       "Tokenised gold"),
+    ("centrifuge",   "CFG",   "Centrifuge",     "Private credit RWA"),
+    ("maple",        "SYRUP", "Maple Finance",  "Institutional credit"),
+    ("goldfinch",    "GFI",   "Goldfinch",      "RWA lending"),
+    ("pharos-network","PROS", "Pharos Network", "RWA-native L1"),
+]
+
+def fetch_rwa_market() -> dict:
+    now    = time.time()
+    cached = st.session_state.get("rwa_market_cache", {})
+    if cached.get("rows") and now - cached.get("fetched_at", 0) < RWA_CACHE:
+        return cached
+    rows = []
+    try:
+        ids = ",".join(a[0] for a in RWA_ASSETS)
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": ids, "vs_currencies": "usd",
+                    "include_24hr_change": "true", "include_market_cap": "true"},
+            timeout=6, headers={"Accept": "application/json"},
+        )
+        r.raise_for_status()
+        data = r.json()
+        for cid, sym, name, tag in RWA_ASSETS:
+            d = data.get(cid) or {}
+            if d.get("usd") is None:
+                continue
+            rows.append({"sym": sym, "name": name, "tag": tag,
+                         "price": d.get("usd"),
+                         "chg": d.get("usd_24h_change"),
+                         "mcap": d.get("usd_market_cap")})
+    except Exception:
+        rows = cached.get("rows", [])
+    out = {"rows": rows, "fetched_at": now,
+           "as_of": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    st.session_state["rwa_market_cache"] = out
+    return out
 
 def get_price_chart_df(days: str = "1"):
     now       = time.time()
@@ -934,7 +1247,7 @@ body{background:transparent;overflow:hidden;font-family:'DM Sans',sans-serif;}
 .wrap{
     display:flex;flex-direction:column;
     align-items:center;justify-content:center;
-    width:100%;height:220px;position:relative;
+    width:100%;height:200px;position:relative;
 }
 canvas{
     position:absolute;top:0;left:0;
@@ -1280,7 +1593,7 @@ canvas{
 </body>
 </html>
         """,
-        height=220,
+        height=200,
         scrolling=False,
     )
 
@@ -1392,6 +1705,129 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
 
     result["error"] = last_error
     return result
+
+
+def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 8):
+    """Single read-only JSON-RPC call with endpoint failover."""
+    candidates = [rpc_url] if rpc_url else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
+    last = None
+    for url in candidates:
+        try:
+            r = requests.post(
+                url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                headers={"Content-Type": "application/json"}, timeout=timeout,
+            )
+            r.raise_for_status()
+            body = r.json()
+            if "error" in body:
+                last = str(body["error"].get("message", "RPC error"))
+                continue
+            return body.get("result")
+        except Exception as e:
+            last = str(e)
+            continue
+    raise RuntimeError(last or "RPC unreachable")
+
+
+def fetch_token_balances(address: str) -> dict:
+    """Real ERC-20 + native balances for a wallet on Pharos mainnet.
+
+    Uses the canonical MultiCall3 (documented at docs.pharos.xyz) to read
+    every token balance in ONE eth_call, then falls back to individual
+    eth_call reads if multicall is unavailable. Token addresses come from
+    the official Pharos Token Registry only.
+    """
+    out = {"native": None, "tokens": [], "available": False, "error": None}
+    if not valid_addr(address):
+        out["error"] = "Invalid address"
+        return out
+
+    addr_arg = address.lower().replace("0x", "").rjust(64, "0")
+    # balanceOf(address) selector
+    call_data = "0x70a08231" + addr_arg
+
+    try:
+        bal_hex = _rpc("eth_getBalance", [address, "latest"])
+        out["native"] = int(bal_hex, 16) / 1e18 if bal_hex else 0.0
+    except Exception as e:
+        out["error"] = str(e)
+        return out
+
+    # ── Try MultiCall3.aggregate3 — one round-trip for all tokens ──
+    def _enc_multicall():
+        # aggregate3((address target,bool allowFailure,bytes callData)[])
+        sel = "0x82ad56cb"
+        n = len(PHAROS_TOKENS)
+        head = "0000000000000000000000000000000000000000000000000000000000000020"
+        head += hex(n)[2:].rjust(64, "0")
+        # Each tuple is dynamic → offsets table, then bodies
+        bodies, offsets, cursor = [], [], n * 32
+        inner = call_data[2:]
+        body_len = len(inner) // 2
+        for _sym, taddr, _d, _l in PHAROS_TOKENS:
+            b = taddr.lower().replace("0x", "").rjust(64, "0")      # target
+            b += "0".rjust(63, "0") + "0"                            # allowFailure=false
+            b += hex(96)[2:].rjust(64, "0")                          # bytes offset
+            b += hex(body_len)[2:].rjust(64, "0")                    # bytes length
+            b += inner.ljust(((len(inner) + 63) // 64) * 64, "0")    # padded data
+            offsets.append(cursor)
+            cursor += len(b) // 2
+            bodies.append(b)
+        table = "".join(hex(o)[2:].rjust(64, "0") for o in offsets)
+        return sel + head + table + "".join(bodies)
+
+    rows, ok = [], False
+    try:
+        res = _rpc("eth_call", [{"to": MULTICALL3_ADDR, "data": _enc_multicall()}, "latest"])
+        if res and res != "0x":
+            raw = res[2:]
+            cnt = int(raw[64:128], 16)
+            if cnt == len(PHAROS_TOKENS):
+                base = 128
+                offs = [int(raw[base + i * 64: base + (i + 1) * 64], 16) for i in range(cnt)]
+                for i, (sym, taddr, dec, label) in enumerate(PHAROS_TOKENS):
+                    st_ = base + offs[i] * 2
+                    success = int(raw[st_: st_ + 64], 16) == 1
+                    dlen = int(raw[st_ + 128: st_ + 192], 16)
+                    val = int(raw[st_ + 192: st_ + 192 + 64], 16) if (success and dlen >= 32) else 0
+                    rows.append({"sym": sym, "addr": taddr, "label": label,
+                                 "bal": val / (10 ** dec)})
+                ok = True
+    except Exception:
+        ok = False
+
+    # ── Fallback: read each token individually ──
+    if not ok:
+        rows = []
+        for sym, taddr, dec, label in PHAROS_TOKENS:
+            try:
+                res = _rpc("eth_call", [{"to": taddr, "data": call_data}, "latest"])
+                val = int(res, 16) if res and res != "0x" else 0
+            except Exception:
+                val = 0
+            rows.append({"sym": sym, "addr": taddr, "label": label, "bal": val / (10 ** dec)})
+
+    out["tokens"] = rows
+    out["available"] = True
+    return out
+
+
+def fetch_tx_receipt(tx_hash: str) -> dict:
+    """Poll a transaction receipt. Returns status once mined."""
+    out = {"mined": False, "status": None, "block": None, "error": None}
+    if not valid_txhash(tx_hash):
+        out["error"] = "Invalid transaction hash"
+        return out
+    try:
+        r = _rpc("eth_getTransactionReceipt", [tx_hash])
+        if not r:
+            return out  # still pending
+        out["mined"] = True
+        out["status"] = "success" if r.get("status") == "0x1" else "failed"
+        out["block"] = int(r["blockNumber"], 16) if r.get("blockNumber") else None
+    except Exception as e:
+        out["error"] = str(e)
+    return out
 
 
 def fetch_pharos_transaction(tx_hash: str) -> dict:
@@ -1948,13 +2384,357 @@ def synthesize_wallet_profile(onchain_data: dict) -> dict:
         return deterministic_profile()
 
 
+# ─────────────────────────────────────────────
+# OCTOBOT INITIALISATION — non-blocking, timeout-guarded
+#
+# Root cause of the "Loading Knowledge Base…" hang: OctoBot() builds /
+# opens the vectorstore and initialises the LLM client synchronously on
+# the Streamlit script thread. Any slow or stalled step inside it
+# (embedding model download, vectorstore open, network call without a
+# timeout) blocked the rerun forever, so the loading screen never
+# resolved — no exception was raised, so the except-branch never fired.
+#
+# Fix: construct OctoBot on a daemon worker thread guarded by a hard
+# timeout. The UI thread merely polls a shared, process-wide holder, so
+# it stays responsive, the loading state always terminates (success,
+# error, or timeout), and repeated reruns / multiple sessions share one
+# initialisation (single-flight lock — no duplicate builds, no races).
+# ─────────────────────────────────────────────
+OCTOBOT_INIT_TIMEOUT = 90  # seconds before we surface a timeout error
+
+_octobot_lock = threading.Lock()
+
+# ─────────────────────────────────────────────
+# IN-APP DEFI ASSISTANT — feature guide
+#
+# The RAG index knows the Pharos *docs*. It does not know THIS app's
+# UI. So when someone asks "how do I stake?" they should get the real
+# workflow for the screens in front of them, not a docs paraphrase.
+#
+# Each entry describes a feature as it is ACTUALLY implemented here —
+# including honest notes where something routes out to an official
+# protocol. Keep this in sync with the DeFi page when features change.
+# ─────────────────────────────────────────────
+APP_FEATURES = {
+    "connect_wallet": {
+        "title": "Connect your wallet",
+        "purpose": "Your wallet is the single sign-in for everything on-chain here — "
+                   "balances, wallet score, history and payments all key off it.",
+        "steps": [
+            "Click **Connect Wallet** at the top-right of any page.",
+            "Pick your wallet in the popup (MetaMask, OKX, Rabby, Coinbase — any EVM wallet).",
+            "Approve the connection request in the wallet.",
+            "Check the pill shows a green dot and **Pharos**. Amber means you're on the wrong chain.",
+            "If it's amber, click **Switch** — the app switches you to Pharos Pacific Mainnet "
+            "(chain 1672), and offers to add the network if your wallet doesn't have it.",
+        ],
+        "prereq": ["An EVM wallet extension installed", "No signature or gas needed just to connect"],
+        "warn": "Connecting only shares your public address. It never moves funds and never "
+                "asks for a signature. Never share your seed phrase — nothing here will ask for it.",
+        "next": "Open **DeFi → Portfolio** to see your live balances.",
+    },
+    "portfolio": {
+        "title": "View your portfolio",
+        "purpose": "See your real PROS and token balances, read live from Pharos mainnet.",
+        "steps": [
+            "Connect your wallet (top-right).",
+            "Go to **DeFi → Portfolio**.",
+            "Balances load automatically from chain — native PROS plus the registry tokens "
+            "(WPROS, USDC, WETH, LINK).",
+            "Click **↻ Refresh balances** for a fresh read.",
+            "Click **View wallet on PharosScan** for the full explorer view.",
+        ],
+        "prereq": ["Wallet connected", "Wallet on Pharos Pacific Mainnet (chain 1672)"],
+        "warn": "Balances are read-only — nothing is cached on a server and nothing is signed.",
+        "next": "Try **DeFi → Wallet Score** for an on-chain reputation breakdown.",
+    },
+    "swap": {
+        "title": "Swap tokens",
+        "purpose": "Trade PROS and other Pharos tokens on FaroSwap, the native AMM+PMM DEX.",
+        "steps": [
+            "Connect your wallet and make sure you're on Pharos.",
+            "Go to **DeFi → Swap**.",
+            "Click **Open FaroSwap** — it opens with the same wallet you connected here.",
+            "On FaroSwap: pick your input/output tokens and amount.",
+            "Approve the token spend if prompted (first time per token), then confirm the swap.",
+        ],
+        "prereq": ["Wallet connected", "PROS for gas", "A balance of the token you're selling"],
+        "warn": "Swaps execute on FaroSwap, not in this app — this hub doesn't hold a verified "
+                "FaroSwap mainnet router address, and routing your funds through an unverified "
+                "contract would be unsafe. Check the rate and slippage on FaroSwap before confirming; "
+                "swaps are irreversible.",
+        "next": "Check **DeFi → Portfolio** to confirm your new balances.",
+    },
+    "bridge": {
+        "title": "Bridge assets to Pharos",
+        "purpose": "Move tokens between Pharos and other chains.",
+        "steps": [
+            "Connect your wallet.",
+            "Go to **DeFi → Bridge**.",
+            "Click **Open Jumper (LI.FI)** — it aggregates the supported routes into Pharos.",
+            "Choose source chain, destination (Pharos), token and amount.",
+            "Approve if prompted, then confirm. Wait for finality on both chains.",
+        ],
+        "prereq": ["Wallet connected", "Gas on the SOURCE chain", "Funds to bridge"],
+        "warn": "Bridging is irreversible and takes minutes, not seconds — don't close the wallet "
+                "mid-flow. Always verify the destination chain is Pharos before confirming. "
+                "USDC uses Circle CCTP v2 (native burn-and-mint); other assets route via CCIP/LayerZero.",
+        "next": "Once funds land, check **DeFi → Portfolio**.",
+    },
+    "staking": {
+        "title": "Stake PROS",
+        "purpose": "Staking PROS helps secure Pharos and earns protocol rewards.",
+        "steps": [
+            "Go to **DeFi → Staking** to check the current status.",
+        ],
+        "prereq": ["Wallet connected"],
+        "warn": "Native PROS staking is NOT live in this app yet — Pharos hasn't published an "
+                "official staking/stPROS contract address, and stPROS native yield is publicly "
+                "described as not yet live. This app deliberately shows no APR rather than an "
+                "invented one, and won't route your PROS to an unverified contract. "
+                "Be sceptical of any site offering PROS staking today.",
+        "next": "Follow @pharos_network or the Pharos Discord for the staking launch.",
+    },
+    "wallet_score": {
+        "title": "Check your wallet score",
+        "purpose": "A transparent 0–100 reputation score from your real on-chain activity.",
+        "steps": [
+            "Connect your wallet.",
+            "Go to **DeFi → Wallet Score**.",
+            "Read the score, tier, and the Activity / Holdings / Engagement breakdown bars.",
+        ],
+        "prereq": ["Wallet connected", "Wallet on Pharos"],
+        "warn": "Scoring is deterministic and uses only public on-chain data — no signature needed.",
+        "next": "See **DeFi → History** for your transaction footprint.",
+    },
+    "history": {
+        "title": "View transaction history",
+        "purpose": "See your on-chain footprint on Pharos.",
+        "steps": [
+            "Connect your wallet.",
+            "Go to **DeFi → History** for your transaction count and balance.",
+            "Click **Full history on PharosScan** for an itemised list.",
+        ],
+        "prereq": ["Wallet connected"],
+        "warn": "Pharos RPC exposes account state, not an indexed list — PharosScan does the indexing.",
+        "next": "Look up any specific hash in **DeFi → Explorer**.",
+    },
+    "rwa_market": {
+        "title": "Track the RWA market",
+        "purpose": "Live prices for leading real-world-asset tokens, next to $PROS.",
+        "steps": [
+            "Go to **DeFi → RWA Market** — no wallet needed.",
+            "Review live prices and 24h changes.",
+            "Click **🔄 Refresh market data** for the latest.",
+        ],
+        "prereq": ["None — this is public market data"],
+        "warn": "Market data is informational, not investment advice. Crypto prices are volatile.",
+        "next": "Try **Market Pulse** for AI sentiment analysis.",
+    },
+    "explorer": {
+        "title": "Explore transactions and addresses",
+        "purpose": "Inspect any Pharos transaction or address in plain language.",
+        "steps": [
+            "Go to **DeFi → Explorer** — no wallet needed.",
+            "Paste a transaction hash (0x + 64 chars) or address (0x + 40 chars).",
+            "Click **Inspect** for status, value, block and type.",
+        ],
+        "prereq": ["A valid hash or address"],
+        "warn": "Read-only — this only reads what is already public on-chain.",
+        "next": "Use **Memory Ledger** for an AI profile of any wallet.",
+    },
+    "pay": {
+        "title": "Send PROS",
+        "purpose": "Send PROS to any address using plain English.",
+        "steps": [
+            "Connect your wallet.",
+            "Go to the **Pay** page.",
+            'Type what you want, e.g. "Send 5 PROS to 0x1234…".',
+            "Review the parsed recipient, amount and network carefully.",
+            "Confirm — your wallet signs the transaction; the app never holds your keys.",
+        ],
+        "prereq": ["Wallet connected", "Wallet on Pharos", "Enough PROS for the amount + gas"],
+        "warn": "Transfers are irreversible. Always double-check the recipient address — the first "
+                "and last four characters are not enough, check the middle too. Gas is paid in PROS.",
+        "next": "Track it in **DeFi → History** or on PharosScan.",
+    },
+    "campaigns": {
+        "title": "Join a campaign",
+        "purpose": "Live opportunities across the Pharos ecosystem.",
+        "steps": [
+            "Go to the **Campaigns** page.",
+            "Browse the live campaigns and read the tag/summary.",
+            "Click **Join** on one — it opens the official campaign site.",
+            "Connect the same wallet there and follow their steps.",
+        ],
+        "prereq": ["Usually a wallet", "Some campaigns need PROS for gas"],
+        "warn": "Only use links from this page or official Pharos channels — campaign phishing "
+                "is common. Never sign a transaction you don't understand.",
+        "next": "Check **Updates** for newly announced campaigns.",
+    },
+}
+
+_FEATURE_KEYWORDS = [
+    ("connect_wallet", ("connect wallet", "connect my wallet", "link wallet", "metamask",
+                        "wallet connect", "sign in", "log in", "switch network",
+                        "wrong network", "add pharos", "chain 1672", "disconnect")),
+    ("portfolio",  ("portfolio", "my balance", "balances", "holdings", "my tokens", "how much do i have")),
+    ("swap",       ("swap", "swapping", "trade token", "trading token", "exchange token",
+                    "faroswap", "dex")),
+    ("bridge",     ("bridge", "bridging", "cross-chain", "cross chain", "transfer from ethereum",
+                    "jumper", "li.fi", "lifi", "cctp", "ccip", "layerzero")),
+    ("staking",    ("stake", "staking", "unstake", "unstaking", "stpros", "apr", "apy",
+                    "yield", "rewards")),
+    ("wallet_score", ("wallet score", "my score", "reputation", "wallet analysis", "analyse my wallet")),
+    ("history",    ("transaction history", "my transactions", "tx history", "past transactions")),
+    ("rwa_market", ("rwa market", "rwa price", "market dashboard", "ondo", "paxg")),
+    ("explorer",   ("explorer", "look up transaction", "check transaction", "inspect address",
+                    "tx hash", "transaction hash")),
+    ("pay",        ("send pros", "pay ", "payment", "transfer pros", "send tokens", "send money")),
+    ("campaigns",  ("campaign", "quest", "airdrop", "expedition", "join event")),
+]
+
+_HOWTO_HINTS = ("how do i", "how to", "how can i", "walk me through", "steps to", "guide me",
+                "show me how", "where do i", "where can i", "help me", "teach me", "can i")
+
+def detect_app_feature(q: str):
+    """Route a question to an in-app feature guide, or None for docs RAG.
+
+    Deliberately conservative: it only fires when the question is about
+    DOING something in this app. Conceptual questions ("what is a bridge?")
+    fall through to the docs index, which answers them better.
+    """
+    ql = (q or "").lower().strip()
+    if not ql:
+        return None
+    hit = None
+    for key, words in _FEATURE_KEYWORDS:
+        if any(w in ql for w in words):
+            hit = key
+            break
+    if not hit:
+        return None
+    # "How do I X" / "where is X" → definitely a how-to.
+    if any(h in ql for h in _HOWTO_HINTS):
+        return hit
+    # Bare feature mentions ("staking?", "connect wallet") are how-tos too.
+    if len(ql.split()) <= 6:
+        return hit
+    # Conceptual phrasing → let the docs answer.
+    if ql.startswith(("what is", "what are", "why ", "explain ")):
+        return None
+    return hit
+
+def render_feature_guide(key: str) -> str:
+    """Markdown answer for an in-app feature, grounded in the real UI."""
+    f = APP_FEATURES.get(key)
+    if not f:
+        return ""
+    out = ["### " + f["title"], "", f["purpose"], ""]
+    if f.get("prereq"):
+        out.append("**Before you start**")
+        out += ["- " + p for p in f["prereq"]]
+        out.append("")
+    out.append("**Steps**")
+    out += [f"{i}. {s}" for i, s in enumerate(f["steps"], 1)]
+    out.append("")
+    if f.get("warn"):
+        out += ["> ⚠️ **Important:** " + f["warn"], ""]
+    if f.get("next"):
+        out.append("**Next:** " + f["next"])
+    return "\n".join(out)
+
+
 @st.cache_resource(show_spinner=False)
-def load_octobot():
+def _octobot_holder() -> dict:
+    """Process-wide shared state for the OctoBot instance.
+
+    'ready' lets the UI thread BLOCK on initialisation instead of
+    spin-rerunning the whole script, which was the real cause of the
+    long "Loading Knowledge Base" hang.
+    """
+    return {"bot": None, "error": None, "done": False,
+            "started": False, "started_at": None,
+            "ready": threading.Event()}
+
+def _octobot_worker(holder: dict) -> None:
     try:
         from octobot import OctoBot
-        return OctoBot(), None
+        bot = OctoBot()
+        # Touch the vectorstore once here so a broken/missing index
+        # fails fast with a clear message instead of failing later.
+        try:
+            holder["chunk_count"] = bot.vectorstore._collection.count()
+        except Exception:
+            holder["chunk_count"] = None
+        holder["bot"] = bot
     except Exception as e:
-        return None, str(e)
+        holder["error"] = str(e) or e.__class__.__name__
+    finally:
+        holder["done"] = True
+        try:
+            holder["ready"].set()
+        except Exception:
+            pass
+
+def _octobot_reset() -> None:
+    """Allow a clean retry after a failure/timeout."""
+    try:
+        _octobot_holder.clear()
+    except Exception:
+        pass
+
+def load_octobot(start: bool = True) -> dict:
+    """Kick off (once) and report OctoBot initialisation state.
+    Returns the shared holder: {bot, error, done, started_at, ...}."""
+    holder = _octobot_holder()
+    if start:
+        with _octobot_lock:
+            if not holder["started"]:
+                holder["started"] = True
+                holder["started_at"] = time.time()
+                threading.Thread(
+                    target=_octobot_worker, args=(holder,), daemon=True,
+                    name="octobot-init",
+                ).start()
+    # Hard timeout: never allow an infinite loading state.
+    if (holder["started"] and not holder["done"]
+            and holder["started_at"]
+            and time.time() - holder["started_at"] > OCTOBOT_INIT_TIMEOUT):
+        holder["error"] = (
+            f"Knowledge base initialisation timed out after {OCTOBOT_INIT_TIMEOUT}s. "
+            "Check network access for the embedding model, and that the "
+            "vectorstore exists (run `python build_vectorstore.py`)."
+        )
+        holder["done"] = True
+        try:
+            holder["ready"].set()
+        except Exception:
+            pass
+    return holder
+
+
+def octobot_wait(seconds: float = 8.0) -> dict:
+    """Block this script run (not the whole server) until OctoBot is
+    ready, or `seconds` elapse. Streamlit runs each session's script on
+    its own thread, so waiting here keeps THIS tab's loading screen up
+    while other sessions stay responsive — and, crucially, does not
+    re-execute the entire page every 350ms the way the old poll loop
+    did. That rerun storm was competing with the init worker for CPU
+    and made loading take far longer than the work itself.
+    """
+    holder = load_octobot()
+    if not holder["done"]:
+        remaining = OCTOBOT_INIT_TIMEOUT
+        if holder.get("started_at"):
+            remaining = OCTOBOT_INIT_TIMEOUT - (time.time() - holder["started_at"])
+        try:
+            holder["ready"].wait(timeout=max(0.0, min(seconds, remaining)))
+        except Exception:
+            time.sleep(min(seconds, 1.0))
+        # Re-evaluate so the hard timeout is applied on this pass too.
+        holder = load_octobot()
+    return holder
 
 # ─────────────────────────────────────────────
 # MARKET & COMMUNITY PULSE — helpers
@@ -4550,7 +5330,7 @@ section[data-testid="stMain"]{
        section, which no inner container rule touches — so page banners
        can never tuck under the floating nav regardless of the cascade
        inside stMainBlockContainer. */
-    padding-top:84px !important;
+    padding-top:80px !important;
 }
 @media (max-width:600px){
     section[data-testid="stMain"]{ padding-top:74px !important; }
@@ -5272,6 +6052,277 @@ html[data-theme="dark"] [data-testid="stMainBlockContainer"]:has(.rd-marker) [st
 </style>
 """, unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────
+# PERFORMANCE & MOTION POLISH (appearance unchanged)
+#  · Theme veil: compositor-only layer for the light↔dark cross-blend.
+#  · .theme-switching: suppress per-element transitions for the single
+#    style pass of the theme swap (this is what removed the lag).
+#  · GPU promotion of the hover/nav surfaces so their transforms never
+#    trigger paint; stable scrollbar gutter kills layout shift; smooth,
+#    contained scrolling on touch devices.
+# ─────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Theme-transition veil — opacity + transform only (GPU compositor). */
+#theme-veil{
+  position:fixed;inset:-2%;z-index:2147483000;pointer-events:none;
+  opacity:0;background:#FFFFFF;
+  transform:translateZ(0) scale3d(1.02,1.02,1);
+  will-change:opacity,transform;backface-visibility:hidden;contain:strict;
+  transition:opacity 150ms cubic-bezier(0.4,0,0.2,1),
+             transform 150ms cubic-bezier(0.4,0,0.2,1);
+}
+#theme-veil.veil-in{opacity:1;transform:translateZ(0) scale3d(1,1,1);}
+#theme-veil.veil-out{
+  opacity:0;transform:translateZ(0) scale3d(1.012,1.012,1);
+  transition:opacity 300ms cubic-bezier(0.22,1,0.36,1),
+             transform 300ms cubic-bezier(0.22,1,0.36,1);
+}
+/* One-pass theme swap: no per-element colour tweens fighting the
+   recalculation. Removed two frames later by the toggle script. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after{transition:none !important;}
+
+/* Rendering & scroll performance — no visual change. */
+html{scrollbar-gutter:stable;}
+body{overscroll-behavior-y:none;}
+section[data-testid="stMain"]{-webkit-overflow-scrolling:touch;}
+*{-webkit-tap-highlight-color:transparent;}
+.hover-lift,.eco-card,.pnav,.pnav-dd,.octo-loading-wrap{
+  transform:translateZ(0);backface-visibility:hidden;
+}
+.hover-lift{will-change:transform;}
+.pnav-icirc,.pnav-theme svg{will-change:transform,opacity;}
+
+/* ═══════════════════════════════════════════════════════════
+   THEME-AWARE SURFACES
+   Everything below is driven by CSS variables, so light and dark
+   are guaranteed to stay in sync and contrast can never silently
+   break: there is exactly one definition per element, not two.
+   ═══════════════════════════════════════════════════════════ */
+.defi-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:12px;margin-bottom:1.1rem;
+}
+.defi-card{
+    background:var(--bg1);border:1px solid var(--border);border-radius:16px;
+    padding:1rem 1.15rem;box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    transform:translateZ(0);
+}
+.defi-card-l{
+    font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--t2);margin-bottom:5px;
+}
+.defi-card-v{
+    font-family:var(--fd,Syne),sans-serif;font-size:19px;font-weight:800;
+    color:var(--t1);line-height:1.15;word-break:break-word;
+}
+.defi-card-s{font-size:11px;font-weight:600;margin-top:3px;}
+.defi-panel,.defi-panel-solid{
+    background:var(--bg1);border:1px solid var(--border);border-radius:18px;
+    padding:1.4rem 1.5rem;box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    margin-bottom:1rem;
+}
+.defi-panel-t{
+    font-family:var(--fd,Syne),sans-serif;font-size:14px;font-weight:800;color:var(--t1);
+}
+.defi-panel-s{font-size:11.5px;color:var(--t2);margin-top:2px;line-height:1.55;}
+.defi-bar{height:6px;border-radius:99px;background:var(--bg2);overflow:hidden;}
+.defi-bar-f{height:100%;border-radius:99px;transition:width 420ms cubic-bezier(0.22,1,0.36,1);}
+.defi-gate{
+    background:var(--bg1);border:1px dashed var(--border);border-radius:18px;
+    padding:2rem 1.5rem;text-align:center;margin-bottom:1rem;
+}
+.defi-gate-warn{border-color:#F59E0B;background:rgba(245,158,11,0.06);}
+.defi-gate-i{font-size:30px;margin-bottom:0.5rem;}
+.defi-gate-t{
+    font-family:var(--fd,Syne),sans-serif;font-size:15px;font-weight:800;
+    color:var(--t1);margin-bottom:0.3rem;
+}
+.defi-gate-s{
+    font-size:12.5px;color:var(--t2);line-height:1.6;max-width:440px;margin:0 auto;
+}
+.defi-gate-s b{color:var(--t1);}
+.defi-note{
+    background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+    padding:1.1rem 1.3rem;margin-bottom:0.9rem;
+}
+.defi-note-t{
+    font-family:var(--fd,Syne),sans-serif;font-size:13px;font-weight:700;
+    color:var(--t1);margin-bottom:0.35rem;
+}
+.defi-note-s{font-size:12px;color:var(--t2);line-height:1.65;}
+.defi-eyebrow{
+    font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--t2);margin-bottom:0.6rem;
+}
+.defi-integ{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:10px;margin-bottom:1rem;
+}
+.defi-integ-c{
+    display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;
+    background:var(--bg1);border:1px solid var(--border);border-radius:14px;
+    padding:0.9rem 0.6rem;text-decoration:none;
+    box-shadow:0 2px 8px rgba(20,20,60,0.04);
+    transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease;
+}
+.defi-integ-n{font-size:12px;font-weight:700;color:var(--t1);}
+.defi-integ-t{font-size:10px;color:var(--t2);}
+
+/* ── DARK MODE CONTRAST AUDIT ──────────────────────────────
+   These target the specific low-contrast cases reported: inline
+   hard-coded light backgrounds and dark text that survive the
+   theme switch because they were written as literal hex values.
+   Rather than restyle each card, we remap the literals so text
+   inherits a readable colour in dark mode. Appearance in light
+   mode is byte-for-byte unchanged. */
+html[data-theme="dark"] .defi-integ-c img{
+    background:#FFFFFF;padding:1px;   /* keep favicons legible on dark */
+}
+/* Hard-coded dark text inside inline styles → light in dark mode. */
+html[data-theme="dark"] [style*="color:#0C0C1A"],
+html[data-theme="dark"] [style*="color:#14141F"],
+html[data-theme="dark"] [style*="color:#000000"],
+html[data-theme="dark"] [style*="color:#000"],
+html[data-theme="dark"] [style*="color:#1A1A2E"]{
+    color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
+}
+html[data-theme="dark"] [style*="color:#5B5F6E"],
+html[data-theme="dark"] [style*="color:#7A7F96"],
+html[data-theme="dark"] [style*="color:#9499A8"]{
+    color:#AEB4C8 !important;-webkit-text-fill-color:#AEB4C8 !important;
+}
+/* Inline white/near-white card backgrounds → dark surfaces. */
+html[data-theme="dark"] [style*="background:#FFFFFF"],
+html[data-theme="dark"] [style*="background:#FFF"],
+html[data-theme="dark"] [style*="background:#F4F5F8"],
+html[data-theme="dark"] [style*="background:#F7F8FA"],
+html[data-theme="dark"] [style*="background:#F8FAFF"],
+html[data-theme="dark"] [style*="background:#FAFBFF"],
+html[data-theme="dark"] [style*="background:#F0F1F5"]{
+    background:#141826 !important;border-color:#262B3E !important;
+}
+/* Docs banner + chat showcase headers read as washed-out in dark. */
+html[data-theme="dark"] .docs-banner{
+    background:#141826 !important;border:1px solid #262B3E;
+}
+html[data-theme="dark"] .docs-banner-text{color:#AEB4C8 !important;}
+html[data-theme="dark"] .docs-banner-text strong{color:#EDEFF7 !important;}
+html[data-theme="dark"] .chat-showcase-header{background:#1B2030 !important;}
+html[data-theme="dark"] .chat-showcase-title{color:#EDEFF7 !important;}
+html[data-theme="dark"] .chat-showcase-sub{color:#AEB4C8 !important;}
+html[data-theme="dark"] .chat-demo-user{color:#AEB4C8 !important;}
+/* Metric strip + captions. */
+html[data-theme="dark"] [data-testid="stMetricValue"],
+html[data-theme="dark"] [data-testid="stMetricLabel"]{color:#EDEFF7 !important;}
+/* Section eyebrow/sub inside dark hero blocks stay light-on-dark. */
+html[data-theme="dark"] .section-dark .section-h{color:#FFFFFF !important;}
+html[data-theme="dark"] .section-dark .section-sub{color:rgba(255,255,255,0.65) !important;}
+/* Text inputs must never render dark-on-dark. */
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] [data-baseweb="input"] input,
+html[data-theme="dark"] [data-baseweb="textarea"] textarea{
+    background:#12151F !important;color:#EDEFF7 !important;border-color:#2A3044 !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#6B7189 !important;}
+/* Links inside light-authored cards. */
+html[data-theme="dark"] [style*="color:#1A1AFF"]{color:#8FA0FF !important;}
+
+/* ═══════════════════════════════════════════════════════════
+   NEWS FEED — Updates & Campaigns
+   Large, scannable rows rather than cramped cards: cover image
+   left, content right, metadata above the headline. Stacks on
+   mobile. Fully variable-driven, so dark mode is automatic.
+   ═══════════════════════════════════════════════════════════ */
+.nf-list{display:flex;flex-direction:column;gap:14px;margin-bottom:1.4rem;}
+.nf-item{
+    display:grid;grid-template-columns:220px 1fr;gap:0;
+    background:var(--bg1);border:1px solid var(--border);border-radius:18px;
+    overflow:hidden;text-decoration:none;
+    box-shadow:0 2px 10px rgba(20,20,60,0.05);
+    transform:translateZ(0);backface-visibility:hidden;
+    transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 240ms ease,border-color 180ms ease;
+    will-change:transform;
+}
+.nf-item:hover{
+    transform:translateY(-3px);
+    box-shadow:0 12px 34px rgba(26,26,255,0.12),0 3px 10px rgba(20,20,60,0.07);
+    border-color:rgba(26,26,255,0.28);
+}
+.nf-thumb{
+    position:relative;background:linear-gradient(135deg,#EEF0FF,#E4E8FF);
+    min-height:150px;overflow:hidden;
+}
+.nf-thumb img{
+    width:100%;height:100%;object-fit:cover;display:block;
+    transition:transform 420ms cubic-bezier(0.22,1,0.36,1);
+}
+.nf-item:hover .nf-thumb img{transform:scale(1.04);}
+.nf-body{
+    padding:1.15rem 1.4rem 1.15rem 1.3rem;
+    display:flex;flex-direction:column;gap:7px;justify-content:center;
+}
+.nf-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.nf-cat{
+    font-size:9px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--blue,#1A1AFF);background:rgba(26,26,255,0.09);
+    border:1px solid rgba(26,26,255,0.16);border-radius:20px;padding:3px 9px;
+}
+.nf-src{font-size:11px;font-weight:600;color:var(--t2);}
+.nf-dot{font-size:11px;color:var(--t2);}
+.nf-time{font-size:11px;color:var(--t2);font-variant-numeric:tabular-nums;}
+.nf-title{
+    font-family:var(--fd,Syne),sans-serif;font-size:16px;font-weight:800;
+    color:var(--t1);line-height:1.4;letter-spacing:-0.01em;
+}
+.nf-summ{font-size:13px;color:var(--t2);line-height:1.62;}
+.nf-cta{
+    font-size:11.5px;font-weight:700;color:var(--blue,#1A1AFF);margin-top:2px;
+}
+.nf-thumb-camp{display:flex;align-items:center;justify-content:center;}
+.nf-thumb-camp .nf-logo{
+    width:76px;height:76px;border-radius:18px;object-fit:cover;
+    box-shadow:0 6px 20px rgba(0,0,0,0.16);background:#fff;
+}
+.nf-emoji{
+    font-size:52px;line-height:1;display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 4px 14px rgba(0,0,0,0.12));
+}
+.nf-item:hover .nf-thumb-camp .nf-logo{transform:scale(1.05);}
+html[data-theme="dark"] .nf-thumb{background:linear-gradient(135deg,#1B2030,#232941);}
+html[data-theme="dark"] .nf-cat{
+    color:#9FB0FF;background:rgba(90,110,255,0.16);border-color:rgba(120,140,255,0.28);
+}
+html[data-theme="dark"] .nf-cta{color:#9FB0FF;}
+html[data-theme="dark"] .nf-item:hover{border-color:rgba(140,160,255,0.4);}
+
+@media (max-width:820px){
+    .nf-item{grid-template-columns:1fr;}
+    .nf-thumb{min-height:180px;max-height:200px;}
+    .nf-body{padding:1.05rem 1.2rem 1.2rem 1.2rem;}
+    .nf-title{font-size:15px;}
+}
+@media (max-width:420px){
+    .nf-thumb{min-height:150px;}
+    .nf-summ{font-size:12.5px;}
+}
+
+/* Campaign cards — same enlarged, readable treatment. */
+.camp-grid-lg{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+    gap:16px;margin-bottom:1.4rem;
+}
+@media (max-width:760px){
+    .camp-grid-lg{grid-template-columns:1fr;}
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 _sailor = st.query_params.get("sailor", "")[:60]
 if _sailor:
@@ -5292,6 +6343,7 @@ NAV_PAGES = [
     ("", "Campaigns", "campaigns"),
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
+    ("🏦", "DeFi",      "defi"),
     ("🧩", "Ecosystem", "ecosystem"),
     ("💸", "Pay",       "pay"),
     ("🧾", "Request",   "request"),
@@ -5322,6 +6374,7 @@ _PNAV_GITHUB_URL = "https://github.com/isharik/Pharos-Octobot"
 _pnav_dd_products = [
     ("💬", "Chat",    "chat"),
     ("📊", "Trade",   "trade"),
+    ("🏦", "DeFi",    "defi"),
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
@@ -5617,7 +6670,7 @@ _pnav_html = (
     '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
     '<div class="pnav-ver">v1.2<span class="pnav-caret"></span></div>'
     '<div class="pnav-links">'
-    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
+    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
     '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
     '</div>'
     '<div class="pnav-item' + (" on" if _pg == "campaigns" else "") + '" data-pnav-go="campaigns">Campaigns</div>'
@@ -5641,7 +6694,165 @@ _pnav_html = (
     '</div>'
     '</nav></div>'
 )
+
+# ── GLOBAL CONNECT WALLET (fixed top-right, every page) ──────
+# Separate from the nav bar, as a fixed overlay. Rendered on every page
+# from module level, so it is always present and always consistent.
+# Purely presentational here — the parent-document script below owns all
+# provider logic and keeps this pill's contents in sync.
+_w3a   = st.session_state.get("w3_address", "")
+_w3c   = st.session_state.get("w3_chain", "")
+_w3l   = st.session_state.get("w3_label", "") or "Wallet"
+_short = (_w3a[:6] + "…" + _w3a[-4:]) if _w3a else ""
+_right_net = (_w3c or "").lower() == PHAROS_CHAIN_ID_HEX.lower()
+
+if _w3a:
+    _dot = "#22C55E" if _right_net else "#F59E0B"
+    _net = "Pharos" if _right_net else "Wrong network"
+    _wallet_pill = (
+        '<div class="w3-pill w3-on" id="w3-pill" title="' + esc(_w3a) + '">'
+        '<span class="w3-dot" style="background:' + _dot + ';"></span>'
+        '<span class="w3-net">' + esc(_net) + '</span>'
+        '<span class="w3-sep"></span>'
+        '<span class="w3-addr">' + esc(_short) + '</span>'
+        + ('<button class="w3-switch" id="w3-switch-btn" title="Switch to Pharos Mainnet">Switch</button>'
+           if not _right_net else '')
+        + '<button class="w3-x" id="w3-disconnect-btn" title="Disconnect">✕</button>'
+        '</div>'
+    )
+else:
+    _wallet_pill = (
+        '<div class="w3-pill" id="w3-pill">'
+        '<button class="w3-connect" id="w3-connect-btn">'
+        '<span class="w3-ico">🔗</span><span class="w3-lbl">Connect Wallet</span></button>'
+        '</div>'
+    )
+
+_W3_CSS = """
+<style>
+/* ── GLOBAL CONNECT WALLET — fixed top-right overlay ───────── */
+.w3-fixed{
+    position:fixed;top:14px;right:18px;z-index:1002;
+    display:flex;justify-content:flex-end;pointer-events:none;
+}
+.w3-pill{
+    pointer-events:auto;display:inline-flex;align-items:center;gap:8px;
+    background:#FFFFFF;border:1px solid #E3E5EA;border-radius:999px;
+    padding:5px 6px 5px 12px;height:38px;
+    box-shadow:0 4px 16px rgba(20,20,60,0.10);
+    transform:translateZ(0);
+    transition:border-color 160ms ease,box-shadow 200ms ease,background 160ms ease;
+}
+.w3-pill:hover{border-color:#C3C7D4;box-shadow:0 6px 22px rgba(20,20,60,0.14);}
+.w3-connect{
+    display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;
+    background:var(--blue,#1A1AFF);color:#fff;border-radius:999px;
+    font-family:inherit;font-size:12.5px;font-weight:700;letter-spacing:0.01em;
+    padding:7px 15px;line-height:1;
+    transition:transform 180ms cubic-bezier(0.34,1.4,0.64,1),background 160ms ease;
+    will-change:transform;
+}
+.w3-connect:hover{background:#0F0FCC;transform:translateY(-1px);}
+.w3-connect:active{transform:translateY(0) scale(0.98);}
+.w3-ico{font-size:12px;}
+.w3-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.w3-net{font-size:11px;font-weight:700;color:#5B5F6E;letter-spacing:0.02em;}
+.w3-sep{width:1px;height:14px;background:#E3E5EA;}
+.w3-addr{font-size:12px;font-weight:700;color:#14141F;font-variant-numeric:tabular-nums;}
+.w3-switch{
+    border:none;cursor:pointer;background:#FEF3C7;color:#92400E;
+    border-radius:999px;font-family:inherit;font-size:10.5px;font-weight:700;
+    padding:4px 9px;line-height:1;transition:background 150ms ease;
+}
+.w3-switch:hover{background:#FDE68A;}
+.w3-x{
+    border:none;cursor:pointer;background:#F1F2F6;color:#5B5F6E;
+    width:24px;height:24px;border-radius:50%;font-size:11px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    transition:background 150ms ease,color 150ms ease;
+}
+.w3-x:hover{background:#FFE4E6;color:#E5484D;}
+/* ── Wallet picker modal ── */
+.w3-modal{position:fixed;inset:0;z-index:2147483100;opacity:0;
+    transition:opacity 180ms cubic-bezier(0.4,0,0.2,1);}
+.w3-modal.on{opacity:1;}
+.w3-modal-bd{position:absolute;inset:0;background:rgba(10,10,25,0.45);
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+.w3-modal-c{
+    position:absolute;top:50%;left:50%;width:min(360px,calc(100vw - 32px));
+    transform:translate(-50%,-48%) translateZ(0);
+    background:#FFFFFF;border:1px solid #E3E5EA;border-radius:18px;
+    box-shadow:0 24px 70px rgba(10,10,40,0.30);overflow:hidden;
+    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1);
+}
+.w3-modal.on .w3-modal-c{transform:translate(-50%,-50%) translateZ(0);}
+.w3-modal-h{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid #EFF0F4;
+    font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#14141F;}
+.w3-modal-x{border:none;background:transparent;cursor:pointer;font-size:13px;
+    color:#9499A8;border-radius:8px;padding:4px 7px;line-height:1;
+    transition:background 140ms ease,color 140ms ease;}
+.w3-modal-x:hover{background:#F3F4F8;color:#14141F;}
+.w3-modal-l{padding:8px;display:flex;flex-direction:column;gap:4px;
+    max-height:min(52vh,340px);overflow-y:auto;}
+.w3-wrow{
+    display:flex;align-items:center;gap:11px;width:100%;
+    border:1px solid transparent;background:transparent;cursor:pointer;
+    border-radius:12px;padding:10px 11px;text-align:left;font-family:inherit;
+    transition:background 140ms ease,border-color 140ms ease,transform 140ms ease;
+}
+.w3-wrow:hover{background:#F6F7FB;border-color:#E3E5EA;transform:translateX(2px);}
+.w3-wi{width:28px;height:28px;border-radius:8px;flex-shrink:0;object-fit:contain;
+    background:#F3F4F8;}
+.w3-wi-ph{display:inline-flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:800;color:#5B5F6E;}
+.w3-wn{font-size:13px;font-weight:700;color:#14141F;flex:1;}
+.w3-wtag{font-size:9px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;
+    color:#B45309;background:#FEF3C7;border:1px solid #FDE68A;
+    border-radius:7px;padding:2px 6px;}
+.w3-modal-f{padding:10px 16px 14px;font-size:10.5px;color:#9499A8;line-height:1.5;
+    border-top:1px solid #EFF0F4;}
+html[data-theme="dark"] .w3-modal-c{background:#141826;border-color:#2A3044;}
+html[data-theme="dark"] .w3-modal-h{color:#EDEFF7;border-bottom-color:#232838;}
+html[data-theme="dark"] .w3-modal-l .w3-wrow:hover{background:#1C2132;border-color:#333A50;}
+html[data-theme="dark"] .w3-wn{color:#EDEFF7;}
+html[data-theme="dark"] .w3-modal-f{color:#8A90A6;border-top-color:#232838;}
+html[data-theme="dark"] .w3-modal-x:hover{background:#232838;color:#EDEFF7;}
+html[data-theme="dark"] .w3-wi,html[data-theme="dark"] .w3-wi-ph{background:#1C2132;}
+
+.w3-toast{
+    position:fixed;top:62px;right:18px;z-index:1003;pointer-events:none;
+    background:#14141F;color:#fff;border-radius:12px;padding:9px 14px;
+    font-size:12px;font-weight:600;max-width:320px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.28);
+    opacity:0;transform:translateY(-6px) translateZ(0);
+    transition:opacity 220ms ease,transform 220ms cubic-bezier(0.22,1,0.36,1);
+}
+.w3-toast.on{opacity:1;transform:translateY(0) translateZ(0);}
+.w3-toast.err{background:#7F1D1D;}
+.w3-toast.ok{background:#14532D;}
+
+/* Dark theme */
+html[data-theme="dark"] .w3-pill{background:#141826;border-color:#2A3044;box-shadow:0 4px 18px rgba(0,0,0,0.5);}
+html[data-theme="dark"] .w3-pill:hover{border-color:#3A4258;}
+html[data-theme="dark"] .w3-net{color:#AEB4C8;}
+html[data-theme="dark"] .w3-addr{color:#EDEFF7;}
+html[data-theme="dark"] .w3-sep{background:#2A3044;}
+html[data-theme="dark"] .w3-x{background:#1B2030;color:#AEB4C8;}
+html[data-theme="dark"] .w3-x:hover{background:#3B1D1F;color:#FF6B6E;}
+
+/* Keep the pill clear of the nav on narrow screens */
+@media (max-width:1120px){
+    .w3-fixed{top:auto;bottom:16px;right:16px;}
+}
+@media (max-width:420px){
+    .w3-addr,.w3-net,.w3-sep{display:none;}
+    .w3-pill{padding:5px 6px;}
+}
+</style>
+"""
 st.markdown(_PNAV_CSS + _pnav_html, unsafe_allow_html=True)
+st.markdown(_W3_CSS + '<div class="w3-fixed">' + _wallet_pill + '</div>', unsafe_allow_html=True)
 
 # ── Bootstrap: GSAP + nav wiring + ⌘K + fluid transitions + Aura Swirl ─
 # A height-0 component that injects a one-time script INTO THE PARENT
@@ -5845,6 +7056,61 @@ components.html(
     function applyTheme(mode){
       try{ doc.documentElement.setAttribute('data-theme', mode === 'dark' ? 'dark' : 'light'); }catch(e){}
     }
+    /* Premium GPU-accelerated theme switch.
+       Why the old swap lagged: flipping data-theme forces the browser
+       to re-match hundreds of html[data-theme="dark"] … !important
+       rules AND run every per-element colour transition at once —
+       one giant style/paint storm on the main thread.
+       Fix: (1) add .theme-switching for the swap so per-element
+       transitions are suppressed → the recalculation happens in a
+       single cheap pass; (2) mask that single pass with a full-screen
+       compositor-only veil animated purely with opacity + transform
+       (translateZ/scale — GPU layers, zero layout, zero paint), giving
+       a subtle depth cross-blend into the new theme at 60fps without
+       ever blocking input (pointer-events:none). */
+    var __themeBusy = false;
+    function switchTheme(next){
+      if (__themeBusy) return;
+      try{
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+          applyTheme(next);
+          try{ localStorage.setItem('octobot-theme', next); }catch(e){}
+          return;
+        }
+      }catch(e){}
+      __themeBusy = true;
+      var root = doc.documentElement;
+      var veil = doc.getElementById('theme-veil');
+      if (!veil){
+        veil = doc.createElement('div');
+        veil.id = 'theme-veil';
+        doc.body.appendChild(veil);
+      }
+      veil.style.background = (next === 'dark') ? '#0B0E1A' : '#FFFFFF';
+      root.classList.add('theme-switching');
+      /* force layout of the veil once so the transition actually runs */
+      void veil.offsetWidth;
+      veil.classList.remove('veil-out');
+      veil.classList.add('veil-in');
+      var swapped = false;
+      function doSwap(){
+        if (swapped) return; swapped = true;
+        applyTheme(next);
+        try{ localStorage.setItem('octobot-theme', next); }catch(e){}
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){
+          root.classList.remove('theme-switching');
+          veil.classList.remove('veil-in');
+          veil.classList.add('veil-out');
+          setTimeout(function(){
+            veil.classList.remove('veil-out');
+            __themeBusy = false;
+          }, 340);
+        }); });
+      }
+      veil.addEventListener('transitionend', doSwap, { once: true });
+      setTimeout(doSwap, 240); /* safety net if transitionend is swallowed */
+    }
+    try{ window.__octoSwitchTheme = switchTheme; }catch(e){}
     (function(){
       var saved = 'light';
       try{ saved = localStorage.getItem('octobot-theme') || 'light'; }catch(e){}
@@ -5854,10 +7120,427 @@ components.html(
       var tb = e.target && e.target.closest ? e.target.closest('#pnav-theme-btn') : null;
       if (!tb) return;
       var cur = doc.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-      var next = cur === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      try{ localStorage.setItem('octobot-theme', next); }catch(e){}
+      switchTheme(cur === 'dark' ? 'light' : 'dark');
     }, true);
+
+    /* ── EIP-1193 WALLET BRIDGE ───────────────────────────
+       Real wallet integration against the injected provider. Works with
+       any EVM wallet that follows EIP-1193 (MetaMask, OKX, Rabby,
+       Coinbase, Brave, Trust…). Prefers EIP-6963 multi-wallet discovery
+       and falls back to window.ethereum.
+
+       This runs in the PARENT document (not a sandboxed iframe), which
+       is the only place window.ethereum is reachable — that is why the
+       connect button is injected here rather than rendered in a
+       component. State is reported back to Python via query params. */
+    var W3_CHAIN_HEX  = '0x688';   /* 1672 — Pharos Pacific Mainnet */
+    var W3_CHAIN_NAME = 'Pharos Pacific Mainnet';
+    var W3_RPC        = 'https://rpc.pharos.xyz';
+    var W3_EXPLORER   = 'https://pharosscan.xyz';
+    var W3_SYMBOL     = 'PROS';
+
+    /* EIP-6963 multi-wallet discovery.
+       Wallets answer 'eip6963:requestProvider' ASYNCHRONOUSLY, and
+       extensions inject window.ethereum at document_idle — which can be
+       after this bootstrap runs. So we must not probe once and cache the
+       answer: we keep the listener alive, re-broadcast the request a few
+       times while the page settles, and re-check at click time. */
+    var w3providers = [];
+    function w3announce(d){
+      try{
+        if (!d || !d.provider) return;
+        for (var i=0;i<w3providers.length;i++){
+          if (w3providers[i].info && d.info && w3providers[i].info.uuid === d.info.uuid) return;
+        }
+        w3providers.push(d);
+        w3paint();   /* a wallet appeared → refresh the button label */
+      }catch(e){}
+    }
+    function w3scan(){
+      try{ window.dispatchEvent(new Event('eip6963:requestProvider')); }catch(e){}
+    }
+    try{
+      window.addEventListener('eip6963:announceProvider', function(ev){ w3announce(ev.detail); });
+      w3scan();
+      /* Re-broadcast while the page settles — covers wallets that inject
+         late, and wallets that only answer once the DOM is ready. */
+      if (doc.readyState === 'loading'){
+        doc.addEventListener('DOMContentLoaded', w3scan, { once: true });
+      }
+      window.addEventListener('load', w3scan);
+      var w3tries = 0;
+      var w3poll = setInterval(function(){
+        w3scan();
+        if (++w3tries > 12 || w3providers.length) clearInterval(w3poll);
+      }, 250);
+    }catch(e){}
+
+    function w3eth(){
+      /* window.ethereum, unwrapping multi-provider arrays. Read LIVE —
+         never cached, because injection may happen after boot. */
+      var eth = window.ethereum;
+      if (!eth) return null;
+      if (eth.providers && eth.providers.length){
+        return eth.providers.find(function(x){ return x.isMetaMask; }) || eth.providers[0];
+      }
+      return eth;
+    }
+
+    /* Is this provider actually usable for EVM?
+       Phantom/Solflare inject an `ethereum` shim that often rejects
+       eth_requestAccounts with -32603. We do not hide them (Phantom's
+       EVM support is real when enabled) — we just never auto-pick one,
+       and we label them so the choice is informed. */
+    function w3isSolanaFirst(p, name){
+      try{
+        var n = (name || '').toLowerCase();
+        if (n.indexOf('phantom') !== -1 || n.indexOf('solflare') !== -1) return true;
+        if (p && (p.isPhantom || p.isSolflare)) return true;
+      }catch(e){}
+      return false;
+    }
+
+    /* Every installed wallet, de-duplicated, best-first. */
+    function w3list(){
+      if (!w3providers.length) w3scan();
+      var out = [], seen = [];
+      function push(p, name, icon, uuid){
+        if (!p) return;
+        for (var i = 0; i < seen.length; i++){ if (seen[i] === p) return; }
+        seen.push(p);
+        out.push({ p: p, name: name || w3name(p), icon: icon || '',
+                   uuid: uuid || '', solFirst: w3isSolanaFirst(p, name || w3name(p)) });
+      }
+      /* EIP-6963 — the modern, unambiguous source (name + icon + uuid). */
+      for (var i = 0; i < w3providers.length; i++){
+        var d = w3providers[i];
+        push(d.provider, d.info && d.info.name, d.info && d.info.icon, d.info && d.info.uuid);
+      }
+      /* Legacy window.ethereum.providers[] — wallets that predate 6963. */
+      try{
+        var eth = window.ethereum;
+        if (eth && eth.providers && eth.providers.length){
+          for (var j = 0; j < eth.providers.length; j++){ push(eth.providers[j]); }
+        } else if (eth){ push(eth); }
+      }catch(e){}
+      /* EVM-native wallets first; Solana-first shims last. */
+      out.sort(function(a, b){ return (a.solFirst ? 1 : 0) - (b.solFirst ? 1 : 0); });
+      return out;
+    }
+
+    function w3get(){
+      /* Single best candidate — used only for labelling, never to
+         silently connect when several wallets exist. */
+      var l = w3list();
+      return l.length ? l[0] : null;
+    }
+    function w3has(){ return w3list().length > 0; }
+    function w3name(p){
+      if (!p) return 'Wallet';
+      if (p.isRabby) return 'Rabby';
+      if (p.isOkxWallet || p.isOKExWallet) return 'OKX';
+      if (p.isCoinbaseWallet) return 'Coinbase';
+      if (p.isTrust) return 'Trust';
+      if (p.isBraveWallet) return 'Brave';
+      if (p.isMetaMask) return 'MetaMask';
+      return 'Wallet';
+    }
+
+    function w3paint(){
+      /* Reflect live detection state on the connect button. */
+      try{
+        var b = doc.getElementById('w3-connect-btn');
+        if (!b || b.getAttribute('data-w3-on') === '1') return;
+        var l = w3list();
+        var lbl = b.querySelector('.w3-lbl');
+        if (lbl){
+          /* Only name a wallet when there is exactly one — otherwise the
+             button would advertise whichever extension announced first
+             (that is how "Connect Phantom" happened). */
+          lbl.textContent = (l.length === 1 && l[0].name)
+            ? ('Connect ' + l[0].name) : 'Connect Wallet';
+        }
+        b.title = l.length > 1
+          ? ('Choose from ' + l.length + ' detected wallets')
+          : (l.length === 1 ? ('Connect with ' + l[0].name) : 'Connect an EVM wallet');
+      }catch(e){}
+    }
+    try{ window.__w3paint = w3paint; }catch(e){}
+
+    function w3toast(msg, kind, ms){
+      try{
+        var t = doc.getElementById('w3-toast');
+        if (!t){
+          t = doc.createElement('div'); t.id = 'w3-toast'; t.className = 'w3-toast';
+          doc.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.className = 'w3-toast on' + (kind ? ' ' + kind : '');
+        clearTimeout(t.__h);
+        t.__h = setTimeout(function(){ t.className = 'w3-toast' + (kind ? ' ' + kind : ''); },
+                           ms || 3200);
+      }catch(e){}
+    }
+    try{ window.__w3toast = w3toast; }catch(e){}
+
+    /* Push wallet state into Python via query params + rerun. */
+    function w3report(addr, chain, label){
+      try{
+        var u = new URL(window.location.href);
+        u.searchParams.set('w3_addr',  addr);
+        u.searchParams.set('w3_chain', chain);
+        u.searchParams.set('w3_label', label || 'Wallet');
+        u.searchParams.delete('w3_act');
+        window.history.replaceState({}, '', u.toString());
+        window.location.reload();
+      }catch(e){}
+    }
+    function w3reportDisconnect(){
+      try{
+        var u = new URL(window.location.href);
+        u.searchParams.delete('w3_addr'); u.searchParams.delete('w3_chain');
+        u.searchParams.delete('w3_label');
+        u.searchParams.set('w3_act', 'disconnect');
+        window.history.replaceState({}, '', u.toString());
+        window.location.reload();
+      }catch(e){}
+    }
+
+    function w3err(e, g){
+      /* Human-readable messages for the standard EIP-1193 error codes.
+         `g` is the wallet we were talking to, so the message can be
+         specific rather than guessing at "wrong network". */
+      var c = e && (e.code !== undefined ? e.code : (e.data && e.data.code));
+      var nm = (g && g.name) ? g.name : 'wallet';
+      if (c === 4001)  return 'Connection request rejected in ' + nm + '.';
+      if (c === -32002) return 'A request is already pending — open ' + nm + ' and approve it.';
+      if (c === 4900 || c === 4901) return nm + ' is disconnected.';
+      if (c === -32602) return 'Invalid request parameters.';
+      if (c === -32603){
+        /* The exact case that produced the bogus "wrong network" toast. */
+        if (g && g.solFirst){
+          return nm + " couldn't complete an EVM request. Enable its EVM/Ethereum "
+                 + 'support, or pick an EVM wallet like MetaMask, OKX or Rabby.';
+        }
+        return nm + ' returned an internal error. Unlock it and try again.';
+      }
+      return (e && e.message) ? String(e.message).slice(0, 140) : 'Wallet request failed.';
+    }
+
+    /* ── Wallet picker ──────────────────────────────────────
+       Lists every installed wallet so the user chooses, instead of the
+       app silently picking whichever extension announced first. */
+    function w3closePicker(){
+      try{
+        var m = doc.getElementById('w3-modal');
+        if (m){ m.classList.remove('on'); setTimeout(function(){ try{ m.remove(); }catch(e){} }, 180); }
+      }catch(e){}
+    }
+    function w3openPicker(list){
+      try{
+        w3closePicker();
+        var m = doc.createElement('div');
+        m.id = 'w3-modal'; m.className = 'w3-modal';
+        var rows = '';
+        for (var i = 0; i < list.length; i++){
+          var w = list[i];
+          var ic = w.icon
+            ? '<img class="w3-wi" src="' + w.icon + '" alt="" />'
+            : '<span class="w3-wi w3-wi-ph">' + (w.name || '?').charAt(0).toUpperCase() + '</span>';
+          rows +=
+            '<button class="w3-wrow" data-w3-idx="' + i + '">' +
+              ic +
+              '<span class="w3-wn">' + (w.name || 'Wallet') + '</span>' +
+              (w.solFirst ? '<span class="w3-wtag">Solana-first</span>' : '') +
+            '</button>';
+        }
+        m.innerHTML =
+          '<div class="w3-modal-bd"></div>' +
+          '<div class="w3-modal-c" role="dialog" aria-label="Choose a wallet">' +
+            '<div class="w3-modal-h">' +
+              '<span>Choose a wallet</span>' +
+              '<button class="w3-modal-x" aria-label="Close">✕</button>' +
+            '</div>' +
+            '<div class="w3-modal-l">' + rows + '</div>' +
+            '<div class="w3-modal-f">Connecting shares only your public address. ' +
+              'It never moves funds and never asks for your seed phrase.</div>' +
+          '</div>';
+        doc.body.appendChild(m);
+        requestAnimationFrame(function(){ m.classList.add('on'); });
+        m.querySelector('.w3-modal-bd').addEventListener('click', w3closePicker);
+        m.querySelector('.w3-modal-x').addEventListener('click', w3closePicker);
+        var btns = m.querySelectorAll('.w3-wrow');
+        for (var k = 0; k < btns.length; k++){
+          btns[k].addEventListener('click', function(ev){
+            var idx = parseInt(ev.currentTarget.getAttribute('data-w3-idx'), 10);
+            w3closePicker();
+            w3do(list[idx]);
+          });
+        }
+      }catch(e){}
+    }
+
+    var w3conn = null;   /* the wallet the user actually chose */
+    var w3busy = false;
+    async function w3connect(){
+      if (w3busy) return;
+      var list = w3list();
+      if (!list.length){
+        /* A wallet may still be announcing — grace period before we
+           claim none exists. */
+        w3scan();
+        for (var i = 0; i < 6 && !w3has(); i++){
+          await new Promise(function(r){ setTimeout(r, 120); });
+          w3scan();
+        }
+        list = w3list();
+      }
+      if (!list.length){
+        w3toast('No EVM wallet detected. Install MetaMask, OKX, Rabby or another EVM wallet, '
+                + 'then reload this page.', 'err', 5600);
+        return;
+      }
+      /* One wallet → connect it. Several → let the user choose. */
+      if (list.length === 1) return w3do(list[0]);
+      w3openPicker(list);
+    }
+
+    async function w3do(g){
+      if (w3busy || !g || !g.p) return;
+      w3busy = true;
+      try{
+        w3toast('Check your ' + (g.name || 'wallet') + ' to approve the connection…', null, 8000);
+        var accts = await g.p.request({ method: 'eth_requestAccounts' });
+        if (!accts || !accts.length){ w3toast('No accounts returned.', 'err'); w3busy = false; return; }
+        var chain = await g.p.request({ method: 'eth_chainId' });
+        w3conn = g;              /* Switch/disconnect must target THIS wallet */
+        w3bind(g.p);
+        w3report(accts[0], chain, g.name);
+      }catch(e){
+        w3toast(w3err(e, g), 'err', 6000);
+        w3busy = false;
+      }
+    }
+
+    async function w3switch(){
+      var g = w3conn || w3get();
+      if (!g || !g.p){ w3toast('No wallet detected.', 'err'); return; }
+      try{
+        await g.p.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: W3_CHAIN_HEX }]
+        });
+        w3toast('Switched to Pharos.', 'ok');
+      }catch(e){
+        /* 4902 = chain unknown to the wallet → offer to add it. */
+        var c = e && (e.code !== undefined ? e.code : (e.data && e.data.code));
+        if (c === 4902 || c === -32603){
+          try{
+            await g.p.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: W3_CHAIN_HEX,
+                chainName: W3_CHAIN_NAME,
+                nativeCurrency: { name: 'Pharos', symbol: W3_SYMBOL, decimals: 18 },
+                rpcUrls: [W3_RPC],
+                blockExplorerUrls: [W3_EXPLORER]
+              }]
+            });
+            w3toast('Pharos network added.', 'ok');
+          }catch(e2){ w3toast(w3err(e2), 'err'); return; }
+        } else {
+          w3toast(w3err(e), 'err'); return;
+        }
+      }
+      try{
+        var accts = await g.p.request({ method: 'eth_accounts' });
+        var chain = await g.p.request({ method: 'eth_chainId' });
+        if (accts && accts.length) w3report(accts[0], chain, g.name);
+      }catch(e3){}
+    }
+
+    /* Live provider events — account switch, chain switch, disconnect. */
+    var w3bound = false;
+    function w3bind(p){
+      if (w3bound || !p || !p.on) return;
+      w3bound = true;
+      try{
+        p.on('accountsChanged', function(a){
+          if (!a || !a.length){ w3reportDisconnect(); return; }
+          p.request({ method: 'eth_chainId' }).then(function(c){
+            w3report(a[0], c, w3name(p));
+          }).catch(function(){});
+        });
+        p.on('chainChanged', function(c){
+          p.request({ method: 'eth_accounts' }).then(function(a){
+            if (a && a.length) w3report(a[0], c, w3name(p));
+          }).catch(function(){});
+        });
+        p.on('disconnect', function(){ w3reportDisconnect(); });
+      }catch(e){}
+    }
+
+    /* Silent re-attach on load: if the wallet is already authorised,
+       restore state without prompting (eth_accounts never pops a modal).
+       This is what makes the connection persist across reruns/reloads. */
+    (function w3restore(){
+      try{
+        setTimeout(async function(){
+          var g = w3get();
+          if (!g || !g.p) return;
+          w3bind(g.p);
+          try{
+            var accts = await g.p.request({ method: 'eth_accounts' });
+            if (!accts || !accts.length) return;
+            var chain = await g.p.request({ method: 'eth_chainId' });
+            var u = new URL(window.location.href);
+            var known = (u.searchParams.get('w3_addr') || '').toLowerCase();
+            var pill  = doc.getElementById('w3-pill');
+            var shown = pill && pill.classList.contains('w3-on');
+            /* Only reload if Python does not already know this account. */
+            if (!shown && known !== accts[0].toLowerCase()){
+              w3report(accts[0], chain, g.name);
+            }
+          }catch(e){}
+        }, 350);
+      }catch(e){}
+    })();
+
+    /* Delegated clicks — survive Streamlit re-renders. */
+    doc.addEventListener('click', function(e){
+      if (!e.target || !e.target.closest) return;
+      if (e.target.closest('#w3-connect-btn')){ e.preventDefault(); w3connect(); return; }
+      if (e.target.closest('#w3-switch-btn')){ e.preventDefault(); w3switch(); return; }
+      if (e.target.closest('#w3-disconnect-btn')){ e.preventDefault(); w3reportDisconnect(); return; }
+    }, true);
+
+    /* Send a real transaction from the connected wallet. Used by the
+       Pay flow: Python renders a button carrying the tx params, the
+       wallet signs, and the hash is handed back for receipt polling. */
+    window.__w3send = async function(to, valueWei, chainHex){
+      var g = w3get();
+      if (!g || !g.p){ w3toast('No wallet detected.', 'err'); return; }
+      try{
+        var cur = await g.p.request({ method: 'eth_chainId' });
+        if (chainHex && cur !== chainHex){
+          w3toast('Switch to Pharos first.', 'err'); return;
+        }
+        var accts = await g.p.request({ method: 'eth_accounts' });
+        if (!accts || !accts.length){ w3toast('Connect your wallet first.', 'err'); return; }
+        w3toast('Confirm the transaction in your wallet…', null, 9000);
+        var hash = await g.p.request({
+          method: 'eth_sendTransaction',
+          params: [{ from: accts[0], to: to, value: valueWei }]
+        });
+        w3toast('Transaction sent — tracking confirmation…', 'ok', 4000);
+        try{
+          var u = new URL(window.location.href);
+          u.searchParams.set('tx_sent', hash);
+          window.history.replaceState({}, '', u.toString());
+          window.location.reload();
+        }catch(e){}
+      }catch(e){ w3toast(w3err(e), 'err'); }
+    };
 
     /* ── COMMAND PALETTE (⌘K / Ctrl+K) ────────────────────
        Fuzzy search across pages, quick actions and docs topics.
@@ -5872,6 +7555,7 @@ components.html(
       {t:'Campaigns',       s:'quests rewards events active',    k:'campaigns', i:'🎯', g:'Page'},
       {t:'Updates',         s:'news announcements blog latest',  k:'updates',   i:'📰', g:'Page'},
       {t:'Ecosystem',       s:'dapps projects apps defi rwa',    k:'ecosystem', i:'🧩', g:'Page'},
+      {t:'DeFi Hub',        s:'bridge liquidity staking lp positions wallet score rwa realfi explorer', k:'defi', i:'🏦', g:'Page'},
       {t:'Network',         s:'stats validators tps chain',      k:'network',   i:'🌐', g:'Page'},
       {t:'Market Pulse',    s:'sentiment community bullish bearish market', k:'pulse', i:'📡', g:'Page'},
       {t:'Memory Ledger',   s:'wallet on-chain intelligence profile', k:'memory', i:'🧠', g:'Page'},
@@ -5925,9 +7609,7 @@ components.html(
       closePalette();
       if (it.act === 'theme'){
         var cur = doc.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        var next = cur === 'dark' ? 'light' : 'dark';
-        applyTheme(next);
-        try{ localStorage.setItem('octobot-theme', next); }catch(e){}
+        switchTheme(cur === 'dark' ? 'light' : 'dark');
         return;
       }
       if (it.q){ try{ sessionStorage.setItem('octobot-prefill', it.q); }catch(e){} }
@@ -7217,15 +8899,51 @@ elif st.session_state.page == "chat":
             unsafe_allow_html=True,
         )
 
-    bot, load_error = load_octobot()
+    # Wait on the init worker instead of spin-rerunning the whole app.
+    # Common case: OctoBot is ready within this wait and the chat renders
+    # on the FIRST run — no rerun, no flash, no wasted CPU. Slow case: we
+    # rerun at most once every few seconds, so the init thread actually
+    # gets the CPU it needs. The hard timeout inside load_octobot() still
+    # guarantees this state always terminates.
+    _octo = octobot_wait(8.0)
+
+    if not _octo["done"]:
+        st.rerun()
+
     _lp.empty()
 
-    if load_error:
-        st.error("OctoBot could not start: " + load_error + " — Run `python build_vectorstore.py` then refresh.")
+    if _octo.get("error") or _octo.get("bot") is None:
+        _err = esc(_octo.get("error") or "Unknown initialisation error")
+        st.markdown(
+            '<div style="max-width:560px;margin:3rem auto;background:#FFFFFF;'
+            'border:1px solid #F3C7C7;border-radius:18px;padding:1.6rem 1.8rem;'
+            'box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
+            '<div style="font-size:26px;margin-bottom:0.4rem;">⚠️</div>'
+            '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
+            'color:#14141F;margin-bottom:0.35rem;">Knowledge base failed to load</div>'
+            '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.55;">' + _err + '</div>'
+            '<div style="font-size:11.5px;color:#9499A8;margin-top:0.6rem;">'
+            'If this is the first run, build the index with '
+            '<code>python build_vectorstore.py</code>, then retry.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        _c1, _c2 = st.columns([1, 3])
+        with _c1:
+            if st.button("↺ Retry loading", key="octo_retry"):
+                _octobot_reset()
+                st.rerun()
         st.stop()
 
+    bot = _octo["bot"]
+
     # ── Settings moved to sidebar — just get chunk count here ──
-    chunk_count = bot.vectorstore._collection.count()
+    chunk_count = _octo.get("chunk_count")
+    if chunk_count is None:
+        try:
+            chunk_count = bot.vectorstore._collection.count()
+        except Exception:
+            chunk_count = 0
 
     # ── Sidebar — price + controls + examples ──────────────────
     with st.sidebar:
@@ -7885,6 +9603,26 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                     if _x402_ch_now["resource"] in st.session_state.get("x402_unlocked", {}):
                         answer  = x402_generate_premium_answer(question, bot, sel_lang)
                         sources = []
+                    elif detect_app_feature(question):
+                        # In-app DeFi assistant: the user is asking how to DO
+                        # something in this app. The docs index describes Pharos,
+                        # not this UI, so answer from the app's own feature guide.
+                        _feat   = detect_app_feature(question)
+                        answer  = render_feature_guide(_feat)
+                        sources = []
+                        if sel_lang and sel_lang != "English":
+                            try:
+                                _tl = ChatGoogleGenerativeAI(
+                                    model="gemini-2.5-flash", temperature=0.2,
+                                    google_api_key=os.getenv("GEMINI_API_KEY"),
+                                )
+                                answer = _tl.invoke([HumanMessage(
+                                    content="Translate to " + sel_lang +
+                                            ". Keep all markdown, numbers, addresses and "
+                                            "UI labels exactly as-is:\n\n" + answer
+                                )]).content
+                            except Exception:
+                                pass  # fall back to the English guide
                     else:
                         # General mode: try docs first, fall back to Gemini if not found
                         answer, sources = bot.ask(guided_question)
@@ -8086,6 +9824,397 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
 # ═════════════════════════════════════════════
 # PAGE: CAMPAIGNS
 # ═════════════════════════════════════════════
+# ═════════════════════════════════════════════
+# PAGE: DEFI HUB
+#
+# Design principle: every number shown here is either read live from
+# chain / a market API, or it is not shown at all. There are no
+# simulated positions, no invented APRs, and no placeholder yields.
+#
+# Where Pharos publishes a verified contract (tokens, MultiCall3), we
+# call it directly. Where no contract is published — PROS staking and
+# the FaroSwap mainnet router are NOT in the official docs, and stPROS
+# is publicly described as not yet live — we deep-link to the official
+# protocol UI rather than send funds to an unverified address.
+# ═════════════════════════════════════════════
+elif st.session_state.page == "defi":
+
+    DEFI_INTEGRATIONS = [
+        ("FaroSwap",  "faroswap.xyz",      "DEX · AMM & PMM",       FAROSWAP_URL,                 "🔄"),
+        ("LI.FI",     "li.fi",             "Bridge Aggregation",    "https://jumper.exchange",    "🌉"),
+        ("CCIP",      "chain.link",        "Cross-chain Messaging", "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip", "🔗"),
+        ("CCTP v2",   "circle.com",        "Native USDC Transfers", "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp", "💵"),
+        ("LayerZero", "layerzero.network", "Omnichain Protocol",    "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero", "🕸️"),
+        ("Faroo",     "faroo.xyz",         "Pharos Incubator",      "https://x.com/Farooxyz",     "⚓"),
+        ("R2",        "r2.money",          "Yield-bearing Stables", PHAROS_ECOSYSTEM_URL,         "🏛️"),
+        ("AquaFlux",  "aquaflux.pro",      "RWA Structuring",       "https://aquaflux.pro",       "💧"),
+        ("Zona",      "zona.finance",      "RealFi Markets",        PHAROS_ECOSYSTEM_URL,         "🏘️"),
+        ("Morpho",    "morpho.org",        "Lending",               "https://morpho.org",         "🦋"),
+        ("Bitverse",  "bitverse.zone",     "Onchain CLOB",          PHAROS_ECOSYSTEM_URL,         "📈"),
+        ("Ember",     "ember.ag",          "AI DeFi Agent",         PHAROS_ECOSYSTEM_URL,         "🔥"),
+    ]
+
+    st.session_state.setdefault("defi_tab", "Portfolio")
+
+    _w3a       = st.session_state.get("w3_address", "")
+    _w3c       = st.session_state.get("w3_chain", "")
+    _connected = bool(_w3a)
+    _right_net = (_w3c or "").lower() == PHAROS_CHAIN_ID_HEX.lower()
+    _pros_usd  = (price_data or {}).get("price_usd") or 0
+
+    def _stat_card(label, value, sub="", accent="var(--blue)"):
+        return (
+            '<div class="defi-card hover-lift">'
+            f'<div class="defi-card-l">{esc(label)}</div>'
+            f'<div class="defi-card-v">{value}</div>'
+            + (f'<div class="defi-card-s" style="color:{accent};">{sub}</div>' if sub else '')
+            + '</div>'
+        )
+
+    def _stat_grid(cards):
+        return '<div class="defi-grid">' + "".join(cards) + '</div>'
+
+    def _panel(title, sub=""):
+        return (
+            '<div class="defi-panel">'
+            f'<div class="defi-panel-t">{title}</div>'
+            + (f'<div class="defi-panel-s">{sub}</div>' if sub else '')
+            + '</div>'
+        )
+
+    def _gate(action="use this feature"):
+        """Wallet is the single auth layer for every on-chain action."""
+        if not _connected:
+            st.markdown(
+                '<div class="defi-gate">'
+                '<div class="defi-gate-i">🔗</div>'
+                '<div class="defi-gate-t">Connect your wallet</div>'
+                f'<div class="defi-gate-s">Connect an EVM wallet to {esc(action)}. '
+                'Use the <b>Connect Wallet</b> button in the top-right corner.</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            return False
+        if not _right_net:
+            st.markdown(
+                '<div class="defi-gate defi-gate-warn">'
+                '<div class="defi-gate-i">⚠️</div>'
+                '<div class="defi-gate-t">Wrong network</div>'
+                '<div class="defi-gate-s">Your wallet is connected to another chain. '
+                'Click <b>Switch</b> in the wallet pill to move to Pharos Pacific Mainnet '
+                '(chain 1672).</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            return False
+        return True
+
+    def _not_live(title, body, url, cta):
+        """Honest state for protocols with no published mainnet contract."""
+        st.markdown(
+            '<div class="defi-note">'
+            f'<div class="defi-note-t">{title}</div>'
+            f'<div class="defi-note-s">{body}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.link_button(cta, url, use_container_width=False)
+
+    # ── Header ───────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-dark">'
+        '<div style="position:relative;z-index:1;">'
+        '<div class="section-eyebrow"><span style="font-size:12px;">🏦</span>&nbsp;PHAROS DEFI HUB</div>'
+        '<h2 class="section-h">Your Pharos Portfolio</h2>'
+        '<p class="section-sub">Live balances, wallet intelligence and RWA markets — read directly '
+        'from Pharos Pacific Mainnet. Connect any EVM wallet to begin.</p>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    DEFI_TABS = ["Portfolio", "Swap", "Bridge", "Staking", "Wallet Score",
+                 "History", "RWA Market", "Explorer"]
+    _tab_cols = st.columns(len(DEFI_TABS))
+    for _ti, _tn in enumerate(DEFI_TABS):
+        with _tab_cols[_ti]:
+            if st.button(_tn, key="defi_tab_" + _tn.replace(" ", "_"), use_container_width=True):
+                st.session_state["defi_tab"] = _tn
+                st.rerun()
+    _tab = st.session_state["defi_tab"]
+    st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+
+    # ══ PORTFOLIO — real balances ═══════════════════════════
+    if _tab == "Portfolio":
+        st.markdown(_panel("💼 Portfolio",
+                    "Native PROS and registry tokens, read live from chain via MultiCall3."),
+                    unsafe_allow_html=True)
+        if _gate("view your live portfolio"):
+            if st.button("↻ Refresh balances", key="defi_bal_refresh"):
+                st.session_state.pop("defi_balances", None)
+            if "defi_balances" not in st.session_state:
+                with st.spinner("Reading balances from Pharos mainnet…"):
+                    st.session_state["defi_balances"] = fetch_token_balances(_w3a)
+            _b = st.session_state["defi_balances"]
+
+            if not _b.get("available"):
+                st.error("Could not read balances: " + esc(_b.get("error") or "RPC unreachable"))
+                if st.button("Try again", key="defi_bal_retry"):
+                    st.session_state.pop("defi_balances", None)
+                    st.rerun()
+            else:
+                _nat = _b.get("native") or 0.0
+                _cards = [_stat_card(
+                    "PROS · Native", f"{_nat:,.6f}",
+                    (f"≈ ${_nat * _pros_usd:,.2f}" if _pros_usd else "gas token"),
+                )]
+                for _t in _b.get("tokens", []):
+                    _cards.append(_stat_card(
+                        _t["sym"] + " · " + _t["label"], f"{_t['bal']:,.6f}",
+                        "Pharos mainnet", "var(--t2)"))
+                st.markdown(_stat_grid(_cards), unsafe_allow_html=True)
+                st.caption("Token addresses come from the official Pharos Token Registry "
+                           "(docs.pharos.xyz). Balances are read live — never cached server-side.")
+                st.link_button("View wallet on PharosScan ↗",
+                               PHAROS_EXPLORER_URL + "/address/" + _w3a)
+
+    # ══ SWAP ════════════════════════════════════════════════
+    elif _tab == "Swap":
+        st.markdown(_panel("🔄 Swap", "Trade PROS and registry tokens on FaroSwap, "
+                    "the native AMM + PMM DEX on Pharos."), unsafe_allow_html=True)
+        if _gate("swap tokens"):
+            _not_live(
+                "Swaps execute on FaroSwap",
+                "This hub does not hold a verified FaroSwap mainnet router address — "
+                "Pharos does not publish one in its contract registry, so routing a swap "
+                "from here would mean sending your funds to an unverified contract. "
+                "Instead, open FaroSwap directly with the same wallet you have connected here. "
+                "Your connection carries over.",
+                FAROSWAP_URL, "Open FaroSwap ↗",
+            )
+            st.caption("When an official router address is published, swaps will execute "
+                       "natively in this tab.")
+
+    # ══ BRIDGE ══════════════════════════════════════════════
+    elif _tab == "Bridge":
+        st.markdown(_panel("🌉 Bridge",
+                    "Move assets to and from Pharos. Pharos supports Chainlink CCIP, "
+                    "Circle CCTP v2 and LayerZero."), unsafe_allow_html=True)
+        if _gate("bridge assets"):
+            _not_live(
+                "Bridging runs through audited routers",
+                "Bridge transactions must go through each protocol's own audited router. "
+                "Jumper (LI.FI) aggregates the supported routes into Pharos and will use "
+                "the wallet you already have connected.",
+                "https://jumper.exchange", "Open Jumper (LI.FI) ↗",
+            )
+            _bc1, _bc2 = st.columns(2)
+            with _bc1:
+                st.link_button("Circle CCTP docs ↗",
+                               "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp",
+                               use_container_width=True)
+            with _bc2:
+                st.link_button("Chainlink CCIP docs ↗",
+                               "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip",
+                               use_container_width=True)
+
+    # ══ STAKING ═════════════════════════════════════════════
+    elif _tab == "Staking":
+        st.markdown(_panel("⚡ PROS Staking",
+                    "Stake PROS to help secure Pharos and earn protocol rewards."),
+                    unsafe_allow_html=True)
+        if _gate("stake PROS"):
+            if PROS_STAKING_ADDR:
+                st.info("Staking contract configured — native staking enabled.")
+            else:
+                st.markdown(
+                    '<div class="defi-note">'
+                    '<div class="defi-note-t">Native staking is not live yet</div>'
+                    '<div class="defi-note-s">'
+                    'Pharos has not published a PROS staking or stPROS contract address in its '
+                    'official documentation, and stPROS native yield is publicly described as '
+                    'not yet live. Rather than show you an invented APR or route funds to an '
+                    'unverified contract, this tab stays honest until the real contract ships. '
+                    'Follow the official channels for the launch announcement.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                _sc1, _sc2 = st.columns(2)
+                with _sc1:
+                    st.link_button("Pharos announcements ↗", PHAROS_X_URL, use_container_width=True)
+                with _sc2:
+                    st.link_button("Ask in Pharos Discord ↗", PHAROS_DISCORD_URL, use_container_width=True)
+                st.caption("Developer note: set PROS_STAKING_ADDR in this file once the "
+                           "official address is published — the staking UI activates automatically.")
+
+    # ══ WALLET SCORE ════════════════════════════════════════
+    elif _tab == "Wallet Score":
+        st.markdown(_panel("🧠 Wallet Analysis & Score",
+                    "On-chain reputation, computed from real mainnet activity."),
+                    unsafe_allow_html=True)
+        if _gate("analyse your wallet"):
+            if "defi_wa_data" not in st.session_state:
+                with st.spinner("Reading on-chain activity…"):
+                    st.session_state["defi_wa_data"] = fetch_pharos_onchain_data(_w3a)
+            _d = st.session_state["defi_wa_data"]
+            if not _d.get("available"):
+                st.error("Could not read this address: " + esc(_d.get("error") or "RPC unreachable"))
+                if st.button("Retry", key="defi_wa_retry"):
+                    st.session_state.pop("defi_wa_data", None)
+                    st.rerun()
+            else:
+                _txn = _d.get("tx_count") or 0
+                _bal = _d.get("balance_pros") or 0.0
+                # Transparent, deterministic scoring — no black box, no fake data.
+                _act  = min(_txn, 200) / 200
+                _hold = min(_bal, 500) / 500
+                _eng  = 1.0 if (_txn > 0 and _bal > 0) else 0.0
+                _score = int(min(100, round(10 + _act * 45 + _hold * 30 + _eng * 15)))
+                _tier = ("Navigator" if _score >= 80 else "Voyager" if _score >= 55
+                         else "Sailor" if _score >= 30 else "Newcomer")
+                _col = ("#22C55E" if _score >= 80 else "#1A1AFF" if _score >= 55
+                        else "#F59E0B" if _score >= 30 else "#9499A8")
+                st.markdown(_stat_grid([
+                    _stat_card("Wallet Score", f'<span style="color:{_col};">{_score} / 100</span>', _tier, _col),
+                    _stat_card("PROS balance", f"{_bal:,.4f}",
+                               (f"≈ ${_bal * _pros_usd:,.2f}" if _pros_usd else "")),
+                    _stat_card("Transactions sent", f"{_txn:,}", "nonce"),
+                    _stat_card("Account type", "Contract" if _d.get("is_contract") else "EOA wallet"),
+                ]), unsafe_allow_html=True)
+                _bh = ""
+                for _bl, _bv in [("Activity", _act), ("Holdings", _hold), ("Engagement", _eng)]:
+                    _bh += (
+                        f'<div style="margin-bottom:9px;"><div style="display:flex;'
+                        f'justify-content:space-between;font-size:11px;color:var(--t2);'
+                        f'margin-bottom:3px;"><span>{_bl}</span><span>{int(_bv*100)}%</span></div>'
+                        f'<div class="defi-bar"><div class="defi-bar-f" '
+                        f'style="width:{_bv*100:.0f}%;background:{_col};"></div></div></div>'
+                    )
+                st.markdown('<div class="defi-panel-solid">'
+                            '<div class="defi-panel-t" style="margin-bottom:10px;">Score breakdown</div>'
+                            + _bh + '</div>', unsafe_allow_html=True)
+                st.caption("Scoring is deterministic and computed from public on-chain data only.")
+
+    # ══ HISTORY ═════════════════════════════════════════════
+    elif _tab == "History":
+        st.markdown(_panel("🧾 Transaction History",
+                    "Your on-chain footprint on Pharos mainnet."), unsafe_allow_html=True)
+        if _gate("view your transaction history"):
+            if "defi_ha_data" not in st.session_state:
+                with st.spinner("Reading on-chain data…"):
+                    st.session_state["defi_ha_data"] = fetch_pharos_onchain_data(_w3a)
+            _hd = st.session_state["defi_ha_data"]
+            if _hd.get("available"):
+                st.markdown(_stat_grid([
+                    _stat_card("Transactions sent", f"{(_hd.get('tx_count') or 0):,}", "account nonce"),
+                    _stat_card("PROS balance", f"{(_hd.get('balance_pros') or 0):,.4f}"),
+                ]), unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="defi-note"><div class="defi-note-s">'
+                    'Pharos JSON-RPC exposes account state, not an indexed transaction list. '
+                    'For a full itemised history, PharosScan indexes every transfer for this address.'
+                    '</div></div>', unsafe_allow_html=True)
+                st.link_button("Full history on PharosScan ↗",
+                               PHAROS_EXPLORER_URL + "/address/" + _w3a)
+            else:
+                st.error("Could not read this address: " + esc(_hd.get("error") or "RPC unreachable"))
+
+    # ══ RWA MARKET ══════════════════════════════════════════
+    elif _tab == "RWA Market":
+        st.markdown(_panel("📊 Live RWA Market",
+                    "Live prices for leading real-world-asset tokens, alongside $PROS."),
+                    unsafe_allow_html=True)
+        with st.spinner("Loading live market data…"):
+            _mk = fetch_rwa_market()
+        if not _mk.get("rows"):
+            st.error("Live RWA market data is temporarily unavailable — try again shortly.")
+            if st.button("Retry", key="rwa_retry"):
+                st.session_state.pop("rwa_market_cache", None)
+                st.rerun()
+        else:
+            _cards = []
+            for _r in _mk["rows"]:
+                _chg = _r.get("chg")
+                _cc  = "#22C55E" if (_chg or 0) >= 0 else "#E5484D"
+                _cs  = (f"{_chg:+.2f}% · 24h" if _chg is not None else "—")
+                _pv  = _r.get("price") or 0
+                _ps  = f"${_pv:,.4f}" if _pv < 10 else f"${_pv:,.2f}"
+                _cards.append(_stat_card(f"{_r['sym']} · {_r['name']}", _ps,
+                                         f'<span style="color:{_cc};">{_cs}</span> · {esc(_r["tag"])}',
+                                         _cc))
+            st.markdown(_stat_grid(_cards), unsafe_allow_html=True)
+            st.caption(f"Live market data · as of {esc(_mk.get('as_of',''))}")
+            if st.button("🔄 Refresh market data", key="rwa_refresh"):
+                st.session_state.pop("rwa_market_cache", None)
+                st.rerun()
+
+    # ══ EXPLORER ════════════════════════════════════════════
+    elif _tab == "Explorer":
+        st.markdown(_panel("🔍 Pharos Protocol Explorer",
+                    "Inspect any transaction or address on Pharos mainnet. No wallet required."),
+                    unsafe_allow_html=True)
+        _q = st.text_input("Transaction hash or address", key="defi_exp_q",
+                           placeholder="0x… (66-char tx hash or 42-char address)")
+        if st.button("Inspect →", key="defi_exp_go"):
+            _qs = (_q or "").strip()
+            if valid_txhash(_qs):
+                with st.spinner("Reading transaction…"):
+                    st.session_state["defi_exp_res"] = ("tx", fetch_pharos_transaction(_qs))
+            elif valid_addr(_qs):
+                with st.spinner("Reading address…"):
+                    st.session_state["defi_exp_res"] = ("addr", fetch_pharos_onchain_data(_qs))
+            else:
+                st.warning("Enter a valid transaction hash (0x + 64 hex) or address (0x + 40 hex).")
+        _res = st.session_state.get("defi_exp_res")
+        if _res:
+            _kind, _rd = _res
+            if not _rd.get("available"):
+                st.error("Lookup failed: " + esc(_rd.get("error") or "not found / RPC unreachable"))
+            elif _kind == "tx":
+                _st = _rd.get("status")
+                _sc = "#22C55E" if _st == "success" else "#E5484D" if _st == "failed" else "#F59E0B"
+                st.markdown(_stat_grid([
+                    _stat_card("Status", f'<span style="color:{_sc};">{esc((_st or "pending").title())}</span>'),
+                    _stat_card("Value", f"{(_rd.get('value_pros') or 0):,.6f} PROS"),
+                    _stat_card("Block", f"{_rd.get('block_number') or '—'}"),
+                    _stat_card("Type", "Contract call" if _rd.get("is_contract_call") else "Transfer"),
+                ]), unsafe_allow_html=True)
+                st.markdown(
+                    '<div style="font-size:11.5px;color:var(--t2);word-break:break-all;">'
+                    f'<b>From</b> <code>{esc(_rd.get("from_addr") or "—")}</code><br>'
+                    f'<b>To</b> <code>{esc(_rd.get("to_addr") or "—")}</code></div>',
+                    unsafe_allow_html=True)
+                st.link_button("Open in PharosScan ↗", PHAROS_EXPLORER_URL + "/tx/" + (_q or "").strip())
+            else:
+                st.markdown(_stat_grid([
+                    _stat_card("PROS balance", f"{(_rd.get('balance_pros') or 0):,.4f}"),
+                    _stat_card("Transactions", f"{(_rd.get('tx_count') or 0):,}"),
+                    _stat_card("Type", "Contract" if _rd.get("is_contract") else "EOA wallet"),
+                ]), unsafe_allow_html=True)
+                st.link_button("Open in PharosScan ↗",
+                               PHAROS_EXPLORER_URL + "/address/" + (_q or "").strip())
+
+    # ── Ecosystem Integrations ───────────────────────────────
+    st.markdown(
+        '<div style="height:0.8rem;"></div>'
+        '<div class="defi-eyebrow">Ecosystem Integrations</div>',
+        unsafe_allow_html=True,
+    )
+    _integ_html = '<div class="defi-integ">'
+    for _nm, _dom, _tagl, _url, _emo in DEFI_INTEGRATIONS:
+        _fav = f"https://www.google.com/s2/favicons?domain={_dom}&sz=64"
+        _integ_html += (
+            f'<a href="{esc_url(_url)}" target="_blank" rel="noopener" class="defi-integ-c hover-lift">'
+            f'<img src="{_fav}" width="28" height="28" loading="lazy" decoding="async" '
+            f'style="border-radius:8px;" '
+            f'onerror="this.outerHTML=\'<span style=&quot;font-size:22px;&quot;>{_emo}</span>\'"/>'
+            f'<span class="defi-integ-n">{esc(_nm)}</span>'
+            f'<span class="defi-integ-t">{esc(_tagl)}</span>'
+            f'</a>'
+        )
+    _integ_html += '</div>'
+    st.markdown(_integ_html, unsafe_allow_html=True)
+
+
 elif st.session_state.page == "campaigns":
 
     st.markdown(
@@ -8098,33 +10227,33 @@ elif st.session_state.page == "campaigns":
         unsafe_allow_html=True,
     )
 
-    # All campaign cards in ONE st.markdown — vertical grid cards, top media block (ref-3 style)
-    all_camp_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.4rem;">'
+    # Campaign cards — large news-feed rows: cover art on the left,
+    # tag/title/summary/CTA on the right. Same component language as the
+    # Updates feed, so both sections read consistently and scan easily.
+    all_camp_html = '<div class="nf-list">'
     for c in CAMPAIGNS:
+        _clogo = c.get("logo", "")
+        _cover = (
+            f'<img src="{esc_url(_clogo)}" loading="lazy" decoding="async" alt="" '
+            f'class="nf-logo" onerror="this.style.display=\'none\';'
+            f'this.parentNode.querySelector(\'.nf-emoji\').style.display=\'flex\';"/>'
+            if _clogo else ''
+        )
         all_camp_html += (
-            f'<a href="{c["link"]}" target="_blank" '
-            f'style="display:flex;flex-direction:column;'
-            f'background:#FFFFFF;border:1px solid #E3E5EA;border-radius:18px;'
-            f'overflow:hidden;text-decoration:none;'
-            f'box-shadow:0 2px 10px rgba(20,20,60,0.05);'
-            f'transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease,border-color 180ms ease;"'
-            f' class="hover-lift">'
-            # Top media block — colored gradient with large icon
-            f'<div style="background:{c["bg"]};height:140px;'
-            f'display:flex;align-items:center;justify-content:center;position:relative;">'
-            f'<span style="font-size:52px;line-height:1;filter:drop-shadow(0 4px 14px rgba(0,0,0,0.12));">{c["icon"]}</span>'
-            f'<img src="{c["logo"]}" width="22" height="22" '
-            f'style="position:absolute;bottom:12px;right:14px;border-radius:5px;opacity:0.7;" '
-            f'onerror="this.style.display=\'none\'"/>'
+            f'<a class="nf-item" href="{esc_url(c["link"])}" target="_blank" rel="noopener">'
+            f'<div class="nf-thumb nf-thumb-camp" style="background:{c["bg"]};">'
+            f'{_cover}'
+            f'<span class="nf-emoji"' + (' style="display:none;"' if _clogo else '') + f'>{c["icon"]}</span>'
             f'</div>'
-            # Bottom text block
-            f'<div style="padding:1.3rem 1.4rem 1.5rem 1.4rem;display:flex;flex-direction:column;gap:8px;">'
-            f'<div class="camp-tag" style="align-self:flex-start;">{c["tag"]}</div>'
-            f'<div class="camp-title">{c["title"]}</div>'
-            f'<div class="camp-desc">{c["desc"]}</div>'
-            f'<span style="font-size:11.5px;font-weight:600;color:#1A1AFF;margin-top:2px;">{c["cta"]} ↗</span>'
+            f'<div class="nf-body">'
+            f'<div class="nf-meta">'
+            f'<span class="nf-cat">{esc(c["tag"].strip())}</span>'
+            f'<span class="nf-src">Pharos ecosystem</span>'
             f'</div>'
-            f'</a>'
+            f'<div class="nf-title">{esc(c["title"])}</div>'
+            f'<div class="nf-summ">{esc(c["desc"])}</div>'
+            f'<div class="nf-cta">{esc(c["cta"])} ↗</div>'
+            f'</div></a>'
         )
     all_camp_html += '</div>'
     st.markdown(all_camp_html, unsafe_allow_html=True)
@@ -8175,104 +10304,91 @@ elif st.session_state.page == "updates":
         '<div class="section-eyebrow"><span style="font-size:12px;">📋</span>&nbsp;PHAROS NEWS</div>'
         '<h2 class="section-h">Active Updates</h2>'
         '<p class="section-sub">Direct from <a href="' + PHAROS_X_URL + '" target="_blank">@pharos_network</a>. '
-        'Only ongoing campaigns and initiatives — hackathons, stake events, and more.</p>'
+        'Live feed of the latest official posts — announcements, ecosystem launches, partnerships, campaigns and protocol updates. Refreshes automatically.</p>'
         '</div></div>',
         unsafe_allow_html=True,
     )
 
-    # ── Live news from CoinGecko ───────────────
-    with st.spinner("Loading latest Pharos news…"):
-        news_items = get_pharos_news()
+    # ── Live updates from the official Pharos Network X account ──
+    # Same card grid + timeline design as before, now driven by real
+    # posts (text, timestamp, media, direct link). Rendered inside a
+    # fragment (where supported) so the feed re-fetches on a schedule
+    # without a full page rerun — users always see the newest posts.
+    def _render_x_feed():
+        posts = get_pharos_x_posts()
+        _live = st.session_state.get("pharos_x_cache", {}).get("live", False)
 
-    if news_items:
-        cards_source = news_items[:6]
-    else:
-        cards_source = [
-            {"title": "Ist project of the Pharos Incubator ⚓", "description": "Excited to announce @Farooxyz as the FIRST project of the Pharos Incubator.", "url": PHAROS_MAIN_URL, "thumb": "https://pbs.twimg.com/profile_images/2016345161756717057/IFCtt1bF_400x400.jpg", "date": ""},
-            {"title": "The next allocation window for pALPHA Stage 2 is almost here.", "description": "Following a fully subscribed $50M first round, the next opportunity opens on July 10–16.", "url": "https://app.yieldnetwork.io/pharos-2/", "thumb": "https://res.cloudinary.com/dhkxvwmjd/image/upload/v1781750528/Pharos_onrmbe.jpg", "date": ""},
-            {"title": "Cross-chain access is expanding on Pharos", "description": "@StargateFinance now supports Pharos, enabling users to transfer and swap assets across EVM chains", "url": "https://x.com/pharos_network/status/2067208187615576378?s=20", "thumb": "https://pbs.twimg.com/profile_images/1928147506699145217/n7-KQGNJ_400x400.png", "date": ""},
-            {"title": "Pharos is partnering with @avalonfinance and @FunctionBTC", "description": " To expand Bitcoin utility within the Pharos ecosystem.", "url": "https://x.com/pharos_network/status/2066993885784822019?s=20", "thumb": "https://pbs.twimg.com/profile_images/1874986577774145536/Uvumm1eb_400x400.jpg", "date": ""},
-            {"title": "The Builders Harbor on Pharos has been upgraded", "description": "New tools, templates, and technical resources.", "url": "https://www.pharos.xyz/devhub", "thumb": "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64", "date": ""},
-            {"title": "Expedition Season 2 ongoing", "description": "Particpate in the Ecosystem.", "url": "https://discord.gg/pharos", "thumb": "https://www.google.com/s2/favicons?domain=discord.com&sz=64", "date": ""},
-            {"title": "Pharos x XLayer & OKX", "description": "Fellow partners in bringing World Cup outcomes onchain.", "url": "https://x.com/pharos_network/status/2065362220851335650", "thumb": "https://www.google.com/s2/favicons?domain=okx.com&sz=64", "date": ""},
-            {"title": "Follow Pharos on X for more updates", "description": "Also join Discord for more insights.", "url": "https://x.com/pharos_network", "thumb": "https://pbs.twimg.com/profile_images/2005491865450430464/ta6znFqT_400x400.jpg", "date": ""},
-        ]
         st.markdown(
-            '<div style="font-size:11px;color:#9499A8;margin-bottom:0.6rem;">'
-            'News could not be loaded from CoinGecko — showing latest known updates:</div>',
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
+            'color:#9499A8;margin-bottom:0.6rem;">'
+            + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
+               'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
+               'Live from <b>@pharos_network</b> · refreshes automatically'
+               if _live else
+               '<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
+               'display:inline-block;"></span>'
+               'Live feed temporarily unreachable — showing the latest known official updates')
+            + '</div>',
             unsafe_allow_html=True,
         )
 
-    # All update cards in ONE st.markdown — same grid + top-media-block
-    # style as the campaign cards, just driven by news data instead.
-    UPDATE_BG = "linear-gradient(135deg,#EEF0FF,#E4E8FF)"
-    all_updates_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.4rem;">'
-    for n in cards_source:
-        title = esc(n.get("title", ""))
-        desc  = esc((n.get("description", "") or "")[:140])
-        link  = esc_url(n.get("url", "#"))
-        thumb = n.get("thumb", "")
-        thumb = esc_url(thumb) if thumb else ""
-        date  = esc(n.get("date", ""))
-        all_updates_html += (
-            f'<a href="{link}" target="_blank" '
-            f'style="display:flex;flex-direction:column;'
-            f'background:#FFFFFF;border:1px solid #E3E5EA;border-radius:18px;'
-            f'overflow:hidden;text-decoration:none;'
-            f'box-shadow:0 2px 10px rgba(20,20,60,0.05);'
-            f'transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 240ms ease,border-color 180ms ease;"'
-            f' class="hover-lift">'
-            # Top media block — same 140px height as campaign cards
-            f'<div style="background:{UPDATE_BG};height:140px;'
-            f'display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">'
-            + (
-                f'<img src="{thumb}" style="max-width:72px;max-height:72px;object-fit:contain;'
-                f'filter:drop-shadow(0 4px 14px rgba(0,0,0,0.12));" '
-                f'onerror="this.outerHTML=\'<span style=&quot;font-size:44px;&quot;>📰</span>\'"/>'
-                if thumb else
-                '<span style="font-size:44px;">📰</span>'
-            ) +
-            f'</div>'
-            # Bottom text block — same padding/tag/title/desc/cta as campaigns
-            f'<div style="padding:1.3rem 1.4rem 1.5rem 1.4rem;display:flex;flex-direction:column;gap:8px;">'
-            + (f'<div class="camp-tag" style="align-self:flex-start;">{date}</div>' if date else '<div class="camp-tag" style="align-self:flex-start;">LATEST</div>')
-            + f'<div class="camp-title">{title}</div>'
-            f'<div class="camp-desc">{desc}</div>'
-            f'<span style="font-size:11.5px;font-weight:600;color:#1A1AFF;margin-top:2px;">Read more ↗</span>'
-            f'</div>'
-            f'</a>'
-        )
-    all_updates_html += '</div>'
-    st.markdown(all_updates_html, unsafe_allow_html=True)
+        # ── News-feed layout ──────────────────────────────
+        # Large, scannable rows: prominent cover image, title, summary
+        # and metadata. Collapses to a stacked card on mobile.
+        _feed = '<div class="nf-list">'
+        for _n in posts[:8]:
+            _text = (_n.get("text") or "").strip()
+            # First sentence/line becomes the headline; the rest is summary.
+            _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
+            _title = (_parts[0] or _text)[:120]
+            _summ  = (_parts[1].strip() if len(_parts) > 1 else "")[:200]
+            _link  = esc_url(_n.get("url", PHAROS_X_URL))
+            _media = _n.get("media") or ""
+            _rel   = esc(_n.get("rel") or "")
+            # Category inferred from the post's own words — no invention.
+            _tl = _text.lower()
+            if   any(k in _tl for k in ("partner", "collab")):        _cat = "Partnership"
+            elif any(k in _tl for k in ("launch", "live", "mainnet")): _cat = "Launch"
+            elif any(k in _tl for k in ("campaign", "quest", "reward", "expedition")): _cat = "Campaign"
+            elif any(k in _tl for k in ("upgrade", "protocol", "release")): _cat = "Protocol"
+            elif any(k in _tl for k in ("incubator", "ecosystem")):   _cat = "Ecosystem"
+            else:                                                     _cat = "Announcement"
 
-    # Quick Updates timeline — same visual language as the campaign
-    # "Phase Timeline" card (white card, vertical connector line)
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-    if news_items and len(news_items) > 6:
-        timeline_html = (
-            '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;">'
-            '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">Quick Updates</div>'
-            '<div style="display:flex;flex-direction:column;gap:8px;">'
-        )
-        for n in news_items[6:9]:
-            timeline_html += (
-                '<div style="display:flex;align-items:flex-start;gap:10px;">'
-                f'<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">{esc(n.get("date","")) or "—"}</div>'
-                '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
-                f'<div><div style="font-size:12px;font-weight:600;color:#14141F;">{esc(n.get("title",""))}</div>'
-                f'<div style="font-size:11px;color:#5B5F6E;">{esc((n.get("description","") or "")[:90])}</div></div>'
-                '</div>'
+            _thumb = (
+                f'<img src="{esc_url(_media)}" loading="lazy" decoding="async" alt="" '
+                f'onerror="this.onerror=null;this.src=\'{esc_url(PHAROS_X_AVATAR)}\';"/>'
+                if _media else
+                f'<img src="{esc_url(PHAROS_X_AVATAR)}" loading="lazy" decoding="async" alt=""/>'
             )
-        timeline_html += '</div></div>'
-        st.markdown(timeline_html, unsafe_allow_html=True)
+            _feed += (
+                f'<a class="nf-item" href="{_link}" target="_blank" rel="noopener">'
+                f'<div class="nf-thumb">{_thumb}</div>'
+                f'<div class="nf-body">'
+                f'<div class="nf-meta">'
+                f'<span class="nf-cat">{esc(_cat)}</span>'
+                f'<span class="nf-src">@pharos_network</span>'
+                + (f'<span class="nf-dot">·</span><span class="nf-time">{_rel}</span>' if _rel else '')
+                + '</div>'
+                f'<div class="nf-title">{esc(_title)}</div>'
+                + (f'<div class="nf-summ">{esc(_summ)}</div>' if _summ else '')
+                + '<div class="nf-cta">View post on X ↗</div>'
+                '</div></a>'
+            )
+        _feed += '</div>'
+        st.markdown(_feed, unsafe_allow_html=True)
+
+    # Periodic auto-refresh where the Streamlit runtime supports
+    # fragments; otherwise the short feed cache refreshes on rerun.
+    if hasattr(st, "fragment"):
+        _render_x_feed = st.fragment(run_every=X_FEED_CACHE)(_render_x_feed)
+    _render_x_feed()
 
     col1, col2 = st.columns(2)
     with col1:
         st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
     with col2:
-        if st.button("🔄 Refresh news", key="refresh_news"):
-            if "pharos_news_cache" in st.session_state:
-                del st.session_state["pharos_news_cache"]
+        if st.button("🔄 Refresh feed", key="refresh_news"):
+            st.session_state.pop("pharos_x_cache", None)
             st.rerun()
 
 
