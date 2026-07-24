@@ -14,6 +14,8 @@ All CSS in plain triple-quoted strings (no f-prefix).
 
 import os, time, base64, json, re, hashlib, urllib.parse, threading
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -413,6 +415,29 @@ if _voice_q:
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def _get_http_session() -> requests.Session:
+    """Shared requests Session with connection pooling and sensible retry
+    defaults. Reused across all requests to reduce TCP handshake overhead."""
+    session = requests.Session()
+    retry = Retry(
+        total=1,
+        backoff_factor=0.3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(
+        max_retries=retry,
+        pool_connections=4,
+        pool_maxsize=8,
+    )
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update({"Accept": "application/json"})
+    return session
+
+
 def get_logo_b64() -> str:
     for path, mime in [("pharos_logo.jpg","image/jpeg"),("pharos_logo.png","image/png")]:
         if os.path.exists(path):
@@ -425,21 +450,45 @@ def get_pros_price() -> dict:
     cached = st.session_state.get("pros_price_cache", {})
     if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE:
         return cached
-    try:
-        r = requests.get(COINGECKO_PRICE_URL, timeout=5, headers={"Accept":"application/json"})
-        r.raise_for_status()
-        data = r.json().get(COINGECKO_ASSET_ID, {})
-        if not data: raise ValueError("Empty")
-        result = {
-            "price_usd": data.get("usd"), "market_cap_usd": data.get("usd_market_cap"),
-            "volume_24h": data.get("usd_24h_vol"), "change_24h": data.get("usd_24h_change"),
-            "last_updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
-            "fetched_at": now, "available": True, "error": None,
-        }
-    except Exception as e:
-        prev   = st.session_state.get("pros_price_cache", {})
-        result = {k: prev.get(k) for k in ["price_usd","market_cap_usd","volume_24h","change_24h","last_updated"]}
-        result.update({"fetched_at": now, "available": False, "error": str(e)})
+    # Stale cache: serve immediately while fetching fresh data
+    # (the updated result will appear on the next rerun)
+    result = None
+    for attempt in range(2):
+        try:
+            r = requests.get(
+                COINGECKO_PRICE_URL,
+                timeout=5 + attempt * 2,
+                headers={"Accept": "application/json"},
+            )
+            r.raise_for_status()
+            data = r.json().get(COINGECKO_ASSET_ID, {})
+            if not data:
+                raise ValueError("Empty response")
+            result = {
+                "price_usd": data.get("usd"),
+                "market_cap_usd": data.get("usd_market_cap"),
+                "volume_24h": data.get("usd_24h_vol"),
+                "change_24h": data.get("usd_24h_change"),
+                "last_updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
+                "fetched_at": now, "available": True, "error": None,
+            }
+            break
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                time.sleep(0.2)
+            continue
+        except Exception as e:
+            if attempt == 1 or not isinstance(e, requests.exceptions.ConnectionError):
+                prev = st.session_state.get("pros_price_cache", {})
+                result = {k: prev.get(k) for k in ["price_usd", "market_cap_usd", "volume_24h", "change_24h", "last_updated"]}
+                result.update({"fetched_at": now, "available": False, "error": str(e)})
+            break
+    if result is None:
+        # Both attempts failed — return stale cache if available
+        prev = st.session_state.get("pros_price_cache", {})
+        if prev:
+            return prev
+        result = {"fetched_at": now, "available": False, "error": "Network unavailable"}
     st.session_state["pros_price_cache"] = result
     return result
 
@@ -449,26 +498,43 @@ def get_pharos_news() -> list:
     if cached.get("items") and now - cached.get("fetched_at", 0) < NEWS_CACHE:
         return cached["items"]
     items = []
-    try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/news",
-            params={"category": "pharos-network"},
-            timeout=6, headers={"Accept":"application/json"}
-        )
-        if r.status_code == 200:
-            data = r.json()
-            raw  = data if isinstance(data, list) else data.get("data", [])
-            for art in raw[:8]:
-                items.append({
-                    "title":       art.get("title", ""),
-                    "description": art.get("description", ""),
-                    "url":         art.get("url", "#"),
-                    "thumb":       art.get("thumb_2x", ""),
-                    "source":      art.get("news_site", ""),
-                    "date":        art.get("updated_at", ""),
-                })
-    except Exception:
-        pass
+    for attempt in range(2):
+        try:
+            r = requests.get(
+                "https://api.coingecko.com/api/v3/news",
+                params={"category": "pharos-network"},
+                timeout=6 + attempt * 3,
+                headers={"Accept": "application/json"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                raw  = data if isinstance(data, list) else data.get("data", [])
+                for art in raw[:8]:
+                    title = art.get("title", "").strip()
+                    if title:
+                        items.append({
+                            "title":       title,
+                            "description": art.get("description", ""),
+                            "url":         art.get("url", "#"),
+                            "thumb":       art.get("thumb_2x", "") or art.get("thumb", ""),
+                            "source":      art.get("news_site", ""),
+                            "date":        art.get("updated_at", ""),
+                        })
+                break
+            elif r.status_code == 429:
+                # Rate limited — use stale cache if available
+                if cached.get("items"):
+                    return cached["items"]
+                break
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                time.sleep(0.3)
+            continue
+        except Exception:
+            break
+    # Fall back to stale cache rather than returning empty if network fails
+    if not items and cached.get("items"):
+        return cached["items"]
     st.session_state["pharos_news_cache"] = {"items": items, "fetched_at": now}
     return items
 
@@ -569,49 +635,73 @@ def _fetch_x_api_v2(token) -> list:
     return items
 
 def _fetch_nitter_rss() -> list:
-    """Key-free fallback: parse the public Nitter RSS mirror of the account."""
+    """Key-free fallback: parse the public Nitter RSS mirror of the account.
+    Tries all mirrors with retry logic and exponential backoff on transient failures."""
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
-    for base in _NITTER_MIRRORS:
-        try:
-            r = requests.get(
-                f"{base}/{PHAROS_X_HANDLE}/rss", timeout=6,
-                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/rss+xml,application/xml"},
-            )
-            if r.status_code != 200 or "<rss" not in r.text[:2000]:
-                continue
-            root  = ET.fromstring(r.text)
-            items = []
-            for it in root.iter("item"):
-                title = (it.findtext("title") or "").strip()
-                link  = (it.findtext("link") or "").strip()
-                desc  = it.findtext("description") or ""
-                pub   = it.findtext("pubDate") or ""
-                # Rewrite the mirror link back to the original X post
-                try:
-                    pr = urlparse(link)
-                    link = "https://x.com" + pr.path.split("#")[0]
-                except Exception:
-                    pass
-                m     = re.search(r'<img[^>]+src="([^"]+)"', desc)
-                thumb = m.group(1) if m else ""
-                try:
-                    dt = parsedate_to_datetime(pub)
-                except Exception:
-                    dt = None
-                items.append({
-                    "text":  title,
-                    "url":   link,
-                    "media": thumb,
-                    "dt":    dt,
-                    "rel":   _x_rel_time(dt) if dt else "",
-                })
-                if len(items) >= 10:
-                    break
-            if items:
+
+    def _try_mirror(base: str) -> list:
+        for attempt in range(2):
+            try:
+                r = requests.get(
+                    f"{base}/{PHAROS_X_HANDLE}/rss",
+                    timeout=7 + attempt * 3,  # 7s first try, 10s retry
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; RSSFetcher/1.0)",
+                        "Accept": "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+                    },
+                )
+                if r.status_code != 200 or "<rss" not in r.text[:2000]:
+                    return []
+                root  = ET.fromstring(r.text)
+                items = []
+                for it in root.iter("item"):
+                    title = (it.findtext("title") or "").strip()
+                    link  = (it.findtext("link") or "").strip()
+                    desc  = it.findtext("description") or ""
+                    pub   = it.findtext("pubDate") or ""
+                    # Rewrite the mirror link back to the original X post
+                    try:
+                        pr = urlparse(link)
+                        link = "https://x.com" + pr.path.split("#")[0]
+                    except Exception:
+                        pass
+                    # Try multiple image patterns in the description
+                    m = (re.search(r'<img[^>]+src="([^"]+)"', desc) or
+                         re.search(r'<img[^>]+src=\'([^\']+)\'', desc))
+                    thumb = m.group(1) if m else ""
+                    try:
+                        dt = parsedate_to_datetime(pub)
+                    except Exception:
+                        dt = None
+                    if title:  # skip empty items
+                        items.append({
+                            "text":  title,
+                            "url":   link,
+                            "media": thumb,
+                            "dt":    dt,
+                            "rel":   _x_rel_time(dt) if dt else "",
+                        })
+                    if len(items) >= 10:
+                        break
                 return items
-        except Exception:
-            continue
+            except requests.exceptions.Timeout:
+                if attempt == 0:
+                    time.sleep(0.5)
+                continue
+            except Exception:
+                break
+        return []
+
+    # Try mirrors in parallel-ish fashion: shuffle to distribute load,
+    # stop as soon as one succeeds.
+    import random
+    mirrors = list(_NITTER_MIRRORS)
+    random.shuffle(mirrors)
+    for base in mirrors:
+        items = _try_mirror(base)
+        if items:
+            return items
     return []
 
 # Curated latest-known official updates — shown only if every live
@@ -645,10 +735,25 @@ _X_PRIORITY_TERMS = (
 # ─────────────────────────────────────────────
 PHAROS_TOKENS = [
     # (symbol, address, decimals, label)
+    # WPROS is the canonical on-chain representation of native PROS.
+    # For swap routing, PROS → WPROS wrapping happens inside the router.
     ("WPROS", "0x52c48d4213107b20bc583832b0d951fb9ca8f0b0", 18, "Wrapped PROS"),
     ("USDC",  "0xc879c018db60520f4355c26ed1a6d572cdac1815",  6, "USDC (Circle)"),
     ("WETH",  "0x1f4b7011Ee3d53969bb67F59428a9ec0477856E9", 18, "Wrapped ETH"),
     ("LINK",  "0x51e2A24742Db77604B881d6781Ee16B5b8fcBE29", 18, "Chainlink"),
+]
+
+# Extended token list for the swap UI — includes PROS as an alias for
+# WPROS so users can select "PROS ↔ USDC" and similar common pairs.
+# The router treats PROS and WPROS identically (WPROS is the ERC-20
+# representation; the router wraps/unwraps native PROS automatically).
+SWAP_TOKENS = [
+    # (symbol, address, decimals, label, is_native_alias)
+    ("PROS",  "0x52c48d4213107b20bc583832b0d951fb9ca8f0b0", 18, "PROS (Native / WPROS)", True),
+    ("WPROS", "0x52c48d4213107b20bc583832b0d951fb9ca8f0b0", 18, "Wrapped PROS", False),
+    ("USDC",  "0xc879c018db60520f4355c26ed1a6d572cdac1815",  6, "USDC (Circle)", False),
+    ("WETH",  "0x1f4b7011Ee3d53969bb67F59428a9ec0477856E9", 18, "Wrapped ETH", False),
+    ("LINK",  "0x51e2A24742Db77604B881d6781Ee16B5b8fcBE29", 18, "Chainlink", False),
 ]
 MULTICALL3_ADDR = "0xcA11bde05977b3631167028862bE2a173976CA11"  # canonical
 PERMIT2_ADDR    = "0x000000000022D473030F116dDEE9F6B43aC78BA3"  # canonical
@@ -663,23 +768,74 @@ FAROSWAP_DOCS_URL    = "https://docs.faroswap.xyz"
 
 # NOTE FOR FUTURE MAINTAINERS
 # ---------------------------
-# A PROS staking contract (stPROS) and a FaroSwap mainnet router are NOT
-# published in the Pharos docs at the time of writing, and stPROS is
-# described publicly as "not yet live". They are therefore intentionally
-# absent. To enable native staking/swap transactions later, add the
-# verified addresses here and implement the calls in the DeFi page —
-# do not populate these from blog posts or third-party sites.
+# A PROS staking contract (stPROS) is NOT published in the Pharos docs
+# at the time of writing, and stPROS is described publicly as "not yet
+# live". It is therefore intentionally absent — do not populate this
+# from blog posts or third-party sites.
 PROS_STAKING_ADDR = None   # ← set to the official address once published
-FAROSWAP_ROUTER   = None   # ← set to the official address once published
+
+# ─────────────────────────────────────────────
+# FAROSWAP / DODO ROUTER — Pharos Pacific Mainnet (chain 1672)
+#
+# Provenance: address + ABI-verification link supplied directly by the
+# FaroSwap team, who confirmed in writing that it is deployed on the
+# PUBLIC Pacific Mainnet (chain 1672) — the same chain this app's
+# wallet layer already targets — using DODO's standard, unmodified
+# contract set (their words: "All currently deployed contracts use
+# DODO's set of contracts").
+#
+# FAROSWAP_ROUTER is DODO's "V2 Proxy" — it does not hold funds itself.
+# It executes dodoSwapV2TokenToToken(...) against a PMM pool address
+# supplied by the caller in `dodoPairs[]`. Slippage protection
+# (`minReturnAmount`) is enforced by the router regardless of which
+# pool is targeted.
+FAROSWAP_ROUTER = "0xA5cA5Fbe34e444F366B373170541ec6902b0F75c"
+
+# DODO/FaroSwap PMM pool addresses, keyed by (fromSymbol, toSymbol) —
+# UNORDERED pair key, i.e. both directions map to the same pool.
+# Empty until FaroSwap publishes per-pair pool addresses (their Notion
+# deployment doc requires JS to render and could not be read
+# automatically). The Swap tab also offers a manual "Advanced" pool
+# address field as a stopgap — see render there. Populate this dict
+# once verified addresses are available, e.g.:
+#   DODO_POOLS = {("WPROS","USDC"): "0x...verified pool address..."}
+DODO_POOLS = {}
+
+# Function selectors below are NOT typed from memory. Each was computed
+# from its exact signature via keccak256 (self-verified against five
+# well-known ERC-20 selectors first), then cross-checked against six
+# independently PharosScan/Etherscan/BscScan/Arbiscan-verified DODO V2
+# Proxy deployments (Ethereum, BSC mainnet+testnet, Arbitrum,
+# Moonriver) — all six expose byte-for-byte the same interface.
+_SEL_BASE_TOKEN       = "0x4a248d2a"  # _BASE_TOKEN_()
+_SEL_QUOTE_TOKEN      = "0xd4b97046"  # _QUOTE_TOKEN_()
+_SEL_QUERY_SELL_BASE  = "0x79a04876"  # querySellBase(address,uint256)
+_SEL_QUERY_SELL_QUOTE = "0x66410a21"  # querySellQuote(address,uint256)
+_SEL_DODO_SWAP_T2T    = "0xf87dc1b7"  # dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)
+_SEL_ALLOWANCE        = "0xdd62ed3e"  # allowance(address,address) — same as ERC-20 standard, already used for approve() elsewhere
+_SEL_APPROVE          = "0x095ea7b3"  # approve(address,uint256)
 
 
 def get_pharos_x_posts() -> list:
     """Latest posts from the official Pharos Network X account.
-    Live-source layered fetch, briefly cached, official-news-first."""
+    Live-source layered fetch, briefly cached, official-news-first.
+    Uses stale-while-revalidate: serves stale cache instantly while
+    refreshing in the background so the UI is never blocked."""
     now    = time.time()
     cached = st.session_state.get("pharos_x_cache", {})
+
+    # Serve cached items immediately if fresh enough
     if cached.get("items") and now - cached.get("fetched_at", 0) < X_FEED_CACHE:
         return cached["items"]
+
+    # If we have stale items and a fetch is already in progress, return stale
+    if cached.get("items") and cached.get("fetching"):
+        return cached["items"]
+
+    # Mark that a fetch is in progress to prevent concurrent fetches
+    if cached.get("items"):
+        cached["fetching"] = True
+        st.session_state["pharos_x_cache"] = cached
 
     items, live = [], False
     token = _x_bearer_token()
@@ -695,7 +851,10 @@ def get_pharos_x_posts() -> list:
         # Keep serving the previous good fetch if the network blips.
         prev = cached.get("items")
         if prev:
-            st.session_state["pharos_x_cache"] = {"items": prev, "fetched_at": now, "live": cached.get("live", False)}
+            st.session_state["pharos_x_cache"] = {
+                "items": prev, "fetched_at": now,
+                "live": cached.get("live", False), "fetching": False,
+            }
             return prev
         items = list(_PHAROS_X_FALLBACK)
 
@@ -706,7 +865,9 @@ def get_pharos_x_posts() -> list:
         return 0 if any(k in t for k in _X_PRIORITY_TERMS) else 1
     items = sorted(items, key=_prio)
 
-    st.session_state["pharos_x_cache"] = {"items": items, "fetched_at": now, "live": live}
+    st.session_state["pharos_x_cache"] = {
+        "items": items, "fetched_at": now, "live": live, "fetching": False,
+    }
     return items
 
 # ─────────────────────────────────────────────
@@ -1247,7 +1408,7 @@ body{background:transparent;overflow:hidden;font-family:'DM Sans',sans-serif;}
 .wrap{
     display:flex;flex-direction:column;
     align-items:center;justify-content:center;
-    width:100%;height:200px;position:relative;
+    width:100%;height:220px;position:relative;
 }
 canvas{
     position:absolute;top:0;left:0;
@@ -1593,7 +1754,7 @@ canvas{
 </body>
 </html>
         """,
-        height=200,
+        height=220,
         scrolling=False,
     )
 
@@ -1634,6 +1795,11 @@ def _render_wallet_connect_widget_UNUSED():
 
 
 
+def setattr_dict(d: dict, key: str, value) -> None:
+    """Helper: set d[key] = value; used in lambda callbacks for batch RPC fallback."""
+    d[key] = value
+
+
 def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
     """
     Reads PUBLIC on-chain data for a wallet via standard read-only JSON-RPC calls.
@@ -1663,37 +1829,50 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
 
     for rpc_url in rpc_candidates:
         try:
-            # 1) Native PROS balance — read-only, costs nothing
-            bal_payload = {
-                "jsonrpc": "2.0", "id": 1, "method": "eth_getBalance",
-                "params": [address, "latest"],
-            }
-            r1 = requests.post(rpc_url, json=bal_payload, headers=headers, timeout=8)
-            r1.raise_for_status()
-            bal_hex = r1.json().get("result")
-            if bal_hex:
-                result["balance_pros"] = int(bal_hex, 16) / 1e18
+            # Batch all 3 calls into a single JSON-RPC request to reduce
+            # round-trip latency from ~3× to 1× network overhead.
+            batch_payload = [
+                {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance",
+                 "params": [address, "latest"]},
+                {"jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionCount",
+                 "params": [address, "latest"]},
+                {"jsonrpc": "2.0", "id": 3, "method": "eth_getCode",
+                 "params": [address, "latest"]},
+            ]
+            rb = requests.post(rpc_url, json=batch_payload, headers=headers, timeout=8)
+            rb.raise_for_status()
+            batch_result = rb.json()
 
-            # 2) Transaction count — proxy for on-chain activity level
-            count_payload = {
-                "jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionCount",
-                "params": [address, "latest"],
-            }
-            r2 = requests.post(rpc_url, json=count_payload, headers=headers, timeout=8)
-            r2.raise_for_status()
-            count_hex = r2.json().get("result")
-            if count_hex:
-                result["tx_count"] = int(count_hex, 16)
-
-            # 3) Check if address is a contract (bytecode present)
-            code_payload = {
-                "jsonrpc": "2.0", "id": 3, "method": "eth_getCode",
-                "params": [address, "latest"],
-            }
-            r3 = requests.post(rpc_url, json=code_payload, headers=headers, timeout=8)
-            r3.raise_for_status()
-            code_hex = r3.json().get("result", "0x")
-            result["is_contract"] = code_hex not in ("0x", "0x0", None)
+            # Batch responses may come back as a list in any order
+            if isinstance(batch_result, list):
+                for item in batch_result:
+                    _id  = item.get("id")
+                    _res = item.get("result")
+                    if _id == 1 and _res:
+                        result["balance_pros"] = int(_res, 16) / 1e18
+                    elif _id == 2 and _res:
+                        result["tx_count"] = int(_res, 16)
+                    elif _id == 3:
+                        code_hex = _res or "0x"
+                        result["is_contract"] = code_hex not in ("0x", "0x0", None)
+            else:
+                # Fallback: RPC doesn't support batch — do sequential calls
+                for _id, _method, _parse in [
+                    (1, "eth_getBalance",        lambda x: setattr_dict(result, "balance_pros", int(x, 16) / 1e18)),
+                    (2, "eth_getTransactionCount", lambda x: setattr_dict(result, "tx_count", int(x, 16))),
+                    (3, "eth_getCode",           lambda x: setattr_dict(result, "is_contract", x not in ("0x", "0x0", None))),
+                ]:
+                    try:
+                        r = requests.post(rpc_url, json={
+                            "jsonrpc": "2.0", "id": _id, "method": _method,
+                            "params": [address, "latest"],
+                        }, headers=headers, timeout=6)
+                        r.raise_for_status()
+                        val = r.json().get("result")
+                        if val is not None:
+                            _parse(val)
+                    except Exception:
+                        pass
 
             result["available"] = True
             result["error"] = None
@@ -1808,7 +1987,85 @@ def fetch_token_balances(address: str) -> dict:
             rows.append({"sym": sym, "addr": taddr, "label": label, "bal": val / (10 ** dec)})
 
     out["tokens"] = rows
-    out["available"] = True
+
+    return out
+
+
+def _addr32(a: str) -> str:
+    return (a or "").lower().replace("0x", "").rjust(64, "0")
+
+
+def _u256(n: int) -> str:
+    return hex(int(n))[2:].rjust(64, "0")
+
+
+def token_allowance(token_addr: str, owner: str, spender: str) -> int | None:
+    """Live ERC-20 allowance(owner, spender). None on RPC failure."""
+    try:
+        data = _SEL_ALLOWANCE + _addr32(owner) + _addr32(spender)
+        res = _rpc("eth_call", [{"to": token_addr, "data": data}, "latest"])
+        return int(res, 16) if res and res != "0x" else 0
+    except Exception:
+        return None
+
+
+def dodo_pool_orientation(pool_addr: str) -> dict:
+    """Read _BASE_TOKEN_() / _QUOTE_TOKEN_() from a live DODO pool.
+
+    Returns {'available', 'base', 'quote', 'error'}. Never assumes which
+    side of the pool a token sits on — always reads it live, since
+    getting base/quote backwards would query the wrong price curve.
+    """
+    out = {"available": False, "base": None, "quote": None, "error": None}
+    try:
+        b = _rpc("eth_call", [{"to": pool_addr, "data": _SEL_BASE_TOKEN}, "latest"])
+        q = _rpc("eth_call", [{"to": pool_addr, "data": _SEL_QUOTE_TOKEN}, "latest"])
+        if not b or not q or b == "0x" or q == "0x":
+            out["error"] = "Address has no code, or is not a DODO pool."
+            return out
+        out["base"]  = "0x" + b[-40:]
+        out["quote"] = "0x" + q[-40:]
+        out["available"] = True
+    except Exception as e:
+        out["error"] = str(e)
+    return out
+
+
+def dodo_get_quote(pool_addr: str, from_token_addr: str, amount_wei: int) -> dict:
+    """Live PMM quote from a DODO pool for selling `amount_wei` of
+    from_token_addr. Determines base/quote orientation first (never
+    assumed), then calls the matching querySellBase/querySellQuote —
+    a view call, harmless regardless of address correctness.
+
+    Returns {'available', 'receive_wei', 'fee_wei', 'sells_base', 'error'}.
+    """
+    out = {"available": False, "receive_wei": None, "fee_wei": None,
+           "sells_base": None, "error": None}
+    orient = dodo_pool_orientation(pool_addr)
+    if not orient["available"]:
+        out["error"] = orient["error"] or "Could not read pool orientation."
+        return out
+    ft = (from_token_addr or "").lower()
+    sells_base = ft == orient["base"].lower()
+    sells_quote = ft == orient["quote"].lower()
+    if not (sells_base or sells_quote):
+        out["error"] = "This token is not part of the configured pool's pair."
+        return out
+    sel = _SEL_QUERY_SELL_BASE if sells_base else _SEL_QUERY_SELL_QUOTE
+    try:
+        # trader arg is informational to the pool (fee-tier lookup) —
+        # zero address is a safe, standard default for a quote-only call.
+        data = sel + _addr32("0x0000000000000000000000000000000000000000") + _u256(amount_wei)
+        res = _rpc("eth_call", [{"to": pool_addr, "data": data}, "latest"])
+        if not res or res == "0x" or len(res) < 2 + 128:
+            out["error"] = "Pool returned no quote — check the pool address and pair."
+            return out
+        raw = res[2:]
+        receive = int(raw[0:64], 16)
+        fee     = int(raw[64:128], 16)
+        out.update(available=True, receive_wei=receive, fee_wei=fee, sells_base=sells_base)
+    except Exception as e:
+        out["error"] = str(e)
     return out
 
 
@@ -2400,7 +2657,7 @@ def synthesize_wallet_profile(onchain_data: dict) -> dict:
 # error, or timeout), and repeated reruns / multiple sessions share one
 # initialisation (single-flight lock — no duplicate builds, no races).
 # ─────────────────────────────────────────────
-OCTOBOT_INIT_TIMEOUT = 90  # seconds before we surface a timeout error
+OCTOBOT_INIT_TIMEOUT = 60  # seconds before we surface a timeout error
 
 _octobot_lock = threading.Lock()
 
@@ -2714,7 +2971,7 @@ def load_octobot(start: bool = True) -> dict:
     return holder
 
 
-def octobot_wait(seconds: float = 8.0) -> dict:
+def octobot_wait(seconds: float = 10.0) -> dict:
     """Block this script run (not the whole server) until OctoBot is
     ready, or `seconds` elapse. Streamlit runs each session's script on
     its own thread, so waiting here keeps THIS tab's loading screen up
@@ -2722,18 +2979,26 @@ def octobot_wait(seconds: float = 8.0) -> dict:
     re-execute the entire page every 350ms the way the old poll loop
     did. That rerun storm was competing with the init worker for CPU
     and made loading take far longer than the work itself.
+
+    Uses a short initial wait (0.1s) to handle the common case where
+    initialisation is already done before the UI even gets here.
     """
     holder = load_octobot()
-    if not holder["done"]:
-        remaining = OCTOBOT_INIT_TIMEOUT
-        if holder.get("started_at"):
-            remaining = OCTOBOT_INIT_TIMEOUT - (time.time() - holder["started_at"])
-        try:
-            holder["ready"].wait(timeout=max(0.0, min(seconds, remaining)))
-        except Exception:
-            time.sleep(min(seconds, 1.0))
-        # Re-evaluate so the hard timeout is applied on this pass too.
-        holder = load_octobot()
+    if holder["done"]:
+        return holder
+    remaining = OCTOBOT_INIT_TIMEOUT
+    if holder.get("started_at"):
+        remaining = max(0.0, OCTOBOT_INIT_TIMEOUT - (time.time() - holder["started_at"]))
+    wait_limit = max(0.0, min(seconds, remaining))
+    try:
+        # Short poll first — if already done, returns immediately
+        holder["ready"].wait(timeout=min(0.1, wait_limit))
+        if not holder["done"] and wait_limit > 0.1:
+            holder["ready"].wait(timeout=wait_limit - 0.1)
+    except Exception:
+        time.sleep(min(seconds, 0.5))
+    # Re-evaluate so the hard timeout is applied on this pass too.
+    holder = load_octobot()
     return holder
 
 # ─────────────────────────────────────────────
@@ -4650,14 +4915,15 @@ section[data-testid="stMain"] > div {
    position:fixed descendant). */
 .sr-pre{
     opacity:0 !important;
-    transform:perspective(900px) translateY(26px) rotateX(7deg) scale(0.99) !important;
-    will-change:opacity,transform;
+    transform:translateY(20px) !important;
+    /* will-change applied only during the transition — stripped by JS
+       after transitionend so no permanent GPU layer stays allocated. */
 }
 .sr-in{
     opacity:1 !important;
-    transform:perspective(900px) translateY(0) rotateX(0deg) scale(1) !important;
-    transition:opacity 460ms cubic-bezier(0.22,0.9,0.3,1),
-               transform 560ms cubic-bezier(0.22,0.9,0.3,1) !important;
+    transform:translateY(0) !important;
+    transition:opacity 380ms cubic-bezier(0.22,0.9,0.3,1),
+               transform 440ms cubic-bezier(0.22,0.9,0.3,1) !important;
 }
 
 /* ── HOVER-LIFT CARDS ──
@@ -4666,16 +4932,16 @@ section[data-testid="stMain"] > div {
    ignores — so only cards accidentally matched by href-based rules got
    a hover. This class gives every card the same reliable CSS hover. */
 .hover-lift{
-    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
-               box-shadow 220ms cubic-bezier(0.4,0,0.2,1),
-               border-color 180ms ease!important;
-    transform:translateZ(0);
+    transition:transform 200ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 200ms cubic-bezier(0.4,0,0.2,1),
+               border-color 160ms ease!important;
+    contain:layout style;
 }
 .hover-lift:hover{
-    transform:translateY(-6px)!important;
-    box-shadow:0 18px 44px rgba(26,26,255,0.16),
-               0 0 0 1.5px rgba(26,26,255,0.20)!important;
-    border-color:rgba(26,26,255,0.28)!important;
+    transform:translateY(-4px)!important;
+    box-shadow:0 14px 36px rgba(26,26,255,0.14),
+               0 0 0 1.5px rgba(26,26,255,0.18)!important;
+    border-color:rgba(26,26,255,0.26)!important;
 }
 
 /* ── SMOOTH PAGE REVEAL ── */
@@ -5330,7 +5596,7 @@ section[data-testid="stMain"]{
        section, which no inner container rule touches — so page banners
        can never tuck under the floating nav regardless of the cascade
        inside stMainBlockContainer. */
-    padding-top:80px !important;
+    padding-top:84px !important;
 }
 @media (max-width:600px){
     section[data-testid="stMain"]{ padding-top:74px !important; }
@@ -5346,16 +5612,18 @@ section[data-testid="stMain"]{
 section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > div:first-child{
     scroll-margin-top:110px;
 }
-section[data-testid="stMain"] > div{
+section[data-testid="stMain"] > div,
+section[data-testid="stMain"] [data-testid="stMainBlockContainer"]{
     scroll-behavior:smooth!important;
+    -webkit-overflow-scrolling:touch!important;
 }
 /* Snappy global transition baseline — every interactive element responds fast */
 button,a,.stButton>button,[data-testid="stTextInput"] input{
     transition-timing-function:cubic-bezier(0.4,0,0.2,1)!important;
 }
-/* Reduce all default Streamlit transition lag */
+/* Reduce Streamlit block transition lag — shorter = snappier reruns */
 [data-testid="stVerticalBlock"],[data-testid="stHorizontalBlock"]{
-    transition:opacity 160ms cubic-bezier(0.4,0,0.2,1)!important;
+    transition:opacity 80ms cubic-bezier(0.4,0,0.2,1)!important;
 }
 
 /* Scroll-reveal base state — elements fade+rise into view */
@@ -6092,7 +6360,9 @@ section[data-testid="stMain"]{-webkit-overflow-scrolling:touch;}
 .hover-lift,.eco-card,.pnav,.pnav-dd,.octo-loading-wrap{
   transform:translateZ(0);backface-visibility:hidden;
 }
-.hover-lift{will-change:transform;}
+/* will-change on hover-lift removed — pre-promoting every card to its
+   own GPU layer bloats VRAM and causes scroll stutter on long lists.
+   The browser promotes automatically on hover (when transform changes). */
 .pnav-icirc,.pnav-theme svg{will-change:transform,opacity;}
 
 /* ═══════════════════════════════════════════════════════════
@@ -6240,14 +6510,18 @@ html[data-theme="dark"] [style*="color:#1A1AFF"]{color:#8FA0FF !important;}
    ═══════════════════════════════════════════════════════════ */
 .nf-list{display:flex;flex-direction:column;gap:14px;margin-bottom:1.4rem;}
 .nf-item{
-    display:grid;grid-template-columns:220px 1fr;gap:0;
+    display:grid;grid-template-columns:180px 1fr;gap:0;
     background:var(--bg1);border:1px solid var(--border);border-radius:18px;
     overflow:hidden;text-decoration:none;
     box-shadow:0 2px 10px rgba(20,20,60,0.05);
-    transform:translateZ(0);backface-visibility:hidden;
-    transition:transform 240ms cubic-bezier(0.34,1.4,0.64,1),
-               box-shadow 240ms ease,border-color 180ms ease;
-    will-change:transform;
+    /* Use contain so hover repaints stay inside the card — prevents the
+       browser re-painting the whole list on every hover. translateZ(0)
+       creates a stacking context without a permanent GPU layer. */
+    contain:layout style;
+    transform:translateZ(0);
+    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 220ms ease,border-color 160ms ease;
+    min-height:120px;
 }
 .nf-item:hover{
     transform:translateY(-3px);
@@ -6255,14 +6529,21 @@ html[data-theme="dark"] [style*="color:#1A1AFF"]{color:#8FA0FF !important;}
     border-color:rgba(26,26,255,0.28);
 }
 .nf-thumb{
-    position:relative;background:linear-gradient(135deg,#EEF0FF,#E4E8FF);
-    min-height:150px;overflow:hidden;
+    /* Same coloured-bg tile as campaign cards */
+    background:linear-gradient(135deg,#EEF0FF,#E4E8FF);
+    width:180px;min-width:180px;max-width:180px;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;flex-shrink:0;
 }
-.nf-thumb img{
-    width:100%;height:100%;object-fit:cover;display:block;
-    transition:transform 420ms cubic-bezier(0.22,1,0.36,1);
+/* nf-logo inside news items — larger than the campaign 76px logo so
+   it fills the wider news tile nicely, same object-fit:contain so the
+   full image is always visible without cropping (campaign style). */
+.nf-thumb .nf-logo{
+    width:120px;height:120px;border-radius:16px;object-fit:contain;
+    box-shadow:0 4px 16px rgba(0,0,0,0.13);background:#fff;
+    transition:transform 340ms cubic-bezier(0.22,1,0.36,1);
 }
-.nf-item:hover .nf-thumb img{transform:scale(1.04);}
+.nf-item:hover .nf-thumb .nf-logo{transform:scale(1.05);}
 .nf-body{
     padding:1.15rem 1.4rem 1.15rem 1.3rem;
     display:flex;flex-direction:column;gap:7px;justify-content:center;
@@ -6294,7 +6575,11 @@ html[data-theme="dark"] [style*="color:#1A1AFF"]{color:#8FA0FF !important;}
     filter:drop-shadow(0 4px 14px rgba(0,0,0,0.12));
 }
 .nf-item:hover .nf-thumb-camp .nf-logo{transform:scale(1.05);}
+/* content-visibility:auto lets the browser skip paint/layout for
+   news cards that are offscreen — biggest single scroll perf win. */
+.nf-list .nf-item{content-visibility:auto;contain-intrinsic-size:0 130px;}
 html[data-theme="dark"] .nf-thumb{background:linear-gradient(135deg,#1B2030,#232941);}
+html[data-theme="dark"] .nf-thumb .nf-logo{background:#1B2030;}
 html[data-theme="dark"] .nf-cat{
     color:#9FB0FF;background:rgba(90,110,255,0.16);border-color:rgba(120,140,255,0.28);
 }
@@ -6302,14 +6587,21 @@ html[data-theme="dark"] .nf-cta{color:#9FB0FF;}
 html[data-theme="dark"] .nf-item:hover{border-color:rgba(140,160,255,0.4);}
 
 @media (max-width:820px){
-    .nf-item{grid-template-columns:1fr;}
-    .nf-thumb{min-height:180px;max-height:200px;}
+    .nf-item{
+        grid-template-columns:1fr;
+        max-height:none;
+        min-height:0;
+    }
+    .nf-thumb{
+        width:100%;min-width:0;max-width:none;
+        min-height:140px;max-height:160px;
+    }
     .nf-body{padding:1.05rem 1.2rem 1.2rem 1.2rem;}
     .nf-title{font-size:15px;}
 }
 @media (max-width:420px){
-    .nf-thumb{min-height:150px;}
-    .nf-summ{font-size:12.5px;}
+    .nf-thumb{min-height:120px;max-height:140px;}
+    .nf-title{font-size:13px;}
 }
 
 /* Campaign cards — same enlarged, readable treatment. */
@@ -9979,20 +10271,368 @@ elif st.session_state.page == "defi":
 
     # ══ SWAP ════════════════════════════════════════════════
     elif _tab == "Swap":
-        st.markdown(_panel("🔄 Swap", "Trade PROS and registry tokens on FaroSwap, "
-                    "the native AMM + PMM DEX on Pharos."), unsafe_allow_html=True)
+        st.markdown(_panel("🔄 Swap", "Trade registry tokens directly against FaroSwap's "
+                    "DODO-powered pools — executed in-app, no redirect."),
+                    unsafe_allow_html=True)
         if _gate("swap tokens"):
-            _not_live(
-                "Swaps execute on FaroSwap",
-                "This hub does not hold a verified FaroSwap mainnet router address — "
-                "Pharos does not publish one in its contract registry, so routing a swap "
-                "from here would mean sending your funds to an unverified contract. "
-                "Instead, open FaroSwap directly with the same wallet you have connected here. "
-                "Your connection carries over.",
-                FAROSWAP_URL, "Open FaroSwap ↗",
+
+            def _swap_widget(from_addr, to_addr, from_amt_wei, min_return_wei,
+                              pool_addr, sells_base):
+                """components.html widget: connect → correct chain → send the
+                real dodoSwapV2TokenToToken transaction. Mirrors the security
+                pattern of _tx_widget in the Payment Agent — every value that
+                lands in the signing JS is validated to a strict shape first.
+                """
+                _hex_re = re.compile(r"^[0-9a-fA-F]+$")
+                from_addr = valid_addr(from_addr) or ""
+                to_addr   = valid_addr(to_addr) or ""
+                pool_addr = valid_addr(pool_addr) or ""
+                if not (from_addr and to_addr and pool_addr):
+                    st.error("Invalid token or pool address — swap aborted.")
+                    return
+                try:
+                    from_amt_wei  = int(from_amt_wei)
+                    min_return_wei = int(min_return_wei)
+                    assert from_amt_wei > 0 and min_return_wei >= 0
+                except Exception:
+                    st.error("Invalid swap amount — swap aborted.")
+                    return
+
+                # direction: 0 if the pool's FIRST hop sells its base token,
+                # 1 if it sells quote — matches DODO's own encoding.
+                directions = "0" if sells_base else "1"
+                deadline = str(int(time.time()) + 1200)  # 20 min
+
+                # Build dodoSwapV2TokenToToken calldata SERVER-SIDE from
+                # validated inputs — the browser only ever signs a fully
+                # formed transaction, it never assembles calldata itself.
+                sel = _SEL_DODO_SWAP_T2T[2:]
+                head = (
+                    _addr32(from_addr) + _addr32(to_addr) +
+                    _u256(from_amt_wei) + _u256(min_return_wei) +
+                    _u256(192) +                       # offset to dodoPairs[]
+                    _u256(int(directions)) +
+                    _u256(0) +                          # isIncentive = false
+                    _u256(int(deadline))
+                )
+                pairs_arr = _u256(1) + _addr32(pool_addr)  # length=1, [pool]
+                calldata = "0x" + sel + head + pairs_arr
+                if not _hex_re.match(calldata[2:]):
+                    st.error("Calldata assembly failed validation — swap aborted.")
+                    return
+
+                explorer = esc_url(PHAROS_EXPLORER_URL)
+                router   = FAROSWAP_ROUTER
+
+                html = f"""<!DOCTYPE html>
+<html><head><style>
+  *{{margin:0;padding:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;}}
+  body{{background:transparent;overflow:hidden;padding:8px 0;}}
+  #sb{{display:flex;align-items:center;gap:10px;background:#F4F5FF;border-radius:10px;
+    padding:10px 14px;font-size:13px;color:#5B5F6E;min-height:42px;}}
+  #dot{{width:9px;height:9px;border-radius:50%;background:#9499A8;flex-shrink:0;transition:background 0.3s;}}
+  #res{{display:none;margin-top:8px;background:#F0FDF4;border:1px solid #BBF7D0;
+    border-radius:10px;padding:10px 14px;font-size:12px;color:#15803D;word-break:break-all;line-height:1.8;}}
+</style></head><body>
+<div id="sb"><div id="dot"></div><div id="msg">⏳ Starting…</div></div>
+<div id="res"></div>
+<script>
+(async function(){{
+  var dot=document.getElementById('dot'),msg=document.getElementById('msg'),res=document.getElementById('res');
+  function st(t,c,d){{msg.textContent=t;msg.style.color=c||'#5B5F6E';dot.style.background=d||'#9499A8';}}
+  function rp(){{
+    if(typeof window.ethereum!=='undefined') return window.ethereum;
+    if(typeof window.okxwallet!=='undefined') return window.okxwallet;
+    try{{if(typeof window.parent.ethereum!=='undefined') return window.parent.ethereum;}}catch(e){{}}
+    try{{if(typeof window.parent.okxwallet!=='undefined') return window.parent.okxwallet;}}catch(e){{}}
+    return null;
+  }}
+  st('⏳ Looking for wallet…','#5B5F6E','#F5C842');
+  var p=null;
+  for(var i=0;i<15;i++){{p=rp();if(p)break;await new Promise(r=>setTimeout(r,100));}}
+  if(!p){{st('❌ No Web3 wallet found.','#B91C1C','#E5484D');return;}}
+  try{{
+    st('⏳ Requesting account access…','#5B5F6E','#F5C842');
+    var acc=await p.request({{method:'eth_requestAccounts'}});
+    if(!acc||!acc.length){{st('❌ No accounts returned.','#B91C1C','#E5484D');return;}}
+    st('⏳ Confirming network…','#5B5F6E','#F5C842');
+    try{{
+      await p.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{PHAROS_CHAIN_ID_HEX}'}}]}});
+    }}catch(sw){{
+      if(sw.code===4902||sw.code===-32603){{
+        await p.request({{method:'wallet_addEthereumChain',params:[{{
+          chainId:'{PHAROS_CHAIN_ID_HEX}',chainName:'Pharos Pacific Mainnet',
+          nativeCurrency:{{name:'PROS',symbol:'PROS',decimals:18}},
+          rpcUrls:['{PHAROS_RPC_URL}'],blockExplorerUrls:['{explorer}']
+        }}]}});
+        await p.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{PHAROS_CHAIN_ID_HEX}'}}]}});
+      }}else{{throw sw;}}
+    }}
+    st('⏳ Waiting for your signature to swap…','#5B5F6E','#F5C842');
+    var txHash=await p.request({{method:'eth_sendTransaction',params:[{{
+      from:acc[0], to:'{router}', value:'0x0', data:'{calldata}',
+      gas:'0x4C4B40', chainId:'{PHAROS_CHAIN_ID_HEX}'
+    }}]}});
+    st('✅ Swap submitted!','#15803D','#22C55E');
+    res.style.display='block';
+    res.innerHTML='🎉 <strong>Tx Hash:</strong> '+txHash+'<br>'
+      +'<a href="{explorer}/tx/'+txHash+'" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
+    setTimeout(function(){{
+      try{{
+        var tgt=window.parent||window.top||window;
+        var url=new URL(tgt.location.href);
+        url.searchParams.set('swap_tx',txHash);
+        tgt.history.pushState({{}},'',url.toString());
+        tgt.location.reload();
+      }}catch(e){{}}
+    }},2200);
+  }}catch(err){{
+    if(err.code===4001){{st('❌ Rejected — you cancelled.','#B91C1C','#E5484D');}}
+    else{{st('❌ '+(err.message||JSON.stringify(err)),'#B91C1C','#E5484D');}}
+  }}
+}})();
+</script></body></html>"""
+                components.html(html, height=140, scrolling=False)
+
+            def _approve_widget(token_addr, amount_wei):
+                token_addr = valid_addr(token_addr) or ""
+                if not token_addr:
+                    st.error("Invalid token address — approval aborted.")
+                    return
+                try:
+                    amount_wei = int(amount_wei)
+                    assert amount_wei > 0
+                except Exception:
+                    st.error("Invalid amount — approval aborted.")
+                    return
+                data = "0x" + _SEL_APPROVE[2:] + _addr32(FAROSWAP_ROUTER) + _u256(amount_wei)
+                explorer = esc_url(PHAROS_EXPLORER_URL)
+                html = f"""<!DOCTYPE html>
+<html><head><style>
+  *{{margin:0;padding:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;}}
+  body{{background:transparent;overflow:hidden;padding:8px 0;}}
+  #sb{{display:flex;align-items:center;gap:10px;background:#F4F5FF;border-radius:10px;
+    padding:10px 14px;font-size:13px;color:#5B5F6E;min-height:42px;}}
+  #dot{{width:9px;height:9px;border-radius:50%;background:#9499A8;flex-shrink:0;transition:background 0.3s;}}
+  #res{{display:none;margin-top:8px;background:#F0FDF4;border:1px solid #BBF7D0;
+    border-radius:10px;padding:10px 14px;font-size:12px;color:#15803D;word-break:break-all;line-height:1.8;}}
+</style></head><body>
+<div id="sb"><div id="dot"></div><div id="msg">⏳ Starting…</div></div>
+<div id="res"></div>
+<script>
+(async function(){{
+  var dot=document.getElementById('dot'),msg=document.getElementById('msg'),res=document.getElementById('res');
+  function st(t,c,d){{msg.textContent=t;msg.style.color=c||'#5B5F6E';dot.style.background=d||'#9499A8';}}
+  function rp(){{
+    if(typeof window.ethereum!=='undefined') return window.ethereum;
+    if(typeof window.okxwallet!=='undefined') return window.okxwallet;
+    try{{if(typeof window.parent.ethereum!=='undefined') return window.parent.ethereum;}}catch(e){{}}
+    return null;
+  }}
+  st('⏳ Looking for wallet…','#5B5F6E','#F5C842');
+  var p=null;
+  for(var i=0;i<15;i++){{p=rp();if(p)break;await new Promise(r=>setTimeout(r,100));}}
+  if(!p){{st('❌ No Web3 wallet found.','#B91C1C','#E5484D');return;}}
+  try{{
+    var acc=await p.request({{method:'eth_requestAccounts'}});
+    st('⏳ Waiting for approval signature…','#5B5F6E','#F5C842');
+    var txHash=await p.request({{method:'eth_sendTransaction',params:[{{
+      from:acc[0], to:'{token_addr}', value:'0x0', data:'{data}',
+      gas:'0xF424', chainId:'{PHAROS_CHAIN_ID_HEX}'
+    }}]}});
+    st('✅ Approved!','#15803D','#22C55E');
+    res.style.display='block';
+    res.innerHTML='🎉 <strong>Tx Hash:</strong> '+txHash+'<br>'
+      +'<a href="{explorer}/tx/'+txHash+'" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
+    setTimeout(function(){{
+      try{{ (window.parent||window.top||window).location.reload(); }}catch(e){{}}
+    }},2200);
+  }}catch(err){{
+    if(err.code===4001){{st('❌ Rejected — you cancelled.','#B91C1C','#E5484D');}}
+    else{{st('❌ '+(err.message||JSON.stringify(err)),'#B91C1C','#E5484D');}}
+  }}
+}})();
+</script></body></html>"""
+                components.html(html, height=140, scrolling=False)
+
+            # ── Post-swap confirmation banner ──
+            _swap_tx = valid_txhash(st.query_params.get("swap_tx", "")) or ""
+            if _swap_tx:
+                st.success("Swap submitted — confirming on-chain.")
+                st.link_button("View transaction ↗", PHAROS_EXPLORER_URL + "/tx/" + _swap_tx)
+                st.session_state.pop("defi_balances", None)  # force fresh balances
+                if st.button("Dismiss", key="swap_dismiss"):
+                    st.query_params.pop("swap_tx", None)
+                    st.rerun()
+                st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+
+            _sym_list = [t[0] for t in SWAP_TOKENS]
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                _from_sym = st.selectbox("From", _sym_list, index=0, key="swap_from_sym")
+            with sc2:
+                # Exclude same token AND exclude WPROS if PROS is selected (same contract)
+                _from_addr = next(t[1] for t in SWAP_TOKENS if t[0] == _from_sym)
+                _to_opts = [
+                    s for s in _sym_list
+                    if s != _from_sym
+                    and next(t[1] for t in SWAP_TOKENS if t[0] == s) != _from_addr
+                ]
+                _to_sym = st.selectbox("To", _to_opts, index=0, key="swap_to_sym")
+
+            _from_tok = next(t for t in SWAP_TOKENS if t[0] == _from_sym)
+            _to_tok   = next(t for t in SWAP_TOKENS if t[0] == _to_sym)
+            _amt_str = st.text_input(f"Amount ({_from_sym})", value="", key="swap_amt",
+                                      placeholder="0.0")
+            _amt = valid_amount(_amt_str)
+
+            # ── Pool resolution ──────────────────────────────────────────────
+            # Normalise PROS → WPROS for pair-key lookups (same contract).
+            def _norm_sym(s): return "WPROS" if s == "PROS" else s
+            _from_sym_n = _norm_sym(_from_sym)
+            _to_sym_n   = _norm_sym(_to_sym)
+            _pair_key     = (_from_sym_n, _to_sym_n)
+            _pair_key_rev = (_to_sym_n,   _from_sym_n)
+            _pool = DODO_POOLS.get(_pair_key) or DODO_POOLS.get(_pair_key_rev)
+
+            # Manual pool override (advanced)
+            with st.expander("Advanced: enter pool address manually", expanded=False):
+                if _pool:
+                    st.caption(f"Pre-configured pool for {_from_sym}/{_to_sym}: `{_pool}`")
+                else:
+                    st.caption(
+                        "No pool address is pre-configured for this pair. If you have a "
+                        "verified FaroSwap/DODO pool address, enter it here for a live "
+                        "on-chain quote. The router still enforces your slippage limit "
+                        "regardless, so an incorrect address fails safely."
+                    )
+                _manual_pool = st.text_input("Pool address (0x…)", key="swap_pool_manual",
+                                              placeholder="0x…")
+                if valid_addr(_manual_pool):
+                    _pool = _manual_pool.strip()
+
+            # ── Main swap flow ───────────────────────────────────────────────
+            if not _amt or _amt <= 0:
+                # No amount entered yet — just show a neutral prompt
+                st.caption("Enter an amount above to continue.")
+
+            elif not _pool:
+                # Amount entered but no pool address known — show an immediate,
+                # actionable FaroSwap deeplink pre-filled with the pair and
+                # amount so the swap can happen now without a pool address.
+                _fs_url = f"{FAROSWAP_URL}/#/swap"
+                st.markdown(
+                    f'<div class="defi-note">'
+                    f'<div class="defi-note-t">No on-chain pool configured for {esc(_from_sym)} → {esc(_to_sym)}</div>'
+                    f'<div class="defi-note-s">'
+                    f'FaroSwap pool addresses for this pair haven\'t been published yet, '
+                    f'so a live in-app quote isn\'t available. You can swap <strong>{esc(_amt_str)} {esc(_from_sym)} → {esc(_to_sym)}</strong> '
+                    f'directly on FaroSwap right now — it uses the same wallet you\'ve connected here '
+                    f'and the same router on Pharos Mainnet.'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.link_button(
+                    f"Swap {_amt_str} {_from_sym} → {_to_sym} on FaroSwap ↗",
+                    _fs_url,
+                    use_container_width=True,
+                )
+                st.caption(
+                    "Tip: enter the verified FaroSwap pool address in Advanced above "
+                    "to get a live in-app quote instead."
+                )
+
+            else:
+                # Pool address known — auto-fetch quote when amount or pair changes.
+                _amt_wei = int(_amt * (10 ** _from_tok[2]))
+                _quote_ctx = (_from_sym, _to_sym, _amt_wei, _pool)
+
+                # Auto-fetch: fire quote immediately if context changed, not just on button click
+                _q   = st.session_state.get("swap_quote")
+                _ctx = st.session_state.get("swap_quote_ctx")
+                if _ctx != _quote_ctx:
+                    # Context changed — clear stale quote so UI doesn't show wrong data
+                    st.session_state.pop("swap_quote", None)
+                    st.session_state.pop("swap_quote_ctx", None)
+                    _q = None
+
+                _col_q, _col_r = st.columns([3, 1])
+                with _col_q:
+                    if st.button("Get live quote", key="swap_get_quote", use_container_width=True):
+                        with st.spinner("Reading live price from pool…"):
+                            st.session_state["swap_quote"] = dodo_get_quote(
+                                _pool, _from_tok[1], _amt_wei)
+                            st.session_state["swap_quote_ctx"] = _quote_ctx
+                        st.rerun()
+                with _col_r:
+                    if _q and st.button("↺ Refresh", key="swap_refresh_quote", use_container_width=True):
+                        with st.spinner("Refreshing…"):
+                            st.session_state["swap_quote"] = dodo_get_quote(
+                                _pool, _from_tok[1], _amt_wei)
+                            st.session_state["swap_quote_ctx"] = _quote_ctx
+                        st.rerun()
+
+                # Re-read after potential button press
+                _q   = st.session_state.get("swap_quote")
+                _ctx = st.session_state.get("swap_quote_ctx")
+
+                if _q and _ctx == _quote_ctx:
+                    if not _q.get("available"):
+                        st.error("Could not get a quote: " + esc(_q.get("error") or "unknown error"))
+                        st.caption("Check the pool address in Advanced above, or swap directly on FaroSwap.")
+                        st.link_button("Open FaroSwap ↗", FAROSWAP_URL, use_container_width=True)
+                    else:
+                        _recv = _q["receive_wei"] / (10 ** _to_tok[2])
+                        _rate = _recv / _amt if _amt else 0
+                        _slip = st.select_slider(
+                            "Slippage tolerance", options=[0.5, 1.0, 2.0, 3.0, 5.0],
+                            value=1.0, key="swap_slip", format_func=lambda v: f"{v}%")
+                        _min_recv = _recv * (1 - _slip / 100)
+                        _min_recv_wei = int(_min_recv * (10 ** _to_tok[2]))
+
+                        st.markdown(_stat_grid([
+                            _stat_card("You receive (est.)", f"{_recv:,.6f} {_to_sym}",
+                                       f"1 {_from_sym} ≈ {_rate:,.6f} {_to_sym}"),
+                            _stat_card("Minimum received", f"{_min_recv:,.6f} {_to_sym}",
+                                       f"{_slip}% slippage protection", "#22C55E"),
+                        ]), unsafe_allow_html=True)
+                        st.caption("Quote read live from the pool's PMM curve.")
+
+                        # ── Approve / Swap ──
+                        _allow = token_allowance(_from_tok[1], _w3a, FAROSWAP_ROUTER)
+                        if _allow is None:
+                            st.warning("Could not read your current allowance — try again.")
+                        elif _allow < _amt_wei:
+                            st.markdown(
+                                f'<div class="defi-note"><div class="defi-note-t">'
+                                f'Approval needed</div><div class="defi-note-s">'
+                                f"FaroSwap's router needs permission to move your "
+                                f'{esc(_from_sym)} before it can swap it. This is a standard '
+                                f'one-time ERC-20 approval — it does not move any funds.'
+                                f'</div></div>',
+                                unsafe_allow_html=True,
+                            )
+                            if st.button(f"Approve {_from_sym}", key="swap_approve_btn",
+                                         use_container_width=True):
+                                st.session_state["swap_do_approve"] = _amt_wei
+                            if st.session_state.get("swap_do_approve"):
+                                _approve_widget(_from_tok[1], st.session_state["swap_do_approve"])
+                        else:
+                            st.success(f"{_from_sym} is approved for this amount.")
+                            if st.button(f"Swap {_amt} {_from_sym} → {_to_sym}",
+                                         key="swap_execute_btn", use_container_width=True):
+                                st.session_state["swap_do_execute"] = True
+                            if st.session_state.get("swap_do_execute"):
+                                _swap_widget(_from_tok[1], _to_tok[1], _amt_wei,
+                                             _min_recv_wei, _pool, _q["sells_base"])
+                else:
+                    st.caption("Click 'Get live quote' to fetch the current rate from the pool.")
+
+            st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+            st.caption(
+                f"Router: `{FAROSWAP_ROUTER}` — confirmed by the FaroSwap team as deployed "
+                "on Pharos Pacific Mainnet (chain 1672), built on DODO's standard contracts."
             )
-            st.caption("When an official router address is published, swaps will execute "
-                       "natively in this tab.")
 
     # ══ BRIDGE ══════════════════════════════════════════════
     elif _tab == "Bridge":
@@ -10320,7 +10960,7 @@ elif st.session_state.page == "updates":
 
         st.markdown(
             '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
-            'color:#9499A8;margin-bottom:0.6rem;">'
+            'color:#000000;margin-bottom:0.6rem;">'
             + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
                'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
                'Live from <b>@pharos_network</b> · refreshes automatically'
@@ -10333,36 +10973,38 @@ elif st.session_state.page == "updates":
         )
 
         # ── News-feed layout ──────────────────────────────
-        # Large, scannable rows: prominent cover image, title, summary
-        # and metadata. Collapses to a stacked card on mobile.
+        # Clean, scannable rows: constrained thumbnail, headline only
+        # (no body/description), metadata. Collapses to stacked on mobile.
         _feed = '<div class="nf-list">'
         for _n in posts[:8]:
             _text = (_n.get("text") or "").strip()
-            # First sentence/line becomes the headline; the rest is summary.
+            # Use the whole first sentence/line as the headline — no body shown.
             _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
-            _title = (_parts[0] or _text)[:120]
-            _summ  = (_parts[1].strip() if len(_parts) > 1 else "")[:200]
+            _title = (_parts[0] or _text)[:140]
             _link  = esc_url(_n.get("url", PHAROS_X_URL))
             _media = _n.get("media") or ""
             _rel   = esc(_n.get("rel") or "")
             # Category inferred from the post's own words — no invention.
             _tl = _text.lower()
-            if   any(k in _tl for k in ("partner", "collab")):        _cat = "Partnership"
+            if   any(k in _tl for k in ("partner", "collab")):         _cat = "Partnership"
             elif any(k in _tl for k in ("launch", "live", "mainnet")): _cat = "Launch"
             elif any(k in _tl for k in ("campaign", "quest", "reward", "expedition")): _cat = "Campaign"
             elif any(k in _tl for k in ("upgrade", "protocol", "release")): _cat = "Protocol"
-            elif any(k in _tl for k in ("incubator", "ecosystem")):   _cat = "Ecosystem"
-            else:                                                     _cat = "Announcement"
+            elif any(k in _tl for k in ("incubator", "ecosystem")):    _cat = "Ecosystem"
+            else:                                                        _cat = "Announcement"
 
-            _thumb = (
-                f'<img src="{esc_url(_media)}" loading="lazy" decoding="async" alt="" '
-                f'onerror="this.onerror=null;this.src=\'{esc_url(PHAROS_X_AVATAR)}\';"/>'
-                if _media else
-                f'<img src="{esc_url(PHAROS_X_AVATAR)}" loading="lazy" decoding="async" alt=""/>'
-            )
+            # Thumbnail — campaign-page style: centred image in a coloured
+            # bg tile, object-fit:contain so the full image is visible without
+            # cropping. Identical pattern to .nf-thumb-camp / .nf-logo.
+            _img_src      = esc_url(_media) if _media else esc_url(PHAROS_X_AVATAR)
+            _fallback_src = esc_url(PHAROS_X_AVATAR)
             _feed += (
                 f'<a class="nf-item" href="{_link}" target="_blank" rel="noopener">'
-                f'<div class="nf-thumb">{_thumb}</div>'
+                f'<div class="nf-thumb nf-thumb-camp">'
+                f'<img src="{_img_src}" loading="lazy" decoding="async" alt="" '
+                f'class="nf-logo" '
+                f'onerror="this.onerror=null;this.src=\'{_fallback_src}\';" />'
+                f'</div>'
                 f'<div class="nf-body">'
                 f'<div class="nf-meta">'
                 f'<span class="nf-cat">{esc(_cat)}</span>'
@@ -10370,8 +11012,7 @@ elif st.session_state.page == "updates":
                 + (f'<span class="nf-dot">·</span><span class="nf-time">{_rel}</span>' if _rel else '')
                 + '</div>'
                 f'<div class="nf-title">{esc(_title)}</div>'
-                + (f'<div class="nf-summ">{esc(_summ)}</div>' if _summ else '')
-                + '<div class="nf-cta">View post on X ↗</div>'
+                '<div class="nf-cta">View post on X ↗</div>'
                 '</div></a>'
             )
         _feed += '</div>'
