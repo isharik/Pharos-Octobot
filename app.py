@@ -338,7 +338,7 @@ if "x402_enabled"    not in st.session_state: st.session_state.x402_enabled    =
 if "x402_challenge"  not in st.session_state: st.session_state.x402_challenge  = None    # active 402 challenge awaiting payment
 if "x402_unlocked"   not in st.session_state: st.session_state.x402_unlocked   = {}      # resource_id -> verified tx hash
 if "x402_receipts"   not in st.session_state: st.session_state.x402_receipts   = []      # list of settled premium calls
-if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "")  # user-set receiving address
+if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4")  # default receiving address
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -1890,9 +1890,10 @@ def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 8):
     """Single read-only JSON-RPC call with endpoint failover."""
     candidates = [rpc_url] if rpc_url else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     last = None
+    session = _get_http_session()
     for url in candidates:
         try:
-            r = requests.post(
+            r = session.post(
                 url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
                 headers={"Content-Type": "application/json"}, timeout=timeout,
             )
@@ -1987,7 +1988,8 @@ def fetch_token_balances(address: str) -> dict:
             rows.append({"sym": sym, "addr": taddr, "label": label, "bal": val / (10 ** dec)})
 
     out["tokens"] = rows
-
+    out["available"] = True   # ← was never set; caused "RPC unreachable" even on success
+    out["error"] = None
     return out
 
 
@@ -2202,7 +2204,7 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
 # no private key lives in the app.
 X402_PAYTO_ADDRESS = os.getenv(
     "X402_PAYTO_ADDRESS",
-    "0x000000000000000000000000000000000000dEaD",  # placeholder demo sink
+    "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4",
 )
 X402_PRICE_PROS   = 0.05      # price per premium call, in native units
 X402_TOLERANCE    = 0.10      # accept payments within 10% under (gas/rounding)
@@ -3513,9 +3515,15 @@ html[data-theme="dark"] [class*="css"]{ background-color:#0B0E1A !important; col
 
 /* Nav pill */
 html[data-theme="dark"] .pnav{
-    background:rgba(18,21,34,0.94);
-    border-color:#262B3E;
-    box-shadow:0 2px 18px rgba(0,0,0,0.5);
+    background:rgba(14,17,30,0.58);
+    border-color:rgba(255,255,255,0.08);
+    box-shadow:
+        0 4px 28px rgba(0,0,0,0.55),
+        0 1px 2px rgba(0,0,0,0.35),
+        inset 0 1px 0 rgba(255,255,255,0.10),
+        inset 0 -1px 0 rgba(0,0,0,0.18);
+    backdrop-filter:blur(28px) saturate(160%) brightness(1.06);
+    -webkit-backdrop-filter:blur(28px) saturate(160%) brightness(1.06);
 }
 html[data-theme="dark"] .pnav-ver{background:#181C2C;border-color:#2A3044;color:#C4C9DC;}
 html[data-theme="dark"] .pnav-item{color:#C4C9DC;}
@@ -3878,8 +3886,15 @@ html[data-theme="dark"] [style*="background:#EAEEFF"]{
     animation: wave-shift 12s cubic-bezier(0.4,0,0.2,1) infinite;
 }
 
- /* Snappy global baseline — overrides Streamlit's slower defaults */
-*, *::before, *::after {
+ /* Targeted transition baseline — interactive elements only.
+    The previous rule (`*, *::before, *::after { transition-duration:140ms }`)
+    forced every DOM element to animate every property change, creating a
+    massive style/paint load on pages with hundreds of elements (stat grids,
+    token rows, news cards). Replaced with a precise selector list that
+    covers every interactive surface without touching static content. */
+button, a, .stButton>button, [data-testid="stTextInput"] input,
+input, select, textarea, [role="tab"], [role="button"],
+.stRadio label, .stCheckbox label, .stSelectbox div[data-baseweb] {
     transition-duration: 140ms !important;
     transition-timing-function: cubic-bezier(0.22,1,0.36,1) !important;
 }
@@ -4255,7 +4270,11 @@ section[data-testid="stMain"] > div {
     background:rgba(255,255,255,0.85);border:1px solid rgba(20,20,60,0.08);
     border-radius:20px;padding:5px 13px;
     text-decoration:none;color:var(--t2);
-    transition:all 180ms cubic-bezier(0.4,0,0.2,1);cursor:pointer;
+    transition:transform 180ms cubic-bezier(0.4,0,0.2,1),
+               border-color 180ms cubic-bezier(0.4,0,0.2,1),
+               color 180ms cubic-bezier(0.4,0,0.2,1),
+               background 180ms cubic-bezier(0.4,0,0.2,1),
+               box-shadow 180ms cubic-bezier(0.4,0,0.2,1);cursor:pointer;
 }
 .qpill:hover{border-color:var(--blue);color:var(--blue);background:#fff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,26,255,0.1);}
 .qpill .dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;}
@@ -4296,6 +4315,7 @@ section[data-testid="stMain"] > div {
                border-color 200ms ease;
     box-shadow:0 3px 14px rgba(20,20,60,0.10);
     display:flex;flex-direction:column;gap:10px;
+    contain:layout style;
 }
 .camp-card:hover{border-color:rgba(26,26,255,0.25);box-shadow:0 16px 44px rgba(26,26,255,0.14);transform:translateY(-5px);}
 .camp-tag{
@@ -4524,6 +4544,7 @@ section[data-testid="stMain"] > div {
     transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
                box-shadow 220ms cubic-bezier(0.4,0,0.2,1),
                border-color 200ms ease;
+    contain:layout style;
 }
 .cex-card:hover{border-color:rgba(26,26,255,0.25);box-shadow:0 14px 36px rgba(26,26,255,0.13);transform:translateY(-4px);}
 .cex-name{font-family:var(--fd);font-size:16px;font-weight:700;color:var(--t1);margin-bottom:3px;}
@@ -4822,7 +4843,7 @@ section[data-testid="stMain"] > div {
     font-size:12px;font-weight:500;color:var(--blue);
     background:rgba(26,26,255,0.06);border:1px solid rgba(26,26,255,0.2);
     border-radius:20px;padding:4px 12px;cursor:pointer;
-    transition:all 0.12s ease;white-space:nowrap;
+    transition:background 120ms ease,color 120ms ease,border-color 120ms ease;white-space:nowrap;
 }
 .followup-pill:hover{background:var(--blue);color:#fff;}
 
@@ -5071,7 +5092,7 @@ section[data-testid="stMain"] > div {
     border-radius:14px;box-shadow:0 8px 32px rgba(26,26,255,0.14);
     padding:0.8rem 1rem;width:220px;z-index:100;
     opacity:0;pointer-events:none;
-    transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+    transition:opacity 200ms cubic-bezier(0.4,0,0.2,1),transform 200ms cubic-bezier(0.4,0,0.2,1);
 }
 .logo-bubble.open{
     opacity:1;pointer-events:all;
@@ -6167,7 +6188,7 @@ def inject_redesign_css(page_marker: str) -> None:
     font-size:12.5px !important;font-weight:500 !important;
     min-height:38px !important;padding:0 14px !important;
     text-align:left !important;justify-content:flex-start !important;
-    transition:all 160ms ease;
+    transition:background 160ms ease,border-color 160ms ease,transform 160ms ease,color 160ms ease;
 }
 [data-testid="stMainBlockContainer"]:has(.rd-chiprow) .stButton button:hover{
     background:rgba(26,26,255,0.10) !important;
@@ -6710,12 +6731,19 @@ section[data-testid="stMain"] > div{padding-top:0 !important;}
     transform:translateZ(0);backface-visibility:hidden;
     display:flex;align-items:center;
     width:100%;max-width:1180px;height:64px;
-    background:rgba(255,255,255,0.97);
-    border:1px solid #E7E8EE;border-radius:16px;
+    /* Liquid glass: semi-opaque so the page bleeds through, strong blur
+       for depth, inner highlight on top edge for the glass refraction feel */
+    background:rgba(255,255,255,0.62);
+    border:1px solid rgba(255,255,255,0.75);
+    border-radius:20px;
     padding:0 12px;
-    box-shadow:0 2px 14px rgba(20,20,60,0.09),0 1px 2px rgba(20,20,60,0.05);
-    backdrop-filter:blur(14px) saturate(150%);
-    -webkit-backdrop-filter:blur(14px) saturate(150%);
+    box-shadow:
+        0 4px 24px rgba(20,20,60,0.10),
+        0 1px 2px rgba(20,20,60,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.90),
+        inset 0 -1px 0 rgba(20,20,60,0.04);
+    backdrop-filter:blur(24px) saturate(180%) brightness(1.04);
+    -webkit-backdrop-filter:blur(24px) saturate(180%) brightness(1.04);
     font-family:'DM Sans','Inter',sans-serif;
 }
 /* Orange logo tile → Home */
@@ -7237,26 +7265,34 @@ components.html(
 
     function scanReveal(){
       if (!srIO) return;
-      try{
-        var els = doc.querySelectorAll(
-          'section[data-testid="stMain"] div[data-testid="stElementContainer"]:not([data-sr])');
-        var vh = window.innerHeight;
-        for (var ei = 0; ei < els.length; ei++){
-          var el3 = els[ei];
-          el3.setAttribute('data-sr', '1');
-          var rc = el3.getBoundingClientRect();
-          /* only below-the-fold, visible-sized blocks get an entrance */
-          if (rc.height < 8 || rc.width < 8) continue;
-          if (rc.top < vh * 0.92) continue;
-          el3.classList.add('sr-pre');
-          srIO.observe(el3);
-        }
-      }catch(e){}
+      /* Schedule the layout read (getBoundingClientRect) on the next
+         animation frame so it runs after the browser's own paint — not
+         during it. Calling getBoundingClientRect synchronously inside a
+         MutationObserver callback forces an immediate layout recalc,
+         which blocks compositing and causes visible jank. */
+      requestAnimationFrame(function(){
+        try{
+          var els = doc.querySelectorAll(
+            'section[data-testid="stMain"] div[data-testid="stElementContainer"]:not([data-sr])');
+          var vh = window.innerHeight;
+          for (var ei = 0; ei < els.length; ei++){
+            var el3 = els[ei];
+            el3.setAttribute('data-sr', '1');
+            var rc = el3.getBoundingClientRect();
+            /* only below-the-fold, visible-sized blocks get an entrance */
+            if (rc.height < 8 || rc.width < 8) continue;
+            if (rc.top < vh * 0.92) continue;
+            el3.classList.add('sr-pre');
+            srIO.observe(el3);
+          }
+        }catch(e){}
+      });
     }
 
     function orbCleanup(){
       try{
         var holders = doc.querySelectorAll('[data-orb-holder]');
+        if (!holders.length) return;  /* fast-path: no orb holders, nothing to do */
         for (var h = 0; h < holders.length; h++){
           var el = holders[h];
           var fr = el.querySelector('iframe');
@@ -7291,7 +7327,16 @@ components.html(
     relocateNav();
     try{
       var appRoot = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
-      new MutationObserver(function(){ relocateNav(); }).observe(appRoot, {childList:true, subtree:true});
+      var _moTimer = null;
+      new MutationObserver(function(){
+        /* Debounce: collapse a burst of mutations (Streamlit reruns can fire
+           hundreds per second) into a single callback 80ms after the last one.
+           Without this, relocateNav() — which forces getBoundingClientRect()
+           layout reads on every element — runs synchronously on the main
+           thread for every DOM write, causing scroll and animation jank. */
+        clearTimeout(_moTimer);
+        _moTimer = setTimeout(relocateNav, 80);
+      }).observe(appRoot, {childList:true, subtree:true});
     }catch(e){}
 
     function navButton(key){
@@ -8451,7 +8496,7 @@ if st.session_state.page == "home":
     st.markdown(
         '<div style="text-align:center;margin:0 0 0.4rem 0;">'
         '<span style="font-size:10px;font-weight:600;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9499A8;">What OctoBot can do</span>'
+        'text-transform:uppercase;color:#000000;">What OctoBot can do</span>'
         '</div>'
         '<div class="marquee-wrap">'
         '<div class="marquee-track">' + items_html + '</div>'
@@ -8751,7 +8796,11 @@ elif st.session_state.page == "memory":
           #octo-mem{ user-select:none; }
           .expr-eye-l,.expr-eye-r,.expr-pupil-l,.expr-pupil-r,
           .expr-mouth,.expr-blush-l,.expr-blush-r{
-            transition:all 0.22s cubic-bezier(0.4,0,0.2,1);
+            transition:opacity 220ms cubic-bezier(0.4,0,0.2,1),
+                       transform 220ms cubic-bezier(0.4,0,0.2,1),
+                       d 220ms cubic-bezier(0.4,0,0.2,1),
+                       cx 220ms cubic-bezier(0.4,0,0.2,1),
+                       cy 220ms cubic-bezier(0.4,0,0.2,1);
           }
           </style>
           <script>
@@ -10960,7 +11009,7 @@ elif st.session_state.page == "updates":
 
         st.markdown(
             '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
-            'color:#000000;margin-bottom:0.6rem;">'
+            'color: #1E3A8A;margin-bottom:0.6rem;">'
             + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
                'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
                'Live from <b>@pharos_network</b> · refreshes automatically'
