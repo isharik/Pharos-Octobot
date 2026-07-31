@@ -134,18 +134,7 @@ CAMPAIGNS = [
         "icon":  "🏆",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-   {
-        "title": "TopNod Million Cup",
-        "tag":   "LIVE · Prediction",
-        "desc":  "Predict the football winners and Earn $PROS",
-        "link":  "https://topnod.com/",
-        "cta":   "Join",
-        "color": "#1A1AFF",
-        "logo":  "https://pbs.twimg.com/profile_images/1953370784698937344/b7j3JHqn_400x400.jpg",
-        "icon":  "🏆",
-        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
-    },
-    
+   
    {
         "title": "Pharos Inner Circle",
         "tag":   "# Make a Million, Become a PRO",
@@ -180,7 +169,18 @@ CAMPAIGNS = [
         "icon":  "✍️",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-    
+  {
+        "title": "TopNod Million Cup",
+        "tag":   "Ended · Prediction",
+        "desc":  "Predict the football winners and Earn $PROS",
+        "link":  "https://topnod.com/",
+        "cta":   "Join",
+        "color": "#1A1AFF",
+        "logo":  "https://pbs.twimg.com/profile_images/1953370784698937344/b7j3JHqn_400x400.jpg",
+        "icon":  "🏆",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+    },
+      
 ]
 
 
@@ -11522,7 +11522,7 @@ elif st.session_state.page == "campaigns":
         '<div style="font-size:11px;color:#5B5F6E;">Skill Hackathon · 20,000 PROS · Submit by Jun 15 · Judging Jun 16–22</div></div>'
         '</div>'
         '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#9499A8;font-weight:600;padding-top:1px;">Phase 2</div>'
+        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:600;padding-top:1px;">Phase 2 ✓</div>'
         '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
         '<div><div style="font-size:12px;font-weight:600;color:#14141F;">Jun 22 – Jul 24</div>'
         '<div style="font-size:11px;color:#5B5F6E;">Agent Arena · 25,000 PROS · Phase 1 winners only · Submit by Jul 6</div></div>'
