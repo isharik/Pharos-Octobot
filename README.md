@@ -11,7 +11,7 @@ Documentation • Live Data • Voice • Multilingual • Web Experience
 
 
 
-## Public Link Demo (Always under Development)
+## Public Link
 https://pharos-octobot-by-echo.streamlit.app/
 
 *(If unavailable, the request quota may have expired. You can clone the repo and run locally with your own API key.)*
