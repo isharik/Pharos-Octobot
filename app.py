@@ -445,6 +445,30 @@ def get_logo_b64() -> str:
                 return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
     return ""
 
+@st.cache_resource(show_spinner=False)
+def get_loading_logo_bands() -> list:
+    """Load the loading-screen logo (loading.jpg / loading.png, dropped
+    in the app root next to app.py) and return it as a single base64
+    data-URI string in a one-element list. The overlay displays it as a
+    static image with an animated aura ring — no splitting needed.
+    Returns an empty list if no file is present (overlay falls back to
+    its built-in placeholder). Cached at process level."""
+    src_path = None
+    for path in ("loading.jpg", "loading.jpeg", "loading.png"):
+        if os.path.exists(path):
+            src_path = path
+            break
+    if not src_path:
+        return []
+    try:
+        import io
+        with open(src_path, "rb") as f:
+            raw = f.read()
+        mime = "image/png" if src_path.endswith(".png") else "image/jpeg"
+        return ["data:" + mime + ";base64," + base64.b64encode(raw).decode()]
+    except Exception:
+        return []
+
 def get_pros_price() -> dict:
     now    = time.time()
     cached = st.session_state.get("pros_price_cache", {})
@@ -457,7 +481,7 @@ def get_pros_price() -> dict:
         try:
             r = requests.get(
                 COINGECKO_PRICE_URL,
-                timeout=5 + attempt * 2,
+                timeout=4 if attempt == 0 else 5,
                 headers={"Accept": "application/json"},
             )
             r.raise_for_status()
@@ -503,7 +527,7 @@ def get_pharos_news() -> list:
             r = requests.get(
                 "https://api.coingecko.com/api/v3/news",
                 params={"category": "pharos-network"},
-                timeout=6 + attempt * 3,
+                timeout=4 if attempt == 0 else 5,
                 headers={"Accept": "application/json"},
             )
             if r.status_code == 200:
@@ -594,7 +618,7 @@ def _fetch_x_api_v2(token) -> list:
     if not uid:
         r = requests.get(
             "https://api.twitter.com/2/users/by/username/" + PHAROS_X_HANDLE,
-            headers=h, timeout=8,
+            headers=h, timeout=4,
         )
         r.raise_for_status()
         uid = r.json().get("data", {}).get("id")
@@ -610,7 +634,7 @@ def _fetch_x_api_v2(token) -> list:
             "expansions": "attachments.media_keys",
             "media.fields": "url,preview_image_url,type",
         },
-        headers=h, timeout=8,
+        headers=h, timeout=4,
     )
     r.raise_for_status()
     body   = r.json()
@@ -645,7 +669,7 @@ def _fetch_nitter_rss() -> list:
             try:
                 r = requests.get(
                     f"{base}/{PHAROS_X_HANDLE}/rss",
-                    timeout=7 + attempt * 3,  # 7s first try, 10s retry
+                    timeout=4 if attempt == 0 else 5,  # 4s first try, 5s retry
                     headers={
                         "User-Agent": "Mozilla/5.0 (compatible; RSSFetcher/1.0)",
                         "Accept": "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
@@ -666,10 +690,35 @@ def _fetch_nitter_rss() -> list:
                         link = "https://x.com" + pr.path.split("#")[0]
                     except Exception:
                         pass
-                    # Try multiple image patterns in the description
-                    m = (re.search(r'<img[^>]+src="([^"]+)"', desc) or
-                         re.search(r'<img[^>]+src=\'([^\']+)\'', desc))
-                    thumb = m.group(1) if m else ""
+
+                    # ── Thumbnail extraction ────────────────────
+                    # Nitter embeds tweet media in the description HTML
+                    # as <img src="https://nitter.host/pic/..."> — those
+                    # URLs load fine in the user's browser directly.
+                    # Earlier attempts to rewrite them to pbs.twimg.com
+                    # broke thumbnails: X blocks direct <img src> loads
+                    # from third-party origins. So: grab the first
+                    # non-avatar img src as-is, resolve relative paths
+                    # to absolute against the mirror base, and done.
+                    thumb = ""
+                    # Try <enclosure url="..."> first (RSS standard slot
+                    # for attached media, never the account avatar)
+                    enc = it.find("enclosure")
+                    if enc is not None:
+                        eu = (enc.get("url") or "").strip()
+                        if eu and "profile_images" not in eu:
+                            if not (eu.startswith("http://") or eu.startswith("https://")):
+                                eu = base.rstrip("/") + "/" + eu.lstrip("/")
+                            thumb = eu
+                    # Fall back to first non-avatar <img> in description
+                    if not thumb:
+                        for cand in re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', desc):
+                            if "profile_images" not in cand:
+                                if not (cand.startswith("http://") or cand.startswith("https://")):
+                                    cand = base.rstrip("/") + "/" + cand.lstrip("/")
+                                thumb = cand
+                                break
+
                     try:
                         dt = parsedate_to_datetime(pub)
                     except Exception:
@@ -895,7 +944,7 @@ def fetch_rwa_market() -> dict:
             "https://api.coingecko.com/api/v3/simple/price",
             params={"ids": ids, "vs_currencies": "usd",
                     "include_24hr_change": "true", "include_market_cap": "true"},
-            timeout=6, headers={"Accept": "application/json"},
+            timeout=4, headers={"Accept": "application/json"},
         )
         r.raise_for_status()
         data = r.json()
@@ -1839,7 +1888,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
                 {"jsonrpc": "2.0", "id": 3, "method": "eth_getCode",
                  "params": [address, "latest"]},
             ]
-            rb = requests.post(rpc_url, json=batch_payload, headers=headers, timeout=8)
+            rb = requests.post(rpc_url, json=batch_payload, headers=headers, timeout=4)
             rb.raise_for_status()
             batch_result = rb.json()
 
@@ -1866,7 +1915,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
                         r = requests.post(rpc_url, json={
                             "jsonrpc": "2.0", "id": _id, "method": _method,
                             "params": [address, "latest"],
-                        }, headers=headers, timeout=6)
+                        }, headers=headers, timeout=4)
                         r.raise_for_status()
                         val = r.json().get("result")
                         if val is not None:
@@ -1886,7 +1935,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
     return result
 
 
-def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 8):
+def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 4):
     """Single read-only JSON-RPC call with endpoint failover."""
     candidates = [rpc_url] if rpc_url else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     last = None
@@ -2127,7 +2176,7 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
                 "jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionByHash",
                 "params": [tx_hash],
             }
-            r1 = requests.post(rpc_url, json=tx_payload, headers=headers, timeout=8)
+            r1 = requests.post(rpc_url, json=tx_payload, headers=headers, timeout=4)
             r1.raise_for_status()
             tx = r1.json().get("result")
 
@@ -2158,7 +2207,7 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
                 "jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionReceipt",
                 "params": [tx_hash],
             }
-            r2 = requests.post(rpc_url, json=receipt_payload, headers=headers, timeout=8)
+            r2 = requests.post(rpc_url, json=receipt_payload, headers=headers, timeout=4)
             r2.raise_for_status()
             receipt = r2.json().get("result")
             if receipt:
@@ -2943,6 +2992,27 @@ def _octobot_reset() -> None:
     except Exception:
         pass
 
+@st.cache_resource(show_spinner=False)
+def _prewarm_done() -> dict:
+    """Process-wide flag so the startup cache pre-warm thread runs
+    exactly once per server process, not once per browser session."""
+    return {"started": False}
+
+def _prewarm_worker() -> None:
+    time.sleep(0.5)  # let OctoBot init grab resources first
+    try:
+        get_pros_price()
+    except Exception:
+        pass
+    try:
+        get_pharos_x_posts()
+    except Exception:
+        pass
+    try:
+        get_pharos_news()
+    except Exception:
+        pass
+
 def load_octobot(start: bool = True) -> dict:
     """Kick off (once) and report OctoBot initialisation state.
     Returns the shared holder: {bot, error, done, started_at, ...}."""
@@ -2956,6 +3026,13 @@ def load_octobot(start: bool = True) -> dict:
                     target=_octobot_worker, args=(holder,), daemon=True,
                     name="octobot-init",
                 ).start()
+                _pw = _prewarm_done()
+                if not _pw["started"]:
+                    _pw["started"] = True
+                    threading.Thread(
+                        target=_prewarm_worker, daemon=True,
+                        name="cache-prewarm",
+                    ).start()
     # Hard timeout: never allow an infinite loading state.
     if (holder["started"] and not holder["done"]
             and holder["started_at"]
@@ -3031,7 +3108,7 @@ def fetch_market_pulse() -> dict:
                 "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
                 params={"slug": "pharos-network", "convert": "USD"},
                 headers={"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"},
-                timeout=6,
+                timeout=4,
             )
             if r.status_code == 200:
                 raw = r.json().get("data", {})
@@ -3064,7 +3141,7 @@ def fetch_market_pulse() -> dict:
                     "market_data": "true", "community_data": "false",
                     "developer_data": "false", "sparkline": "false",
                 },
-                headers={"Accept": "application/json"}, timeout=6,
+                headers={"Accept": "application/json"}, timeout=4,
             )
             if r.status_code == 200:
                 md = r.json().get("market_data", {})
@@ -6625,6 +6702,147 @@ html[data-theme="dark"] .nf-item:hover{border-color:rgba(140,160,255,0.4);}
     .nf-title{font-size:13px;}
 }
 
+/* ═══════════════════════════════════════════════════════════
+   UPDATES — minimal editorial cards (from-scratch redesign)
+   Dedicated to the Updates page only; does not touch .nf-* which
+   the Campaigns page still uses. Flat, quiet, typography-led — no
+   drop shadows, no pill badges, no card "lift" on hover. Two posts
+   per page with generous breathing room between cards. Paging is
+   handled by slim arrow buttons flanking the cards on either side
+   (desktop) instead of a cluttered bottom bar; a small page readout
+   sits quietly at the top-right of the section. Thumbnails always
+   render something (post photo, or a built-in flat placeholder —
+   never a blank void).
+   ═══════════════════════════════════════════════════════════ */
+.updc-headrow{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:0.7rem;
+}
+.updc-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:20px;
+}
+.updc-card{
+    display:flex;flex-direction:column;height:100%;
+    background:var(--bg1);border:1px solid var(--border);border-radius:14px;
+    overflow:hidden;text-decoration:none;position:relative;
+    transition:background 160ms ease,border-color 160ms ease;
+}
+.updc-card::before{
+    content:"";position:absolute;top:0;left:0;width:2px;height:0;
+    background:var(--blue,#1A1AFF);transition:height 220ms cubic-bezier(.2,.8,.2,1);
+}
+.updc-card:hover{background:rgba(26,26,255,0.025);border-color:rgba(26,26,255,0.22);}
+.updc-card:hover::before{height:100%;}
+html[data-theme="dark"] .updc-card:hover{background:rgba(140,160,255,0.04);border-color:rgba(140,160,255,0.32);}
+.updc-thumb{
+    position:relative;width:100%;aspect-ratio:21/9;
+    background:var(--bg2);overflow:hidden;flex-shrink:0;
+}
+.updc-thumb img{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    opacity:0;transition:opacity 320ms ease;filter:saturate(1.02);
+}
+.updc-thumb img.loaded{opacity:1;}
+/* Editorial placeholder — pure CSS/SVG, no network request, so a
+   card never shows an empty box. Uses the post's own category as a
+   quiet oversized watermark so it reads as a designed empty state
+   rather than a failed image load. Sits underneath the <img>; the
+   real photo fades in on top once it has actually finished loading. */
+.updc-thumb-fallback{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    background:var(--bg2);
+}
+.updc-thumb-fallback::before{
+    content:attr(data-wm);
+    position:absolute;left:-0.06em;bottom:-0.24em;
+    font-family:var(--fd,Syne),sans-serif;font-weight:800;
+    font-size:52px;letter-spacing:-0.02em;
+    color:var(--t1);opacity:0.05;white-space:nowrap;line-height:1;
+    pointer-events:none;
+}
+.updc-thumb-fallback img{
+    position:relative;
+    width:68px;height:68px;border-radius:16px;
+    object-fit:cover;
+    box-shadow:0 4px 18px rgba(0,0,0,0.15);
+    background:#fff;
+}
+html[data-theme="dark"] .updc-thumb-fallback img{background:#1a1a2e;}
+.updc-body{
+    padding:1.05rem 1.3rem 1.2rem 1.3rem;
+    display:flex;flex-direction:column;gap:9px;flex:1;
+}
+.updc-meta{
+    display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+    font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--t2);font-weight:700;
+}
+.updc-cat{color:var(--blue,#1A1AFF);}
+html[data-theme="dark"] .updc-cat{color:#8EA1FF;}
+.updc-meta .updc-dot{opacity:0.5;text-transform:none;letter-spacing:0;font-weight:400;}
+.updc-meta .updc-time{text-transform:none;letter-spacing:0;font-weight:500;
+    font-variant-numeric:tabular-nums;opacity:0.85;}
+.updc-title{
+    font-family:var(--fd,Syne),sans-serif;font-size:16px;font-weight:700;
+    color:var(--t1);line-height:1.44;letter-spacing:-0.008em;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+    overflow:hidden;flex:1;
+}
+.updc-cta{
+    font-size:11.5px;font-weight:600;color:var(--t2);margin-top:auto;
+    letter-spacing:0.01em;transition:color 160ms ease;
+}
+.updc-card:hover .updc-cta{color:var(--blue,#1A1AFF);}
+html[data-theme="dark"] .updc-card:hover .updc-cta{color:#8EA1FF;}
+
+.updc-count{
+    font-size:11px;font-weight:600;color:var(--t2);
+    font-variant-numeric:tabular-nums;letter-spacing:0.06em;
+    text-transform:uppercase;white-space:nowrap;
+}
+
+/* Side arrow nav — restyles the two Streamlit buttons flanking the
+   card grid into slim, quiet circular arrows instead of a bottom
+   Prev/Next bar. Targeted by key so nothing else in the app is
+   affected. */
+div[data-testid="stHorizontalBlock"] .st-key-updates_prev button,
+div[data-testid="stHorizontalBlock"] .st-key-updates_next button{
+    width:38px;height:38px;min-width:38px;padding:0;
+    border-radius:50%;border:1px solid var(--border);
+    background:var(--bg1);color:var(--t1);
+    font-size:15px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:none;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease;
+}
+div[data-testid="stHorizontalBlock"] .st-key-updates_prev button:hover:not(:disabled),
+div[data-testid="stHorizontalBlock"] .st-key-updates_next button:hover:not(:disabled){
+    border-color:var(--blue,#1A1AFF);color:var(--blue,#1A1AFF);
+    background:rgba(26,26,255,0.06);transform:scale(1.06);
+}
+html[data-theme="dark"] div[data-testid="stHorizontalBlock"] .st-key-updates_prev button:hover:not(:disabled),
+html[data-theme="dark"] div[data-testid="stHorizontalBlock"] .st-key-updates_next button:hover:not(:disabled){
+    color:#8EA1FF;border-color:#8EA1FF;background:rgba(140,160,255,0.1);
+}
+div[data-testid="stHorizontalBlock"] .st-key-updates_prev button:disabled,
+div[data-testid="stHorizontalBlock"] .st-key-updates_next button:disabled{
+    opacity:0.28;
+}
+/* Vertically center the arrow button within its column so it sits
+   level with the middle of the card grid rather than pinned to the
+   top. Scoped narrowly via :has() to just these two button wrappers. */
+div:has(> div > div.st-key-updates_prev),
+div:has(> div > div.st-key-updates_next){
+    display:flex;flex-direction:column;justify-content:center;height:100%;
+}
+
+@media (max-width:640px){
+    .updc-grid{grid-template-columns:1fr;}
+    .updc-title{font-size:15px;-webkit-line-clamp:4;}
+    .updc-body{padding:0.95rem 1.1rem 1.1rem 1.1rem;}
+}
+
+
 /* Campaign cards — same enlarged, readable treatment. */
 .camp-grid-lg{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
@@ -8220,6 +8438,344 @@ components.html(
 
 
 # ═════════════════════════════════════════════
+# PAGE-TRANSITION LOADING OVERLAY + TAB SHIMMER
+# ─────────────────────────────────────────────
+# Full-screen overlay that masks the brief flash of stale content
+# between clicking a nav button and the new page rendering, plus a
+# lightweight shimmer placeholder for in-page tab switches. Injected
+# into the parent realm exactly once per session (gated by a
+# session_state flag below) and self-guarded in JS with
+# window.__octoOverlayBoot so it never double-initialises even if the
+# gate is ever hit twice in one session.
+if not st.session_state.get("_overlay_js_injected"):
+    st.session_state["_overlay_js_injected"] = True
+    _loading_bands = get_loading_logo_bands()
+    _logo_uri = _loading_bands[0] if _loading_bands else ""
+    _overlay_html = (
+        """
+<style>
+/* ── Full-screen loading overlay ──────────────────────────────────
+   Covers the entire viewport during page transitions AND whenever
+   Streamlit is actively rerunning/fetching live data. Uses the
+   app's own dark gradient (matches dark-mode theme perfectly).
+   Transitions in instantly on nav click; transitions out only after
+   the new page's mutations have settled (debounced), so users never
+   see partially rendered or flickering UI. */
+#octo-nav-overlay{
+  position:fixed; inset:0; z-index:99999;
+  background:linear-gradient(160deg,#06071A 0%,#0B0D2A 55%,#080820 100%);
+  opacity:0; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  transition:opacity 220ms ease;
+}
+#octo-nav-overlay.on{
+  opacity:1; pointer-events:all;
+  transition:opacity 120ms ease;
+}
+/* ── Blue tile ─────────────────────────────────────────────────── */
+#octo-nav-overlay .onv-wrap{
+  position:relative;
+  width:120px; height:120px;
+  border-radius:26px;
+  background:linear-gradient(145deg,#1A1AFF 0%,#0000CC 100%);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 0 1.5px rgba(99,102,241,0.5),
+             0 8px 40px rgba(26,26,255,0.6),
+             0 2px 10px rgba(0,0,0,0.5);
+}
+/* ── Aura rings: three concentric rings expanding outward ──────── */
+.onv-ring{
+  position:absolute; inset:0; border-radius:26px; pointer-events:none;
+}
+.onv-ring::before,.onv-ring::after{
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  border:1.5px solid rgba(99,102,241,0.65);
+  animation:onvAura 2.4s cubic-bezier(0,.6,.4,1) infinite;
+}
+.onv-ring::before{ animation-delay:0s; }
+.onv-ring::after{  animation-delay:0.8s; }
+.onv-ring2::before{ animation-delay:1.6s; }
+.onv-ring2::after{  display:none; }
+@keyframes onvAura{
+  0%{   transform:scale(1);    opacity:0.7; }
+  100%{ transform:scale(1.85); opacity:0;   }
+}
+/* ── Subtle inner-glow breathing on the tile ───────────────────── */
+#octo-nav-overlay .onv-wrap::after{
+  content:""; position:absolute; inset:-4px; border-radius:30px;
+  background:radial-gradient(ellipse at 50% 40%,
+    rgba(99,102,241,0.22) 0%, transparent 68%);
+  animation:onvBreath 2.4s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes onvBreath{
+  0%,100%{ opacity:0.5; transform:scale(0.96); }
+  50%{     opacity:1;   transform:scale(1.04); }
+}
+/* ── Logo image — completely static, flat 2D ───────────────────── */
+#octo-nav-overlay .onv-logo{
+  position:relative; z-index:1;
+  width:72px; height:72px;
+  display:flex; align-items:center; justify-content:center;
+}
+#octo-nav-overlay .onv-logo img{
+  width:100%; height:100%; object-fit:contain;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,0.35));
+}
+/* ── Loading banner below the tile ─────────────────────────────── */
+#octo-nav-overlay .onv-banner{
+  margin-top:52px;
+  display:flex; flex-direction:column; align-items:center; gap:7px;
+  text-align:center;
+}
+#octo-nav-overlay .onv-banner-title{
+  font-family:'Syne','Inter',system-ui,sans-serif;
+  font-size:17px; font-weight:800; letter-spacing:0.01em;
+  color:#FFFFFF;
+  animation:onvBannerFade 1.8s ease forwards;
+}
+#octo-nav-overlay .onv-banner-sub{
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:12.5px; font-weight:500; letter-spacing:0.04em;
+  color:rgba(165,180,255,0.72);
+  animation:onvBannerFade 1.8s ease 0.3s both;
+}
+#octo-nav-overlay .onv-banner-dot{
+  display:inline-flex; gap:5px; margin-top:4px;
+}
+#octo-nav-overlay .onv-banner-dot span{
+  width:4px; height:4px; border-radius:50%;
+  background:rgba(99,102,241,0.7);
+  animation:onvDotBounce 1.4s ease-in-out infinite;
+}
+#octo-nav-overlay .onv-banner-dot span:nth-child(2){ animation-delay:0.18s; }
+#octo-nav-overlay .onv-banner-dot span:nth-child(3){ animation-delay:0.36s; }
+@keyframes onvBannerFade{
+  from{ opacity:0; transform:translateY(6px); }
+  to{   opacity:1; transform:translateY(0);   }
+}
+@keyframes onvDotBounce{
+  0%,80%,100%{ transform:translateY(0);    opacity:0.5; }
+  40%{         transform:translateY(-4px); opacity:1;   }
+}
+  width:52px; height:52px; opacity:0.92;
+}
+#octo-nav-overlay .onv-logo-fallback path{
+  fill:none; stroke:#fff; stroke-width:2; stroke-linejoin:round;
+}
+</style>
+<script>
+(function(){
+  function OCTO_OVERLAY_BOOT(){
+    if(window.__octoOverlayBoot) return;
+    window.__octoOverlayBoot = true;
+    var doc = document;
+
+    /* ── Build overlay DOM ─────────────────────────────── */
+    if(!doc.getElementById('octo-nav-overlay')){
+      var ov = doc.createElement('div');
+      ov.id = 'octo-nav-overlay';
+      var logoHtml = 'LOGO_HTML_PLACEHOLDER';
+      ov.innerHTML =
+        '<div class="onv-wrap">' +
+          '<div class="onv-ring"></div>' +
+          '<div class="onv-ring onv-ring2"></div>' +
+          '<div class="onv-logo">' + logoHtml + '</div>' +
+        '</div>' +
+        '<div class="onv-banner">' +
+          '<div class="onv-banner-title">Hold tight, Sailor 🐙</div>' +
+          '<div class="onv-banner-sub">OctoBot is warming up the engines</div>' +
+          '<div class="onv-banner-dot"><span></span><span></span><span></span></div>' +
+        '</div>';
+      doc.body.appendChild(ov);
+    }
+    var overlay = doc.getElementById('octo-nav-overlay');
+
+    /* ── Helpers ───────────────────────────────────────── */
+    function mainEl(){ return doc.querySelector('[data-testid="stMain"]'); }
+    function hideMain(){ var m=mainEl(); if(m) m.style.opacity='0'; }
+    function showMain(){ var m=mainEl(); if(m) m.style.opacity='1'; }
+
+    /* ── State ─────────────────────────────────────────── */
+    var active       = false;
+    var shownAt      = 0;
+    var hardTimer    = null;
+    var settleTimer  = null;
+    var mutObs       = null;
+    var stateObs     = null;
+    var MIN_SHOW_MS  = 380;   /* minimum overlay duration — prevents flash */
+    var SETTLE_MS    = 300;   /* idle-mutation window before deactivating  */
+    var HARD_MAX_MS  = 3500;  /* absolute cap — never block UI permanently */
+
+    function clearTimers(){
+      if(hardTimer)   { clearTimeout(hardTimer);   hardTimer=null;  }
+      if(settleTimer) { clearTimeout(settleTimer); settleTimer=null; }
+    }
+    function disconnectObs(){
+      if(mutObs)   { mutObs.disconnect();   mutObs=null;   }
+      if(stateObs) { stateObs.disconnect(); stateObs=null; }
+    }
+
+    function deactivate(){
+      if(!active) return;
+      var elapsed = Date.now() - shownAt;
+      if(elapsed < MIN_SHOW_MS){
+        setTimeout(deactivate, MIN_SHOW_MS - elapsed); return;
+      }
+      active = false;
+      overlay.classList.remove('on');
+      showMain();
+      clearTimers();
+      disconnectObs();
+    }
+
+    function activate(){
+      if(active) return;
+      active = true;
+      shownAt = Date.now();
+      hideMain();
+      overlay.classList.add('on');
+      clearTimers();
+      disconnectObs();
+
+      /* Watch stMain for mutations — deactivate once DOM settles.
+         Debounced: each new mutation resets the settle timer so we
+         wait for a quiet stretch (all widgets rendered) not just the
+         first incremental paint. */
+      var m = mainEl();
+      if(m){
+        try{
+          mutObs = new MutationObserver(function(){
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(deactivate, SETTLE_MS);
+          });
+          mutObs.observe(m, {childList:true, subtree:true, attributes:false});
+        }catch(e){}
+      }
+
+      /* Also watch Streamlit's running-state indicator — the spinner
+         that appears in the top-right while a rerun is in progress.
+         When it disappears the rerun is fully done. */
+      try{
+        var spinnerParent = doc.querySelector('[data-testid="stStatusWidget"]')
+                        || doc.querySelector('.stSpinner')
+                        || doc.body;
+        stateObs = new MutationObserver(function(){
+          var running = !!doc.querySelector(
+            '[data-testid="stStatusWidget"] [data-testid="stSpinner"],' +
+            '.stSpinner:not([style*="display: none"]),' +
+            '[aria-label="Running..."]'
+          );
+          if(!running){
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(deactivate, SETTLE_MS);
+          }
+        });
+        stateObs.observe(spinnerParent, {childList:true, subtree:true, attributes:true});
+      }catch(e){}
+
+      /* Hard cap — never leave overlay on indefinitely */
+      hardTimer = setTimeout(deactivate, HARD_MAX_MS);
+    }
+
+    /* ── Trigger on nav button clicks ─────────────────── */
+    doc.addEventListener('click', function(e){
+      var t = e.target && e.target.closest
+        ? (e.target.closest('[class*="st-key-nav_"] button') ||
+           e.target.closest('[class*="st-key-home_all"] button') ||
+           e.target.closest('[class*="st-key-home_chat"] button'))
+        : null;
+      if(t) activate();
+    }, true);
+
+    /* ── Also trigger on any Streamlit rerun start ─────── 
+       Streamlit sets data-testid="stStatusWidget" visible when a
+       rerun begins (live-data refresh, fragment reload, etc.).
+       Intercept that signal to show the overlay for data fetches. */
+    try{
+      var bodyObs = new MutationObserver(function(){
+        var spinner = doc.querySelector('[data-testid="stSpinner"],' +
+                        '[aria-label="Running..."]');
+        if(spinner && !active) activate();
+      });
+      bodyObs.observe(doc.body, {childList:true, subtree:true});
+    }catch(e){}
+
+    /* ── Tab shimmer (unchanged from before) ───────────── */
+    doc.addEventListener('click', function(e){
+      var tabBtn = e.target && e.target.closest
+        ? e.target.closest('button[role="tab"]') : null;
+      if(!tabBtn) return;
+      try{
+        var tablist = tabBtn.closest('[role="tablist"]');
+        if(!tablist) return;
+        var panels = tablist.parentElement.querySelectorAll('[role="tabpanel"]');
+        var panel = null;
+        for(var i=0;i<panels.length;i++){
+          if(panels[i].offsetParent!==null||!panels[i].hasAttribute('hidden')){
+            panel=panels[i]; break;
+          }
+        }
+        if(!panel && panels.length) panel=panels[0];
+        if(!panel) return;
+        var shim=doc.createElement('div');
+        shim.className='shimmer';
+        shim.style.cssText='width:100%;height:120px;margin:8px 0;';
+        panel.insertBefore(shim,panel.firstChild);
+        var done=false;
+        function rm(){ if(done)return; done=true;
+          if(shim.parentNode) shim.parentNode.removeChild(shim);
+          if(tObs){tObs.disconnect();tObs=null;} }
+        var tObs=new MutationObserver(function(mts){
+          for(var i=0;i<mts.length;i++){
+            var a=mts[i].addedNodes;
+            for(var j=0;j<a.length;j++){ if(a[j]!==shim){rm();return;} }
+          }
+        });
+        tObs.observe(panel,{childList:true,subtree:true});
+        setTimeout(rm,1000);
+      }catch(e){}
+    }, true);
+  }
+
+  /* Inject into parent document (survives Streamlit reruns) */
+  try{
+    var PW = window.parent;
+    if(PW && !PW.__octoOverlayBoot){
+      /* Style block */
+      if(!PW.document.getElementById('octo-overlay-style')){
+        var st_=PW.document.createElement('style');
+        st_.id='octo-overlay-style';
+        var localStyle=document.querySelector('style');
+        st_.textContent=localStyle?localStyle.textContent:'';
+        PW.document.head.appendChild(st_);
+      }
+      /* Boot script */
+      var sc=PW.document.createElement('script');
+      sc.id='octo-overlay-bootstrap';
+      sc.textContent='('+OCTO_OVERLAY_BOOT.toString()+')();';
+      PW.document.body.appendChild(sc);
+    }
+  }catch(e){}
+})();
+</script>
+        """
+    )
+    # Inject the logo — either the user's loading.jpg (base64) or a
+    # clean built-in SVG fallback that looks right on the blue tile.
+    if _logo_uri:
+        _logo_html = '<img src="' + _logo_uri + '" alt="" />'
+    else:
+        _logo_html = (
+            '<svg class="onv-logo-fallback" viewBox="0 0 52 60">'
+            '<path d="M26 4 L6 22 H18 L10 56 L46 24 H32 Z" />'
+            '</svg>'
+        )
+    _overlay_html = _overlay_html.replace("LOGO_HTML_PLACEHOLDER", _logo_html)
+    components.html(_overlay_html, height=0, scrolling=False)
+
+
+# ═════════════════════════════════════════════
 # PAGE: HOME
 # ═════════════════════════════════════════════
 if st.session_state.page == "home":
@@ -8441,7 +8997,7 @@ if st.session_state.page == "home":
     home_camp_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
     for c in CAMPAIGNS[:2]:
         home_camp_html += (
-            f'<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;'
+            f'<div style="background:var(--bg1);border:1px solid var(--border);border-radius:12px;'
             f'padding:1rem 1.1rem;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;'
             f'box-shadow:0 1px 3px rgba(20,20,60,0.04);transition:transform 180ms cubic-bezier(0.34,1.4,0.64,1),box-shadow 180ms ease;">'
             f'<div style="flex:1;min-width:0;">'
@@ -10999,73 +11555,139 @@ elif st.session_state.page == "updates":
     )
 
     # ── Live updates from the official Pharos Network X account ──
-    # Same card grid + timeline design as before, now driven by real
-    # posts (text, timestamp, media, direct link). Rendered inside a
-    # fragment (where supported) so the feed re-fetches on a schedule
-    # without a full page rerun — users always see the newest posts.
+    # Redesigned card grid: 2 posts per page with Prev/Next paging.
+    # Every card's thumbnail is guaranteed to show *something* — a
+    # built-in CSS tile sits behind the real photo at all times, so a
+    # missing/blocked/slow image never leaves a blank box (the real
+    # photo just fades in on top of it once it finishes loading).
+    # Rendered inside a fragment (where supported) so the feed
+    # re-fetches on a schedule without a full page rerun.
     def _render_x_feed():
-        posts = get_pharos_x_posts()
+        posts = get_pharos_x_posts()[:12]
         _live = st.session_state.get("pharos_x_cache", {}).get("live", False)
 
+        if not posts:
+            st.markdown(
+                '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
+                'color: #1E3A8A;margin-bottom:0.8rem;">'
+                + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
+                   'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
+                   'Live from <b>@pharos_network</b> · refreshes automatically'
+                   if _live else
+                   '<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
+                   'display:inline-block;"></span>'
+                   'Live feed temporarily unreachable — showing the latest known official updates')
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+            st.info("No updates available right now.")
+            return
+
+        _per_page = 2
+        _page_count = max(1, (len(posts) + _per_page - 1) // _per_page)
+
+        _page_key = "updates_feed_page"
+        st.session_state.setdefault(_page_key, 0)
+        st.session_state[_page_key] = max(0, min(st.session_state[_page_key], _page_count - 1))
+        _page = st.session_state[_page_key]
+
         st.markdown(
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
-            'color: #1E3A8A;margin-bottom:0.6rem;">'
+            '<div class="updc-headrow">'
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#1E3A8A;">'
             + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
                'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
                'Live from <b>@pharos_network</b> · refreshes automatically'
                if _live else
                '<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
                'display:inline-block;"></span>'
-               'Live feed temporarily unreachable — showing the latest known official updates')
+               'Live feed temporarily unreachable — showing the latest official updates')
+            + '</div>'
+            + (f'<span class="updc-count">Page {_page + 1} of {_page_count}</span>' if _page_count > 1 else '')
             + '</div>',
             unsafe_allow_html=True,
         )
 
-        # ── News-feed layout ──────────────────────────────
-        # Clean, scannable rows: constrained thumbnail, headline only
-        # (no body/description), metadata. Collapses to stacked on mobile.
-        _feed = '<div class="nf-list">'
-        for _n in posts[:8]:
-            _text = (_n.get("text") or "").strip()
-            # Use the whole first sentence/line as the headline — no body shown.
-            _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
-            _title = (_parts[0] or _text)[:140]
-            _link  = esc_url(_n.get("url", PHAROS_X_URL))
-            _media = _n.get("media") or ""
-            _rel   = esc(_n.get("rel") or "")
-            # Category inferred from the post's own words — no invention.
-            _tl = _text.lower()
-            if   any(k in _tl for k in ("partner", "collab")):         _cat = "Partnership"
-            elif any(k in _tl for k in ("launch", "live", "mainnet")): _cat = "Launch"
-            elif any(k in _tl for k in ("campaign", "quest", "reward", "expedition")): _cat = "Campaign"
-            elif any(k in _tl for k in ("upgrade", "protocol", "release")): _cat = "Protocol"
-            elif any(k in _tl for k in ("incubator", "ecosystem")):    _cat = "Ecosystem"
-            else:                                                        _cat = "Announcement"
+        _start = _page * _per_page
+        _slice = posts[_start:_start + _per_page]
 
-            # Thumbnail — campaign-page style: centred image in a coloured
-            # bg tile, object-fit:contain so the full image is visible without
-            # cropping. Identical pattern to .nf-thumb-camp / .nf-logo.
-            _img_src      = esc_url(_media) if _media else esc_url(PHAROS_X_AVATAR)
-            _fallback_src = esc_url(PHAROS_X_AVATAR)
-            _feed += (
-                f'<a class="nf-item" href="{_link}" target="_blank" rel="noopener">'
-                f'<div class="nf-thumb nf-thumb-camp">'
-                f'<img src="{_img_src}" loading="lazy" decoding="async" alt="" '
-                f'class="nf-logo" '
-                f'onerror="this.onerror=null;this.src=\'{_fallback_src}\';" />'
-                f'</div>'
-                f'<div class="nf-body">'
-                f'<div class="nf-meta">'
-                f'<span class="nf-cat">{esc(_cat)}</span>'
-                f'<span class="nf-src">@pharos_network</span>'
-                + (f'<span class="nf-dot">·</span><span class="nf-time">{_rel}</span>' if _rel else '')
-                + '</div>'
-                f'<div class="nf-title">{esc(_title)}</div>'
-                '<div class="nf-cta">View post on X ↗</div>'
-                '</div></a>'
+        # Fallback thumbnail — the Pharos logo, shown centred on the
+        # placeholder tile whenever a post has no attached image.
+        # Uses the same logo_b64 already loaded for the app header
+        # (pharos_logo.jpg / .png from the app root), so it's a
+        # guaranteed local render with zero network dependency.
+        # Falls back to a plain indigo circle if the logo file isn't
+        # present (e.g. first run before the file is dropped in).
+        if logo_b64:
+            _fallback_glyph = f'<img src="{logo_b64}" alt="Pharos" />'
+        else:
+            _fallback_glyph = (
+                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                '<circle cx="12" cy="12" r="9" fill="rgba(26,26,255,0.18)" '
+                'stroke="rgba(99,102,241,0.6)" stroke-width="1.5"/>'
+                '<path d="M9 8L15 12L9 16" stroke="white" stroke-width="1.6" '
+                'stroke-linecap="round" stroke-linejoin="round"/>'
+                '</svg>'
             )
-        _feed += '</div>'
-        st.markdown(_feed, unsafe_allow_html=True)
+
+        def _build_cards_html(slice_):
+            html_ = '<div class="updc-grid">'
+            for _n in slice_:
+                _text = (_n.get("text") or "").strip()
+                _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
+                _title = (_parts[0] or _text)[:200]
+                _link  = esc_url(_n.get("url", PHAROS_X_URL))
+                _media = (_n.get("media") or "").strip()
+                _rel   = esc(_n.get("rel") or "")
+                _tl = _text.lower()
+                if   any(k in _tl for k in ("partner", "collab")):         _cat = "Partnership"
+                elif any(k in _tl for k in ("launch", "live", "mainnet")): _cat = "Launch"
+                elif any(k in _tl for k in ("campaign", "quest", "reward", "expedition")): _cat = "Campaign"
+                elif any(k in _tl for k in ("upgrade", "protocol", "release")): _cat = "Protocol"
+                elif any(k in _tl for k in ("incubator", "ecosystem")):    _cat = "Ecosystem"
+                else:                                                        _cat = "Announcement"
+
+                # Thumbnail: always use the Pharos logo from the root
+                # folder — no live fetch from nitter, no broken images,
+                # no dependency on external mirrors. Clean and consistent.
+                _img_tag = ""
+
+                html_ += (
+                    f'<a class="updc-card" href="{_link}" target="_blank" rel="noopener">'
+                    f'<div class="updc-thumb">'
+                    f'<div class="updc-thumb-fallback" data-wm="{esc(_cat)}">{_fallback_glyph}</div>'
+                    f'{_img_tag}'
+                    f'</div>'
+                    f'<div class="updc-body">'
+                    f'<div class="updc-meta">'
+                    f'<span class="updc-cat">{esc(_cat)}</span>'
+                    + (f'<span class="updc-dot">·</span><span class="updc-time">{_rel}</span>' if _rel else '')
+                    + '</div>'
+                    f'<div class="updc-title">{esc(_title)}</div>'
+                    '<span class="updc-cta">View post on X →</span>'
+                    '</div></a>'
+                )
+            html_ += '</div>'
+            return html_
+
+        # ── Side-arrow paging: slim circular Prev/Next buttons flank
+        # the card grid on either side instead of a bottom bar, so the
+        # cards stay the visual focus and paging feels lightweight.
+        if _page_count > 1:
+            _ac1, _ac2, _ac3 = st.columns([0.06, 0.88, 0.06], gap="small")
+            with _ac1:
+                if st.button("←", key="updates_prev", use_container_width=True,
+                             disabled=(_page == 0)):
+                    st.session_state[_page_key] = max(0, _page - 1)
+                    st.rerun()
+            with _ac2:
+                st.markdown(_build_cards_html(_slice), unsafe_allow_html=True)
+            with _ac3:
+                if st.button("→", key="updates_next", use_container_width=True,
+                             disabled=(_page >= _page_count - 1)):
+                    st.session_state[_page_key] = min(_page_count - 1, _page + 1)
+                    st.rerun()
+        else:
+            st.markdown(_build_cards_html(_slice), unsafe_allow_html=True)
 
     # Periodic auto-refresh where the Streamlit runtime supports
     # fragments; otherwise the short feed cache refreshes on rerun.
@@ -11073,12 +11695,18 @@ elif st.session_state.page == "updates":
         _render_x_feed = st.fragment(run_every=X_FEED_CACHE)(_render_x_feed)
     _render_x_feed()
 
+    st.markdown(
+        '<div style="height:1.6rem;border-bottom:1px solid var(--border);margin-bottom:1.4rem;"></div>',
+        unsafe_allow_html=True,
+    )
+
     col1, col2 = st.columns(2)
     with col1:
         st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
     with col2:
         if st.button("🔄 Refresh feed", key="refresh_news"):
             st.session_state.pop("pharos_x_cache", None)
+            st.session_state.pop("updates_feed_page", None)
             st.rerun()
 
 
@@ -12703,7 +13331,7 @@ elif st.session_state.page == "network":
         def rpc(method, params=None):
             r = requests.post(PHAROS_RPC_URL,
                 json={"jsonrpc":"2.0","id":1,"method":method,"params":params or []},
-                timeout=6, headers={"Content-Type":"application/json"})
+                timeout=4, headers={"Content-Type":"application/json"})
             r.raise_for_status()
             d = r.json()
             if "error" in d: raise ValueError(d["error"])
