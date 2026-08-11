@@ -102,7 +102,7 @@ CEX_LINKS = [
 CAMPAIGNS = [
      {
         "title": "Pharos X AnvitaFlow 🌊",
-        "tag":   "LIVE · Ist Anniversary ",
+        "tag":   "Ended · Ist Anniversary ",
         "desc":  "Community Co-Creation Campaign.",
         "link":  "https://port.pharos.xyz/agent-carnival/",
         "cta":   "Join",
@@ -125,7 +125,7 @@ CAMPAIGNS = [
     },
    {
         "title": "Create Like a PRO Phase 2",
-        "tag":   "LIVE · Agent Carnival",
+        "tag":   "Ended · Agent Carnival",
         "desc":  "Join the Alpha Summer. Build Skills. Launch Agents. Earn PROS",
         "link":  "https://port.pharos.xyz/agent-carnival/",
         "cta":   "Join",
@@ -333,6 +333,7 @@ if "req_invoices"    not in st.session_state: st.session_state.req_invoices    =
 if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
 if "net_stats_cache" not in st.session_state: st.session_state.net_stats_cache = {}
 if "spn_filter"      not in st.session_state: st.session_state.spn_filter      = "all"
+if "_app_initialized" not in st.session_state: st.session_state._app_initialized = False
 # ── x402 pay-per-call state ──
 if "x402_enabled"    not in st.session_state: st.session_state.x402_enabled    = False   # premium mode toggle (free is default)
 if "x402_challenge"  not in st.session_state: st.session_state.x402_challenge  = None    # active 402 challenge awaiting payment
@@ -440,6 +441,16 @@ def _get_http_session() -> requests.Session:
 
 def get_logo_b64() -> str:
     for path, mime in [("pharos_logo.jpg","image/jpeg"),("pharos_logo.png","image/png")]:
+        if os.path.exists(path):
+            with open(path,"rb") as f:
+                return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
+    return ""
+
+@st.cache_resource(show_spinner=False)
+def get_chat_logo_b64() -> str:
+    """Load Chat_logo.jpg from the app root for the chat welcome gate."""
+    for path, mime in [("Chat_logo.jpg","image/jpeg"),("Chat_logo.png","image/png"),
+                        ("chat_logo.jpg","image/jpeg"),("chat_logo.png","image/png")]:
         if os.path.exists(path):
             with open(path,"rb") as f:
                 return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
@@ -3492,6 +3503,32 @@ html,body{background:transparent;overflow:hidden;}
 
 
 # ─────────────────────────────────────────────
+# FLASH PREVENTION — must be the first thing rendered.
+# Hides the functional nav buttons and other elements that flash
+# visibly before the main CSS block loads. Injected as an inline
+# <style> with no external dependencies so it takes effect
+# in the same frame as the first DOM paint.
+# ─────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Hide functional nav buttons instantly — before main CSS loads */
+div[class*="st-key-nav_"],
+[data-testid="stElementContainer"]:has(iframe[height="0"]),
+.st-key-nav_home,.st-key-nav_chat,.st-key-nav_campaigns,
+.st-key-nav_updates,.st-key-nav_trade,.st-key-nav_defi,
+.st-key-nav_ecosystem,.st-key-nav_pay,.st-key-nav_request,
+.st-key-nav_network,.st-key-nav_spns,.st-key-nav_chronos,
+.st-key-nav_memory,.st-key-nav_pulse{
+    display:none!important;
+    visibility:hidden!important;
+    height:0!important;
+    overflow:hidden!important;
+    pointer-events:none!important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────
 # FONTS
 # ─────────────────────────────────────────────
 st.markdown(
@@ -3611,6 +3648,13 @@ html[data-theme="dark"] .pnav-kbd{background:#1B1F30;border-color:#2C3247;color:
 html[data-theme="dark"] .pnav-icirc{background:#1B1F2E;border-color:#2E3448;color:#F2F4FB;}
 html[data-theme="dark"] .pnav-icirc svg{color:#F2F4FB;fill:#F2F4FB;}
 html[data-theme="dark"] .pnav-icirc:hover{background:#242A3C;border-color:#454E68;color:#FFFFFF;}
+/* Theme toggle dark mode — override generic rule above with high specificity */
+html[data-theme="dark"] button.pnav-icirc.pnav-theme#pnav-theme-btn,
+html[data-theme="dark"] .pnav-icirc.pnav-theme{
+    background:#252A42!important;
+    border-color:#3A4268!important;
+    color:#E8EAFF!important;
+}
 html[data-theme="dark"] .pnav-icirc:hover svg{color:#FFFFFF;fill:#FFFFFF;}
 html[data-theme="dark"] .pnav-dd{background:#141826;border-color:#262B3E;box-shadow:0 14px 40px rgba(0,0,0,0.6);}
 html[data-theme="dark"] .pnav-dd-item{color:#C4C9DC;}
@@ -3824,7 +3868,7 @@ html[data-theme="dark"] input,html[data-theme="dark"] textarea,
 html[data-theme="dark"] [data-baseweb="input"],html[data-theme="dark"] [data-baseweb="textarea"]{
     background:#12151F !important;color:#EDEFF7 !important;border-color:#262B3E !important;
 }
-html[data-theme="dark"] [data-testid="stChatInput"]{background:#12151F !important;border-color:#262B3E !important;}
+/* dark stChatInput handled in the main chat input CSS block */
 html[data-theme="dark"] .stButton>button{
     background:#161A28 !important;color:#DDE0EE !important;border:1px solid #2A3044 !important;
 }
@@ -4101,6 +4145,40 @@ section[data-testid="stSidebar"]{
 
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
 
+/* ── Kill Streamlit's native header bar (the "black bar" under the
+   custom top nav). It was never given a transparent background, so it
+   rendered as a solid default-colour slab above the real .octo-nav.
+   Zero it out completely — no background, no height, no layout space —
+   while leaving z-index:1 above intact (harmless once it's invisible). ── */
+[data-testid="stHeader"]{
+    background:transparent!important;
+    background-color:transparent!important;
+    box-shadow:none!important;
+    border:none!important;
+    height:0!important;
+    min-height:0!important;
+    padding:0!important;
+    margin:0!important;
+}
+[data-testid="stHeader"] *{
+    background:transparent!important;
+}
+/* stDecoration is Streamlit's separate coloured top accent bar — a
+   distinct element from stHeader. Left unstyled it can render as a
+   solid full-width block beneath the custom nav (the "black bar"
+   reported on the welcome page and elsewhere). Zero it out globally,
+   the same way stHeader is neutralised above, so it never appears on
+   any page — not just the gate, where it was previously hidden. */
+[data-testid="stDecoration"]{
+    background:transparent!important;
+    background-image:none!important;
+    height:0!important;
+    min-height:0!important;
+    padding:0!important;
+    margin:0!important;
+    display:none!important;
+}
+
 /* Hide the zero-height wrapper that holds hidden nav fallback buttons */
 div[style*="height:0"][style*="overflow:hidden"][style*="visibility:hidden"]{
     display:none!important;
@@ -4115,7 +4193,26 @@ div[style*="height:0"][style*="overflow:hidden"][style*="visibility:hidden"]{
     border-right:1px solid #D0D3E0!important;
     min-width:240px!important;
     max-width:260px!important;
+    top:0!important;
+    z-index:900!important;
+    position:fixed!important;
+    height:100vh!important;
 }
+/* Guarantee the sidebar is always visible whenever Streamlit itself
+   marks it expanded (aria-expanded="true" — Streamlit sets this
+   attribute directly, it isn't something this app writes). This is
+   what makes the sidebar reopen reliably via the native collapse
+   arrow: no matter what other transform/display state a stale rule
+   left behind, this rule always wins when Streamlit says "expanded". */
+[data-testid="stSidebar"][aria-expanded="true"]{
+    transform:translateX(0)!important;
+    display:block!important;
+    visibility:visible!important;
+}
+/* Push sidebar content below the nav bar — sizing/padding for this
+   selector set lives in the single consolidated rule further down
+   (kept together with stSidebarContent/first-child to avoid the
+   duplicate-rule problem described there). */
 [data-testid="stSidebar"] .stButton>button{
     font-size:13px!important;font-weight:600!important;
     color:#0C0C1A!important;text-align:left!important;
@@ -4132,18 +4229,22 @@ div[style*="height:0"][style*="overflow:hidden"][style*="visibility:hidden"]{
 [data-testid="stSidebar"] p,[data-testid="stSidebar"] div{
     color:#0C0C1A!important;
 }
-[data-testid="collapsedControl"]{display:none!important;}
+/* Native Streamlit sidebar collapse control (the "«" arrow) is the
+   single toggle — no custom hamburger button exists anymore. Ensure
+   it's never accidentally hidden by other rules, on any browser. */
+[data-testid="collapsedControl"]{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    z-index:9400!important;
+}
 
 /* Force Streamlit main block to allow true centering.
-   NOTE: this container (stMainBlockContainer) is what actually holds
-   page content — the nav clearance MUST live here, not on the outer
-   wrapper, or the floating nav overlaps the first rows (chat language
-   pills, New Conversation, etc.). */
+   padding-top is set in the nav-clearance block above. */
 [data-testid="stMainBlockContainer"] {
     max-width: 1200px !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
-    padding-top: 0 !important;
     margin: 0 auto !important;
 }
 section[data-testid="stMain"] > div {
@@ -4718,33 +4819,159 @@ section[data-testid="stMain"] > div {
     border:1px solid rgba(26,26,255,0.3)!important;
     box-shadow:0 2px 8px rgba(26,26,255,0.15)!important;
 }
-.stChatInput,[data-testid="stChatInput"],[data-testid="stChatInput"]>div,[data-testid="stBottomBlockContainer"],[data-testid="stBottom"],[data-testid="stBottom"]>div{background:var(--bg)!important;}
+/* Chat input containers — all transparent (handled per-element below) */
+
+/* ── Bottom bar — fully transparent, no black or coloured slab ── */
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div,
+[data-testid="stBottom"] > div > div > div,
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottomBlockContainer"] > div,
+[data-testid="stBottomBlockContainer"] > div > div,
+.stChatInput,
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] > div > div > div,
+/* base-web internal containers that cause the black bar */
+[data-testid="stChatInput"] [data-baseweb],
+[data-testid="stChatInput"] [data-baseweb="textarea"],
+[data-testid="stChatInput"] [data-baseweb="base-input"],
+[data-testid="stChatInput"] div[class*="st-"],
+[data-testid="stChatInput"] div[class*="css-"]{
+    background:transparent!important;
+    background-color:transparent!important;
+    border:none!important;
+    box-shadow:none!important;
+    color:inherit!important;
+}
+[data-testid="stBottom"]{
+    padding:0!important;
+}
+[data-testid="stBottomBlockContainer"]{
+    padding:0 1.2rem 1.4rem 1.2rem!important;
+    max-width:860px!important;
+    margin:0 auto!important;
+}
+
+/* ── The glassy input pill ── */
 [data-testid="stChatInput"]{
-    background:var(--bg1)!important;
-    border:1.5px solid var(--border2)!important;
-    border-radius:12px!important;
-    box-shadow:0 2px 8px rgba(26,26,255,0.06)!important;
+    background:rgba(255,255,255,0.72)!important;
+    border:1.5px solid rgba(200,204,220,0.55)!important;
+    border-radius:22px!important;
+    box-shadow:
+        0 8px 32px rgba(20,20,60,0.10),
+        0 2px 8px rgba(20,20,60,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.90)!important;
+    backdrop-filter:blur(20px) saturate(160%)!important;
+    -webkit-backdrop-filter:blur(20px) saturate(160%)!important;
+    padding:4px 6px 4px 8px!important;
+    transition:
+        box-shadow 260ms cubic-bezier(0.4,0,0.2,1),
+        border-color 260ms cubic-bezier(0.4,0,0.2,1),
+        transform 260ms cubic-bezier(0.34,1.2,0.64,1)
+    !important;
 }
 [data-testid="stChatInput"]:focus-within{
-    border-color:var(--blue)!important;
-    box-shadow:0 0 0 3px var(--glow),0 2px 8px rgba(26,26,255,0.1)!important;
+    border-color:rgba(26,26,255,0.4)!important;
+    box-shadow:
+        0 0 0 3.5px rgba(26,26,255,0.10),
+        0 12px 40px rgba(26,26,255,0.10),
+        inset 0 1px 0 rgba(255,255,255,0.95)!important;
+    transform:translateY(-2px)!important;
 }
-[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],textarea[data-testid="stChatInputTextArea"]{
-    background:var(--bg1)!important;background-color:var(--bg1)!important;
-    color:var(--t1)!important;-webkit-text-fill-color:var(--t1)!important;
-    font-family:var(--fb)!important;font-size:14px!important;
-    caret-color:var(--blue)!important;font-weight:500!important;
+
+/* ── Textarea inside ── */
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInputTextArea"],
+textarea[data-testid="stChatInputTextArea"]{
+    background:transparent!important;
+    background-color:transparent!important;
+    color:#0C0C1A!important;
+    -webkit-text-fill-color:#0C0C1A!important;
+    font-family:'DM Sans','Inter',system-ui,sans-serif!important;
+    font-size:14.5px!important;
+    font-weight:500!important;
+    caret-color:#1A1AFF!important;
+    padding:0.85rem 0.6rem 0.85rem 1rem!important;
+    line-height:1.55!important;
+    border:none!important;
+    outline:none!important;
+    box-shadow:none!important;
+    resize:none!important;
 }
-[data-testid="stChatInput"] textarea::placeholder,[data-testid="stChatInputTextArea"]::placeholder{
-    color:var(--t3)!important;-webkit-text-fill-color:var(--t3)!important;
-    font-size:13px!important;opacity:1!important;
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInputTextArea"]::placeholder{
+    color:rgba(90,95,120,0.65)!important;
+    -webkit-text-fill-color:rgba(90,95,120,0.65)!important;
+    font-size:13.5px!important;
+    font-weight:400!important;
+    opacity:1!important;
 }
+
+/* ── Send button — sharp blue pill ── */
 [data-testid="stChatInput"] button{
-    background:var(--blue)!important;border:none!important;
-    border-radius:8px!important;
-    box-shadow:0 2px 6px rgba(26,26,255,0.3)!important;
+    background:linear-gradient(135deg,#1A1AFF 0%,#4444FF 100%)!important;
+    border:none!important;
+    border-radius:14px!important;
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    margin:auto 2px auto 0!important;
+    box-shadow:
+        0 4px 14px rgba(26,26,255,0.40),
+        inset 0 1px 0 rgba(255,255,255,0.18)!important;
+    transition:
+        transform 180ms cubic-bezier(0.34,1.4,0.64,1),
+        box-shadow 180ms ease,
+        background 160ms ease
+    !important;
+    flex-shrink:0!important;
 }
-[data-testid="stChatInput"] button svg{fill:#fff!important;}
+[data-testid="stChatInput"] button:hover{
+    background:linear-gradient(135deg,#0F0FCC 0%,#2D2DFF 100%)!important;
+    transform:scale(1.09) translateY(-1px)!important;
+    box-shadow:0 8px 22px rgba(26,26,255,0.55),inset 0 1px 0 rgba(255,255,255,0.22)!important;
+}
+[data-testid="stChatInput"] button:active{
+    transform:scale(0.97)!important;
+}
+[data-testid="stChatInput"] button svg{
+    fill:#fff!important;
+    width:18px!important;
+    height:18px!important;
+}
+
+/* ── Dark mode overrides ── */
+html[data-theme="dark"] [data-testid="stChatInput"]{
+    background:rgba(16,18,32,0.82)!important;
+    border-color:rgba(80,90,140,0.40)!important;
+    box-shadow:
+        0 8px 32px rgba(0,0,0,0.28),
+        0 2px 8px rgba(0,0,0,0.18),
+        inset 0 1px 0 rgba(255,255,255,0.06)!important;
+}
+html[data-theme="dark"] [data-testid="stChatInput"]:focus-within{
+    border-color:rgba(99,120,255,0.55)!important;
+    box-shadow:
+        0 0 0 3.5px rgba(99,120,255,0.12),
+        0 12px 40px rgba(0,0,0,0.30),
+        inset 0 1px 0 rgba(255,255,255,0.08)!important;
+}
+html[data-theme="dark"] [data-testid="stChatInput"] textarea,
+html[data-theme="dark"] [data-testid="stChatInputTextArea"]{
+    color:#EDEFF7!important;
+    -webkit-text-fill-color:#EDEFF7!important;
+}
+html[data-theme="dark"] [data-testid="stChatInput"] textarea::placeholder,
+html[data-theme="dark"] [data-testid="stChatInputTextArea"]::placeholder{
+    color:rgba(180,190,220,0.45)!important;
+    -webkit-text-fill-color:rgba(180,190,220,0.45)!important;
+}
+html[data-theme="dark"] [data-testid="stBottom"],
+html[data-theme="dark"] [data-testid="stBottomBlockContainer"]{
+    background:transparent!important;
+}
 
 /* ── EXPANDER / SOURCE ── */
 [data-testid="stExpander"]{background:var(--bg1)!important;border:1.5px solid var(--border)!important;border-radius:10px!important;margin-top:0.5rem!important;box-shadow:0 2px 8px rgba(26,26,255,0.05)!important;}
@@ -5424,28 +5651,13 @@ section[data-testid="stMain"] > div {
 [data-testid="stChatMessage"]:nth-child(odd){animation-delay:0ms;}
 [data-testid="stChatMessage"]:nth-child(even){animation-delay:60ms;}
 
-/* Chat input — smooth focus ring expand */
-[data-testid="stChatInput"]{
-    transition:
-        box-shadow 220ms cubic-bezier(0.4,0,0.2,1),
-        border-color 220ms cubic-bezier(0.4,0,0.2,1),
-        transform 220ms cubic-bezier(0.4,0,0.2,1)
-    !important;
-}
-[data-testid="stChatInput"]:focus-within{
-    transform:translateY(-1px)!important;
-    box-shadow:0 0 0 3px rgba(26,26,255,0.12),
-               0 4px 16px rgba(26,26,255,0.08)!important;
-}
+/* Chat input — transitions now handled in the main chat input block above */
 
 
 /* ── 6. LOADING — premium shimmer skeleton ──
-   Converted from animating `background-position` (CPU repaint every
-   frame) to `transform:translateX` on an oversized background — same
-   sweeping visual, GPU-composited instead. This runs on every
-   st.spinner() call across the app (wallet fetch, tx fetch, news
-   load, chat thinking), so it's one of the most frequently-active
-   animations and benefits the most from being GPU-friendly. */
+   GPU-composited shimmer sweep. Used by in-page skeleton placeholders
+   and st.spinner() wrappers. The fullscreen overlay is startup-only;
+   page navigation uses the __pnavGo fluid transition. */
 @keyframes shimmer-sweep{
     0%{transform:translateX(-35%);}
     100%{transform:translateX(35%);}
@@ -5460,6 +5672,30 @@ section[data-testid="stMain"] > div {
     background-size:1200px 100%!important;
     animation:shimmer-sweep 1.6s ease-in-out infinite!important;
     border-radius:8px!important;
+    will-change:transform;
+}
+/* ── Page-level skeleton placeholder ── */
+.page-skeleton{display:flex;flex-direction:column;gap:14px;padding:1rem 0;}
+.skel-block{
+    border-radius:12px;overflow:hidden;position:relative;
+    background:var(--bg1);border:1px solid var(--border);
+}
+.skel-block::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.12) 50%,transparent 100%);
+    animation:shimmer-sweep 1.6s ease-in-out infinite;
+    will-change:transform;
+}
+.skel-h{height:18px;border-radius:6px;background:var(--bg2);margin-bottom:8px;}
+.skel-p{height:12px;border-radius:4px;background:var(--bg2);}
+.skel-p.w80{width:80%;}
+.skel-p.w60{width:60%;}
+.skel-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.skel-card{height:220px;border-radius:16px;background:var(--bg1);border:1px solid var(--border);position:relative;overflow:hidden;}
+.skel-card::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.10) 50%,transparent 100%);
+    animation:shimmer-sweep 1.6s ease-in-out infinite;
     will-change:transform;
 }
 /* Spinner text smooth fade */
@@ -5693,19 +5929,91 @@ section[data-testid="stMain"]{
     /* Single source of truth for nav clearance. Lives on the OUTER
        section, which no inner container rule touches — so page banners
        can never tuck under the floating nav regardless of the cascade
-       inside stMainBlockContainer. */
-    padding-top:84px !important;
+/* ── TOP NAV CLEARANCE ─────────────────────────────────────────────
+   All pages need top padding so content starts below the fixed nav.
+   The nav is 64px tall + 14px from top = 78px. Add 12px breathing room.
+   IMPORTANT: padding must go on stMainBlockContainer, NOT on stMain,
+   because stMain itself is a flex column wrapper — padding there causes
+   double-spacing and the "page overlap" ghost layout issue.            */
+section[data-testid="stMain"]{
+    padding-top:0 !important;
+    margin-top:0 !important;
+}
+/* All pages: clear the fixed nav bar (64px nav + 14px top + 14px gap = 92px) */
+[data-testid="stMainBlockContainer"]{
+    padding-top:72px !important;
 }
 @media (max-width:600px){
-    section[data-testid="stMain"]{ padding-top:74px !important; }
+    [data-testid="stMainBlockContainer"]{ padding-top:64px !important; }
 }
-/* Pages with a sidebar (Chat) render main content higher — add extra
-   clearance so the first row (language pills) never hides under the
-   floating nav. Combined with the in-page .chat-top-spacer, the first
-   row is guaranteed to sit clear on the chat page. */
-.stApp:has(section[data-testid="stSidebar"]) section[data-testid="stMain"]{
-    padding-top:38px !important;
+/* Chat page (has sidebar): same clearance, sidebar handled separately */
+.stApp:has(section[data-testid="stSidebar"]) [data-testid="stMainBlockContainer"]{
+    padding-top:76px !important;
 }
+/* Sidebar is position:fixed (taken out of normal flow), so the main
+   content must reserve its own space explicitly or it renders
+   underneath it. Reserve space only when the sidebar is expanded;
+   when collapsed the main area reclaims the full width. */
+section[data-testid="stMain"]{
+    transition:margin-left 300ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+.stApp:has(section[data-testid="stSidebar"][aria-expanded="true"]) section[data-testid="stMain"]{
+    margin-left:260px!important;
+}
+.stApp:has(section[data-testid="stSidebar"][aria-expanded="false"]) section[data-testid="stMain"]{
+    margin-left:0!important;
+}
+@media (max-width:768px){
+    /* On mobile the sidebar overlays rather than pushing content */
+    .stApp:has(section[data-testid="stSidebar"][aria-expanded="true"]) section[data-testid="stMain"]{
+        margin-left:0!important;
+    }
+}
+/* Remove any other padding-top on stMain direct child — only stMainBlockContainer controls vertical pos */
+section[data-testid="stMain"] > div{
+    padding-top:0 !important;
+    margin-top:0 !important;
+}
+/* Sidebar itself — smooth open/close, always below nav. This is the
+   ONLY base [data-testid="stSidebar"] rule in the stylesheet (a
+   duplicate used to exist further up, each setting its own competing
+   `transition` value with !important — both blocks arrive via
+   separate injected <style> tags, and different browsers/engines can
+   merge/order those inconsistently, which is what made the sidebar
+   render in Brave but not Chrome on the same page. Declaring the
+   transition exactly once removes that ambiguity entirely.) */
+[data-testid="stSidebar"]{
+    z-index:900!important;
+    top:0!important;
+    transition:transform 300ms cubic-bezier(0.4,0,0.2,1),
+               width 300ms cubic-bezier(0.4,0,0.2,1),
+               margin-left 300ms cubic-bezier(0.4,0,0.2,1)!important;
+}
+/* Sidebar's inner scroll container — single authoritative rule (a
+   duplicate of this used to live further up with slightly different
+   values, which is the other half of the cross-browser inconsistency
+   fixed above, and also part of why the sidebar had oversized empty
+   space: the old top padding (80-82px) was sized to clear the custom
+   floating hamburger button, which no longer exists now that the
+   sidebar uses only Streamlit's native collapse control. */
+[data-testid="stSidebar"] > div[data-testid="stSidebarContent"],
+[data-testid="stSidebar"] section,
+[data-testid="stSidebar"] > div:first-child{
+    padding-top:16px!important;
+    padding-bottom:16px!important;
+    height:100vh!important;
+    overflow-y:auto!important;
+    box-sizing:border-box!important;
+    background:inherit!important;
+}
+/* collapsedControl (Streamlit's native toggle) is the sole sidebar
+   control now. Do not override its display/visibility here — that's
+   Streamlit's own JS to manage; fighting it with CSS is what caused
+   inconsistent show/hide behaviour across browsers previously. */
+/* Nav bar + wallet always on top of everything */
+.pnav-fixed{z-index:10000!important;}
+/* .w3-fixed removed — wallet is embedded in .pnav-wallet-wrap */
+#pnav-root,[class*="pnav-fixed"]{z-index:10000!important;}
 /* Belt & braces: the first content block also carries scroll/anchor margin. */
 section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > div:first-child{
     scroll-margin-top:110px;
@@ -5839,9 +6147,26 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
         padding-right:0.5rem!important;
     }
 
-    /* ── Hide sidebar on mobile ── */
-    [data-testid="stSidebar"]{display:none!important;}
-    [data-testid="collapsedControl"]{display:none!important;}
+    /* ── Sidebar on mobile: collapse by default but stay reachable ──
+       Previously this forced display:none unconditionally, which made
+       the sidebar completely inaccessible on small screens even via the
+       toggle button (there was no CSS path back to visible). Instead,
+       slide it off-canvas by default and let Streamlit's own expanded
+       state (aria-expanded, driven by the real collapse control) bring
+       it back on-screen, above the content, without clipping. */
+    [data-testid="stSidebar"]{
+        transform:translateX(-100%);
+        transition:transform 300ms cubic-bezier(0.4,0,0.2,1)!important;
+        width:82vw!important;
+        max-width:300px!important;
+        min-width:0!important;
+    }
+    [data-testid="stSidebar"][aria-expanded="true"]{
+        transform:translateX(0)!important;
+        box-shadow:6px 0 28px rgba(0,0,0,0.28)!important;
+    }
+    /* Keep the collapsed control visible so the sidebar can be reopened —
+       handled by the native collapsedControl rule above. */
 
     /* ── Nav bar — stack vertically, scrollable ── */
     [data-testid="stHorizontalBlock"]{
@@ -5945,49 +6270,21 @@ button,a,.stButton>button,[data-testid="stTextInput"] input{
     .home-stat-num{font-size:13px!important;}
     .nav-wrap .stButton>button{font-size:10px!important;padding:0.2rem 0.4rem!important;}
 }
-/* ── Force nav buttons black — target by Streamlit's per-element key class ── */
-.st-key-nav_home    button,
-.st-key-nav_chat    button,
-.st-key-nav_campaigns button,
-.st-key-nav_updates button,
-.st-key-nav_trade   button,
-.st-key-nav_ecosystem button,
-.st-key-nav_pay     button,
-.st-key-nav_request button,
-.st-key-nav_network button,
-.st-key-nav_spns    button{
-    background:#EAEEFF !important;
-    background-color:#EAEEFF !important;
-    color:#000000 !important;
-    border:1px solid #C7D0FF !important;
+/* ── Nav buttons — always hidden, never visible to the user ─────────── */
+/* (Flash prevention also covers these at top of file via inline style.) */
+div[class*="st-key-nav_"],
+.st-key-nav_home,.st-key-nav_chat,.st-key-nav_campaigns,
+.st-key-nav_updates,.st-key-nav_trade,.st-key-nav_defi,
+.st-key-nav_ecosystem,.st-key-nav_pay,.st-key-nav_request,
+.st-key-nav_network,.st-key-nav_spns,.st-key-nav_chronos,
+.st-key-nav_memory,.st-key-nav_pulse{
+    display:none!important;
+    visibility:hidden!important;
+    height:0!important;
+    overflow:hidden!important;
+    pointer-events:none!important;
 }
-.st-key-nav_home    button *,
-.st-key-nav_chat    button *,
-.st-key-nav_campaigns button *,
-.st-key-nav_updates button *,
-.st-key-nav_trade   button *,
-.st-key-nav_ecosystem button *,
-.st-key-nav_pay     button *,
-.st-key-nav_request button *,
-.st-key-nav_network button *,
-.st-key-nav_spns    button *{
-    color:#000000 !important;
-}
-.st-key-nav_home    button:hover,
-.st-key-nav_chat    button:hover,
-.st-key-nav_campaigns button:hover,
-.st-key-nav_updates button:hover,
-.st-key-nav_trade   button:hover,
-.st-key-nav_ecosystem button:hover,
-.st-key-nav_pay     button:hover,
-.st-key-nav_request button:hover,
-.st-key-nav_network button:hover,
-.st-key-nav_spns    button:hover{
-    background:#D8DFFF !important;
-    background-color:#D8DFFF !important;
-    color:#000000 !important;
-    border-color:#1A1AFF !important;
-}
+/* nav button hide rules above cover all states */
                        
 </style>
 """, unsafe_allow_html=True)
@@ -6842,6 +7139,63 @@ div:has(> div > div.st-key-updates_next){
     .updc-body{padding:0.95rem 1.1rem 1.1rem 1.1rem;}
 }
 
+/* ── Update card v2 — Pharos logo tile + premium badge ── */
+.updc-card-v2{
+    display:flex;flex-direction:column;height:100%;
+    background:var(--bg1);border:1px solid var(--border);border-radius:18px;
+    overflow:hidden;text-decoration:none;position:relative;
+    box-shadow:0 2px 12px rgba(20,20,60,0.06);
+    transition:transform 220ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 220ms ease,border-color 180ms ease;
+}
+.updc-card-v2:hover{
+    transform:translateY(-5px);
+    box-shadow:0 16px 44px rgba(26,26,255,0.13),0 4px 14px rgba(26,26,255,0.07);
+    border-color:rgba(26,26,255,0.28);
+}
+.updc-logo-tile{
+    width:100%;aspect-ratio:16/7;
+    display:flex;align-items:center;justify-content:center;
+    position:relative;overflow:hidden;flex-shrink:0;
+}
+.updc-logo-pattern{
+    position:absolute;inset:0;
+    background-image:radial-gradient(circle,rgba(255,255,255,0.08) 1px,transparent 1px);
+    background-size:14px 14px;
+    pointer-events:none;
+}
+.updc-logo-inner{
+    position:relative;z-index:1;
+    width:64px;height:64px;border-radius:16px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,0.12);
+    border:1.5px solid rgba(255,255,255,0.2);
+    box-shadow:0 4px 24px rgba(0,0,0,0.3);
+    backdrop-filter:blur(4px);
+}
+.updc-logo-inner img{
+    width:44px;height:44px;object-fit:contain;border-radius:10px;
+}
+.updc-logo-inner svg{
+    width:36px;height:36px;
+}
+.updc-badge{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;
+    border:1px solid;border-radius:20px;padding:3px 9px;
+    transition:opacity 160ms ease;
+}
+html[data-theme="dark"] .updc-card-v2{
+    background:#141826;border-color:#262B3E;
+}
+html[data-theme="dark"] .updc-card-v2:hover{
+    border-color:rgba(140,160,255,0.35);
+    box-shadow:0 16px 44px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .updc-logo-inner{
+    background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);
+}
+
 
 /* Campaign cards — same enlarged, readable treatment. */
 .camp-grid-lg{
@@ -6880,6 +7234,7 @@ NAV_PAGES = [
     ("🧾", "Request",   "request"),
     ("🌐", "Network",   "network"),
     ("⚡", "SPNs",      "spns"),
+    ("⏳", "Chronos",   "chronos"),
 ]
 # ── Hidden functional nav buttons ────────────────────────────
 # These are the REAL Streamlit navigation actions — identical keys and
@@ -6909,6 +7264,7 @@ _pnav_dd_products = [
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
+    ("⏳", "Chronos", "chronos"),
 ]
 _pnav_dd_explore = [
     ("🧩", "Ecosystem",     "ecosystem"),
@@ -6934,11 +7290,11 @@ div[class*="st-key-nav_"]{display:none!important;}
 /* Hide the height-0 bootstrap component's container so it adds no gap. */
 div[data-testid="stElementContainer"]:has(iframe[height="0"]){display:none!important;}
 
-/* Offset page content below the fixed nav (identical on every page). */
-section[data-testid="stMain"] > div{padding-top:0 !important;}
+/* Offset page content below the fixed nav — handled in main CSS block */
+section[data-testid="stMain"] > div{padding-top:0 !important;margin-top:0!important;}
 
 .pnav-fixed{
-    position:fixed;top:14px;left:0;right:0;z-index:1000;
+    position:fixed;top:14px;left:0;right:0;z-index:10000;
     display:flex;justify-content:center;
     pointer-events:none;padding:0 1.25rem;
 }
@@ -6948,13 +7304,11 @@ section[data-testid="stMain"] > div{padding-top:0 !important;}
     pointer-events:auto;
     transform:translateZ(0);backface-visibility:hidden;
     display:flex;align-items:center;
-    width:100%;max-width:1180px;height:64px;
-    /* Liquid glass: semi-opaque so the page bleeds through, strong blur
-       for depth, inner highlight on top edge for the glass refraction feel */
+    width:100%;max-width:1280px;height:64px;
     background:rgba(255,255,255,0.62);
     border:1px solid rgba(255,255,255,0.75);
     border-radius:20px;
-    padding:0 12px;
+    padding:0 14px;
     box-shadow:
         0 4px 24px rgba(20,20,60,0.10),
         0 1px 2px rgba(20,20,60,0.06),
@@ -6963,6 +7317,7 @@ section[data-testid="stMain"] > div{padding-top:0 !important;}
     backdrop-filter:blur(24px) saturate(180%) brightness(1.04);
     -webkit-backdrop-filter:blur(24px) saturate(180%) brightness(1.04);
     font-family:'DM Sans','Inter',sans-serif;
+    gap:8px;
 }
 /* Orange logo tile → Home */
 .pnav-logo{
@@ -7048,28 +7403,72 @@ section[data-testid="stMain"] > div{padding-top:0 !important;}
     background:#FFFFFF;border:1px solid #E4E4E9;border-radius:6px;
     padding:3px 6px;box-shadow:0 1px 0 rgba(20,20,60,0.05);
 }
-/* Circular social icon buttons */
-.pnav-socials{display:flex;align-items:center;gap:8px;margin-left:12px;flex-shrink:0;}
-.pnav-icirc{
-    width:40px;height:40px;border-radius:50%;
-    background:#F4F4F6;border:1px solid #ECECF1;
-    display:flex;align-items:center;justify-content:center;
-    color:#17181C;text-decoration:none;
+/* ── Wallet button embedded in nav ── */
+.pnav-wallet-wrap{
+    display:flex;align-items:center;flex-shrink:0;margin-left:8px;
+}
+.pnav-wallet-wrap .w3-pill{
+    pointer-events:auto;display:inline-flex;align-items:center;gap:8px;
+    background:#FFFFFF;border:1px solid #E3E5EA;border-radius:999px;
+    padding:5px 6px 5px 14px;height:38px;
+    box-shadow:0 2px 10px rgba(20,20,60,0.10);
+    transition:border-color 160ms ease,box-shadow 200ms ease;
+}
+.pnav-wallet-wrap .w3-pill:hover{border-color:#C3C7D4;box-shadow:0 4px 16px rgba(20,20,60,0.14);}
+.pnav-wallet-wrap .w3-connect{
+    display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;
+    background:linear-gradient(135deg,#1A1AFF 0%,#4444FF 100%);
+    color:#fff;border-radius:999px;
+    font-family:inherit;font-size:13px;font-weight:700;letter-spacing:0.01em;
+    padding:8px 18px;line-height:1;
+    box-shadow:0 2px 10px rgba(26,26,255,0.30);
+    transition:transform 180ms cubic-bezier(0.34,1.4,0.64,1),
+               box-shadow 180ms ease,background 160ms ease;
+}
+.pnav-wallet-wrap .w3-connect:hover{
+    background:linear-gradient(135deg,#0F0FCC 0%,#2D2DFF 100%);
+    transform:translateY(-1px);
+    box-shadow:0 6px 18px rgba(26,26,255,0.45);
+}
+.pnav-wallet-wrap .w3-connect:active{transform:translateY(0) scale(0.97);}
+
+/* Theme toggle — circle icon button, sits right of Explore with clear separation */
+button.pnav-theme.pnav-icirc,
+.pnav-icirc.pnav-theme{
+    width:36px!important;height:36px!important;
+    border-radius:50%!important;
+    background:#F0F1F6!important;
+    border:1px solid #DCDFE8!important;
+    display:flex!important;align-items:center!important;justify-content:center!important;
+    color:#17181C!important;cursor:pointer!important;flex-shrink:0!important;
+    margin-left:14px!important;
     transition:transform 150ms cubic-bezier(0.34,1.4,0.64,1),
-               background 150ms ease,border-color 150ms ease,box-shadow 150ms ease;
+               background 150ms ease,border-color 150ms ease,box-shadow 150ms ease!important;
+    pointer-events:auto!important;
 }
-.pnav-icirc:hover{
-    background:#FFFFFF;border-color:#D9DBE4;color:#000;
-    transform:translateY(-1px);box-shadow:0 4px 10px rgba(20,20,60,0.10);
+button.pnav-theme.pnav-icirc:hover,
+.pnav-icirc.pnav-theme:hover{
+    background:#FFFFFF!important;border-color:#C8CCD8!important;
+    transform:translateY(-1px)!important;
+    box-shadow:0 4px 12px rgba(20,20,60,0.12)!important;
 }
-.pnav-icirc svg{width:17px;height:17px;display:block;}
-.pnav-icirc svg path{fill:currentColor;}
-.pnav-icirc[title="Discord"]:hover{color:#5865F2;border-color:#5865F2;}
-.pnav-icirc[title="X / Twitter"]:hover{color:#000;}
-.pnav-icirc[title="GitHub"]:hover{color:#000;}
-html[data-theme="dark"] .pnav-icirc[title="Discord"]:hover{color:#7C88FF;border-color:#5865F2;}
-html[data-theme="dark"] .pnav-icirc[title="X / Twitter"]:hover,
-html[data-theme="dark"] .pnav-icirc[title="GitHub"]:hover{color:#FFFFFF;}
+/* Dark mode — use a dark tile so the icon is always visible */
+html[data-theme="dark"] button.pnav-theme.pnav-icirc,
+html[data-theme="dark"] .pnav-icirc.pnav-theme{
+    background:#22263A!important;
+    border-color:#363D58!important;
+    color:#E8EAFF!important;
+}
+html[data-theme="dark"] button.pnav-theme.pnav-icirc:hover,
+html[data-theme="dark"] .pnav-icirc.pnav-theme:hover{
+    background:#2C3250!important;
+    border-color:#4A5480!important;
+    box-shadow:0 4px 14px rgba(0,0,0,0.35)!important;
+}
+.pnav-icirc.pnav-theme svg{width:16px!important;height:16px!important;display:block!important;}
+/* Social icons still hidden */
+.pnav-socials{display:none!important;}
+.pnav-icirc:not(.pnav-theme){display:none!important;}
 .pnav-theme{cursor:pointer;padding:0;}
 .pnav-theme svg{position:absolute;width:17px;height:17px;transition:opacity 200ms ease,transform 300ms cubic-bezier(0.34,1.4,0.64,1);}
 .pnav-theme .ic-moon{opacity:0;transform:rotate(-40deg) scale(0.6);}
@@ -7128,28 +7527,25 @@ html[data-theme="dark"] #octo-palette .op-foot{border-color:#242A3B;}
 
 /* Responsive — degrade gracefully, never overlap or clip */
 @media (max-width:1120px){
-    .pnav-search{width:220px;}
-    .pnav-links{gap:20px;margin-left:22px;}
+    .pnav-search{width:200px;}
+    .pnav-links{gap:18px;margin-left:20px;}
 }
 @media (max-width:980px){
     .pnav-kbd{display:none;}
-    .pnav-search{width:44px;padding:0;justify-content:center;}
+    .pnav-search{width:40px;padding:0;justify-content:center;}
     .pnav-search-ph{display:none;}
+    .pnav-wallet-wrap .w3-lbl{display:none;}
+    .pnav-wallet-wrap .w3-connect{padding:8px 10px;}
 }
 @media (max-width:860px){
     .pnav-ver{display:none;}
-    .pnav-links{gap:16px;margin-left:16px;}
+    .pnav-links{gap:14px;margin-left:14px;}
 }
 @media (max-width:700px){
     .pnav-dot{display:none;}
-    .pnav-socials .pnav-icirc:nth-child(2){display:none;}
+    .pnav-search{display:none;}
 }
-/* Home sentiment orb: pinned to the extreme left corner by its own
-   script (frameElement inline styles, validated + cleaned up by the
-   parent bootstrap when Streamlit recycles the container node). */
-
 @media (max-width:600px){
-    .pnav-socials .pnav-icirc:not(:last-child){display:none;}
     .pnav{height:58px;border-radius:14px;padding:0 10px;}
     .pnav-fixed{top:10px;padding:0 0.75rem;}
     .pnav-item{font-size:13px;padding:17px 0;}
@@ -7203,41 +7599,7 @@ if logo_b64:
 else:
     _pnav_logo_inner = '<span class="pnav-logo-emoji">🐙</span>'
 
-_pnav_html = (
-    '<div class="pnav-fixed"><nav class="pnav">'
-    '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
-    '<div class="pnav-ver">v1.2<span class="pnav-caret"></span></div>'
-    '<div class="pnav-links">'
-    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
-    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
-    '</div>'
-    '<div class="pnav-item' + (" on" if _pg == "campaigns" else "") + '" data-pnav-go="campaigns">Campaigns</div>'
-    '<div class="pnav-item' + (" on" if _pg == "updates" else "") + '" data-pnav-go="updates">Updates</div>'
-    '<div class="pnav-item' + (" on" if _pg in ("ecosystem", "network", "memory", "pulse") else "") + '">Explore<span class="pnav-caret"></span>'
-    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_explore) + '</div>'
-    '</div>'
-    '</div>'
-    '<span class="pnav-dot"></span>'
-    '<div class="pnav-search" id="pnav-search-pill" title="Search — pages, actions, docs (Ctrl/Cmd + K)">'
-    '<svg class="pnav-mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
-    '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>'
-    '<span class="pnav-search-ph">Quick search...</span>'
-    '<span class="pnav-kbd">⌘K</span>'
-    '</div>'
-    '<button class="pnav-icirc pnav-theme" id="pnav-theme-btn" title="Toggle dark mode" aria-label="Toggle dark mode">' + _PNAV_SUN_SVG + _PNAV_MOON_SVG + '</button>'
-    '<div class="pnav-socials">'
-    '<a class="pnav-icirc" href="' + PHAROS_X_URL + '" target="_blank" rel="noopener" title="X / Twitter">' + _PNAV_X_SVG + '</a>'
-    '<a class="pnav-icirc" href="' + _PNAV_GITHUB_URL + '" target="_blank" rel="noopener" title="GitHub">' + _PNAV_GH_SVG + '</a>'
-    '<a class="pnav-icirc" href="' + PHAROS_DISCORD_URL + '" target="_blank" rel="noopener" title="Discord">' + _PNAV_DC_SVG + '</a>'
-    '</div>'
-    '</nav></div>'
-)
-
-# ── GLOBAL CONNECT WALLET (fixed top-right, every page) ──────
-# Separate from the nav bar, as a fixed overlay. Rendered on every page
-# from module level, so it is always present and always consistent.
-# Purely presentational here — the parent-document script below owns all
-# provider logic and keeps this pill's contents in sync.
+# ── GLOBAL CONNECT WALLET pill HTML (defined before nav bar) ─────────
 _w3a   = st.session_state.get("w3_address", "")
 _w3c   = st.session_state.get("w3_chain", "")
 _w3l   = st.session_state.get("w3_label", "") or "Wallet"
@@ -7266,13 +7628,42 @@ else:
         '</div>'
     )
 
+_pnav_html = (
+    '<div class="pnav-fixed"><nav class="pnav">'
+    '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
+    '<div class="pnav-ver">v1.2<span class="pnav-caret"></span></div>'
+    '<div class="pnav-links">'
+    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
+    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
+    '</div>'
+    '<div class="pnav-item' + (" on" if _pg == "campaigns" else "") + '" data-pnav-go="campaigns">Campaigns</div>'
+    '<div class="pnav-item' + (" on" if _pg == "updates" else "") + '" data-pnav-go="updates">Updates</div>'
+    '<div class="pnav-item' + (" on" if _pg in ("ecosystem", "network", "memory", "pulse") else "") + '">Explore<span class="pnav-caret"></span>'
+    '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_explore) + '</div>'
+    '</div>'
+    '</div>'
+    # Theme toggle sits right after the links row, before the dot separator
+    '<button class="pnav-icirc pnav-theme" id="pnav-theme-btn" title="Toggle dark / light mode" aria-label="Toggle dark mode">' + _PNAV_SUN_SVG + _PNAV_MOON_SVG + '</button>'
+    '<span class="pnav-dot"></span>'
+    '<div class="pnav-search" id="pnav-search-pill" title="Search — pages, actions, docs (Ctrl/Cmd + K)">'
+    '<svg class="pnav-mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>'
+    '<span class="pnav-search-ph">Quick search...</span>'
+    '<span class="pnav-kbd">⌘K</span>'
+    '</div>'
+    # Connect Wallet embedded directly in the nav
+    '<div class="pnav-wallet-wrap" id="pnav-wallet-wrap">'
+    + _wallet_pill +
+    '</div>'
+    '</nav></div>'
+)
+
+# ── GLOBAL CONNECT WALLET CSS + modal (pill HTML already built above) ─
+
 _W3_CSS = """
 <style>
-/* ── GLOBAL CONNECT WALLET — fixed top-right overlay ───────── */
-.w3-fixed{
-    position:fixed;top:14px;right:18px;z-index:1002;
-    display:flex;justify-content:flex-end;pointer-events:none;
-}
+/* ── GLOBAL CONNECT WALLET — now embedded inside the nav bar ───────── */
+/* w3-fixed overlay removed; wallet lives in .pnav-wallet-wrap instead */
 .w3-pill{
     pointer-events:auto;display:inline-flex;align-items:center;gap:8px;
     background:#FFFFFF;border:1px solid #E3E5EA;border-radius:999px;
@@ -7381,7 +7772,7 @@ html[data-theme="dark"] .w3-x:hover{background:#3B1D1F;color:#FF6B6E;}
 
 /* Keep the pill clear of the nav on narrow screens */
 @media (max-width:1120px){
-    .w3-fixed{top:auto;bottom:16px;right:16px;}
+    /* wallet always in nav bar, no bottom positioning needed */
 }
 @media (max-width:420px){
     .w3-addr,.w3-net,.w3-sep{display:none;}
@@ -7390,7 +7781,7 @@ html[data-theme="dark"] .w3-x:hover{background:#3B1D1F;color:#FF6B6E;}
 </style>
 """
 st.markdown(_PNAV_CSS + _pnav_html, unsafe_allow_html=True)
-st.markdown(_W3_CSS + '<div class="w3-fixed">' + _wallet_pill + '</div>', unsafe_allow_html=True)
+st.markdown(_W3_CSS, unsafe_allow_html=True)  # W3 modal CSS still needed for picker dialog
 
 # ── Bootstrap: GSAP + nav wiring + ⌘K + fluid transitions + Aura Swirl ─
 # A height-0 component that injects a one-time script INTO THE PARENT
@@ -7564,38 +7955,115 @@ components.html(
       return doc.querySelector('section[data-testid="stMain"] > div');
     }
 
-    /* ── Fluid page transition + navigation ─────────────── */
+    /* ── Fluid page transition + navigation ─────────────────────
+       Shows the premium "Hold tight, Sailor 🐙" overlay for a brief
+       intentional window (650ms feel) on every nav click, then fades
+       out smoothly. Three distinct loading systems:
+         1. Startup  — overlay stays until app is ready (OCTO_OVERLAY_BOOT)
+         2. Nav      — overlay shown briefly here, always dismissed fast
+         3. Live data — in-page skeletons, never blocks UI                */
     var navBusy = false;
+    var NAV_SHOW_MS  = 650;   /* how long overlay is visible before dismiss */
+    var NAV_FADE_MS  = 420;   /* overlay fade-out duration */
+
+    /* Ensure the nav veil element exists in parent */
+    (function(){
+      try{
+        if(!doc.getElementById('octo-nav-veil')){
+          var vl=doc.createElement('div');
+          vl.id='octo-nav-veil';
+          doc.body.appendChild(vl);
+        }
+      }catch(e){}
+    })();
+
+    function navVeil(show){
+      try{
+        var vl=doc.getElementById('octo-nav-veil');
+        if(!vl) return;
+        if(show){ vl.classList.add('on'); }
+        else { vl.classList.remove('on'); }
+      }catch(e){}
+    }
+
+    /* Show the "Hold tight, Sailor" overlay for nav transitions */
+    function navOverlayShow(){
+      try{
+        var ov = doc.getElementById('octo-nav-overlay');
+        if(!ov) return;
+        ov.classList.remove('hiding','hidden');
+        ov.style.opacity = '1';
+        ov.style.pointerEvents = 'all';
+        /* Update sub-text for nav (not startup) */
+        var sub = ov.querySelector('.onv-banner-sub');
+        if(sub) sub.textContent = 'Loading page…';
+      }catch(e){}
+    }
+
+    function navOverlayDismiss(){
+      try{
+        var ov = doc.getElementById('octo-nav-overlay');
+        if(!ov) return;
+        ov.classList.add('hiding');
+        setTimeout(function(){
+          ov.classList.add('hidden');
+          /* Reset so it can be shown again next nav click */
+          setTimeout(function(){
+            ov.classList.remove('hiding','hidden');
+            ov.style.opacity = '0';
+            ov.style.pointerEvents = 'none';
+            ov.style.display = 'none';
+          }, NAV_FADE_MS + 50);
+        }, NAV_FADE_MS);
+      }catch(e){}
+    }
+
+    /* Reusable show-then-auto-dismiss */
+    function navOverlayFlash(onShown){
+      /* Make overlay re-showable (override .hidden if set from startup) */
+      try{
+        var ov = doc.getElementById('octo-nav-overlay');
+        if(ov){
+          ov.style.display   = '';
+          ov.style.opacity   = '';
+          ov.style.pointerEvents = '';
+          ov.classList.remove('hiding','hidden');
+        }
+      }catch(e){}
+      navOverlayShow();
+      /* After brief show window, fire the actual nav then dismiss */
+      setTimeout(function(){
+        if(onShown) onShown();
+        setTimeout(navOverlayDismiss, 180);
+      }, NAV_SHOW_MS);
+    }
+
     window.__pnavGo = function(key){
       var btn = navButton(key);
       if (!btn) return;
       if (navBusy){ btn.click(); return; }
+      navBusy = true;
       var m = mainEl();
-      if (gsapReady && window.gsap && m){
-        navBusy = true;
-        window.gsap.to(m, {opacity:0.18, duration:0.14, ease:'power2.in',
-          onComplete:function(){
-            btn.click();
-            setTimeout(function(){
-              window.gsap.fromTo(m, {opacity:0.18},
-                {opacity:1, duration:0.28, ease:'power3.out', clearProps:'opacity',
-                 onComplete:function(){ navBusy = false; }});
-            }, 240);
-          }});
-      } else if (m){
-        navBusy = true;
-        m.style.transition = 'opacity 140ms ease';
-        m.style.opacity = '0.25';
-        setTimeout(function(){
-          btn.click();
+
+      /* Fade main content slightly while overlay is visible */
+      if(m){
+        m.style.transition = 'opacity 120ms ease';
+        m.style.opacity = '0.08';
+      }
+
+      navOverlayFlash(function(){
+        /* Fire the actual Streamlit button click → triggers page rerun */
+        btn.click();
+        /* Restore main content opacity after Streamlit re-renders */
+        if(m){
           setTimeout(function(){
             m.style.opacity = '1';
-            setTimeout(function(){ m.style.transition=''; navBusy=false; }, 260);
-          }, 240);
-        }, 140);
-      } else {
-        btn.click();
-      }
+            setTimeout(function(){ m.style.transition=''; navBusy=false; }, 320);
+          }, 200);
+        } else {
+          navBusy = false;
+        }
+      });
     };
 
     /* Delegated nav clicks */
@@ -8454,23 +8922,36 @@ if not st.session_state.get("_overlay_js_injected"):
     _overlay_html = (
         """
 <style>
-/* ── Full-screen loading overlay ──────────────────────────────────
-   Covers the entire viewport during page transitions AND whenever
-   Streamlit is actively rerunning/fetching live data. Uses the
-   app's own dark gradient (matches dark-mode theme perfectly).
-   Transitions in instantly on nav click; transitions out only after
-   the new page's mutations have settled (debounced), so users never
-   see partially rendered or flickering UI. */
+    /* ── Nav page transition overlay ──
+       Shown briefly on every nav click (650ms), then fades out.
+       Also shown at startup until app is ready.
+       Uses opacity+pointer-events only — no display:none during transitions
+       so it can be re-shown without layout recalculation. */
 #octo-nav-overlay{
   position:fixed; inset:0; z-index:99999;
   background:linear-gradient(160deg,#06071A 0%,#0B0D2A 55%,#080820 100%);
-  opacity:0; pointer-events:none;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  transition:opacity 220ms ease;
-}
-#octo-nav-overlay.on{
   opacity:1; pointer-events:all;
-  transition:opacity 120ms ease;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  transition:opacity 420ms cubic-bezier(0.4,0,0.2,1);
+}
+#octo-nav-overlay.hiding{
+  opacity:0; pointer-events:none;
+}
+#octo-nav-overlay.hidden{
+  opacity:0 !important; pointer-events:none !important;
+  /* do NOT use display:none — we need to re-show without reflow */
+  visibility:hidden;
+}
+/* Nav-transition veil — kept for fallback, lightweight GPU-only */
+#octo-nav-veil{
+  position:fixed;inset:0;z-index:88888;
+  background:#06071A;
+  opacity:0;pointer-events:none;
+  transition:opacity 180ms cubic-bezier(0.4,0,0.2,1);
+}
+#octo-nav-veil.on{
+  opacity:0.72;pointer-events:none;
+  transition:opacity 140ms cubic-bezier(0.4,0,0.2,1);
 }
 /* ── Blue tile ─────────────────────────────────────────────────── */
 #octo-nav-overlay .onv-wrap{
@@ -8591,117 +9072,55 @@ if not st.session_state.get("_overlay_js_injected"):
     }
     var overlay = doc.getElementById('octo-nav-overlay');
 
-    /* ── Helpers ───────────────────────────────────────── */
-    function mainEl(){ return doc.querySelector('[data-testid="stMain"]'); }
-    function hideMain(){ var m=mainEl(); if(m) m.style.opacity='0'; }
-    function showMain(){ var m=mainEl(); if(m) m.style.opacity='1'; }
+    /* ── STARTUP-ONLY: dismiss overlay once app is ready ──
+       The overlay starts fully visible (opacity:1). We watch the
+       main Streamlit content area: once it gets real content (first
+       meaningful mutation after load), we wait a short settle period
+       then fade the overlay out and remove it. It is NEVER shown
+       again — page navigation uses the __pnavGo fluid transition
+       instead, and live-data pages use skeleton shimmers. */
+    var dismissed = false;
+    var settleTimer = null;
+    var hardTimer = null;
+    var SETTLE_MS = 350;
+    var HARD_MAX_MS = 5000;
 
-    /* ── State ─────────────────────────────────────────── */
-    var active       = false;
-    var shownAt      = 0;
-    var hardTimer    = null;
-    var settleTimer  = null;
-    var mutObs       = null;
-    var stateObs     = null;
-    var MIN_SHOW_MS  = 380;   /* minimum overlay duration — prevents flash */
-    var SETTLE_MS    = 300;   /* idle-mutation window before deactivating  */
-    var HARD_MAX_MS  = 3500;  /* absolute cap — never block UI permanently */
-
-    function clearTimers(){
-      if(hardTimer)   { clearTimeout(hardTimer);   hardTimer=null;  }
-      if(settleTimer) { clearTimeout(settleTimer); settleTimer=null; }
-    }
-    function disconnectObs(){
-      if(mutObs)   { mutObs.disconnect();   mutObs=null;   }
-      if(stateObs) { stateObs.disconnect(); stateObs=null; }
-    }
-
-    function deactivate(){
-      if(!active) return;
-      var elapsed = Date.now() - shownAt;
-      if(elapsed < MIN_SHOW_MS){
-        setTimeout(deactivate, MIN_SHOW_MS - elapsed); return;
-      }
-      active = false;
-      overlay.classList.remove('on');
-      showMain();
-      clearTimers();
-      disconnectObs();
+    function dismiss(){
+      if(dismissed) return;
+      dismissed = true;
+      if(settleTimer){ clearTimeout(settleTimer); }
+      if(hardTimer){ clearTimeout(hardTimer); }
+      overlay.classList.add('hiding');
+      setTimeout(function(){
+        overlay.classList.add('hidden');
+        /* Reset inline styles so __pnavGo can re-show it cleanly */
+        overlay.style.display = '';
+        overlay.style.opacity = '';
+        overlay.style.pointerEvents = '';
+        overlay.style.visibility = '';
+      }, 450);
     }
 
-    function activate(){
-      if(active) return;
-      active = true;
-      shownAt = Date.now();
-      hideMain();
-      overlay.classList.add('on');
-      clearTimers();
-      disconnectObs();
-
-      /* Watch stMain for mutations — deactivate once DOM settles.
-         Debounced: each new mutation resets the settle timer so we
-         wait for a quiet stretch (all widgets rendered) not just the
-         first incremental paint. */
-      var m = mainEl();
-      if(m){
-        try{
-          mutObs = new MutationObserver(function(){
-            clearTimeout(settleTimer);
-            settleTimer = setTimeout(deactivate, SETTLE_MS);
-          });
-          mutObs.observe(m, {childList:true, subtree:true, attributes:false});
-        }catch(e){}
-      }
-
-      /* Also watch Streamlit's running-state indicator — the spinner
-         that appears in the top-right while a rerun is in progress.
-         When it disappears the rerun is fully done. */
-      try{
-        var spinnerParent = doc.querySelector('[data-testid="stStatusWidget"]')
-                        || doc.querySelector('.stSpinner')
-                        || doc.body;
-        stateObs = new MutationObserver(function(){
-          var running = !!doc.querySelector(
-            '[data-testid="stStatusWidget"] [data-testid="stSpinner"],' +
-            '.stSpinner:not([style*="display: none"]),' +
-            '[aria-label="Running..."]'
-          );
-          if(!running){
-            clearTimeout(settleTimer);
-            settleTimer = setTimeout(deactivate, SETTLE_MS);
-          }
-        });
-        stateObs.observe(spinnerParent, {childList:true, subtree:true, attributes:true});
-      }catch(e){}
-
-      /* Hard cap — never leave overlay on indefinitely */
-      hardTimer = setTimeout(deactivate, HARD_MAX_MS);
+    function scheduleSettle(){
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(dismiss, SETTLE_MS);
     }
 
-    /* ── Trigger on nav button clicks ─────────────────── */
-    doc.addEventListener('click', function(e){
-      var t = e.target && e.target.closest
-        ? (e.target.closest('[class*="st-key-nav_"] button') ||
-           e.target.closest('[class*="st-key-home_all"] button') ||
-           e.target.closest('[class*="st-key-home_chat"] button'))
-        : null;
-      if(t) activate();
-    }, true);
-
-    /* ── Also trigger on any Streamlit rerun start ─────── 
-       Streamlit sets data-testid="stStatusWidget" visible when a
-       rerun begins (live-data refresh, fragment reload, etc.).
-       Intercept that signal to show the overlay for data fetches. */
+    /* Watch for first content in stMain */
     try{
-      var bodyObs = new MutationObserver(function(){
-        var spinner = doc.querySelector('[data-testid="stSpinner"],' +
-                        '[aria-label="Running..."]');
-        if(spinner && !active) activate();
+      var m = doc.querySelector('[data-testid="stMain"]') || doc.body;
+      var startObs = new MutationObserver(function(mts){
+        for(var i=0;i<mts.length;i++){
+          if(mts[i].addedNodes && mts[i].addedNodes.length){ scheduleSettle(); break; }
+        }
       });
-      bodyObs.observe(doc.body, {childList:true, subtree:true});
+      startObs.observe(m, {childList:true, subtree:true});
     }catch(e){}
 
-    /* ── Tab shimmer (unchanged from before) ───────────── */
+    /* Hard cap: never block UI beyond 5 seconds */
+    hardTimer = setTimeout(dismiss, HARD_MAX_MS);
+
+    /* Tab shimmer for in-page tab switches ─────────────── */
     doc.addEventListener('click', function(e){
       var tabBtn = e.target && e.target.closest
         ? e.target.closest('button[role="tab"]') : null;
@@ -8742,7 +9161,7 @@ if not st.session_state.get("_overlay_js_injected"):
   try{
     var PW = window.parent;
     if(PW && !PW.__octoOverlayBoot){
-      /* Style block */
+      /* Style block — includes both startup overlay + nav veil */
       if(!PW.document.getElementById('octo-overlay-style')){
         var st_=PW.document.createElement('style');
         st_.id='octo-overlay-style';
@@ -8750,6 +9169,21 @@ if not st.session_state.get("_overlay_js_injected"):
         st_.textContent=localStyle?localStyle.textContent:'';
         PW.document.head.appendChild(st_);
       }
+      /* Nav veil element — lightweight dark overlay for page transitions */
+      if(!PW.document.getElementById('octo-nav-veil')){
+        var vl_=PW.document.createElement('div');
+        vl_.id='octo-nav-veil';
+        PW.document.body.appendChild(vl_);
+      }
+      /* Floating hamburger sidebar toggle (#octo-sb-btn) removed per
+         request — it duplicated Streamlit's own native sidebar
+         collapse/expand arrow (the "«" control built into the sidebar
+         header) and was the fragile piece behind the "sidebar won't
+         reopen" bug: it depended on locating Streamlit's internal
+         toggle via a hardcoded selector list that could silently miss
+         across versions/browsers. Now there is exactly one sidebar
+         toggle — Streamlit's native one — and the CSS fixes below
+         (browser-consistency + reopen guarantee) apply directly to it. */
       /* Boot script */
       var sc=PW.document.createElement('script');
       sc.id='octo-overlay-bootstrap';
@@ -9779,19 +10213,18 @@ elif st.session_state.page == "memory":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "chat":
 
-    # ── Loading screen ─────────────────────────
+    # ── In-page loading placeholder while OctoBot initialises ──
+    # Uses the skeleton system (not the fullscreen overlay — that is
+    # startup-only). The nav-veil handles the page transition; this
+    # placeholder covers only the chat content area while the bot loads.
     _lp = st.empty()
-    _ll = ('<img src="' + logo_b64 + '" />' if logo_b64 else '<span class="fi">🐙</span>')
     with _lp.container():
         st.markdown(
-            '<div class="octo-loading">'
-            '<div class="octo-loading-wrap">'
-            '<div class="octo-lr r1"></div><div class="octo-lr r2"></div><div class="octo-lr r3"></div>'
-            + _ll +
-            '</div>'
-            '<div class="octo-loading-title">Loading OctoBot</div>'
-            '<div class="octo-loading-sub">Connecting to knowledge base…</div>'
-            '<div class="octo-loading-dots"><span></span><span></span><span></span></div>'
+            '<div class="page-skeleton" style="max-width:720px;margin:0 auto;">'
+            '<div class="skel-block" style="height:64px;border-radius:16px;"></div>'
+            '<div class="skel-block" style="height:40px;border-radius:10px;width:60%;"></div>'
+            '<div class="skel-block" style="height:120px;border-radius:16px;"></div>'
+            '<div class="skel-block" style="height:80px;border-radius:16px;width:80%;"></div>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -9843,6 +10276,281 @@ elif st.session_state.page == "chat":
             chunk_count = 0
 
     # ── Sidebar — price + controls + examples ──────────────────
+    # ══════════════════════════════════════════════════════════════════
+    #  GATE FIRST — must run before sidebar/control deck so nothing
+    #  from the chat UI leaks through while the welcome screen is active
+    # ══════════════════════════════════════════════════════════════════
+    _chat_logo_b64 = get_chat_logo_b64()
+
+    if not st.session_state.sailor_done:
+        # ══════════════════════════════════════════════════════════════
+        # Welcome gate — rendered with REAL Streamlit widgets, not an
+        # isolated components.html iframe.
+        #
+        # The previous implementation put the name input and button
+        # inside a components.html iframe (a separate, sandboxed HTML
+        # document) and then tried to bridge a JS event on that button
+        # back into Streamlit's actual widget tree from outside it —
+        # first via a full browser navigation (visibly reloaded the
+        # whole app), then via simulated DOM/keyboard events on hidden
+        # native widgets (unreliable: React's controlled-input/keyboard
+        # handling does not reliably accept synthetic events, so
+        # nothing happened at all). Both were workarounds for the same
+        # root problem: the interactive elements were never real
+        # Streamlit widgets in the first place.
+        #
+        # This version has no iframe and no JS bridging whatsoever.
+        # The name input and submit button are genuine st.text_input /
+        # st.form_submit_button widgets, rendered directly in this
+        # script like every other widget in the app. st.form() is
+        # Streamlit's own built-in mechanism for "Enter and the submit
+        # button do the same thing" — pressing Enter inside a form
+        # submits it exactly like clicking its submit button, with a
+        # single, standard Streamlit rerun. There is exactly one
+        # submission path and one place that decides what happens next.
+        # ══════════════════════════════════════════════════════════════
+
+        # Hide sidebar/toolbar/chat-input behind the gate, and restyle
+        # the plain Streamlit form/input/button to match the existing
+        # visual design (glassy card, gradient button, etc.) — CSS only,
+        # same DOM elements Streamlit always renders.
+        st.markdown("""
+<style>
+[data-testid="stSidebar"],[data-testid="stDecoration"],[data-testid="stToolbar"],
+[data-testid="stBottom"],[data-testid="stBottomBlockContainer"],
+[data-testid="stChatInput"]{display:none!important;}
+/* Center the whole gate (logo, heading, form, feature cards) as one
+   group in the space below the fixed top nav (nav sits at top:14px,
+   height:64px — clears around 90-100px). True vertical centering
+   within that remaining space, not just a fixed top offset. */
+[data-testid="stMainBlockContainer"]{max-width:640px!important;margin:0 auto!important;
+  padding:0 1.25rem 2rem!important;
+  min-height:calc(100vh - 100px)!important;
+  margin-top:100px!important;
+  display:flex!important;flex-direction:column!important;
+  justify-content:center!important;align-items:center!important;
+}
+[data-testid="stMainBlockContainer"] > div{width:100%;
+  flex:0 0 auto!important;height:auto!important;min-height:0!important;
+}
+[data-testid="stMainBlockContainer"] > div > div[data-testid="stVerticalBlock"]{
+  height:auto!important;min-height:0!important;
+}
+/* Streamlit's own default container chrome (a subtle border on
+   stElementContainer/stVerticalBlock, barely visible in light mode
+   but showing as a clear boxed outline around each markdown block
+   and the form in dark mode) — the gate's own cards/backgrounds
+   already provide all the visual framing needed, so strip Streamlit's
+   default borders/outlines from plain containers inside the gate.
+   Explicitly excludes stForm (:not(...)) since that one legitimately
+   keeps its own glass-card background/border, set separately below —
+   a broader rule here would win the specificity fight against that
+   and blank the form's card out along with the unwanted borders. */
+[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"]:not(:has(> div[data-testid="stForm"])),
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"]:not([data-testid="stForm"] [data-testid="stVerticalBlock"]){
+  border:none!important;outline:none!important;box-shadow:none!important;
+}
+[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"]:not(:has(> div[data-testid="stForm"])){
+  background:transparent!important;
+}
+[data-testid="stVerticalBlock"]{gap:0!important;}
+
+/* ── Background wash behind the gate content — subtle, no mascot ── */
+.gocto-gate-bg{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+  background:
+    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.14) 0%, transparent 70%),
+    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.12) 0%, transparent 70%),
+    radial-gradient(circle 560px at 50% 96%, rgba(90,150,255,0.10) 0%, transparent 72%);
+}
+html[data-theme="dark"] .gocto-gate-bg{
+  background:
+    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.20) 0%, transparent 70%),
+    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.16) 0%, transparent 70%),
+    radial-gradient(circle 560px at 50% 96%, rgba(60,110,255,0.14) 0%, transparent 72%);
+}
+
+/* ── Hero logo ── */
+.gocto-logo-wrap{position:relative;width:104px;height:104px;margin:0 auto 1.1rem;
+  animation:gocto-popIn 0.7s cubic-bezier(0.34,1.5,0.64,1) both,
+            gocto-logoFloat 5s ease-in-out infinite 0.8s;}
+@keyframes gocto-popIn{from{opacity:0;transform:scale(0.6) translateY(-16px);}to{opacity:1;transform:scale(1) translateY(0);}}
+@keyframes gocto-logoFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+.gocto-logo-aura{position:absolute;inset:-26px;border-radius:50%;
+  background:radial-gradient(circle, rgba(90,130,255,0.35) 0%, rgba(160,110,255,0.18) 45%, transparent 72%);
+  filter:blur(18px);z-index:-1;animation:gocto-auraPulse 4.2s ease-in-out infinite;}
+@keyframes gocto-auraPulse{0%,100%{opacity:0.75;transform:scale(1);}50%{opacity:1;transform:scale(1.08);}}
+.gocto-logo-wrap img{display:block;width:104px;height:104px;object-fit:cover;border-radius:50%;
+  box-shadow:0 0 0 3px rgba(255,255,255,0.55),0 18px 40px rgba(60,100,255,0.30),0 4px 14px rgba(60,100,255,0.18);}
+html[data-theme="dark"] .gocto-logo-wrap img{
+  box-shadow:0 0 0 3px rgba(255,255,255,0.10),0 18px 44px rgba(90,130,255,0.35),0 4px 14px rgba(0,0,0,0.4);}
+
+/* ── Heading / subtext ── */
+.gocto-heading{text-align:center;margin-bottom:0.55rem;
+  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.18s both;}
+@keyframes gocto-riseIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+.gocto-heading h1{font-family:'Syne','DM Sans',system-ui;font-weight:800;letter-spacing:-0.03em;
+  font-size:clamp(1.7rem,5vw,2.4rem);color:#14142B;line-height:1.15;margin:0;}
+html[data-theme="dark"] .gocto-heading h1{color:#F1F3FF;}
+.gocto-heading .accent{background:linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.gocto-sub1{font-size:15px;font-weight:600;color:#4A5178;text-align:center;margin-bottom:0.3rem;
+  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.26s both;}
+.gocto-sub2{font-size:13.5px;color:#8288A6;text-align:center;max-width:400px;line-height:1.6;
+  margin:0 auto 1.7rem;animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.32s both;}
+html[data-theme="dark"] .gocto-sub1{color:#C6CBE8;}
+html[data-theme="dark"] .gocto-sub2{color:#8F96BE;}
+
+/* ── Name entry: real st.form, restyled to match the card design ── */
+div[data-testid="stForm"]{
+  border-radius:22px!important;padding:1.5rem 1.6rem!important;
+  background:rgba(255,255,255,0.66)!important;
+  border:1.5px solid rgba(120,140,230,0.20)!important;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 10px 34px rgba(60,90,220,0.10),inset 0 1px 0 rgba(255,255,255,0.9)!important;
+  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.4s both;
+  margin-bottom:1.4rem!important;max-width:560px;margin-left:auto;margin-right:auto;
+}
+html[data-theme="dark"] div[data-testid="stForm"]{
+  background:rgba(20,24,44,0.62)!important;
+  border:1.5px solid rgba(90,110,180,0.28)!important;
+  box-shadow:0 10px 34px rgba(0,0,0,0.30),inset 0 1px 0 rgba(255,255,255,0.04)!important;
+}
+.gocto-name-title{font-family:'Syne','DM Sans',system-ui;font-size:16px;font-weight:800;
+  color:#14142B;text-align:center;margin-bottom:0.9rem;}
+html[data-theme="dark"] .gocto-name-title{color:#EDEFFF;}
+
+/* Restore breathing room between the name input and the Start Chat
+   button — the global [data-testid="stVerticalBlock"]{gap:0} rule
+   above (needed elsewhere on the gate) also zeroed the gap *inside*
+   the form between its two children, crushing them together. Scoped
+   back in just for the form's own inner blocks. */
+div[data-testid="stForm"] [data-testid="stVerticalBlock"]{gap:0.9rem!important;}
+div[data-testid="stForm"] [data-testid="stElementContainer"]{margin-bottom:0!important;}
+
+/* ── Name input: gradient-ring treatment, light + dark aware.
+   Streamlit wraps the real <input> in a [data-baseweb="input"] div
+   that draws its own border/background — styling the bare <input>
+   alone (as before) left that wrapper's default box visible
+   underneath, which is the plain grey/black-bordered box seen in
+   testing. Both the wrapper and the input itself are targeted here,
+   and with higher specificity than the app's existing global
+   dark-mode input rule (html[data-theme="dark"] [data-baseweb="input"]
+   input) so this doesn't get silently overridden by it. ── */
+div[data-testid="stForm"] [data-baseweb="input"]{
+  border-radius:16px!important;
+  background:linear-gradient(#fff,#fff) padding-box,
+             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
+  border:1.5px solid transparent!important;
+  box-shadow:0 2px 10px rgba(60,90,220,0.08)!important;
+  transition:box-shadow 200ms ease!important;
+}
+div[data-testid="stForm"] [data-baseweb="input"]:focus-within{
+  box-shadow:0 0 0 4px rgba(58,123,255,0.14),0 2px 14px rgba(60,90,220,0.16)!important;
+}
+/* Dark mode: a clearly dark-navy fill (not near-black) with a visibly
+   lighter placeholder — the previous #12151F read too close to black
+   next to the gradient border and made the placeholder hard to see. */
+html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]{
+  background:linear-gradient(#1B2036,#1B2036) padding-box,
+             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
+  box-shadow:0 2px 10px rgba(0,0,0,0.25)!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]:focus-within{
+  box-shadow:0 0 0 4px rgba(139,92,246,0.18),0 2px 14px rgba(0,0,0,0.3)!important;
+}
+div[data-testid="stForm"] [data-testid="stTextInput"] input{
+  padding:0.85rem 1.1rem!important;background:transparent!important;
+  background-color:transparent!important;
+  border:none!important;border-radius:16px!important;
+  font-size:14.5px!important;font-weight:500!important;
+  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
+  caret-color:#3A7BFF!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input{
+  color:#EDEFFF!important;-webkit-text-fill-color:#EDEFFF!important;
+  background:transparent!important;background-color:transparent!important;
+  caret-color:#8B5CF6!important;
+}
+div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{color:#A6ABC4!important;}
+html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{color:#8990BC!important;}
+div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
+  padding:0.85rem 1.3rem!important;border-radius:16px!important;border:none!important;
+  background:linear-gradient(135deg,#3A7BFF 0%,#8B5CF6 100%)!important;
+  color:#fff!important;font-size:14px!important;font-weight:700!important;
+  box-shadow:0 4px 18px rgba(80,90,240,0.38)!important;width:100%;
+  transition:transform 150ms cubic-bezier(0.34,1.5,0.64,1),box-shadow 150ms ease;
+}
+div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover{
+  transform:translateY(-1px) scale(1.02);box-shadow:0 6px 24px rgba(80,90,240,0.5)!important;}
+
+/* ── Feature cards ── */
+.gocto-features{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
+  max-width:560px;margin:0 auto;animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.5s both;}
+@media (max-width:420px){.gocto-features{grid-template-columns:1fr;}}
+.gocto-feat-card{display:flex;align-items:center;gap:9px;padding:0.75rem 0.85rem;
+  background:rgba(255,255,255,0.5);border:1px solid rgba(120,140,230,0.16);border-radius:14px;
+  font-size:12px;font-weight:600;color:#4A5178;box-shadow:0 2px 10px rgba(60,90,220,0.05);}
+html[data-theme="dark"] .gocto-feat-card{
+  background:rgba(20,24,44,0.45);border-color:rgba(90,110,180,0.22);color:#B7BEE4;}
+</style>
+<div class="gocto-gate-bg"></div>
+""", unsafe_allow_html=True)
+
+        # Hero logo (Chat_logo.jpg is the only logo/mascot on this page)
+        _logo_tag = (
+            f'<img src="{_chat_logo_b64}" alt="OctoBot">'
+            if _chat_logo_b64 else
+            '<div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#3A7BFF,#8B5CF6);'
+            'display:flex;align-items:center;justify-content:center;font-size:44px;'
+            'box-shadow:0 0 0 3px rgba(255,255,255,0.55),0 18px 40px rgba(60,100,255,0.30);">🐙</div>'
+        )
+        st.markdown(
+            f'<div class="gocto-logo-wrap"><div class="gocto-logo-aura"></div>{_logo_tag}</div>'
+            '<div class="gocto-heading"><h1>HI There <span class="accent">GOCTO</span></h1></div>'
+            '<div class="gocto-sub1">Your AI guide to the Pharos universe.</div>'
+            '<div class="gocto-sub2">Explore SPNs, Restaking, RWA, DeFi, building on Pharos, and more.</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Name entry — a real st.form: Enter and the submit button
+        # both trigger the exact same, single code path below. This is
+        # the one source of truth for the transition. ──
+        with st.form("sailor_gate_form", clear_on_submit=False):
+            st.markdown('<div class="gocto-name-title">What should we explore today?</div>', unsafe_allow_html=True)
+            _name_val = st.text_input(
+                "Your name",
+                value="",
+                placeholder="Enter your name to begin…",
+                label_visibility="collapsed",
+                key="gate_name_field",
+            )
+            _submitted = st.form_submit_button("Start Chat →", use_container_width=True)
+
+        if _submitted:
+            _clean_name = (_name_val or "").strip()
+            if _clean_name:
+                st.session_state.sailor_name = _clean_name
+                st.session_state.sailor_done = True
+                st.session_state.page = "chat"
+                st.rerun()
+            else:
+                st.warning("Please enter your name to continue.")
+
+        # Feature cards
+        st.markdown(
+            '<div class="gocto-features">'
+            '<div class="gocto-feat-card">✓&nbsp;&nbsp;Verified Pharos Docs</div>'
+            '<div class="gocto-feat-card">◈&nbsp;&nbsp;Built for the Pharos Ecosystem</div>'
+            '<div class="gocto-feat-card">🔒&nbsp;&nbsp;Private &amp; Secure</div>'
+            '<div class="gocto-feat-card">🌐&nbsp;&nbsp;Multi-language Support</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.stop()
+
+    # ── Sidebar (only shown in actual chat, not on gate) ──────────────
     with st.sidebar:
 
         # Live $PROS price card
@@ -10014,8 +10722,7 @@ html[data-theme="dark"] [style*="color:#8A90A6"],
 html[data-theme="dark"] [style*="color:#8891A8"]{ color:#AEB4C8 !important; }
 /* Toggle & radio tracks readable on dark */
 html[data-theme="dark"] [data-baseweb="checkbox"] div[role="checkbox"]{border-color:#3A4260 !important;}
-html[data-theme="dark"] [data-testid="stChatInput"] textarea{color:#EDEFF7 !important;}
-html[data-theme="dark"] [data-testid="stChatInput"] textarea::placeholder{color:#7B8199 !important;}
+/* dark stChatInput textarea — handled in main chat input CSS block */
 /* Dropdown menus / popovers / tooltips (render at <body> root) */
 html[data-theme="dark"] [data-baseweb="popover"] [role="listbox"],
 html[data-theme="dark"] [data-baseweb="menu"],
@@ -10264,121 +10971,11 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                     unsafe_allow_html=True,
                 )
 
-    # ── Name gate — blocks chat until name entered ──
-    if not st.session_state.sailor_done:
-        st.markdown("""
-        <style>
-        section[data-testid="stSidebar"]{display:none!important;}
-        div[data-testid="stDecoration"]{display:none!important;}
-        .gate-wrap{
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:flex-start;min-height:auto;padding:0.4rem 1rem 0 1rem;
-        }
-        .gate-card{
-            background:#FFFFFF;
-            border:1.5px solid rgba(26,26,255,0.15);
-            border-radius:18px;
-            padding:1.7rem 1.9rem 1.5rem 1.9rem;
-            width:100%;max-width:330px;
-            text-align:center;
-            box-shadow:0 24px 60px rgba(26,26,255,0.13),
-                       0 6px 18px rgba(0,0,0,0.07);
-            position:relative;overflow:hidden;
-            animation:card-pop 0.6s cubic-bezier(0.34,1.5,0.64,1) 0.1s both;
-        }
-        @keyframes card-pop{
-            0%  {opacity:0;transform:scale(0.78) translateY(40px);}
-            60% {opacity:1;transform:scale(1.04) translateY(-6px);}
-            80% {transform:scale(0.98) translateY(2px);}
-            100%{transform:scale(1) translateY(0);}
-        }
-        .gate-card::after{
-            content:'';position:absolute;
-            width:180px;height:180px;border-radius:50%;
-            background:radial-gradient(circle,rgba(26,26,255,0.10) 0%,transparent 70%);
-            top:-60px;right:-60px;pointer-events:none;
-        }
-        .gate-emoji{
-            font-size:60px;display:block;margin-bottom:1rem;
-            animation:emoji-bounce 0.7s cubic-bezier(0.34,1.6,0.64,1) 0.5s both;
-        }
-        @keyframes emoji-bounce{
-            0%  {opacity:0;transform:scale(0.4) rotate(-15deg);}
-            60% {transform:scale(1.18) rotate(6deg);}
-            80% {transform:scale(0.94) rotate(-2deg);}
-            100%{opacity:1;transform:scale(1) rotate(0deg);}
-        }
-        .gate-title{
-            font-family:'Syne',sans-serif;font-size:21px;font-weight:800;
-            color:#0C0C1A;margin-bottom:0.3rem;letter-spacing:-0.025em;
-            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.65s both;
-        }
-        .gate-sub{
-            font-size:12px;color:#7A7F96;line-height:1.6;margin-bottom:0.4rem;
-            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 0.78s both;
-        }
-        .gate-divider{
-            width:0%;height:1.5px;
-            background:linear-gradient(90deg,#1A1AFF,#6B8CFF,#1A1AFF);
-            border-radius:4px;margin:0 auto 1.4rem auto;
-            animation:line-draw 0.6s cubic-bezier(0.4,0,0.2,1) 0.9s both;
-        }
-        @keyframes line-draw{
-            from{width:0%;opacity:0;}to{width:60%;opacity:1;}
-        }
-        @keyframes rise{
-            from{opacity:0;transform:translateY(12px);}
-            to{opacity:1;transform:translateY(0);}
-        }
-        .gate-input-wrap div[data-testid="stTextInput"] input{
-            border-radius:14px!important;
-            border:2px solid rgba(26,26,255,0.18)!important;
-            background:#F8F9FF!important;
-            font-size:16px!important;font-weight:500!important;
-            text-align:center!important;padding:0.9rem 1rem!important;
-            font-family:'DM Sans',sans-serif!important;color:#0C0C1A!important;
-            transition:border-color 200ms ease,box-shadow 200ms ease!important;
-            animation:rise 0.5s cubic-bezier(0.16,1,0.3,1) 1s both;
-        }
-        .gate-input-wrap div[data-testid="stTextInput"] input:focus{
-            border-color:#1A1AFF!important;
-            box-shadow:0 0 0 4px rgba(26,26,255,0.10)!important;
-            background:#FFFFFF!important;outline:none!important;
-        }
-        .gate-input-wrap div[data-testid="stTextInput"] input::placeholder{
-            color:#B0B4C4!important;font-size:13px!important;
-        }
-        </style>
-        <div class="gate-wrap">
-          <div class="gate-card">
-            <span class="gate-emoji">🐙</span>
-            <div class="gate-title">Ahoy, Sailor!</div>
-            <div class="gate-sub">What should I call you?<br>Enter your name to open OctoBot.</div>
-            <div class="gate-divider"></div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        _, mid, _ = st.columns([1, 2, 1])
-        with mid:
-            st.markdown('<div class="gate-input-wrap">', unsafe_allow_html=True)
-            name_val = st.text_input(
-                "name",
-                placeholder="Your name… then press Enter",
-                key="sailor_input",
-                label_visibility="collapsed",
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<p style="text-align:center;font-size:11px;color:#B0B4C4;margin-top:0.3rem;">Press Enter after typing</p>',
-                unsafe_allow_html=True,
-            )
-
-        if name_val.strip():
-            st.session_state.sailor_name = name_val.strip()
-            st.session_state.sailor_done = True
-            st.rerun()
-        st.stop()
+    # ── Chat welcome gate ───────────────────────────────────────────────
+    # The gate (above, before this point in the script) is rendered with
+    # real Streamlit widgets inside an st.form — no iframe, no JS bridge.
+    # Enter and the "Start Chat →" button both submit the same form and
+    # run through the exact same code path.
 
     # ── Welcome card with name ──────────────────
     if not st.session_state.messages:
@@ -11629,41 +12226,52 @@ elif st.session_state.page == "updates":
                 '</svg>'
             )
 
+        # Category detection with badge colour map
+        _CAT_MAP = [
+            (("partner", "collab", "x ", "joining"),          "Partnership",  "#7C3AED", "rgba(124,58,237,0.08)"),
+            (("launch", "launched", "live", "mainnet", "go live"), "Launch", "#059669", "rgba(5,150,105,0.08)"),
+            (("campaign", "quest", "reward", "expedition", "airdrop"), "Campaign", "#D97706", "rgba(217,119,6,0.08)"),
+            (("upgrade", "protocol", "release", "update", "v2", "v3"), "Development", "#1A1AFF", "rgba(26,26,255,0.08)"),
+            (("incubator", "ecosystem", "dapp", "defi"),       "Ecosystem",   "#0891B2", "rgba(8,145,178,0.08)"),
+            (("event", "hackathon", "summit", "conference"),   "Event",       "#DC2626", "rgba(220,38,38,0.08)"),
+            (("announce", "introducing", "new ", "welcome"),   "Announcement","#1A1AFF", "rgba(26,26,255,0.08)"),
+        ]
+
+        def _classify(text):
+            tl = text.lower()
+            for keywords, cat, color, bg in _CAT_MAP:
+                if any(k in tl for k in keywords):
+                    return cat, color, bg
+            return "Announcement", "#1A1AFF", "rgba(26,26,255,0.08)"
+
         def _build_cards_html(slice_):
             html_ = '<div class="updc-grid">'
             for _n in slice_:
-                _text = (_n.get("text") or "").strip()
+                _text  = (_n.get("text") or "").strip()
                 _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
                 _title = (_parts[0] or _text)[:200]
                 _link  = esc_url(_n.get("url", PHAROS_X_URL))
-                _media = (_n.get("media") or "").strip()
                 _rel   = esc(_n.get("rel") or "")
-                _tl = _text.lower()
-                if   any(k in _tl for k in ("partner", "collab")):         _cat = "Partnership"
-                elif any(k in _tl for k in ("launch", "live", "mainnet")): _cat = "Launch"
-                elif any(k in _tl for k in ("campaign", "quest", "reward", "expedition")): _cat = "Campaign"
-                elif any(k in _tl for k in ("upgrade", "protocol", "release")): _cat = "Protocol"
-                elif any(k in _tl for k in ("incubator", "ecosystem")):    _cat = "Ecosystem"
-                else:                                                        _cat = "Announcement"
+                _cat, _ccolor, _cbg = _classify(_text)
 
-                # Thumbnail: always use the Pharos logo from the root
-                # folder — no live fetch from nitter, no broken images,
-                # no dependency on external mirrors. Clean and consistent.
-                _img_tag = ""
+                # Pharos logo tile — always reliable, no external deps
+                _logo_tile = (
+                    f'<div class="updc-logo-tile" style="background:linear-gradient(135deg,#0C0C1A 0%,#1A1AFF 100%);">'
+                    f'<div class="updc-logo-inner">{_fallback_glyph}</div>'
+                    f'<div class="updc-logo-pattern"></div>'
+                    f'</div>'
+                )
 
                 html_ += (
-                    f'<a class="updc-card" href="{_link}" target="_blank" rel="noopener">'
-                    f'<div class="updc-thumb">'
-                    f'<div class="updc-thumb-fallback" data-wm="{esc(_cat)}">{_fallback_glyph}</div>'
-                    f'{_img_tag}'
-                    f'</div>'
+                    f'<a class="updc-card updc-card-v2" href="{_link}" target="_blank" rel="noopener">'
+                    f'{_logo_tile}'
                     f'<div class="updc-body">'
                     f'<div class="updc-meta">'
-                    f'<span class="updc-cat">{esc(_cat)}</span>'
+                    f'<span class="updc-badge" style="color:{_ccolor};background:{_cbg};border-color:{_ccolor}33;">{esc(_cat)}</span>'
                     + (f'<span class="updc-dot">·</span><span class="updc-time">{_rel}</span>' if _rel else '')
                     + '</div>'
                     f'<div class="updc-title">{esc(_title)}</div>'
-                    '<span class="updc-cta">View post on X →</span>'
+                    '<span class="updc-cta">View on X →</span>'
                     '</div></a>'
                 )
             html_ += '</div>'
@@ -11880,11 +12488,211 @@ elif st.session_state.page == "ecosystem":
 
 
 # ═════════════════════════════════════════════
-# PAGE: OCTOBOT PAYMENT AGENT
+# PAGE: OCTOBOT PAYMENT AGENT  (rebuilt UI)
 # ═════════════════════════════════════════════
 elif st.session_state.page == "pay":
 
     inject_redesign_css("pay rd-hero-compact")
+
+    # ── Premium Pay page header ───────────────────────────────────────────
+    st.markdown("""
+<style>
+/* ╔══════════════════════════════════════════════════════╗
+   ║   PAY PAGE — Premium spacing & design system         ║
+   ╚══════════════════════════════════════════════════════╝ */
+
+/* Hero */
+.pay-hero{
+    background:linear-gradient(135deg,#06071A 0%,#0C0E38 45%,#1A1AFF 100%);
+    border-radius:20px;padding:1.6rem 2.2rem 1.5rem;margin-bottom:1.4rem;
+    position:relative;overflow:hidden;
+    box-shadow:0 10px 40px rgba(26,26,255,0.22),0 3px 10px rgba(0,0,0,0.18);
+}
+.pay-hero::before{
+    content:"";position:absolute;inset:0;
+    background-image:radial-gradient(circle,rgba(255,255,255,0.055) 1px,transparent 1px);
+    background-size:18px 18px;pointer-events:none;
+}
+.pay-hero::after{
+    content:"";position:absolute;top:-60px;right:-60px;
+    width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(99,102,241,0.22),transparent 68%);
+    pointer-events:none;
+}
+.pay-hero-eyebrow{
+    font-size:9px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;
+    color:rgba(163,174,255,0.75);margin-bottom:0.5rem;
+    display:inline-flex;align-items:center;gap:8px;
+}
+.pay-hero-title{
+    font-family:Syne,sans-serif;font-size:1.8rem;font-weight:800;
+    color:#FFFFFF;letter-spacing:-0.025em;margin:0 0 0.4rem 0;line-height:1.08;
+}
+.pay-hero-sub{
+    font-size:0.875rem;color:rgba(255,255,255,0.52);line-height:1.6;
+    max-width:560px;margin:0;
+}
+.pay-feature-pills{
+    display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem;
+}
+.pay-feature-pill{
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.16);
+    border-radius:20px;padding:5px 12px;
+    font-size:11px;font-weight:600;color:rgba(255,255,255,0.82);
+    backdrop-filter:blur(6px);
+    transition:background 180ms ease,border-color 180ms ease;
+}
+.pay-feature-pill:hover{
+    background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.28);
+}
+
+/* Section divider */
+.pay-section-gap{ height:1.4rem; }
+
+/* Card base */
+.pay-input-card{
+    background:#FFFFFF;
+    border:1.5px solid #E8EAF4;
+    border-radius:20px;
+    padding:1.8rem 2rem;
+    box-shadow:0 2px 16px rgba(20,20,60,0.05),0 1px 4px rgba(20,20,60,0.04);
+    margin-bottom:1.4rem;
+}
+html[data-theme="dark"] .pay-input-card{
+    background:#141826;border-color:#232840;
+    box-shadow:0 2px 16px rgba(0,0,0,0.25);
+}
+
+/* Card header */
+.pay-card-head{
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:1.2rem;padding-bottom:0.9rem;
+    border-bottom:1px solid #F0F1F8;
+}
+html[data-theme="dark"] .pay-card-head{ border-color:#232840; }
+.pay-card-icon{
+    width:36px;height:36px;border-radius:10px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;
+    background:linear-gradient(135deg,rgba(26,26,255,0.10),rgba(99,102,241,0.08));
+    border:1px solid rgba(26,26,255,0.12);
+}
+.pay-card-label{
+    font-family:Syne,sans-serif;font-size:14px;font-weight:800;
+    color:var(--t1);letter-spacing:-0.01em;
+}
+.pay-card-sub{
+    font-size:11.5px;color:var(--t3);margin-top:1px;line-height:1.4;
+}
+
+/* Input hint */
+.pay-input-hint{
+    font-size:12px;color:var(--t3);margin-bottom:1rem;line-height:1.6;
+}
+
+/* Network badge strip */
+.pay-net-badge{
+    display:inline-flex;align-items:center;gap:7px;
+    border-radius:12px;padding:8px 14px;margin-top:0.9rem;
+    font-size:12px;font-weight:700;letter-spacing:0.01em;
+}
+
+/* Field boxes inside preview/cards */
+.pay-field{
+    background:#F6F7FC;
+    border:1px solid #ECEEF8;
+    border-radius:14px;padding:0.85rem 1.1rem;
+    margin-bottom:0.75rem;
+}
+html[data-theme="dark"] .pay-field{
+    background:#1B2030;border-color:#262B3E;
+}
+.pay-field-lbl{
+    font-size:9.5px;font-weight:800;letter-spacing:0.10em;text-transform:uppercase;
+    color:var(--t3);margin-bottom:5px;
+}
+.pay-field-val{
+    font-size:14px;font-weight:600;color:var(--t1);word-break:break-all;line-height:1.4;
+}
+.pay-field-sub{font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.4;}
+.pay-amount-big{
+    font-family:Syne,sans-serif;font-size:2.1rem;font-weight:800;
+    color:var(--t1);letter-spacing:-0.02em;line-height:1;
+}
+
+/* Preview card */
+.pay-preview{
+    background:#FFFFFF;border:1.5px solid #E8EAF4;border-radius:20px;
+    padding:1.8rem 2rem;
+    box-shadow:0 2px 16px rgba(20,20,60,0.05);
+    margin-bottom:1.4rem;
+}
+html[data-theme="dark"] .pay-preview{
+    background:#141826;border-color:#232840;
+}
+.pay-preview-title{
+    font-family:Syne,sans-serif;font-size:15px;font-weight:800;
+    color:var(--t1);margin-bottom:1.2rem;
+    display:flex;align-items:center;gap:9px;padding-bottom:0.9rem;
+    border-bottom:1px solid #F0F1F8;
+}
+html[data-theme="dark"] .pay-preview-title{border-color:#232840;}
+
+/* History */
+.pay-history-item{
+    background:#FFFFFF;border:1.5px solid #ECEEF8;border-radius:16px;
+    padding:1rem 1.3rem;margin-bottom:0.75rem;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    transition:border-color 180ms ease,box-shadow 180ms ease,transform 180ms ease;
+}
+.pay-history-item:hover{
+    border-color:rgba(26,26,255,0.22);
+    box-shadow:0 6px 20px rgba(26,26,255,0.09);
+    transform:translateY(-1px);
+}
+html[data-theme="dark"] .pay-history-item{
+    background:#141826;border-color:#232840;
+}
+
+/* Wallet strip */
+.pay-wallet-strip{
+    background:linear-gradient(135deg,#06071A,#1A1AFF);
+    border-radius:14px;padding:0.9rem 1.1rem;
+    display:flex;align-items:center;gap:12px;margin-bottom:1rem;
+}
+.pay-wallet-strip-lbl{
+    font-size:9px;color:rgba(255,255,255,0.45);font-weight:700;
+    letter-spacing:0.1em;text-transform:uppercase;
+}
+.pay-wallet-strip-addr{
+    font-size:13.5px;color:#fff;font-weight:700;font-family:monospace;
+}
+
+/* Section heading */
+.pay-section-title{
+    font-family:Syne,sans-serif;font-size:15px;font-weight:800;
+    color:var(--t1);margin:1.8rem 0 0.9rem 0;
+    display:flex;align-items:center;gap:8px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="pay-hero">'
+        '<div style="position:relative;z-index:1;">'
+        '<div class="pay-hero-eyebrow">💸 PAYMENT AGENT · PHAROS NETWORK</div>'
+        '<h2 class="pay-hero-title">Send PROS</h2>'
+        '<p class="pay-hero-sub">Send tokens with plain English. Just describe what you want — OctoBot parses the intent, shows a preview, and your wallet signs it. Nothing leaves without your approval.</p>'
+        '<div class="pay-feature-pills">'
+        '<span class="pay-feature-pill">🔒 Non-custodial</span>'
+        '<span class="pay-feature-pill">⚡ Instant on-chain</span>'
+        '<span class="pay-feature-pill">🌐 Mainnet & Testnet</span>'
+        '<span class="pay-feature-pill">📦 Batch send</span>'
+        '</div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
     # ════════════════════════════════════════════════════════
     # HELPERS — intent parsers
@@ -12171,129 +12979,139 @@ elif st.session_state.page == "pay":
 </script></body></html>"""
         components.html(html, height=140, scrolling=False)
 
-    # ════════════════════════════════════════════════════════
-    # PAGE HEADER
-    # ════════════════════════════════════════════════════════
-    st.markdown(
-        '<div style="background:linear-gradient(135deg,#0A2A0A 0%,#145214 100%);'
-        'border-radius:20px;padding:2.2rem 2.4rem 1.8rem 2.4rem;margin-bottom:1.4rem;'
-        'box-shadow:0 8px 32px rgba(10,60,20,0.2);position:relative;overflow:hidden;">'
-        '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.06) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>'
-        '<div style="position:relative;z-index:1;">'
-        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
-        'letter-spacing:0.15em;text-transform:uppercase;color:#8BFFB0;margin-bottom:0.7rem;">'
-        '💸 PAYMENT AGENT · PHAROS NETWORK</div>'
-        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
-        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">Send PROS with Plain English</h2>'
-        '<p style="font-size:0.92rem;color:rgba(255,255,255,0.6);line-height:1.55;max-width:620px;margin:0;">'
-        'Send tokens, batch-pay multiple addresses, or approve a contract — just describe what you want '
-        'and OctoBot builds the transaction. Nothing moves without your wallet signature.</p>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    # ── Network selector + wallet — premium two-column layout ────────────
+    _pay_layout_col, _pay_side_col = st.columns([1.6, 1], gap="medium")
 
-    # ── Slim network toolbar ──────────────────────
-    st.markdown('<div class="rd-toolbarrow"></div>', unsafe_allow_html=True)
-    tb_lbl, tb_n1, tb_n2, tb_badge = st.columns([0.7, 0.9, 0.9, 2.2])
-    with tb_lbl:
-        st.markdown('<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-                    'text-transform:uppercase;color:#7A7F96;padding-top:0.7rem;">Network</div>',
-                    unsafe_allow_html=True)
-    with tb_n1:
-        mainnet_active = st.session_state.pay_network == "mainnet"
-        if st.button(("● " if mainnet_active else "") + "🌐 Mainnet", key="pay_net_mainnet",
-                     use_container_width=True, type="primary" if mainnet_active else "secondary"):
-            if st.session_state.pay_network != "mainnet":
-                st.session_state.pay_network = "mainnet"
-                st.session_state.pay_parsed  = None
-                st.session_state.pay_result  = None
-                st.rerun()
-    with tb_n2:
-        testnet_active = st.session_state.pay_network == "testnet"
-        if st.button(("● " if testnet_active else "") + "🧪 Testnet", key="pay_net_testnet",
-                     use_container_width=True, type="primary" if testnet_active else "secondary"):
-            if st.session_state.pay_network != "testnet":
-                st.session_state.pay_network = "testnet"
-                st.session_state.pay_parsed  = None
-                st.session_state.pay_result  = None
-                st.session_state.wallet_data = None
-                st.rerun()
-
+    # Network config (needed for both columns)
+    mainnet_active = st.session_state.pay_network == "mainnet"
+    testnet_active = st.session_state.pay_network == "testnet"
     _net = _pay_net_config(st.session_state.pay_network)
-    net_badge_color = "#1414E8" if st.session_state.pay_network == "mainnet" else "#166016"
-    net_badge_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
-    with tb_badge:
+    _sym_label = _net.get("symbol", "PROS")
+
+    # ----- RIGHT: Wallet side panel -----
+    with _pay_side_col:
+        wallet_addr = st.session_state.get("wallet_address", "")
+
+        # ── Network card ──────────────────────────────
         st.markdown(
-            f'<div style="display:inline-flex;align-items:center;gap:7px;background:{net_badge_bg};'
-            f'border:1px solid {net_badge_color}33;border-radius:10px;padding:7px 12px;margin-top:0.35rem;'
-            f'font-size:11.5px;font-weight:600;color:{net_badge_color};white-space:nowrap;overflow:hidden;'
-            f'text-overflow:ellipsis;max-width:100%;">'
-            f'{"🌐" if st.session_state.pay_network == "mainnet" else "🧪"} '
-            f'{_net["label"]} · Chain {_net["chain_id_dec"]} · {_net.get("symbol","PROS")}</div>',
+            '<div class="pay-input-card">'
+            '<div class="pay-card-head">'
+            '<div class="pay-card-icon">🌐</div>'
+            '<div><div class="pay-card-label">Network</div>'
+            '<div class="pay-card-sub">Choose where to send</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        nc1, nc2 = st.columns(2)
+        with nc1:
+            if st.button(
+                ("✓ " if mainnet_active else "") + "Mainnet",
+                key="pay_net_mainnet",
+                use_container_width=True,
+                type="primary" if mainnet_active else "secondary"
+            ):
+                if not mainnet_active:
+                    st.session_state.pay_network = "mainnet"
+                    st.session_state.pay_parsed  = None
+                    st.session_state.pay_result  = None
+                    st.rerun()
+        with nc2:
+            if st.button(
+                ("✓ " if testnet_active else "") + "Testnet",
+                key="pay_net_testnet",
+                use_container_width=True,
+                type="primary" if testnet_active else "secondary"
+            ):
+                if not testnet_active:
+                    st.session_state.pay_network = "testnet"
+                    st.session_state.pay_parsed  = None
+                    st.session_state.pay_result  = None
+                    st.session_state.wallet_data = None
+                    st.rerun()
+
+        nb_color = "#1A1AFF" if mainnet_active else "#059669"
+        nb_bg    = "rgba(26,26,255,0.07)" if mainnet_active else "rgba(5,150,105,0.07)"
+        nb_border= "rgba(26,26,255,0.18)" if mainnet_active else "rgba(5,150,105,0.18)"
+        st.markdown(
+            f'<div class="pay-net-badge" style="background:{nb_bg};border:1px solid {nb_border};color:{nb_color};">'
+            f'{"🌐" if mainnet_active else "🧪"}&nbsp; {_net["label"]} &nbsp;·&nbsp; Chain {_net["chain_id_dec"]} &nbsp;·&nbsp; {_sym_label}'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pay-section-gap"></div>', unsafe_allow_html=True)
 
-    # ── Command center: prompt (left) + wallet rail (right) ──
-    wallet_addr = st.session_state.get("wallet_address", "")
-    cmd_col, side_col = st.columns([1.65, 1], gap="medium")
-
-    # ----- RIGHT: compact wallet side panel + utilities -----
-    with side_col:
-        with st.container(border=True):
-            if not wallet_addr:
-                st.markdown(
-                    '<div style="padding:0.4rem 0.5rem 0.2rem 0.6rem;">'
-                    '<span class="rd-eyebrow">🔑 Wallet</span>'
-                    '<div class="rd-panel-title" style="font-size:14px;color:#000000;">Connect wallet</div>'
-                    '<div class="rd-panel-sub" style="color:#000000;">Paste your address — read-only, no signing.</div></div>',
-                    unsafe_allow_html=True,
-                )
-                _pwi = st.text_input("Your wallet address", placeholder="0x1234…your Pharos address",
-                                     key="pay_inline_wallet_input", label_visibility="collapsed")
-                if st.button("🔗 Connect Wallet", key="pay_inline_wallet_btn",
-                             use_container_width=True, type="primary"):
-                    if valid_addr(_pwi):
-                        st.session_state.wallet_address = _pwi.strip()
-                        st.session_state.wallet_data    = None
-                        st.session_state.wallet_profile = None
-                        st.rerun()
-                    else:
-                        st.error("Enter a valid 0x… wallet address (42 characters).")
-            else:
-                _wa = wallet_addr; _ws = _wa[:6] + "…" + _wa[-4:]
-                st.markdown(
-                    '<div style="padding:0.4rem 0.5rem 0.2rem 0.6rem;">'
-                    '<span class="rd-eyebrow">🔗 Connected</span>'
-                    f'<div style="display:flex;align-items:center;gap:10px;'
-                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
-                    f'border-radius:12px;padding:0.65rem 0.9rem;margin:0.2rem 0 0.2rem 0;">'
-                    f'<span style="font-size:15px;">👛</span><div style="min-width:0;">'
-                    f'<div style="font-size:9px;color:rgba(255,255,255,0.5);font-weight:600;'
-                    f'letter-spacing:0.07em;text-transform:uppercase;">Connected wallet</div>'
-                    f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:DM Mono,monospace;">{_ws}</div>'
-                    f'</div></div></div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("✕ Disconnect", key="pay_disconnect_wallet", use_container_width=True):
-                    st.session_state.wallet_address = ""
-                    st.session_state.wallet_data    = None
-                    st.session_state.wallet_profile = None
-                    st.session_state.pay_parsed     = None
-                    st.session_state.pay_result     = None
-                    st.rerun()
-
-            st.markdown('<hr class="rd-divider"/>', unsafe_allow_html=True)
-            st.markdown('<div class="rd-util" style="margin-bottom:0.4rem;color:#FFFFFF;">🧰 Utilities</div>', unsafe_allow_html=True)
-            if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
-                st.session_state.page = "memory"; st.rerun()
+        # ── Wallet card ───────────────────────────────
+        st.markdown(
+            '<div class="pay-input-card">'
+            '<div class="pay-card-head">'
+            '<div class="pay-card-icon">🔑</div>'
+            '<div><div class="pay-card-label">Your Wallet</div>'
+            '<div class="pay-card-sub">Read-only · no signing needed</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if not wallet_addr:
             st.markdown(
-                '<div style="font-size:10.5px;color:#000000;line-height:1.5;margin-top:0.5rem;'
-                'padding:0 0.3rem;">Describe a payment in plain English — Send, Batch, or Approve. '
-                'Nothing moves without your signature.</div>',
+                '<p class="pay-input-hint">Paste your Pharos address to view balance and enable transactions.</p>',
                 unsafe_allow_html=True,
             )
+            _pwi = st.text_input(
+                "Wallet address",
+                placeholder="0x… your Pharos address",
+                key="pay_inline_wallet_input",
+                label_visibility="collapsed",
+            )
+            if st.button("Connect Wallet →", key="pay_inline_wallet_btn", use_container_width=True, type="primary"):
+                if valid_addr(_pwi):
+                    st.session_state.wallet_address = _pwi.strip()
+                    st.session_state.wallet_data    = None
+                    st.rerun()
+                else:
+                    st.error("Enter a valid 0x… address (42 chars).")
+        else:
+            _wa = wallet_addr
+            _ws = _wa[:6] + "…" + _wa[-4:]
+            st.markdown(
+                f'<div class="pay-wallet-strip">'
+                f'<span style="font-size:18px;">👛</span>'
+                f'<div><div class="pay-wallet-strip-lbl">Signing from</div>'
+                f'<div class="pay-wallet-strip-addr">{_ws}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Live balance
+            if st.session_state.wallet_data is None:
+                with st.spinner("Loading balance…"):
+                    st.session_state.wallet_data = fetch_pharos_onchain_data(_wa)
+            _wd = st.session_state.wallet_data or {}
+            _bal = _wd.get("balance_pros")
+            if _bal is not None:
+                st.markdown(
+                    f'<div class="pay-field">'
+                    f'<div class="pay-field-lbl">PROS Balance</div>'
+                    f'<div style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;'
+                    f'color:#1A1AFF;letter-spacing:-0.02em;">{_bal:,.4f}</div>'
+                    f'<div class="pay-field-sub">PROS on {_net["label"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            if st.button("✕ Disconnect wallet", key="pay_disconnect_wallet", use_container_width=True):
+                st.session_state.wallet_address = ""
+                st.session_state.wallet_data    = None
+                st.session_state.pay_parsed     = None
+                st.session_state.pay_result     = None
+                st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="pay-section-gap"></div>', unsafe_allow_html=True)
+        if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
+            st.session_state.page = "memory"; st.rerun()
+
+    # Re-assign wallet_addr after potential update
+    wallet_addr = st.session_state.get("wallet_address", "")
 
     # ----- LEFT: the AI command card (hero element of the page) -----
     EXAMPLE_PROMPTS = [
@@ -12301,46 +13119,52 @@ elif st.session_state.page == "pay":
         ("📦 Batch",   "Send 1 PROS each to 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB, 0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
         ("✅ Approve", "Approve 0xFaroswap1111111111111111111111111111111111 to spend 100 PROS"),
     ]
-    with cmd_col:
-        with st.container(border=True):
-            st.markdown(
-                '<div class="rd-command" style="padding:0.5rem 0.7rem 0.2rem 0.7rem;">'
-                '<span class="rd-eyebrow">🤖 AI Command</span>'
-                '<div class="rd-panel-title" style="font-size:17px;">What payment can I build for you?</div>'
-                '<div class="rd-panel-sub">Type an instruction in plain English, or start from an example.</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            # Example suggestion chips
-            st.markdown('<div class="rd-chiprow"></div>', unsafe_allow_html=True)
-            ep_cols = st.columns(3)
-            for i, (ep_label, ep_text) in enumerate(EXAMPLE_PROMPTS):
-                with ep_cols[i]:
-                    if st.button(ep_label, key=f"pay_ep_{i}", use_container_width=True):
-                        st.session_state.pay_intent_raw = ep_text
-                        st.session_state.pay_parsed     = None
-                        st.session_state.pay_confirmed  = False
-                        st.session_state.pay_result     = None
-                        st.rerun()
-
-            pay_input = st.text_area(
-                "Payment instruction in plain English",
-                value=st.session_state.pay_intent_raw,
-                placeholder='e.g. "Send 5 PROS to 0xAbCd…" or "Approve 0xContract to spend 100 PROS"',
-                key="pay_text_input",
-                label_visibility="collapsed",
-                height=120,
-            )
-            parse_col, clear_col = st.columns([2, 1])
-            with parse_col:
-                parse_clicked = st.button("🔍 Parse Payment Intent", key="pay_parse_btn", use_container_width=True, type="primary")
-            with clear_col:
-                if st.button("✕ Clear", key="pay_clear_btn", use_container_width=True):
-                    st.session_state.pay_intent_raw = ""
+    with _pay_layout_col:
+        st.markdown(
+            '<div class="pay-input-card">'
+            '<div class="pay-card-head">'
+            '<div class="pay-card-icon">🤖</div>'
+            '<div><div class="pay-card-label">AI Payment Command</div>'
+            '<div class="pay-card-sub">Describe what you want in plain English — Send, Batch, or Approve</div></div>'
+            '</div>'
+            '<p class="pay-input-hint">OctoBot parses your intent and builds a transaction preview. Nothing moves without your wallet signature.</p>',
+            unsafe_allow_html=True,
+        )
+        # Example chips
+        ep_cols = st.columns(3)
+        for i, (ep_label, ep_text) in enumerate(EXAMPLE_PROMPTS):
+            with ep_cols[i]:
+                if st.button(ep_label, key=f"pay_ep_{i}", use_container_width=True):
+                    st.session_state.pay_intent_raw = ep_text
                     st.session_state.pay_parsed     = None
                     st.session_state.pay_confirmed  = False
                     st.session_state.pay_result     = None
                     st.rerun()
+
+        st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+
+        pay_input = st.text_area(
+            "Payment instruction",
+            value=st.session_state.pay_intent_raw,
+            placeholder='e.g. "Send 5 PROS to 0xAbCd…" · "Approve 0xContract to spend 100 PROS"',
+            key="pay_text_input",
+            label_visibility="collapsed",
+            height=140,
+        )
+
+        st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+
+        parse_col, clear_col = st.columns([2, 1])
+        with parse_col:
+            parse_clicked = st.button("⚡ Parse Intent", key="pay_parse_btn", use_container_width=True, type="primary")
+        with clear_col:
+            if st.button("✕ Clear", key="pay_clear_btn", use_container_width=True):
+                st.session_state.pay_intent_raw = ""
+                st.session_state.pay_parsed     = None
+                st.session_state.pay_confirmed  = False
+                st.session_state.pay_result     = None
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     if parse_clicked and pay_input.strip():
         st.session_state.pay_intent_raw = pay_input.strip()
@@ -12404,43 +13228,38 @@ elif st.session_state.page == "pay":
             insufficient = sender_balance is not None and sender_balance < amount
 
             st.markdown(
-                f'<div style="background:#FFFFFF;border:1.5px solid {"#E5484D" if insufficient else "#C8D0FF"};'
-                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(26,26,255,0.08);margin-bottom:1rem;">'
-                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
-                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>📋</span> Transaction Preview · Send</div>'
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
-                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#0C0C1A;">{amount:,.4f} {_sym}</div>'
-                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--border)"};">'
+                '<div class="pay-preview-title"><span>📋</span> Transaction Preview · Send</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
+                '<div class="pay-field">'
+                '<div class="pay-field-lbl">Amount</div>'
+                f'<div class="pay-amount-big">{amount:,.4f}</div>'
+                f'<div class="pay-field-sub">{_sym}' + (f' · ≈ ${usd_val:,.4f} USD' if usd_val else '') + '</div>'
                 '</div>'
-                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Network</div>'
-                f'<div style="font-size:14px;font-weight:700;color:#0C0C1A;">{_net["label"]}</div>'
-                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">Chain ID {_net["chain_id_dec"]} · {_sym}</div>'
+                '<div class="pay-field">'
+                '<div class="pay-field-lbl">Network</div>'
+                f'<div class="pay-field-val">{_net["label"]}</div>'
+                f'<div class="pay-field-sub">Chain {_net["chain_id_dec"]} · {_sym}</div>'
                 '</div></div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
-                + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
+                '<div class="pay-field" style="margin-bottom:0.7rem;">'
+                '<div class="pay-field-lbl">From</div>'
+                f'<div class="pay-field-val">{esc(wallet_addr[:20])+"…"+esc(wallet_addr[-6:]) if wallet_addr else "⚠️ Not connected"}</div>'
+                + (f'<div class="pay-field-sub" style="color:{"#E5484D" if insufficient else ""};">Balance: {sender_balance:,.4f} {_sym}' + (' — Insufficient' if insufficient else '') + '</div>' if sender_balance is not None else '') +
                 '</div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">To</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(recipient)}</div>'
+                '<div class="pay-field" style="margin-bottom:0.7rem;">'
+                '<div class="pay-field-lbl">To</div>'
+                f'<div class="pay-field-val">{esc(recipient)}</div>'
                 '</div>'
-                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
-                '<div style="font-size:12px;color:#0C0C1A;">21,000 gas units</div>'
-                '</div></div>',
+                + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
+                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
+                '<div class="pay-field-val">21,000 units</div></div>'
+                '</div>',
                 unsafe_allow_html=True,
             )
             if insufficient:
-                st.markdown(f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.8rem;font-size:13px;font-weight:600;color:#B91C1C;">⚠️ Insufficient funds: balance {sender_balance:,.4f} {_sym} &lt; {amount:,.4f} {_sym}.</div>', unsafe_allow_html=True)
+                st.error(f"⚠️ Insufficient funds: {sender_balance:,.4f} {_sym} < {amount:,.4f} {_sym}")
             if not wallet_addr:
-                st.info("Connect your wallet above to proceed.")
+                st.info("Connect your wallet in the panel to proceed.")
             elif not insufficient:
                 if st.button("✅ Confirm & Sign — Send", key="pay_confirm_btn", use_container_width=True, type="primary"):
                     _tx_widget(
@@ -12464,50 +13283,40 @@ elif st.session_state.page == "pay":
             insufficient = sender_balance is not None and sender_balance < total_amount
 
             st.markdown(
-                f'<div style="background:#FFFFFF;border:1.5px solid {"#E5484D" if insufficient else "#C7D2FE"};'
-                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(26,26,255,0.08);margin-bottom:1rem;">'
-                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
-                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>📦</span> Transaction Preview · Batch Send</div>'
-                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
-                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Each Address</div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">{amount_each:,.4f} {_sym}</div>'
-                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_each:,.4f}</div>' if usd_each else '') +
+                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--border)"};">'
+                '<div class="pay-preview-title"><span>📦</span> Transaction Preview · Batch Send</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
+                '<div class="pay-field"><div class="pay-field-lbl">Each Address</div>'
+                f'<div class="pay-amount-big" style="font-size:1.4rem;">{amount_each:,.4f}</div>'
+                f'<div class="pay-field-sub">{_sym}' + (f' · ≈ ${usd_each:,.4f}' if usd_each else '') + '</div></div>'
+                '<div class="pay-field"><div class="pay-field-lbl">Recipients</div>'
+                f'<div class="pay-amount-big" style="color:#1A1AFF;">{len(recipients)}</div></div>'
+                '<div class="pay-field"><div class="pay-field-lbl">Total</div>'
+                f'<div class="pay-amount-big" style="font-size:1.4rem;">{total_amount:,.4f}</div>'
+                f'<div class="pay-field-sub">{_sym}' + (f' · ≈ ${usd_total:,.4f}' if usd_total else '') + '</div></div>'
                 '</div>'
-                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Recipients</div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#1414E8;">{len(recipients)}</div>'
+                '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">From</div>'
+                f'<div class="pay-field-val">{esc(wallet_addr[:20])+"…"+esc(wallet_addr[-6:]) if wallet_addr else "⚠️ Not connected"}</div>'
+                + (f'<div class="pay-field-sub" style="color:{"#E5484D" if insufficient else ""};">Balance: {sender_balance:,.4f} {_sym}' + (' — Insufficient' if insufficient else '') + '</div>' if sender_balance is not None else '') +
                 '</div>'
-                '<div style="background:#EEF0FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Total</div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">{total_amount:,.4f} {_sym}</div>'
-                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">≈ ${usd_total:,.4f}</div>' if usd_total else '') +
-                '</div></div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">From</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
-                + (f'<div style="font-size:11px;color:{"#E5484D" if insufficient else "#7A7F96"};margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}' + (' — <strong style="color:#E5484D;">Insufficient</strong>' if insufficient else '') + '</div>' if sender_balance is not None else '') +
+                '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Recipients</div>'
+                + "".join([
+                    f'<div style="font-size:11.5px;font-weight:600;color:var(--t1);word-break:break-all;padding:4px 0;border-bottom:1px solid var(--border);">'
+                    f'<span style="color:#1A1AFF;font-weight:700;">{i+1}.</span> {esc(addr)} '
+                    f'<span style="color:var(--t3);">({amount_each:,.4f} {_sym})</span></div>'
+                    for i, addr in enumerate(recipients)
+                ]) +
                 '</div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:8px;">Recipients</div>' +
-                "".join([f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;padding:4px 0;border-bottom:1px solid #ECEEF4;">'
-                         f'<span style="color:#1414E8;font-weight:700;">{i+1}.</span> {esc(addr)} '
-                         f'<span style="color:#7A7F96;">({amount_each:,.4f} {_sym})</span></div>'
-                         for i, addr in enumerate(recipients)]) +
-                '</div>'
-                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Reason</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
-                f'<div style="font-size:12px;color:#0C0C1A;">21,000 × {len(recipients)} = {21000*len(recipients):,} gas units ({len(recipients)} separate transactions)</div>'
-                '</div></div>',
+                + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
+                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
+                f'<div class="pay-field-val">21,000 × {len(recipients)} = {21000*len(recipients):,} units</div></div>'
+                '</div>',
                 unsafe_allow_html=True,
             )
             if insufficient:
-                st.markdown(f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.8rem;font-size:13px;font-weight:600;color:#B91C1C;">⚠️ Insufficient funds: balance {sender_balance:,.4f} {_sym} &lt; total {total_amount:,.4f} {_sym}.</div>', unsafe_allow_html=True)
+                st.error(f"⚠️ Insufficient funds: {sender_balance:,.4f} {_sym} < total {total_amount:,.4f} {_sym}")
             if not wallet_addr:
-                st.info("Connect your wallet above to proceed.")
+                st.info("Connect your wallet in the panel to proceed.")
             elif not insufficient:
                 if st.button(f"✅ Confirm & Sign — Send to {len(recipients)} addresses", key="pay_confirm_btn", use_container_width=True, type="primary"):
                     import json as _json
@@ -12531,55 +13340,42 @@ elif st.session_state.page == "pay":
             reason       = p_data.get("reason", "")
             is_unlimited = raw_amount == -1
             approve_amt  = float(raw_amount) if not is_unlimited else 0
-            # Max uint256 for unlimited approval
             MAX_UINT256  = 2**256 - 1
             approve_hex  = hex(MAX_UINT256) if is_unlimited else hex(int(approve_amt * 1e18))
             amt_display  = "Unlimited" if is_unlimited else f"{approve_amt:,.4f} {_sym}"
 
             st.markdown(
-                '<div style="background:#FFFFFF;border:1.5px solid #FDE68A;'
-                'border-radius:16px;padding:1.4rem 1.6rem;box-shadow:0 4px 20px rgba(250,200,0,0.08);margin-bottom:1rem;">'
-                '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
-                'margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><span>✅</span> Transaction Preview · Token Approval</div>'
-                '<div style="background:#FFFBEB;border-radius:10px;padding:0.85rem 1rem;margin-bottom:0.9rem;'
-                'border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:8px;">'
-                '<span style="font-size:16px;flex-shrink:0;">⚠️</span>'
-                '<div style="font-size:12px;color:#7A5800;line-height:1.55;">'
+                '<div class="pay-preview" style="border-color:#F59E0B22;">'
+                '<div class="pay-preview-title"><span>✅</span> Transaction Preview · Token Approval</div>'
+                '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);'
+                'border-radius:12px;padding:0.85rem 1rem;margin-bottom:0.8rem;display:flex;align-items:flex-start;gap:9px;">'
+                '<span style="font-size:15px;flex-shrink:0;">⚠️</span>'
+                '<div style="font-size:12px;color:#92400E;line-height:1.6;">'
                 '<strong>Approval grants a contract permission to spend your tokens.</strong> '
-                'Always verify the spender address before confirming. You can revoke approvals later.</div>'
+                'Always verify the spender address before confirming.</div></div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
+                '<div class="pay-field"><div class="pay-field-lbl">Allowance</div>'
+                f'<div class="pay-amount-big" style="font-size:1.5rem;color:{"#E5484D" if is_unlimited else "var(--t1)"};">{amt_display}</div></div>'
+                '<div class="pay-field"><div class="pay-field-lbl">Network</div>'
+                f'<div class="pay-field-val">{_net["label"]}</div>'
+                f'<div class="pay-field-sub">Chain {_net["chain_id_dec"]}</div></div>'
                 '</div>'
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
-                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Allowance</div>'
-                f'<div style="font-family:Syne,sans-serif;font-size:{"15" if is_unlimited else "18"}px;font-weight:800;color:{"#E5484D" if is_unlimited else "#0C0C1A"};">{amt_display}</div>'
+                '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Owner (Your Wallet)</div>'
+                f'<div class="pay-field-val">{esc(wallet_addr[:20])+"…"+esc(wallet_addr[-6:]) if wallet_addr else "⚠️ Not connected"}</div>'
+                + (f'<div class="pay-field-sub">Balance: {sender_balance:,.4f} {_sym}</div>' if sender_balance is not None else '') +
                 '</div>'
-                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Network</div>'
-                f'<div style="font-size:14px;font-weight:700;color:#0C0C1A;">{_net["label"]}</div>'
-                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">Chain ID {_net["chain_id_dec"]}</div>'
-                '</div></div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Owner (Your Wallet)</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr) or "⚠️ Not connected"}</div>'
-                + (f'<div style="font-size:11px;color:#7A7F96;margin-top:3px;">Balance: {sender_balance:,.4f} {_sym}</div>' if sender_balance is not None else '') +
-                '</div>'
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:6px;">Spender (Contract being approved)</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#1414E8;word-break:break-all;">{esc(spender)}</div>'
-                '</div>'
-                + (f'<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                   f'<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Note</div>'
-                   f'<div style="font-size:12px;color:#0C0C1A;">{esc(reason)}</div></div>' if reason else '') +
-                '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
-                '<div style="font-size:12px;color:#0C0C1A;">~62,000 gas units (ERC-20 approve)</div>'
-                '</div></div>',
+                '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Spender Contract</div>'
+                f'<div class="pay-field-val" style="color:#1A1AFF;">{esc(spender) or "—"}</div></div>'
+                + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
+                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
+                '<div class="pay-field-val">~62,000 units (ERC-20 approve)</div></div>'
+                '</div>',
                 unsafe_allow_html=True,
             )
             if not wallet_addr:
-                st.info("Connect your wallet above to proceed.")
+                st.info("Connect your wallet in the panel to proceed.")
             elif not spender:
-                st.error("No valid spender contract address found. Try: \"Approve 0xContractAddress to spend 100 PROS\"")
+                st.error('No spender address found. Try: "Approve 0xContractAddress to spend 100 PROS"')
             else:
                 if st.button("✅ Confirm & Sign — Approve", key="pay_confirm_btn", use_container_width=True, type="primary"):
                     _tx_widget(
@@ -12643,18 +13439,22 @@ elif st.session_state.page == "pay":
         _sym = r.get("symbol", "PROS")
         _m   = r.get("mode", "Send")
         st.markdown(
-            '<div style="background:#F0FFF4;border:1.5px solid #22C55E;border-radius:16px;'
-            'padding:1.2rem 1.5rem;margin:1rem 0;box-shadow:0 4px 16px rgba(34,197,94,0.12);">'
-            '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#15803D;margin-bottom:0.5rem;">'
-            f'🎉 {_m} Complete!</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Type:</strong> {_m}</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Amount:</strong> {r["amount"]:,.4f} {_sym}</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Address:</strong> {esc(r["recipient"])}</div>'
-            f'<div style="font-size:12.5px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {esc(r.get("network","Pharos"))}</div>'
-            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:4px;"><strong>Tx Hash:</strong> {esc(r["tx_hash"])}</div>'
+            '<div class="pay-preview" style="border-color:#22C55E;background:rgba(34,197,94,0.04);">'
+            '<div class="pay-preview-title" style="color:#15803D;"><span>🎉</span> ' + esc(_m) + ' Complete!</div>'
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
+            '<div class="pay-field"><div class="pay-field-lbl">Amount</div>'
+            f'<div class="pay-amount-big" style="color:#15803D;">{r["amount"]:,.4f}</div>'
+            f'<div class="pay-field-sub">{_sym}</div></div>'
+            '<div class="pay-field"><div class="pay-field-lbl">Network</div>'
+            f'<div class="pay-field-val">{esc(r.get("network","Pharos"))}</div></div>'
+            '</div>'
+            '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Recipient</div>'
+            f'<div class="pay-field-val">{esc(r["recipient"])}</div></div>'
+            '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Tx Hash</div>'
+            f'<div class="pay-field-val" style="font-size:11px;">{esc(r["tx_hash"])}</div></div>'
             f'<a href="{esc_url(_exp)}/tx/{esc(r["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
-            'style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;'
-            'color:#1A1AFF;margin-top:4px;text-decoration:none;">View on Pharosscan ↗</a>'
+            'style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;'
+            'color:#1A1AFF;text-decoration:none;margin-top:4px;">View on Pharosscan ↗</a>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -12669,29 +13469,27 @@ elif st.session_state.page == "pay":
     if st.session_state.pay_history:
         st.markdown(
             '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
-            'color:#0C0C1A;margin:1.5rem 0 0.6rem 0;">📜 Recent Transactions</div>',
+            'color:var(--t1);margin:1.6rem 0 0.7rem 0;">📜 Recent Transactions</div>',
             unsafe_allow_html=True,
         )
         for h in st.session_state.pay_history[:10]:
-            tx_short = h["tx_hash"][:14] + "…" + h["tx_hash"][-8:]
-            _h_exp   = h.get("explorer", PHAROS_EXPLORER_URL)
-            _h_net   = h.get("network", "Pharos")
-            _h_sym   = h.get("symbol", "PROS")
-            _h_mode  = h.get("mode", "Send")
+            tx_short   = h["tx_hash"][:14] + "…" + h["tx_hash"][-8:]
+            _h_exp     = h.get("explorer", PHAROS_EXPLORER_URL)
+            _h_net     = h.get("network", "Pharos")
+            _h_sym     = h.get("symbol", "PROS")
+            _h_mode    = h.get("mode", "Send")
             _mode_icon = {"Send": "➡️", "Batch Send": "📦", "Approve": "✅"}.get(_h_mode, "➡️")
             st.markdown(
-                '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:12px;'
-                'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
-                'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
-                f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
-                f'{_mode_icon} {_h_mode} · {h["amount"]:,.4f} {_h_sym} → {esc(h["recipient"][:16])}…</div>'
-                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(tx_short)}</div></div>'
+                '<div class="pay-history-item">'
+                f'<div><div style="font-size:13px;font-weight:700;color:var(--t1);">'
+                f'{_mode_icon} {esc(_h_mode)} · {h["amount"]:,.4f} {esc(_h_sym)}</div>'
+                f'<div style="font-size:11px;color:var(--t3);margin-top:2px;">'
+                f'{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(tx_short)}</div></div>'
                 f'<a href="{esc_url(_h_exp)}/tx/{esc(h["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
-                'style="font-size:11.5px;font-weight:600;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
+                'style="font-size:12px;font-weight:700;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
                 '</div>',
                 unsafe_allow_html=True,
             )
-
 
 
 # ═════════════════════════════════════════════════════════════
@@ -12699,8 +13497,160 @@ elif st.session_state.page == "pay":
 # ═════════════════════════════════════════════════════════════
 elif st.session_state.page == "request":
 
-
     inject_redesign_css("request rd-hero-compact rd-wide")
+
+    # ── Premium Request page styles ────────────────────────────────────
+    st.markdown("""
+<style>
+/* ╔══════════════════════════════════════════════════════╗
+   ║   REQUEST PAGE — Premium spacing & design system     ║
+   ╚══════════════════════════════════════════════════════╝ */
+
+.req-hero{
+    background:linear-gradient(135deg,#0C0C1A 0%,#1A0A2E 42%,#3B0764 100%);
+    border-radius:24px;padding:2.8rem 3rem 2.4rem;margin-bottom:2rem;
+    position:relative;overflow:hidden;
+    box-shadow:0 16px 56px rgba(59,7,100,0.32),0 4px 16px rgba(0,0,0,0.2);
+}
+.req-hero::before{
+    content:"";position:absolute;inset:0;
+    background-image:radial-gradient(circle,rgba(255,255,255,0.05) 1px,transparent 1px);
+    background-size:18px 18px;pointer-events:none;
+}
+.req-hero::after{
+    content:"";position:absolute;top:-50px;right:-50px;
+    width:260px;height:260px;border-radius:50%;
+    background:radial-gradient(circle,rgba(139,92,246,0.28),transparent 68%);
+    pointer-events:none;
+}
+
+/* Shared card base */
+.req-card{
+    background:#FFFFFF;
+    border:1.5px solid #EDE9F8;
+    border-radius:20px;
+    padding:1.8rem 2rem;
+    box-shadow:0 2px 16px rgba(59,7,100,0.05),0 1px 4px rgba(0,0,0,0.04);
+    margin-bottom:1.4rem;
+}
+html[data-theme="dark"] .req-card{
+    background:#13111E;border-color:#2A2440;
+    box-shadow:0 2px 16px rgba(0,0,0,0.3);
+}
+
+/* Card header row */
+.req-card-head{
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:1.2rem;padding-bottom:0.9rem;
+    border-bottom:1px solid #F0EDF8;
+}
+html[data-theme="dark"] .req-card-head{border-color:#2A2440;}
+.req-card-icon{
+    width:36px;height:36px;border-radius:10px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+    background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(139,92,246,0.08));
+    border:1px solid rgba(124,58,237,0.15);
+}
+.req-card-label{
+    font-family:Syne,sans-serif;font-size:14px;font-weight:800;
+    color:var(--t1);letter-spacing:-0.01em;
+}
+.req-card-sub{font-size:11.5px;color:var(--t3);margin-top:1px;line-height:1.4;}
+
+/* Field pill inside cards */
+.req-field{
+    background:#F7F5FD;border:1px solid #EDE9F8;
+    border-radius:14px;padding:0.85rem 1.1rem;margin-bottom:0.75rem;
+}
+html[data-theme="dark"] .req-field{background:#1D1930;border-color:#2A2440;}
+.req-field-lbl{
+    font-size:9.5px;font-weight:800;letter-spacing:0.10em;text-transform:uppercase;
+    color:var(--t3);margin-bottom:5px;
+}
+.req-field-val{
+    font-size:14px;font-weight:600;color:var(--t1);word-break:break-all;line-height:1.4;
+}
+.req-field-sub{font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.4;}
+
+/* Invoice card (pay/success modes) */
+.req-invoice-card{
+    background:#FFFFFF;border:2px solid rgba(124,58,237,0.25);border-radius:22px;
+    padding:2rem 2.2rem;
+    box-shadow:0 8px 40px rgba(124,58,237,0.10),0 2px 8px rgba(0,0,0,0.04);
+    max-width:700px;margin:0 auto 1.6rem auto;
+}
+html[data-theme="dark"] .req-invoice-card{
+    background:#13111E;border-color:rgba(139,92,246,0.22);
+}
+
+/* Amount display block */
+.req-amount-display{
+    background:linear-gradient(135deg,rgba(124,58,237,0.07),rgba(99,102,241,0.04));
+    border:1px solid rgba(124,58,237,0.15);
+    border-radius:18px;padding:1.6rem;margin-bottom:1.2rem;text-align:center;
+}
+html[data-theme="dark"] .req-amount-display{
+    background:rgba(124,58,237,0.08);border-color:rgba(124,58,237,0.18);
+}
+.req-amount-big{
+    font-family:Syne,sans-serif;font-size:2.8rem;font-weight:800;
+    color:var(--t1);letter-spacing:-0.03em;line-height:1;
+}
+
+/* Shareable link box */
+.req-link-box{
+    background:#F7F5FD;border:1.5px solid #DDD6FE;border-radius:14px;
+    padding:1rem 1.2rem;
+    display:flex;align-items:flex-start;gap:10px;
+    font-size:12px;color:var(--t2);word-break:break-all;
+    font-family:monospace;line-height:1.6;
+    margin-top:0.6rem;
+}
+html[data-theme="dark"] .req-link-box{background:#1D1930;border-color:#3D2E6A;}
+.req-link-box a{color:#7C3AED;font-weight:700;text-decoration:none;}
+.req-link-box a:hover{text-decoration:underline;}
+
+/* Wallet strip */
+.req-wallet-strip{
+    background:linear-gradient(135deg,#1A0A2E,#7C3AED);
+    border-radius:14px;padding:0.9rem 1.1rem;
+    display:flex;align-items:center;gap:12px;margin-bottom:1rem;
+}
+.req-wallet-strip-lbl{
+    font-size:9px;color:rgba(255,255,255,0.45);font-weight:700;
+    letter-spacing:0.1em;text-transform:uppercase;
+}
+.req-wallet-strip-addr{
+    font-size:13.5px;color:#fff;font-weight:700;font-family:monospace;
+}
+
+/* Network badge */
+.req-net-badge{
+    display:inline-flex;align-items:center;gap:7px;
+    border-radius:12px;padding:8px 14px;margin-bottom:1.2rem;
+    font-size:12px;font-weight:700;letter-spacing:0.01em;
+}
+
+/* Section spacing */
+.req-section-gap{height:1.4rem;}
+
+/* Live preview card */
+.req-preview-card{
+    background:#FFFFFF;border:1.5px solid #EDE9F8;border-radius:20px;
+    padding:1.6rem 1.8rem;
+    box-shadow:0 2px 16px rgba(59,7,100,0.05);
+    position:sticky;top:80px;
+}
+html[data-theme="dark"] .req-preview-card{
+    background:#13111E;border-color:#2A2440;
+}
+.req-preview-amount{
+    font-family:Syne,sans-serif;font-size:2rem;font-weight:800;
+    color:var(--t1);letter-spacing:-0.025em;line-height:1;
+    margin-bottom:3px;
+}
+</style>
+""", unsafe_allow_html=True)
 
     def _req_net_config(network: str) -> dict:
         if network == "testnet":
@@ -12851,28 +13801,23 @@ elif st.session_state.page == "request":
     _mode  = _draft.get("mode", "create")
     wallet_addr = st.session_state.get("wallet_address", "")
 
-    # ── Header ───────────────────────────────────
+    # ── Premium hero header ───────────────────────
     _hdr_map = {
-        "pay_invoice":  ("🧾", "You've Received a Payment Request",
-                         "Review the invoice below and pay with one click — your wallet handles the rest."),
-        "paid_success": ("🎉", "Payment Sent!", "The invoice has been paid on-chain."),
-        "create":       ("🧾", "Request PROS",
-                         "Create a payment request, generate a shareable link, and send it to whoever owes you — they open it and pay with one click."),
+        "pay_invoice":  ("🧾", "Payment Request", "Review the invoice and pay with one click — your wallet handles the rest."),
+        "paid_success": ("🎉", "Payment Sent!",   "The invoice has been paid on-chain."),
+        "create":       ("🧾", "Request PROS",    "Generate a shareable invoice link. Anyone can open it and pay with one click."),
     }
     _hdr_icon, _hdr_title, _hdr_sub = _hdr_map.get(_mode, _hdr_map["create"])
     st.markdown(
-        f'<div style="background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 100%);'
-        f'border-radius:20px;padding:2.2rem 2.4rem 1.8rem 2.4rem;margin-bottom:1.4rem;'
-        f'box-shadow:0 8px 32px rgba(20,20,90,0.22);position:relative;overflow:hidden;">'
-        f'<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.05) 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>'
-        f'<div style="position:relative;z-index:1;">'
-        f'<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
-        f'letter-spacing:0.15em;text-transform:uppercase;color:#9FB4FF;margin-bottom:0.7rem;">'
+        f'<div class="req-hero"><div style="position:relative;z-index:1;">'
+        f'<div style="font-size:9px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:rgba(196,181,253,0.8);margin-bottom:0.7rem;display:inline-flex;align-items:center;gap:7px;">'
         f'{_hdr_icon} REQUEST PROS · PHAROS NETWORK</div>'
-        f'<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
+        f'<h2 style="font-family:Syne,sans-serif;font-size:2.1rem;font-weight:800;color:#FFFFFF;'
         f'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">{_hdr_title}</h2>'
-        f'<p style="font-size:0.92rem;color:rgba(255,255,255,0.6);line-height:1.55;max-width:600px;margin:0;">'
-        f'{_hdr_sub}</p></div></div>',
+        f'<p style="font-size:0.92rem;color:rgba(255,255,255,0.55);line-height:1.6;max-width:560px;margin:0;">'
+        f'{_hdr_sub}</p>'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -12897,91 +13842,81 @@ elif st.session_state.page == "request":
         if price_info.get("available") and price_info.get("price_usd") and inv_net == "mainnet":
             usd_val = inv_amt_f * price_info["price_usd"]
 
+        # Header badge
+        nb_color = "#7C3AED" if inv_net == "mainnet" else "#059669"
+        nb_bg    = "rgba(124,58,237,0.1)" if inv_net == "mainnet" else "rgba(5,150,105,0.1)"
+
         st.markdown(
-            '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
-            'padding:1.8rem 2rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);'
-            'max-width:680px;margin:0 auto 1.2rem auto;">'
+            '<div class="req-invoice-card">'
             '<div style="display:flex;align-items:center;justify-content:space-between;'
             'margin-bottom:1.2rem;flex-wrap:wrap;gap:10px;">'
             '<div style="display:flex;align-items:center;gap:10px;">'
-            '<div style="width:44px;height:44px;border-radius:12px;'
-            'background:linear-gradient(135deg,#0C0C1A,#1414E8);'
-            'display:flex;align-items:center;justify-content:center;font-size:22px;">🧾</div>'
-            '<div><div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0C0C1A;">Invoice</div>'
-            '<div style="font-size:11px;color:#7A7F96;">Powered by OctoBot · Pharos Network</div></div>'
+            '<div style="width:46px;height:46px;border-radius:13px;'
+            'background:linear-gradient(135deg,#3B0764,#7C3AED);'
+            'display:flex;align-items:center;justify-content:center;font-size:22px;'
+            'box-shadow:0 4px 14px rgba(124,58,237,0.3);">🧾</div>'
+            '<div><div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:var(--t1);">Invoice</div>'
+            '<div style="font-size:11px;color:var(--t3);">Powered by OctoBot · Pharos Network</div></div>'
             '</div>'
-            f'<div style="background:#EEF0FF;border-radius:10px;padding:5px 14px;'
-            f'font-size:12px;font-weight:700;color:#1414E8;">🌐 {_n["label"]}</div>'
+            f'<div style="background:{nb_bg};border:1px solid {nb_color}44;border-radius:10px;'
+            f'padding:5px 13px;font-size:12px;font-weight:700;color:{nb_color};">🌐 {_n["label"]}</div>'
             '</div>'
-            '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
-            'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;text-align:center;">'
-            '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
-            'text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Amount Requested</div>'
-            f'<div style="font-family:Syne,sans-serif;font-size:2.4rem;font-weight:800;'
-            f'color:#0C0C1A;letter-spacing:-0.02em;">{inv_amt_f:,.4f} {_sym}</div>'
-            + (f'<div style="font-size:13px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+            '<div class="req-amount-display">'
+            '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;'
+            'color:var(--t3);margin-bottom:5px;">Amount Requested</div>'
+            f'<div class="req-amount-big">{inv_amt_f:,.4f} {_sym}</div>'
+            + (f'<div style="font-size:13px;color:var(--t3);margin-top:4px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
             '</div>'
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
             + (
-                '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Requested by</div>'
-                f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{inv_from}</div>'
-                '</div>' if inv_from else ''
+                '<div class="req-field"><div class="req-field-lbl">Requested by</div>'
+                f'<div class="req-field-val">{esc(inv_from)}</div></div>' if inv_from else ''
             ) +
-            '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Pay to</div>'
-            f'<div style="font-size:12px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(inv_to)}</div>'
-            '</div></div>'
+            '<div class="req-field"><div class="req-field-lbl">Pay to</div>'
+            f'<div class="req-field-val">{esc(inv_to)}</div></div>'
+            '</div>'
             + (
-                '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
-                'padding:0.75rem 0.9rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Note / For</div>'
-                f'<div style="font-size:13px;color:#0C0C1A;font-weight:500;">{inv_note}</div>'
-                '</div>' if inv_note else ''
+                '<div class="req-field" style="margin-bottom:0.8rem;background:rgba(245,158,11,0.08);'
+                'border:1px solid rgba(245,158,11,0.25);">'
+                '<div class="req-field-lbl" style="color:#92400E;">Note</div>'
+                f'<div class="req-field-val" style="color:#78350F;">{esc(inv_note)}</div></div>' if inv_note else ''
             ) +
-            '<div style="background:#F9F9FC;border-radius:10px;padding:0.75rem 0.9rem;">'
-            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Estimated Gas</div>'
-            '<div style="font-size:12px;color:#0C0C1A;">21,000 gas units (standard transfer)</div>'
-            '</div></div>',
+            '</div>',
             unsafe_allow_html=True,
         )
 
         if not wallet_addr:
             st.markdown(
-                '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
-                'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:0.9rem;">'
-                '<div style="font-size:13px;font-weight:700;color:#0C0C1A;margin-bottom:0.5rem;">🔑 Connect your wallet to pay</div>'
-                '<div style="font-size:12px;color:#FFFFFF;margin-bottom:0.8rem;">Paste your wallet address — read-only, no signing required just to connect.</div>',
+                '<div class="req-create-card">'
+                '<div class="req-field-lbl" style="margin-bottom:6px;">Your wallet address (to pay from)</div>',
                 unsafe_allow_html=True,
             )
-            _ri = st.text_input("Your wallet address", placeholder="0x…",
+            _ri = st.text_input("Wallet address", placeholder="0x… address you will pay from",
                                 key="req_pay_wallet_input", label_visibility="collapsed")
-            rw1, rw2 = st.columns([2, 1])
-            with rw1:
-                if st.button("🔗 Connect Wallet", key="req_pay_wallet_btn",
-                             use_container_width=True, type="primary"):
-                    if valid_addr(_ri):
-                        st.session_state.wallet_address = _ri.strip()
-                        st.rerun()
-                    else:
-                        st.error("Enter a valid 0x… address (42 chars).")
+            if st.button("🔗 Set Wallet & Proceed", key="req_pay_wallet_btn",
+                         use_container_width=True, type="primary"):
+                if valid_addr(_ri):
+                    st.session_state.wallet_address = _ri.strip()
+                    st.rerun()
+                else:
+                    st.error("Enter a valid 0x… address (42 chars).")
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             _wa = wallet_addr
             _ws = _wa[:6] + "…" + _wa[-4:]
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:10px;'
-                f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
-                f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.8rem;">'
-                f'<span style="font-size:16px;">🔗</span><div>'
-                f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;'
-                f'letter-spacing:0.07em;text-transform:uppercase;">Paying from</div>'
+                f'background:linear-gradient(90deg,#0C0C1A,#7C3AED);'
+                f'border-radius:13px;padding:0.8rem 1.1rem;margin-bottom:0.8rem;">'
+                f'<span style="font-size:17px;">🔗</span><div>'
+                f'<div style="font-size:9px;color:rgba(255,255,255,0.5);font-weight:700;'
+                f'letter-spacing:0.08em;text-transform:uppercase;">Paying from</div>'
                 f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
                 f'</div></div>',
                 unsafe_allow_html=True,
             )
             if st.button(
-                f"✅ Pay {inv_amt_f:,.4f} {_sym} → {inv_to[:10]}…",
+                f"✅ Pay {inv_amt_f:,.4f} {_sym} now",
                 key="req_pay_confirm_btn",
                 use_container_width=True,
                 type="primary",
@@ -12993,7 +13928,7 @@ elif st.session_state.page == "request":
                     pay_net_ss=inv_net, amount_display=str(inv_amt_f),
                 )
 
-        if st.button("✕ Cancel / Close invoice", key="req_cancel_invoice"):
+        if st.button("✕ Cancel / Close invoice", key="req_cancel_invoice_2"):
             st.session_state.req_draft = None
             st.rerun()
 
@@ -13005,15 +13940,26 @@ elif st.session_state.page == "request":
         _exp  = entry.get("explorer", PHAROS_EXPLORER_URL)
         _sym  = entry.get("symbol", "PROS")
         st.markdown(
-            '<div style="background:#F0FFF4;border:2px solid #22C55E;border-radius:16px;'
-            'padding:1.5rem 1.8rem;margin-bottom:1.2rem;box-shadow:0 4px 20px rgba(34,197,94,0.12);">'
-            '<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#15803D;margin-bottom:0.6rem;">🎉 Invoice Paid!</div>'
-            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Amount:</strong> {entry.get("amount","?")} {_sym}</div>'
-            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Paid to:</strong> {entry.get("to",entry.get("recipient","?"))}</div>'
-            f'<div style="font-size:13px;color:#166534;margin-bottom:4px;"><strong>Network:</strong> {entry.get("network","Pharos")}</div>'
-            f'<div style="font-size:12px;color:#15803D;word-break:break-all;margin-bottom:6px;"><strong>Tx Hash:</strong> {entry.get("tx_hash","?")}</div>'
-            f'<a href="{_exp}/tx/{entry.get("tx_hash","")}" target="_blank" '
-            'style="font-size:12px;font-weight:600;color:#1A1AFF;text-decoration:none;">View on Pharosscan ↗</a>'
+            '<div class="req-invoice-card" style="border-color:#22C55E;background:rgba(34,197,94,0.03);">'
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:1.2rem;">'
+            '<div style="width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#14532D,#22C55E);'
+            'display:flex;align-items:center;justify-content:center;font-size:22px;">🎉</div>'
+            '<div><div style="font-family:Syne,sans-serif;font-size:17px;font-weight:800;color:#15803D;">Invoice Paid!</div>'
+            '<div style="font-size:12px;color:var(--t3);">Transaction confirmed on Pharos Network</div></div>'
+            '</div>'
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
+            '<div class="req-field"><div class="req-field-lbl">Amount</div>'
+            f'<div class="req-field-val" style="color:#15803D;font-size:1.3rem;font-family:Syne,sans-serif;font-weight:800;">'
+            f'{entry.get("amount","?")} {_sym}</div></div>'
+            '<div class="req-field"><div class="req-field-lbl">Network</div>'
+            f'<div class="req-field-val">{entry.get("network","Pharos")}</div></div>'
+            '</div>'
+            '<div class="req-field" style="margin-bottom:0.8rem;"><div class="req-field-lbl">Paid to</div>'
+            f'<div class="req-field-val">{entry.get("to",entry.get("recipient","?"))}</div></div>'
+            '<div class="req-field" style="margin-bottom:0.8rem;"><div class="req-field-lbl">Tx Hash</div>'
+            f'<div class="req-field-val" style="font-size:11px;">{entry.get("tx_hash","?")}</div></div>'
+            f'<a href="{esc_url(_exp)}/tx/{esc(entry.get("tx_hash",""))}" target="_blank" '
+            'style="font-size:12.5px;font-weight:700;color:#1A1AFF;text-decoration:none;">View on Pharosscan ↗</a>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -13025,20 +13971,18 @@ elif st.session_state.page == "request":
     # MODE C — CREATE REQUEST (default)
     # ══════════════════════════════════════════════
     else:
-        # ── Slim network toolbar ──────────────
-        st.markdown('<div class="rd-toolbarrow"></div>', unsafe_allow_html=True)
-        st.markdown('<span class="rd-tb-lbl" style="display:block;margin-bottom:4px;">Network</span>', unsafe_allow_html=True)
+        # Network selector
+        _mn_active = st.session_state.pay_network == "mainnet"
+        _tn_active = st.session_state.pay_network == "testnet"
         rn1, rn2, rn_sp = st.columns([1, 1, 3])
         with rn1:
-            _mn_active = st.session_state.pay_network == "mainnet"
-            if st.button(("● " if _mn_active else "") + "🌐 Mainnet",
+            if st.button(("✓ " if _mn_active else "") + "Mainnet",
                          key="req_net_mainnet", use_container_width=True,
                          type="primary" if _mn_active else "secondary"):
                 if not _mn_active:
                     st.session_state.pay_network = "mainnet"; st.rerun()
         with rn2:
-            _tn_active = st.session_state.pay_network == "testnet"
-            if st.button(("● " if _tn_active else "") + "🧪 Testnet",
+            if st.button(("✓ " if _tn_active else "") + "Testnet",
                          key="req_net_testnet", use_container_width=True,
                          type="primary" if _tn_active else "secondary"):
                 if not _tn_active:
@@ -13046,123 +13990,136 @@ elif st.session_state.page == "request":
 
         _rn   = _req_net_config(st.session_state.pay_network)
         _rsym = _rn.get("symbol", "PROS")
-        nb_color = "#1414E8" if st.session_state.pay_network == "mainnet" else "#166016"
-        nb_bg    = "#EEF0FF" if st.session_state.pay_network == "mainnet" else "#F0FFF4"
+        nb_color = "#7C3AED" if _mn_active else "#059669"
+        nb_bg    = "rgba(124,58,237,0.07)" if _mn_active else "rgba(5,150,105,0.07)"
+        nb_border= "rgba(124,58,237,0.18)" if _mn_active else "rgba(5,150,105,0.18)"
         st.markdown(
-            f'<div style="display:inline-flex;align-items:center;gap:7px;background:{nb_bg};'
-            f'border:1px solid {nb_color}33;border-radius:10px;padding:5px 12px;margin-bottom:0.8rem;'
-            f'font-size:12px;font-weight:600;color:{nb_color};">'
-            f'{"🌐" if st.session_state.pay_network=="mainnet" else "🧪"} '
-            f'{_rn["label"]} · {_rsym} · Chain ID {_rn["chain_id_dec"]}</div>',
+            f'<div class="req-net-badge" style="background:{nb_bg};border:1px solid {nb_border};color:{nb_color};">'
+            f'{"🌐" if _mn_active else "🧪"}&nbsp; {_rn["label"]} &nbsp;·&nbsp; {_rsym} &nbsp;·&nbsp; Chain {_rn["chain_id_dec"]}'
+            f'</div>',
             unsafe_allow_html=True,
         )
 
-        # ── Wallet setup (top of workspace) ───
-        if not wallet_addr:
-            st.markdown(
-                '<div style="background:#FFFFFF;border:1.5px solid rgba(26,26,255,0.2);'
-                'border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
-                '<div style="font-size:13px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
-                '🔑 Your wallet address (where you will receive payment)</div>'
-                '<div style="font-size:12px;color:#5B5F6E;margin-bottom:0.7rem;">'
-                'Read-only — no signing, no extension needed.</div>',
-                unsafe_allow_html=True,
-            )
-            _cwi = st.text_input("Your wallet address", placeholder="0x… your receiving address",
-                                 key="req_create_wallet_input", label_visibility="collapsed")
-            cw1, cw2 = st.columns([2, 1])
-            with cw1:
-                if st.button("🔗 Set My Address", key="req_create_wallet_btn",
-                             use_container_width=True, type="primary"):
-                    if valid_addr(_cwi):
-                        st.session_state.wallet_address = _cwi.strip()
-                        st.rerun()
-                    else:
-                        st.error("Enter a valid 0x… address (42 chars).")
-            with cw2:
-                if st.button("🧠 Memory Ledger", key="req_go_memory", use_container_width=True):
-                    st.session_state.page = "memory"; st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            _wa  = wallet_addr
-            _ws  = _wa[:6] + "…" + _wa[-4:]
-            rcol1, rcol2 = st.columns([4, 1])
-            with rcol1:
-                st.markdown(
-                    f'<div style="display:flex;align-items:center;gap:10px;'
-                    f'background:linear-gradient(90deg,#0C0C1A,#1414E8);'
-                    f'border-radius:12px;padding:0.7rem 1.1rem;margin-bottom:0.8rem;">'
-                    f'<span style="font-size:16px;">🔗</span><div>'
-                    f'<div style="font-size:9.5px;color:rgba(255,255,255,0.5);font-weight:600;'
-                    f'letter-spacing:0.07em;text-transform:uppercase;">Receiving wallet</div>'
-                    f'<div style="font-size:13px;color:#fff;font-weight:700;font-family:monospace;">{_ws}</div>'
-                    f'</div></div>',
-                    unsafe_allow_html=True,
-                )
-            with rcol2:
-                if st.button("✕ Change", key="req_disconnect", use_container_width=True):
-                    st.session_state.wallet_address = ""
-                    st.rerun()
+        st.markdown('<div class="req-section-gap"></div>', unsafe_allow_html=True)
 
-        # ── Workspace body: Request Card (left) + summary rail (right) ──
+        # Two-column layout: form left, summary right
         form_col, sum_col = st.columns([1.5, 1], gap="medium")
 
         with form_col:
-            with st.container(border=True):
+            # Wallet card
+            st.markdown(
+                '<div class="req-card">'
+                '<div class="req-card-head">'
+                '<div class="req-card-icon">🔑</div>'
+                '<div><div class="req-card-label">Receiving Wallet</div>'
+                '<div class="req-card-sub">Where PROS will land when paid. Read-only — no signing needed.</div></div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            if not wallet_addr:
+                _cwi = st.text_input("Your wallet", placeholder="0x… your receiving address",
+                                     key="req_create_wallet_input", label_visibility="collapsed")
+                cw1, cw2 = st.columns([2, 1])
+                with cw1:
+                    if st.button("Set My Address →", key="req_create_wallet_btn",
+                                 use_container_width=True, type="primary"):
+                        if valid_addr(_cwi):
+                            st.session_state.wallet_address = _cwi.strip()
+                            st.rerun()
+                        else:
+                            st.error("Enter a valid 0x… address (42 chars).")
+                with cw2:
+                    if st.button("🧠 Memory", key="req_go_memory", use_container_width=True):
+                        st.session_state.page = "memory"; st.rerun()
+            else:
+                _wa  = wallet_addr
+                _ws  = _wa[:6] + "…" + _wa[-4:]
                 st.markdown(
-                    '<div style="padding:0.4rem 0.6rem 0.2rem 0.7rem;">'
-                    '<span class="rd-eyebrow">🧾 New request</span>'
-                    '<div class="rd-panel-title">Create payment request</div>'
-                    '<div class="rd-panel-sub">Fill in the details, then generate a shareable link.</div>'
-                    '</div>',
+                    f'<div class="req-wallet-strip">'
+                    f'<span style="font-size:18px;">👛</span>'
+                    f'<div><div class="req-wallet-strip-lbl">Receiving to</div>'
+                    f'<div class="req-wallet-strip-addr">{_ws}</div></div>'
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
-                fc1, fc2 = st.columns([1, 1])
-                with fc1:
-                    req_amount = st.text_input(f"Amount ({_rsym})", placeholder="e.g. 10", key="req_amount_input")
-                with fc2:
-                    st.text_input("Token", value=_rsym, disabled=True, key="req_token_display")
-                req_payer = st.text_input("Payer wallet address (optional)",
-                                          placeholder="0x… leave blank for anyone",
-                                          key="req_payer_input")
-                req_note = st.text_input("Note / What is this for?",
-                                         placeholder='"Design work", "Hackathon bounty", "Invoice #001"',
-                                         key="req_note_input")
-                gen_clicked = st.button("🔗 Generate Payment Link", key="req_generate_btn",
-                                        use_container_width=True, type="primary")
+                if st.button("✕ Change address", key="req_disconnect", use_container_width=False):
+                    st.session_state.wallet_address = ""
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="req-section-gap"></div>', unsafe_allow_html=True)
+
+            # Request form card
+            st.markdown(
+                '<div class="req-card">'
+                '<div class="req-card-head">'
+                '<div class="req-card-icon">🧾</div>'
+                '<div><div class="req-card-label">Request Details</div>'
+                '<div class="req-card-sub">Fill in the details then generate a shareable link</div></div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            fc1, fc2 = st.columns([2, 1])
+            with fc1:
+                req_amount = st.text_input(f"Amount ({_rsym})", placeholder="e.g. 10.5", key="req_amount_input")
+            with fc2:
+                st.text_input("Token", value=_rsym, disabled=True, key="req_token_display")
+            st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+            req_payer = st.text_input("Payer wallet (optional)",
+                                      placeholder="0x… leave blank for anyone",
+                                      key="req_payer_input")
+            st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+            req_note = st.text_input("Note / What is this for?",
+                                     placeholder='"Design work", "Invoice #001", "Hackathon bounty"',
+                                     key="req_note_input")
+            st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+            gen_clicked = st.button("⚡ Generate Payment Link", key="req_generate_btn",
+                                    use_container_width=True, type="primary")
+            st.markdown('</div>', unsafe_allow_html=True)
 
         with sum_col:
-            with st.container(border=True):
-                _amt_prev = (st.session_state.get("req_amount_input") or "").strip()
-                _note_prev = (st.session_state.get("req_note_input") or "").strip()
-                _to_prev = (wallet_addr[:6] + "…" + wallet_addr[-4:]) if wallet_addr else "Not set"
-                st.markdown(
-                    '<div style="padding:0.4rem 0.6rem 0.3rem 0.7rem;">'
-                    '<span class="rd-eyebrow">👁 Summary</span>'
-                    '<div class="rd-panel-title">Request summary</div>'
-                    '<hr class="rd-divider"/>'
-                    '<div style="display:flex;flex-direction:column;gap:0.7rem;">'
-                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
-                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Amount</div>'
-                    f'<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#0B1020;">'
-                    f'{esc(_amt_prev) if _amt_prev else "—"} <span style="font-size:0.8rem;color:#68738C;">{_rsym}</span></div></div>'
-                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
-                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Receive to</div>'
-                    f'<div style="font-family:DM Mono,monospace;font-size:12.5px;font-weight:600;color:#2B3656;">{esc(_to_prev)}</div></div>'
-                    '<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
-                    'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Network</div>'
-                    f'<div style="font-size:12.5px;font-weight:600;color:#2B3656;">{_rn["label"]}</div></div>'
-                    + (f'<div><div style="font-size:10px;font-weight:700;letter-spacing:0.06em;'
-                       f'text-transform:uppercase;color:#FFFFFF;margin-bottom:2px;">Note</div>'
-                       f'<div style="font-size:12.5px;color:#2B3656;">{esc(_note_prev)}</div></div>' if _note_prev else '')
-                    + '</div></div>',
-                    unsafe_allow_html=True,
-                )
+            _amt_prev  = (st.session_state.get("req_amount_input") or "").strip()
+            _note_prev = (st.session_state.get("req_note_input") or "").strip()
+            _to_prev   = (_wa[:6] + "…" + _wa[-4:]) if wallet_addr else "Not set"
+            st.markdown(
+                '<div class="req-preview-card">'
+                '<div class="req-card-head">'
+                '<div class="req-card-icon">👁</div>'
+                '<div><div class="req-card-label">Live Preview</div>'
+                '<div class="req-card-sub">Updates as you type</div></div>'
+                '</div>'
+                '<div class="req-amount-display">'
+                '<div class="req-field-lbl">Amount</div>'
+                f'<div class="req-preview-amount">{esc(_amt_prev) if _amt_prev else "—"}</div>'
+                f'<div style="font-size:13px;color:var(--t3);margin-top:5px;">{_rsym}</div>'
+                '</div>'
+                '<div class="req-field">'
+                '<div class="req-field-lbl">Receive to</div>'
+                f'<div class="req-field-val" style="font-family:monospace;font-size:12px;">{esc(_to_prev)}</div>'
+                '</div>'
+                '<div class="req-field">'
+                '<div class="req-field-lbl">Network</div>'
+                f'<div class="req-field-val">{_rn["label"]}</div>'
+                f'<div class="req-field-sub">Chain {_rn["chain_id_dec"]}</div>'
+                '</div>'
+                + (
+                    '<div class="req-field">'
+                    '<div class="req-field-lbl">Note</div>'
+                    f'<div class="req-field-val">{esc(_note_prev)}</div>'
+                    '</div>' if _note_prev else
+                    '<div class="req-field" style="opacity:0.4;">'
+                    '<div class="req-field-lbl">Note</div>'
+                    '<div class="req-field-val" style="color:var(--t3);font-style:italic;">No note yet</div>'
+                    '</div>'
+                ) +
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
         if gen_clicked:
             _err = None
             if not wallet_addr:
-                _err = "Set your wallet address first — that's where the PROS will be sent."
+                _err = "Set your wallet address first — that's where PROS will be sent."
             elif not req_amount.strip():
                 _err = "Enter an amount."
             else:
@@ -13205,80 +14162,54 @@ elif st.session_state.page == "request":
                 if price_info.get("available") and price_info.get("price_usd") and st.session_state.pay_network == "mainnet":
                     usd_val = _amt_f * price_info["price_usd"]
 
-                # ── Generated request card (result) ──
-                st.markdown('<div style="margin-top:1.1rem;"></div>', unsafe_allow_html=True)
+                # ── Generated request card ──────────────
                 st.markdown(
-                    '<div style="display:inline-flex;align-items:center;gap:7px;background:#F0FFF4;'
-                    'border:1px solid #86EFAC;border-radius:999px;padding:4px 12px;font-size:11px;'
-                    'font-weight:700;color:#15803D;margin-bottom:0.6rem;">✓ Request created · ready to share</div>',
-                    unsafe_allow_html=True,
-                )
-                res_main, res_qr = st.columns([1.5, 1], gap="medium")
-
-                with res_main:
-                    st.markdown(
-                        '<div style="background:#FFFFFF;border:2px solid #1414E8;border-radius:20px;'
-                        'padding:1.5rem 1.7rem;box-shadow:0 8px 32px rgba(26,26,255,0.10);">'
-                        '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
-                        'color:#0C0C1A;margin-bottom:1rem;">🧾 Payment Request</div>'
-                        '<div style="background:linear-gradient(135deg,#EEF0FF,#E4E8FF);'
-                        'border-radius:14px;padding:1rem 1.2rem;margin-bottom:0.9rem;text-align:center;">'
-                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">Amount</div>'
-                        f'<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#0C0C1A;">{_amt_f:,.4f} {_rsym}</div>'
-                        + (f'<div style="font-size:12px;color:#7A7F96;margin-top:3px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
-                        '</div>'
-                        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.9rem;">'
-                        '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Receive to</div>'
-                        f'<div style="font-size:11.5px;font-weight:600;color:#0C0C1A;word-break:break-all;">{esc(wallet_addr)}</div>'
-                        '</div>'
-                        '<div style="background:#F4F5FF;border-radius:10px;padding:0.75rem 0.9rem;">'
-                        '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:4px;">Network</div>'
-                        f'<div style="font-size:13px;font-weight:700;color:#0C0C1A;">{_rn["label"]}</div>'
-                        f'<div style="font-size:11px;color:#7A7F96;margin-top:1px;">Chain ID {_rn["chain_id_dec"]}</div>'
-                        '</div></div>'
-                        + (
-                            '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
-                            'padding:0.75rem 0.9rem;">'
-                            '<div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">For</div>'
-                            f'<div style="font-size:13px;font-weight:500;color:#0C0C1A;">{esc(req_note.strip())}</div>'
-                            '</div>' if req_note.strip() else ''
-                        ) +
-                        '</div>',
-                        unsafe_allow_html=True,
-                    )
-
-                with res_qr:
-                    st.markdown(
-                        '<div style="text-align:center;margin-bottom:0.4rem;">'
-                        '<div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
-                        'text-transform:uppercase;color:#7A7F96;margin-bottom:0.5rem;">Scan to pay</div></div>',
-                        unsafe_allow_html=True,
-                    )
-                    render_qr_code(_link, size=168, key="req_qr")
-
-                st.markdown(
-                    '<div style="background:#F0FFF4;border:1.5px solid #22C55E;border-radius:14px;'
-                    'padding:1rem 1.2rem;margin:0.8rem 0 0.4rem 0;">'
-                    '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;'
-                    'color:#15803D;margin-bottom:0.5rem;">🔗 Shareable Payment Link</div>'
-                    '<div style="font-size:11px;color:#166534;margin-bottom:0.6rem;">'
-                    'Send this link to the payer. They open it, see the invoice, and pay with one click.</div>'
-                    f'<div style="background:#FFFFFF;border:1px solid #86EFAC;border-radius:8px;'
-                    f'padding:8px 12px;font-size:11px;font-family:monospace;color:#0C0C1A;'
-                    f'word-break:break-all;line-height:1.6;">{esc(_link)}</div>'
+                    '<div class="req-invoice-card" style="margin-top:1.2rem;">'
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">'
+                    '<span style="display:inline-flex;align-items:center;gap:5px;background:#F0FFF4;'
+                    'border:1px solid #86EFAC;border-radius:20px;padding:4px 12px;font-size:11px;'
+                    'font-weight:700;color:#15803D;">✓ Request created · ready to share</span>'
+                    '</div>'
+                    '<div class="req-amount-display" style="margin-bottom:0.9rem;">'
+                    '<div class="req-field-lbl">Amount Requested</div>'
+                    f'<div class="req-amount-big">{_amt_f:,.4f} {_rsym}</div>'
+                    + (f'<div style="font-size:12px;color:var(--t3);margin-top:4px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
+                    '</div>'
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
+                    '<div class="req-field"><div class="req-field-lbl">Receive to</div>'
+                    f'<div class="req-field-val" style="font-size:11px;font-family:monospace;">{esc(wallet_addr)}</div></div>'
+                    '<div class="req-field"><div class="req-field-lbl">Network</div>'
+                    f'<div class="req-field-val">{_rn["label"]}</div>'
+                    f'<div class="pay-field-sub">Chain {_rn["chain_id_dec"]}</div></div>'
+                    '</div>'
+                    + (f'<div class="req-field" style="margin-bottom:0.8rem;background:rgba(245,158,11,0.07);'
+                       f'border:1px solid rgba(245,158,11,0.2);"><div class="req-field-lbl" style="color:#92400E;">For</div>'
+                       f'<div class="req-field-val">{esc(req_note.strip())}</div></div>' if req_note.strip() else '') +
+                    '<div class="req-field-lbl" style="margin-bottom:6px;">🔗 Shareable Payment Link</div>'
+                    f'<div class="req-link-box">'
+                    f'<a href="{esc_url(_link)}" target="_blank">{esc(_link)}</a>'
+                    f'</div>'
                     '</div>',
                     unsafe_allow_html=True,
                 )
+
+                res_qr_col, _ = st.columns([1, 2])
+                with res_qr_col:
+                    st.markdown(
+                        '<div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
+                        'text-transform:uppercase;color:var(--t3);margin:0.6rem 0 0.4rem 0;">Scan to pay</div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_qr_code(_link, size=160, key="req_qr")
+
                 st.code(_link, language=None)
                 st.caption("👆 Copy the link above and send it via Telegram, Discord, or email.")
-
 
     # ── Invoice History ───────────────────────────
     if _mode == "create" and st.session_state.req_invoices:
         st.markdown(
             '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;'
-            'color:#0C0C1A;margin:1.6rem 0 0.6rem 0;">📋 Invoice History</div>',
+            'color:var(--t1);margin:1.6rem 0 0.7rem 0;">📋 Invoice History</div>',
             unsafe_allow_html=True,
         )
         for _inv in st.session_state.req_invoices[:10]:
@@ -13289,18 +14220,16 @@ elif st.session_state.page == "request":
             _label = "Created" if _it == "created" else "Paid"
             _addr  = _inv.get("to", _inv.get("recipient", "?"))
             st.markdown(
-                '<div style="background:#FFFFFF;border:1px solid #ECEEF4;border-radius:12px;'
-                'padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;'
-                'justify-content:space-between;gap:12px;flex-wrap:wrap;">'
-                f'<div><div style="font-size:13px;font-weight:700;color:#0C0C1A;">'
-                f'{_icon} {_label} · {esc(_inv.get("amount","?"))} {esc(_i_sym)}'
-                + (f' · {esc(_inv.get("note",""))}' if _inv.get("note") else '') +
+                '<div class="pay-history-item">'
+                f'<div><div style="font-size:13px;font-weight:700;color:var(--t1);">'
+                f'{_icon} {esc(_label)} · {esc(_inv.get("amount","?"))} {esc(_i_sym)}'
+                + (f' · {esc(_inv.get("note","")[:30])}' if _inv.get("note") else '') +
                 f'</div>'
-                f'<div style="font-size:11px;color:#7A7F96;margin-top:2px;">'
-                f'{esc(_inv.get("timestamp",""))} · {esc(_i_net)} · {esc(_addr[:16])}…</div></div>'
+                f'<div style="font-size:11px;color:var(--t3);margin-top:2px;">'
+                f'{esc(_inv.get("timestamp",""))} · {esc(_i_net)} · {esc(_addr[:18])}…</div></div>'
                 + (
                     f'<a href="{esc_url(_inv.get("explorer",PHAROS_EXPLORER_URL))}/tx/{esc(_inv.get("tx_hash",""))}" '
-                    f'target="_blank" rel="noopener noreferrer" style="font-size:11.5px;font-weight:600;color:#1A1AFF;'
+                    f'target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:700;color:#7C3AED;'
                     f'white-space:nowrap;text-decoration:none;">Tx ↗</a>'
                     if _it == "paid" and _inv.get("tx_hash") else ''
                 ) +
@@ -13309,6 +14238,197 @@ elif st.session_state.page == "request":
             )
 
 
+
+
+# ═════════════════════════════════════════════
+# PAGE: CHRONOS  (coming soon — premium placeholder)
+# ═════════════════════════════════════════════
+elif st.session_state.page == "chronos":
+
+    _chronos_logo_bands = get_loading_logo_bands()
+    _chronos_logo_uri   = _chronos_logo_bands[0] if _chronos_logo_bands else ""
+
+    # CSS block — plain string, no f-string needed (no Python values to inject)
+    st.markdown("""
+<style>
+.chronos-wrap{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:72vh;padding:3rem 1.5rem;text-align:center;position:relative;overflow:hidden;
+}
+.chronos-wrap::before{
+    content:"";position:absolute;top:-20%;left:50%;transform:translateX(-50%);
+    width:600px;height:600px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(26,26,255,0.07) 0%,transparent 65%);
+    animation:chronos-pulse 6s ease-in-out infinite;
+}
+.chronos-wrap::after{
+    content:"";position:absolute;bottom:-10%;left:50%;transform:translateX(-50%);
+    width:400px;height:400px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(99,102,241,0.05) 0%,transparent 65%);
+    animation:chronos-pulse 8s ease-in-out infinite reverse;
+}
+@keyframes chronos-pulse{
+    0%,100%{opacity:0.6;transform:translateX(-50%) scale(1);}
+    50%{opacity:1;transform:translateX(-50%) scale(1.12);}
+}
+.chronos-rig{
+    position:relative;width:160px;height:160px;
+    perspective:700px;margin:0 auto 2.6rem auto;z-index:1;
+}
+.chronos-scene{
+    width:100%;height:100%;
+    transform-style:preserve-3d;
+    animation:chronos-spin 8s linear infinite;
+}
+@keyframes chronos-spin{
+    0%  {transform:rotateY(0deg) rotateX(12deg);}
+    100%{transform:rotateY(360deg) rotateX(12deg);}
+}
+.chronos-face{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:28px;
+    border:1.5px solid rgba(99,102,241,0.3);
+    background:linear-gradient(135deg,#0C0C1E 0%,rgba(26,26,255,0.03) 100%);
+    backface-visibility:hidden;
+    box-shadow:0 0 40px rgba(26,26,255,0.12),inset 0 0 20px rgba(99,102,241,0.04);
+}
+.chronos-logo-img{
+    width:90px;height:90px;object-fit:contain;border-radius:18px;
+    filter:drop-shadow(0 0 12px rgba(99,102,241,0.35));
+}
+.chronos-logo-fallback{
+    font-size:52px;
+    filter:drop-shadow(0 0 12px rgba(99,102,241,0.4));
+}
+.chronos-aura{
+    position:absolute;inset:-20px;border-radius:50%;
+    border:1.5px solid rgba(99,102,241,0.15);
+    animation:chronos-ring 3s ease-in-out infinite;
+}
+.chronos-aura2{
+    position:absolute;inset:-44px;border-radius:50%;
+    border:1px solid rgba(99,102,241,0.08);
+    animation:chronos-ring 3s ease-in-out infinite 1.2s;
+}
+.chronos-aura3{
+    position:absolute;inset:-70px;border-radius:50%;
+    border:1px solid rgba(99,102,241,0.05);
+    animation:chronos-ring 3s ease-in-out infinite 2.1s;
+}
+@keyframes chronos-ring{
+    0%,100%{opacity:0.4;transform:scale(1);}
+    50%{opacity:1;transform:scale(1.04);}
+}
+.chronos-dots{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.chronos-dot{
+    position:absolute;width:3px;height:3px;border-radius:50%;
+    background:rgba(99,102,241,0.4);
+    animation:chronos-float var(--dur,8s) ease-in-out infinite var(--delay,0s);
+}
+@keyframes chronos-float{
+    0%{transform:translate(0,0) scale(1);opacity:0;}
+    20%{opacity:1;}
+    80%{opacity:0.6;}
+    100%{transform:translate(var(--tx,20px),var(--ty,-80px)) scale(0.3);opacity:0;}
+}
+.chronos-eyebrow{
+    font-size:9px;font-weight:800;letter-spacing:0.22em;text-transform:uppercase;
+    color:rgba(99,102,241,0.7);margin-bottom:0.8rem;
+    display:inline-flex;align-items:center;gap:8px;
+}
+.chronos-title{
+    font-family:Syne,sans-serif;font-size:3rem;font-weight:800;
+    color:var(--t1);letter-spacing:-0.03em;margin:0 0 0.6rem 0;line-height:1.08;
+}
+.chronos-sub{
+    font-size:1.05rem;color:var(--t2);line-height:1.65;
+    max-width:480px;margin:0 auto 1.8rem auto;
+}
+.chronos-badge-row{
+    display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:2rem;
+}
+.chronos-badge{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--bg1);border:1px solid var(--border);
+    border-radius:20px;padding:6px 14px;
+    font-size:11.5px;font-weight:600;color:var(--t2);
+    transition:border-color 200ms ease,box-shadow 200ms ease;
+}
+.chronos-badge:hover{
+    border-color:rgba(99,102,241,0.4);
+    box-shadow:0 2px 12px rgba(99,102,241,0.1);
+}
+@keyframes chronos-bar{
+    0%{width:28%;opacity:0.8;}
+    50%{width:35%;opacity:1;}
+    100%{width:28%;opacity:0.8;}
+}
+html[data-theme="dark"] .chronos-face{
+    background:linear-gradient(135deg,#0C0C22 0%,rgba(26,26,255,0.06) 100%);
+    border-color:rgba(99,102,241,0.22);
+}
+</style>
+""", unsafe_allow_html=True)
+
+    # HTML body — f-string only for the logo img tag, no CSS braces here
+    _chronos_logo_tag = (
+        f'<img src="{_chronos_logo_uri}" class="chronos-logo-img" alt="Pharos"/>'
+        if _chronos_logo_uri
+        else '<span class="chronos-logo-fallback">⏳</span>'
+    )
+    st.markdown(
+        '<div class="chronos-wrap">'
+        '<div class="chronos-dots">'
+        '<div class="chronos-dot" style="left:12%;top:60%;--dur:9s;--delay:0s;--tx:18px;--ty:-90px;"></div>'
+        '<div class="chronos-dot" style="left:25%;top:75%;--dur:11s;--delay:1.4s;--tx:-14px;--ty:-70px;"></div>'
+        '<div class="chronos-dot" style="left:70%;top:65%;--dur:8s;--delay:0.7s;--tx:22px;--ty:-100px;"></div>'
+        '<div class="chronos-dot" style="left:85%;top:55%;--dur:13s;--delay:2.1s;--tx:-18px;--ty:-80px;"></div>'
+        '<div class="chronos-dot" style="left:50%;top:80%;--dur:10s;--delay:3s;--tx:10px;--ty:-110px;"></div>'
+        '<div class="chronos-dot" style="left:38%;top:50%;--dur:7s;--delay:1.8s;--tx:-20px;--ty:-60px;"></div>'
+        '<div class="chronos-dot" style="left:60%;top:40%;--dur:12s;--delay:0.4s;--tx:16px;--ty:-75px;"></div>'
+        '</div>'
+        '<div class="chronos-rig">'
+        '<div class="chronos-aura"></div>'
+        '<div class="chronos-aura2"></div>'
+        '<div class="chronos-aura3"></div>'
+        '<div class="chronos-scene">'
+        '<div class="chronos-face">' + _chronos_logo_tag + '</div>'
+        '</div>'
+        '</div>'
+        '<div class="chronos-eyebrow">⏳ Pharos Network · Upcoming Feature</div>'
+        '<h1 class="chronos-title">Chronos</h1>'
+        '<p class="chronos-sub">A new dimension of DeFi time-intelligence is on its way — scheduled executions, time-locked vaults, recurring payments, and automated strategy triggers. All on Pharos.</p>'
+        '<div class="chronos-badge-row">'
+        '<span class="chronos-badge">🔒 Time-Locked Vaults</span>'
+        '<span class="chronos-badge">🔁 Recurring Payments</span>'
+        '<span class="chronos-badge">⚙️ Automated Triggers</span>'
+        '<span class="chronos-badge">📅 Scheduled Execution</span>'
+        '<span class="chronos-badge">🧠 Strategy Automation</span>'
+        '</div>'
+        '<div style="background:var(--bg1);border:1.5px solid var(--border);border-radius:20px;'
+        'padding:1.4rem 2rem;max-width:400px;margin:0 auto 1.6rem auto;">'
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;'
+        'color:var(--t3);margin-bottom:0.5rem;">Development Status</div>'
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.9rem;">'
+        '<div style="flex:1;height:6px;border-radius:3px;background:var(--bg2);overflow:hidden;">'
+        '<div style="width:30%;height:100%;border-radius:3px;'
+        'background:linear-gradient(90deg,#1A1AFF,#6366F1);'
+        'animation:chronos-bar 3s ease-in-out infinite;"></div>'
+        '</div>'
+        '<span style="font-size:11px;font-weight:700;color:#6366F1;white-space:nowrap;">In Design</span>'
+        '</div>'
+        '<div style="font-size:12px;color:var(--t3);line-height:1.6;">'
+        'Join the Pharos community for early access and feature previews.'
+        '</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button("← Back to Home", key="chronos_back_home"):
+        st.session_state.page = "home"
+        st.rerun()
 
 
 # ═════════════════════════════════════════════
