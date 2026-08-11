@@ -27,6 +27,25 @@ import html
 from urllib.parse import urlparse
 
 # ─────────────────────────────────────────────
+# PERFORMANCE: shared, cached Gemini client factory
+# ─────────────────────────────────────────────
+# Previously every call site that needed a Gemini client built its own
+# ChatGoogleGenerativeAI(...) inline, on every single invocation. Since
+# Streamlit re-runs the whole script on every interaction, a chat page
+# with several LLM-backed features could reconstruct this client many
+# times per session for the exact same (model, temperature, api_key)
+# combination — pure construction overhead (arg validation, retry/
+# transport setup) with zero behavioural difference, since the client
+# is stateless and safe to reuse for identical config.
+# @st.cache_resource keys on the function's arguments automatically,
+# so each distinct temperature still gets its own client (matching
+# existing behaviour exactly), but a given (model, temperature) pair
+# is now built once per server process and reused, not once per call.
+@st.cache_resource(show_spinner=False)
+def _get_gemini_client(model: str, temperature: float, api_key: str) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(model=model, temperature=temperature, google_api_key=api_key)
+
+# ─────────────────────────────────────────────
 # SECURITY HELPERS
 # Validation + escaping used across the app. These constrain untrusted
 # input (URL params, manual entry, remote API + LLM output) to safe
@@ -490,7 +509,7 @@ def get_pros_price() -> dict:
     result = None
     for attempt in range(2):
         try:
-            r = requests.get(
+            r = _get_http_session().get(
                 COINGECKO_PRICE_URL,
                 timeout=4 if attempt == 0 else 5,
                 headers={"Accept": "application/json"},
@@ -535,7 +554,7 @@ def get_pharos_news() -> list:
     items = []
     for attempt in range(2):
         try:
-            r = requests.get(
+            r = _get_http_session().get(
                 "https://api.coingecko.com/api/v3/news",
                 params={"category": "pharos-network"},
                 timeout=4 if attempt == 0 else 5,
@@ -627,7 +646,7 @@ def _fetch_x_api_v2(token) -> list:
     h = {"Authorization": "Bearer " + token, "Accept": "application/json"}
     uid = st.session_state.get("_pharos_x_uid")
     if not uid:
-        r = requests.get(
+        r = _get_http_session().get(
             "https://api.twitter.com/2/users/by/username/" + PHAROS_X_HANDLE,
             headers=h, timeout=4,
         )
@@ -636,7 +655,7 @@ def _fetch_x_api_v2(token) -> list:
         if not uid:
             return []
         st.session_state["_pharos_x_uid"] = uid
-    r = requests.get(
+    r = _get_http_session().get(
         f"https://api.twitter.com/2/users/{uid}/tweets",
         params={
             "max_results": "10",
@@ -678,7 +697,7 @@ def _fetch_nitter_rss() -> list:
     def _try_mirror(base: str) -> list:
         for attempt in range(2):
             try:
-                r = requests.get(
+                r = _get_http_session().get(
                     f"{base}/{PHAROS_X_HANDLE}/rss",
                     timeout=4 if attempt == 0 else 5,  # 4s first try, 5s retry
                     headers={
@@ -951,7 +970,7 @@ def fetch_rwa_market() -> dict:
     rows = []
     try:
         ids = ",".join(a[0] for a in RWA_ASSETS)
-        r = requests.get(
+        r = _get_http_session().get(
             "https://api.coingecko.com/api/v3/simple/price",
             params={"ids": ids, "vs_currencies": "usd",
                     "include_24hr_change": "true", "include_market_cap": "true"},
@@ -983,7 +1002,7 @@ def get_price_chart_df(days: str = "1"):
     try:
         url = ("https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
                "/market_chart?vs_currency=usd&days=" + days)
-        r = requests.get(url, timeout=5, headers={"Accept":"application/json"})
+        r = _get_http_session().get(url, timeout=5, headers={"Accept":"application/json"})
         r.raise_for_status()
         prices = r.json().get("prices", [])
         if not prices: raise ValueError("Empty")
@@ -1065,10 +1084,7 @@ def get_followup_questions(question: str, answer: str) -> list:
     if not api_key:
         return []
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", temperature=0.4,
-            google_api_key=api_key,
-        )
+        llm = _get_gemini_client("gemini-2.5-flash", 0.4, api_key)
         prompt = (
             "Based on this question and answer about Pharos blockchain, "
             "generate exactly 3 short follow-up questions the user might want to ask next. "
@@ -1343,10 +1359,7 @@ def build_path_generator(goal: str, bot) -> str:
     if not api_key:
         return rag_answer or "Could not generate roadmap — GEMINI_API_KEY missing."
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", temperature=0.3,
-        google_api_key=api_key,
-    )
+    llm = _get_gemini_client("gemini-2.5-flash", 0.3, api_key)
     context_block = ("\n\nContext from Pharos documentation:\n" + rag_answer[:1200]) if has_rag else ""
     prompt = (
         f"You are an expert Pharos blockchain developer guide. "
@@ -1899,7 +1912,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
                 {"jsonrpc": "2.0", "id": 3, "method": "eth_getCode",
                  "params": [address, "latest"]},
             ]
-            rb = requests.post(rpc_url, json=batch_payload, headers=headers, timeout=4)
+            rb = _get_http_session().post(rpc_url, json=batch_payload, headers=headers, timeout=4)
             rb.raise_for_status()
             batch_result = rb.json()
 
@@ -1923,7 +1936,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
                     (3, "eth_getCode",           lambda x: setattr_dict(result, "is_contract", x not in ("0x", "0x0", None))),
                 ]:
                     try:
-                        r = requests.post(rpc_url, json={
+                        r = _get_http_session().post(rpc_url, json={
                             "jsonrpc": "2.0", "id": _id, "method": _method,
                             "params": [address, "latest"],
                         }, headers=headers, timeout=4)
@@ -2187,7 +2200,7 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
                 "jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionByHash",
                 "params": [tx_hash],
             }
-            r1 = requests.post(rpc_url, json=tx_payload, headers=headers, timeout=4)
+            r1 = _get_http_session().post(rpc_url, json=tx_payload, headers=headers, timeout=4)
             r1.raise_for_status()
             tx = r1.json().get("result")
 
@@ -2218,7 +2231,7 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
                 "jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionReceipt",
                 "params": [tx_hash],
             }
-            r2 = requests.post(rpc_url, json=receipt_payload, headers=headers, timeout=4)
+            r2 = _get_http_session().post(rpc_url, json=receipt_payload, headers=headers, timeout=4)
             r2.raise_for_status()
             receipt = r2.json().get("result")
             if receipt:
@@ -2382,10 +2395,7 @@ def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") 
         if sel_lang and sel_lang != "English" else "Respond in English. "
     )
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", temperature=0.5,
-            google_api_key=api_key,
-        )
+        llm = _get_gemini_client("gemini-2.5-flash", 0.5, api_key)
         prompt = (
             "You are OctoBot Premium, an expert analyst on the Pharos blockchain. "
             "A user has paid a micro-payment (x402) to unlock a deeper, higher-effort answer. "
@@ -2577,10 +2587,7 @@ def explain_transaction(tx_data: dict) -> dict:
         return deterministic_explanation()
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", temperature=0.3,
-            google_api_key=api_key,
-        )
+        llm = _get_gemini_client("gemini-2.5-flash", 0.3, api_key)
         prompt = (
             "You are OctoBot's transaction explainer for Pharos Network. "
             "Based on this read-only, publicly-verifiable transaction data, "
@@ -2672,10 +2679,7 @@ def synthesize_wallet_profile(onchain_data: dict) -> dict:
         return deterministic_profile()
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", temperature=0.4,
-            google_api_key=api_key,
-        )
+        llm = _get_gemini_client("gemini-2.5-flash", 0.4, api_key)
         prompt = (
             "You are OctoBot's on-chain intelligence module for Pharos Network. "
             "Based on this read-only wallet data, write a SHORT (3-4 sentence) "
@@ -3115,7 +3119,7 @@ def fetch_market_pulse() -> dict:
     cmc_key = os.getenv("CMC_API_KEY") or os.getenv("COINMARKETCAP_API_KEY")
     if cmc_key:
         try:
-            r = requests.get(
+            r = _get_http_session().get(
                 "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
                 params={"slug": "pharos-network", "convert": "USD"},
                 headers={"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"},
@@ -3145,7 +3149,7 @@ def fetch_market_pulse() -> dict:
 
     if not data.get("available"):
         try:
-            r = requests.get(
+            r = _get_http_session().get(
                 "https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID,
                 params={
                     "localization": "false", "tickers": "false",
@@ -3218,7 +3222,7 @@ def compute_community_pulse(market: dict, news: list) -> dict:
     if api_key:
         try:
             titles = "; ".join([(a.get("title") or "")[:90] for a in (news or [])[:6]]) or "(none)"
-            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.4, google_api_key=api_key)
+            llm = _get_gemini_client("gemini-2.5-flash", 0.4, api_key)
             prompt = (
                 "You are a crypto community analyst for the Pharos Network ($PROS). "
                 "Given the live data below, respond with ONLY a JSON object (no markdown, no backticks) "
@@ -11106,10 +11110,7 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                         sources = []
                         if sel_lang and sel_lang != "English":
                             try:
-                                _tl = ChatGoogleGenerativeAI(
-                                    model="gemini-2.5-flash", temperature=0.2,
-                                    google_api_key=os.getenv("GEMINI_API_KEY"),
-                                )
+                                _tl = _get_gemini_client("gemini-2.5-flash", 0.2, os.getenv("GEMINI_API_KEY"))
                                 answer = _tl.invoke([HumanMessage(
                                     content="Translate to " + sel_lang +
                                             ". Keep all markdown, numbers, addresses and "
@@ -11122,10 +11123,7 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                         answer, sources = bot.ask(guided_question)
                         if (st.session_state.chat_mode == "general"
                                 and "I could not find that information" in answer):
-                            fallback_llm = ChatGoogleGenerativeAI(
-                                model="gemini-2.5-flash", temperature=0.5,
-                                google_api_key=os.getenv("GEMINI_API_KEY"),
-                            )
+                            fallback_llm = _get_gemini_client("gemini-2.5-flash", 0.5, os.getenv("GEMINI_API_KEY"))
                             lang_instruction = (
                                 f"CRITICAL: You MUST respond entirely in {sel_lang}. "
                                 f"Do not use any other language. "
@@ -12714,8 +12712,7 @@ html[data-theme="dark"] .pay-history-item{
         if not api_key:
             return None
         try:
-            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1,
-                                          google_api_key=api_key)
+            llm = _get_gemini_client("gemini-2.5-flash", 0.1, api_key)
             if intent == "batch":
                 prompt = (
                     "Extract a batch payment intent from the following message.\n"
@@ -14449,7 +14446,7 @@ elif st.session_state.page == "network":
                "tx_count": None, "gas_price_gwei": None,
                "chain_id": None, "peer_count": None, "error": None}
         def rpc(method, params=None):
-            r = requests.post(PHAROS_RPC_URL,
+            r = _get_http_session().post(PHAROS_RPC_URL,
                 json={"jsonrpc":"2.0","id":1,"method":method,"params":params or []},
                 timeout=4, headers={"Content-Type":"application/json"})
             r.raise_for_status()
