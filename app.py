@@ -10334,28 +10334,104 @@ elif st.session_state.page == "chat":
   display:flex!important;flex-direction:column!important;
   justify-content:center!important;align-items:center!important;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Kill every default Streamlit wrapper background/border/shadow
+   inside the gate — using ONLY simple selectors (element, attribute,
+   class), no :not() with a descendant combinator inside it anywhere.
+   The previous version of this rule used
+   ":not(div[data-testid='stForm'] *)" — a :not() containing a
+   combinator. That specific form of :not() requires full CSS
+   Selectors Level 4 "complex selector in :not()" support, which is
+   narrower than ordinary :not()/:has() support and can cause the
+   ENTIRE selector list to be silently invalid and dropped by the
+   browser, meaning this rule may never have applied at all — which
+   would explain why the rectangle survived every previous attempt at
+   this exact fix. Rewritten below with only simple selectors: every
+   div under stMainBlockContainer is targeted directly (no exclusion
+   needed in the selector itself), and the form's own real card
+   styling is reasserted afterward on div[data-testid="stForm"]
+   specifically — a plain, ordinary selector with no :not() at all —
+   so it always wins regardless of any browser's :not() support level.
+   ══════════════════════════════════════════════════════════════════ */
+[data-testid="stMainBlockContainer"]{
+  background:transparent!important;background-color:transparent!important;
+  background-image:none!important;border:none!important;
+  outline:none!important;box-shadow:none!important;
+}
+[data-testid="stMainBlockContainer"] div{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  border:none!important;
+  outline:none!important;
+  box-shadow:none!important;
+}
+/* Reassert every element that must keep its own real styling — plain
+   selectors only, applied AFTER the blanket rule above so they always
+   win on source order + matching specificity, with no :not() at all
+   involved in getting these to apply. */
+div.gocto-gate-bg{
+  background:
+    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.14) 0%, transparent 70%),
+    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.12) 0%, transparent 70%),
+    radial-gradient(circle 560px at 50% 96%, rgba(90,150,255,0.10) 0%, transparent 72%)!important;
+}
+html[data-theme="dark"] div.gocto-gate-bg{
+  background:
+    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.20) 0%, transparent 70%),
+    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.16) 0%, transparent 70%),
+    radial-gradient(circle 560px at 50% 96%, rgba(60,110,255,0.14) 0%, transparent 72%)!important;
+}
+div.gocto-logo-aura{
+  background:radial-gradient(circle, rgba(90,130,255,0.35) 0%, rgba(160,110,255,0.18) 45%, transparent 72%)!important;
+}
+div.gocto-feat-card{
+  background:rgba(255,255,255,0.5)!important;
+  border:1px solid rgba(120,140,230,0.16)!important;
+  box-shadow:0 2px 10px rgba(60,90,220,0.05)!important;
+}
+html[data-theme="dark"] div.gocto-feat-card{
+  background:rgba(20,24,44,0.45)!important;
+  border-color:rgba(90,110,180,0.22)!important;
+}
+div[data-testid="stForm"]{
+  background:rgba(255,255,255,0.66)!important;
+  border:1.5px solid rgba(120,140,230,0.20)!important;
+  box-shadow:0 10px 34px rgba(60,90,220,0.10),inset 0 1px 0 rgba(255,255,255,0.9)!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"]{
+  background:rgba(20,24,44,0.62)!important;
+  border:1.5px solid rgba(90,110,180,0.28)!important;
+  box-shadow:0 10px 34px rgba(0,0,0,0.30),inset 0 1px 0 rgba(255,255,255,0.04)!important;
+}
+/* Everything inside the form (the input wrapper, the button) also
+   needs its own real styling reasserted, since it too is a <div>
+   caught by the blanket rule above. Values match the form's existing
+   input/button CSS defined later in this same style block — repeated
+   here only so the blanket rule can never strip them first. */
+div[data-testid="stForm"] [data-baseweb="input"]{
+  background:linear-gradient(#fff,#fff) padding-box,
+             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
+  border:1.5px solid transparent!important;
+  box-shadow:0 2px 10px rgba(60,90,220,0.08)!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]{
+  background:linear-gradient(#1B2036,#1B2036) padding-box,
+             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
+  box-shadow:0 2px 10px rgba(0,0,0,0.25)!important;
+}
+div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
+  background:linear-gradient(135deg,#3A7BFF 0%,#8B5CF6 100%)!important;
+  border:none!important;
+  box-shadow:0 4px 18px rgba(80,90,240,0.38)!important;
+}
+
 [data-testid="stMainBlockContainer"] > div{width:100%;
   flex:0 0 auto!important;height:auto!important;min-height:0!important;
 }
 [data-testid="stMainBlockContainer"] > div > div[data-testid="stVerticalBlock"]{
   height:auto!important;min-height:0!important;
-}
-/* Streamlit's own default container chrome (a subtle border on
-   stElementContainer/stVerticalBlock, barely visible in light mode
-   but showing as a clear boxed outline around each markdown block
-   and the form in dark mode) — the gate's own cards/backgrounds
-   already provide all the visual framing needed, so strip Streamlit's
-   default borders/outlines from plain containers inside the gate.
-   Explicitly excludes stForm (:not(...)) since that one legitimately
-   keeps its own glass-card background/border, set separately below —
-   a broader rule here would win the specificity fight against that
-   and blank the form's card out along with the unwanted borders. */
-[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"]:not(:has(> div[data-testid="stForm"])),
-[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"]:not([data-testid="stForm"] [data-testid="stVerticalBlock"]){
-  border:none!important;outline:none!important;box-shadow:none!important;
-}
-[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"]:not(:has(> div[data-testid="stForm"])){
-  background:transparent!important;
 }
 [data-testid="stVerticalBlock"]{gap:0!important;}
 
@@ -10468,7 +10544,7 @@ div[data-testid="stForm"] [data-testid="stTextInput"] input{
   background-color:transparent!important;
   border:none!important;border-radius:16px!important;
   font-size:14.5px!important;font-weight:500!important;
-  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
+  color:#FFFFFF!important;-webkit-text-fill-color:#FFFFFF!important;
   caret-color:#3A7BFF!important;
 }
 html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input{
@@ -10511,7 +10587,7 @@ html[data-theme="dark"] .gocto-feat-card{
         )
         st.markdown(
             f'<div class="gocto-logo-wrap"><div class="gocto-logo-aura"></div>{_logo_tag}</div>'
-            '<div class="gocto-heading"><h1>HI There <span class="accent">GOCTO</span></h1></div>'
+            '<div class="gocto-heading"><h1>Gocto<span class="accent">Sailor</span></h1></div>'
             '<div class="gocto-sub1">Your AI guide to the Pharos universe.</div>'
             '<div class="gocto-sub2">Explore SPNs, Restaking, RWA, DeFi, building on Pharos, and more.</div>',
             unsafe_allow_html=True,
@@ -10645,7 +10721,7 @@ html[data-theme="dark"] .gocto-feat-card{
 
 /* ── The control deck card ─────────────────────────────────── */
 [data-testid="stMainBlockContainer"]:has(.cdeck-anchor) .cdeck{
-    max-width:600px;margin:0 0 0.9rem 0;
+    max-width:600px;margin:-16px 0 0.9rem 0;
     background:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,248,252,0.96));
     border:1px solid #E1E4EE;border-radius:16px;
     box-shadow:0 4px 20px rgba(20,20,60,0.06);
@@ -10936,32 +11012,21 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                   "and the verified payment unlocks a deeper answer. Free answering stays on when OFF."),
         )
     with _xc2:
-        _payto_in = st.text_input(
-            "x402 pay-to address",
-            value=st.session_state.get("x402_payto", ""),
-            key="x402_payto_input",
-            placeholder="\U0001F4B3 Wallet 0x\u2026 (blank = safe placeholder)",
-            label_visibility="collapsed",
-            help="Premium micro-payments are sent here. Paste your own wallet address. "
-                 "Leave blank to use the safe placeholder (a burn address).",
+        # The payment destination is fixed to the team's configured
+        # address (x402_get_payto() falls back to X402_PAYTO_ADDRESS
+        # below) and is intentionally NOT user-editable — an address
+        # is not something that should sit in an editable text field
+        # that could be altered (accidentally or otherwise). No input
+        # is rendered here at all; this is a plain, static display.
+        st.markdown(
+            '<div style="padding:0.85rem 1.1rem;border-radius:12px;'
+            'background:rgba(21,128,61,0.08);border:1px solid rgba(21,128,61,0.22);'
+            'font-size:12.5px;font-weight:600;color:#15803D;line-height:1.4;'
+            'display:flex;align-items:center;height:100%;box-sizing:border-box;">'
+            '\u2713 Payments go to the team.'
+            '</div>',
+            unsafe_allow_html=True,
         )
-        if _payto_in != st.session_state.get("x402_payto", ""):
-            _clean = (_payto_in or "").strip()
-            if _clean == "" or valid_addr(_clean):
-                st.session_state.x402_payto = _clean
-            else:
-                st.warning("That doesn\'t look like a valid 0x\u2026 address \u2014 keeping the previous one.")
-
-    _active_payto = x402_get_payto()
-    _is_custom = bool(valid_addr(st.session_state.get("x402_payto", "")))
-    st.markdown(
-        '<div style="font-size:9.5px;color:'
-        + ("#15803D" if _is_custom else "#9AA0AE") + ';line-height:1.45;margin:2px 0 2px 2px;'
-        'word-break:break-all;max-width:600px;">'
-        + ("\u2713 Payments go to: " if _is_custom else "Using placeholder: ")
-        + '<span style="font-family:DM Mono,monospace;">' + esc(_active_payto) + '</span></div>',
-        unsafe_allow_html=True,
-    )
     if st.session_state.x402_receipts:
         with st.expander("\U0001F9FE x402 receipts \u00b7 " + str(len(st.session_state.x402_receipts)), expanded=False):
             for _r in reversed(st.session_state.x402_receipts[-8:]):
