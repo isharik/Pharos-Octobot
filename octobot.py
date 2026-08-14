@@ -10,10 +10,26 @@ Powered by:
 
 Multilingual: responds in the same language the user writes in.
 General mode: falls back to Gemini when answer not in docs.
+
+── Lifecycle note (fixes the "Chat page hangs on Loading Knowledge Base") ──
+Loading the embedding model, opening Chroma, and constructing the Gemini
+client are all expensive, process-wide, stateless resources. They are built
+ONCE per server process via `st.cache_resource`-wrapped factory functions
+below, and every OctoBot instance simply borrows the same cached objects —
+constructing a second (or hundredth) OctoBot() no longer re-downloads the
+embedding model or re-opens the vector store. app.py is responsible for
+kicking this off in the background at app *startup* (not on Chat
+navigation) — see `load_octobot()` in app.py.
+
+Conversation memory (`chat_history`) is explicitly NOT part of this shared
+state: it is passed into `ask()` by the caller (app.py keeps one list per
+Streamlit session in `st.session_state`) so one user's conversation never
+leaks into another's.
 """
 
 import os
 import requests
+import streamlit as st
 from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -76,51 +92,90 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
 
 
 # ─────────────────────────────────────────────
+# SHARED, PROCESS-WIDE RESOURCES
+# Each factory is wrapped in @st.cache_resource, so no matter how many
+# OctoBot() instances get constructed (or how many Streamlit sessions /
+# reruns hit this module), the underlying embedding model / vector store /
+# Gemini client are built exactly once per server process and reused.
+# show_spinner=False: these are warmed up on a background thread by
+# app.py's load_octobot(), never on the interactive request path, so
+# there's no user-facing spinner to show anyway.
+# ─────────────────────────────────────────────
+
+@st.cache_resource(show_spinner=False)
+def _get_embeddings(model_name: str) -> HuggingFaceEmbeddings:
+    return HuggingFaceEmbeddings(model_name=model_name)
+
+
+@st.cache_resource(show_spinner=False)
+def _get_vectorstore(persist_dir: str, collection_name: str, model_name: str) -> Chroma:
+    # model_name is part of the cache key (not used directly here) so a
+    # change in embedding model correctly busts this cached vectorstore
+    # instead of silently reusing one built with a different embedder.
+    embeddings = _get_embeddings(model_name)
+    return Chroma(
+        collection_name=collection_name,
+        embedding_function=embeddings,
+        persist_directory=persist_dir,
+    )
+
+
+@st.cache_resource(show_spinner=False)
+def _get_gemini_client(model: str, temperature: float, api_key: str) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(model=model, temperature=temperature, google_api_key=api_key)
+
+
+def get_shared_resources():
+    """Build (once) and return the shared embeddings/vectorstore/retriever/
+    llm tuple. Safe to call from any thread — st.cache_resource itself is
+    the single-flight guard, so concurrent callers never build duplicates.
+    Raises if GEMINI_API_KEY is missing or the vector store doesn't exist,
+    exactly like the old OctoBot.__init__ did."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY not found. "
+            "Add it to your .env file or Streamlit secrets."
+        )
+    if not os.path.exists(CHROMA_DB_DIR):
+        raise FileNotFoundError(
+            f"Vector store not found: '{CHROMA_DB_DIR}'. "
+            "Run: python build_vectorstore.py"
+        )
+
+    embeddings = _get_embeddings(EMBEDDING_MODEL)
+    vectorstore = _get_vectorstore(CHROMA_DB_DIR, COLLECTION_NAME, EMBEDDING_MODEL)
+    retriever = vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": TOP_K},
+    )
+    llm = _get_gemini_client(GEMINI_MODEL, 0, api_key)
+    return embeddings, vectorstore, retriever, llm
+
+
+# ─────────────────────────────────────────────
 # OCTOBOT CLASS
 # ─────────────────────────────────────────────
 class OctoBot:
 
-    def __init__(self):
+    def __init__(self, price_fetcher=None):
+        """
+        price_fetcher: optional callable() -> dict with keys
+            {price_usd, market_cap_usd, volume_24h, change_24h, ...}
+            (the same shape app.py's cached get_pros_price() returns).
+            When provided, ask() reuses that cached market-data lookup
+            instead of hitting CoinGecko again for every price-related
+            question. Falls back to an internal (uncached) CoinGecko
+            call only if no fetcher is supplied — kept for standalone /
+            terminal use (see `__main__` below).
+        """
         print("Initializing OctoBot...")
 
-        # API key check inside __init__ — NOT at module level
-        # This prevents circular import when app.py imports octobot
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY not found. "
-                "Add it to your .env file or Streamlit secrets."
-            )
+        # All expensive, stateless resources are shared/cached at module
+        # level — constructing OctoBot never rebuilds them.
+        self.embeddings, self.vectorstore, self.retriever, self.llm = get_shared_resources()
 
-        if not os.path.exists(CHROMA_DB_DIR):
-            raise FileNotFoundError(
-                f"Vector store not found: '{CHROMA_DB_DIR}'. "
-                "Run: python build_vectorstore.py"
-            )
-
-        # Embeddings — MUST match build_vectorstore.py exactly
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=EMBEDDING_MODEL
-        )
-
-        self.vectorstore = Chroma(
-            collection_name=COLLECTION_NAME,
-            embedding_function=self.embeddings,
-            persist_directory=CHROMA_DB_DIR,
-        )
-
-        self.retriever = self.vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": TOP_K},
-        )
-
-        self.llm = ChatGoogleGenerativeAI(
-            model=GEMINI_MODEL,
-            temperature=0,
-            google_api_key=api_key,
-        )
-
-        self.chat_history = []
+        self._price_fetcher = price_fetcher
 
         count = self.vectorstore._collection.count()
         print(f"OctoBot ready! {count} chunks loaded.")
@@ -140,7 +195,30 @@ class OctoBot:
 
     # ─────────────────────────────────────────
     def _get_live_pros_data(self):
-        """Fetch live PROS price from CoinGecko for context injection."""
+        """Fetch live PROS price. Prefers the caller-supplied cached
+        fetcher (app.py's get_pros_price(), which is throttled/cached
+        across the whole app) so this never issues its own uncached
+        CoinGecko request per question. Falls back to a direct,
+        short-timeout CoinGecko call only when no fetcher was supplied
+        (e.g. running octobot.py standalone from the terminal)."""
+        if self._price_fetcher is not None:
+            try:
+                data = self._price_fetcher() or {}
+                if not data.get("available", True) and data.get("price_usd") is None:
+                    return None
+                price = data.get("price_usd")
+                if price is None:
+                    return None
+                return {
+                    "price":      price,
+                    "market_cap": data.get("market_cap_usd"),
+                    "change_24h": data.get("change_24h"),
+                }
+            except Exception as e:
+                print(f"Price fetch error (shared fetcher): {e}")
+                return None
+
+        # Standalone fallback — no shared/cached fetcher available.
         try:
             r = requests.get(
                 "https://api.coingecko.com/api/v3/simple/price"
@@ -173,12 +251,24 @@ class OctoBot:
         return sources
 
     # ─────────────────────────────────────────
-    def ask(self, question: str):
+    def ask(self, question: str, chat_history: list = None):
         """
         Main method — retrieves answer from docs.
         Injects live PROS price when question is price-related.
+
+        chat_history: the CALLER's own conversation memory (a list of
+        Human/AIMessage), e.g. st.session_state[...] in app.py — one per
+        Streamlit session. This method reads it for prompt context and
+        appends this turn to it in place; it is NEVER stored on `self`,
+        so a single shared/cached OctoBot instance never mixes one
+        user's conversation into another's. Pass None for a stateless,
+        single-shot call (e.g. build-path / premium-answer generation).
+
         Returns (answer_str, sources_list).
         """
+        if chat_history is None:
+            chat_history = []
+
         relevant_docs = self.retriever.invoke(question)
 
         if not relevant_docs:
@@ -208,19 +298,21 @@ class OctoBot:
 
         answer = chain.invoke({
             "context":      context,
-            "chat_history": self.chat_history,
+            "chat_history": chat_history,
             "question":     question,
         })
 
-        self.chat_history.append(HumanMessage(content=question))
-        self.chat_history.append(AIMessage(content=answer))
+        chat_history.append(HumanMessage(content=question))
+        chat_history.append(AIMessage(content=answer))
 
         sources = self._extract_sources(relevant_docs)
         return answer, sources
 
     # ─────────────────────────────────────────
-    def reset_memory(self):
-        self.chat_history = []
+    def reset_memory(self, chat_history: list) -> None:
+        """Clears the CALLER's history list in place (per-session — see
+        `ask()`). Kept as a method for API-compatibility / terminal use."""
+        chat_history.clear()
         print("Memory cleared.")
 
 
@@ -229,6 +321,7 @@ class OctoBot:
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     bot = OctoBot()
+    history = []
     print("\nOctoBot Ready — type 'quit' to exit, 'reset' to clear memory\n")
 
     while True:
@@ -236,9 +329,9 @@ if __name__ == "__main__":
         if q.lower() in ["quit", "exit"]:
             break
         if q.lower() == "reset":
-            bot.reset_memory()
+            bot.reset_memory(history)
             continue
-        answer, sources = bot.ask(q)
+        answer, sources = bot.ask(q, chat_history=history)
         print(f"\nOctoBot: {answer}")
         if sources:
             print("\nSources:")

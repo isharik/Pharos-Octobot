@@ -323,6 +323,10 @@ PHAROS_DAPPS = [
 # ─────────────────────────────────────────────
 if "page"            not in st.session_state: st.session_state.page            = "home"
 if "messages"        not in st.session_state: st.session_state.messages        = []
+# OctoBot's own LangChain conversation memory (Human/AIMessage list) — kept
+# per-session here, NEVER on the shared/cached OctoBot instance, so one
+# user's chat context can never leak into another user's session.
+if "octobot_chat_history" not in st.session_state: st.session_state.octobot_chat_history = []
 if "sources_history" not in st.session_state: st.session_state.sources_history = []
 if "show_sources"    not in st.session_state: st.session_state.show_sources    = True
 if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
@@ -2983,7 +2987,11 @@ def _octobot_holder() -> dict:
 def _octobot_worker(holder: dict) -> None:
     try:
         from octobot import OctoBot
-        bot = OctoBot()
+        # Reuse the app's own cached/throttled CoinGecko price lookup
+        # (get_pros_price, cached ~5 min in st.session_state) instead of
+        # OctoBot issuing its own uncached CoinGecko request for every
+        # single price-related question.
+        bot = OctoBot(price_fetcher=get_pros_price)
         # Touch the vectorstore once here so a broken/missing index
         # fails fast with a clear message instead of failing later.
         try:
@@ -3094,6 +3102,25 @@ def octobot_wait(seconds: float = 10.0) -> dict:
     # Re-evaluate so the hard timeout is applied on this pass too.
     holder = load_octobot()
     return holder
+
+
+# ─────────────────────────────────────────────
+# START OCTOBOT INITIALISATION AT APP STARTUP — not on Chat navigation.
+# This is the actual fix for the slow first Chat visit: previously
+# load_octobot() was only ever called from inside the Chat page branch
+# below, so the embedding model / vector store / Gemini client didn't
+# even start loading until a user clicked Chat. Calling it here means
+# the background worker thread starts the moment the app boots (first
+# script run of the server process), so by the time anyone navigates
+# to Chat the knowledge base is already warm — or close to it.
+#
+# load_octobot() is idempotent and single-flight-guarded (see
+# `_octobot_lock` / holder["started"] above): every Streamlit rerun and
+# every new session calls this again, but the background thread itself
+# is only ever started once per server process. Cheap to call on every
+# rerun; does not block this script run.
+# ─────────────────────────────────────────────
+load_octobot(start=True)
 
 # ─────────────────────────────────────────────
 # MARKET & COMMUNITY PULSE — helpers
@@ -10333,7 +10360,25 @@ elif st.session_state.page == "chat":
   margin-top:100px!important;
   display:flex!important;flex-direction:column!important;
   justify-content:center!important;align-items:center!important;
+  /* ROOT CAUSE of the rectangular "container edge" around the whole
+     welcome section: the app's global stylesheet sets
+     `contain:layout style` on this same element (for paint/perf
+     reasons on other pages). Per the CSS Containment spec,
+     `contain:layout` makes the element a new containing block for any
+     `position:fixed` DESCENDANT — so .gocto-gate-bg below (a
+     position:fixed;inset:0 div meant to wash the ENTIRE viewport with
+     ambient background glow) was instead being resolved relative to
+     THIS box's own bounds, not the viewport. The glow abruptly
+     stopping at that box's edge is exactly the visible rectangle in
+     the screenshot — it was never an actual border/box-shadow. Undoing
+     containment here (gate-only, via source order) lets .gocto-gate-bg
+     span the true viewport again, so it blends into the page instead
+     of stopping at a box edge. Nothing else about this element's
+     layout (flex/centering/spacing above, animation elsewhere) reads
+     `contain`, so removing it has no visible side effect besides this. */
+  contain:none!important;
 }
+
 
 /* ══════════════════════════════════════════════════════════════════
    Kill every default Streamlit wrapper background/border/shadow
@@ -10400,10 +10445,35 @@ div[data-testid="stForm"]{
   border:1.5px solid rgba(120,140,230,0.20)!important;
   box-shadow:0 10px 34px rgba(60,90,220,0.10),inset 0 1px 0 rgba(255,255,255,0.9)!important;
 }
+/* Dark mode: the gate's own card container previously carried a
+   translucent fill + border + drop shadow, which reads as a separate
+   boxed panel floating over the ambient background instead of part of
+   it. Layout (padding/border-radius/margin/animation, set further
+   below) is untouched — only the outline/background/shadow that made
+   the panel visually separate are removed, so the section blends into
+   the page's existing background effects (.gocto-gate-bg / the app's
+   global aura) instead of sitting inside a visible container. */
 html[data-theme="dark"] div[data-testid="stForm"]{
-  background:rgba(20,24,44,0.62)!important;
-  border:1.5px solid rgba(90,110,180,0.28)!important;
-  box-shadow:0 10px 34px rgba(0,0,0,0.30),inset 0 1px 0 rgba(255,255,255,0.04)!important;
+  background:transparent!important;
+  border:none!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+/* Defensive: current Streamlit renders st.form()'s outer element as a
+   bordered container (data-testid="stVerticalBlockBorderWrapper"), and
+   the app has an existing GLOBAL, page-agnostic rule (written for
+   chart-range-button panels elsewhere) that paints ANY such wrapper
+   with a background + border + box-shadow. That unscoped rule would
+   otherwise leak a second, unwanted boxed-panel look onto this form.
+   Neutralised here specifically for the gate (scoped under
+   stMainBlockContainer for higher selector specificity, so it wins
+   regardless of source order) without touching that rule's intended
+   use elsewhere in the app. */
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlockBorderWrapper"]>div>div[data-testid="stVerticalBlock"]{
+  background:transparent!important;
+  border:none!important;
+  box-shadow:none!important;
 }
 /* Everything inside the form (the input wrapper, the button) also
    needs its own real styling reasserted, since it too is a <div>
@@ -10491,10 +10561,16 @@ div[data-testid="stForm"]{
   animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.4s both;
   margin-bottom:1.4rem!important;max-width:560px;margin-left:auto;margin-right:auto;
 }
+/* Same rationale as the earlier dark-mode stForm rule above: no
+   border, no fill, no shadow — the card blends into the global
+   background. border-radius/padding/margin/animation on the light-mode
+   rule above are inherited as-is (never overridden here), so spacing
+   and layout are unchanged — only the visible edge is gone. */
 html[data-theme="dark"] div[data-testid="stForm"]{
-  background:rgba(20,24,44,0.62)!important;
-  border:1.5px solid rgba(90,110,180,0.28)!important;
-  box-shadow:0 10px 34px rgba(0,0,0,0.30),inset 0 1px 0 rgba(255,255,255,0.04)!important;
+  background:transparent!important;
+  border:none!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
 }
 .gocto-name-title{font-family:'Syne','DM Sans',system-ui;font-size:16px;font-weight:800;
   color:#14142B;text-align:center;margin-bottom:0.9rem;}
@@ -10539,21 +10615,44 @@ html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]{
 html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]:focus-within{
   box-shadow:0 0 0 4px rgba(139,92,246,0.18),0 2px 14px rgba(0,0,0,0.3)!important;
 }
+/* Light mode (default): the input's own background is white/near-white
+   (see the [data-baseweb="input"] gradient fill above), so the entered
+   text color here MUST be dark for any contrast — this was previously
+   hardcoded to #FFFFFF, i.e. white text on a white field, which is why
+   a typed name was invisible. Dark mode gets its own override below. */
 div[data-testid="stForm"] [data-testid="stTextInput"] input{
   padding:0.85rem 1.1rem!important;background:transparent!important;
   background-color:transparent!important;
   border:none!important;border-radius:16px!important;
   font-size:14.5px!important;font-weight:500!important;
-  color:#FFFFFF!important;-webkit-text-fill-color:#FFFFFF!important;
+  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
   caret-color:#3A7BFF!important;
 }
 html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input{
-  color:#EDEFFF!important;-webkit-text-fill-color:#EDEFFF!important;
+  color:#F5F6FF!important;-webkit-text-fill-color:#F5F6FF!important;
   background:transparent!important;background-color:transparent!important;
   caret-color:#8B5CF6!important;
 }
-div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{color:#A6ABC4!important;}
-html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{color:#8990BC!important;}
+/* Focus state: no separate color rule needed — the input keeps the
+   same theme-correct text color above while focused, it just isn't
+   re-declared here, so it can never accidentally inherit the wrong
+   value from a later, more general selector. */
+div[data-testid="stForm"] [data-testid="stTextInput"] input:focus{
+  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input:focus{
+  color:#F5F6FF!important;-webkit-text-fill-color:#F5F6FF!important;
+}
+/* Placeholder ("Enter your name to begin…") — dark/black in light
+   mode, white/light in dark mode, each with enough contrast against
+   its own input background to read clearly without being mistaken
+   for entered text. */
+div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
+  color:#2B2E45!important;opacity:0.62!important;
+}
+html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
+  color:#F5F6FF!important;opacity:0.55!important;
+}
 div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
   padding:0.85rem 1.3rem!important;border-radius:16px!important;border:none!important;
   background:linear-gradient(135deg,#3A7BFF 0%,#8B5CF6 100%)!important;
@@ -10658,7 +10757,7 @@ html[data-theme="dark"] .gocto-feat-card{
         if st.button("↺  New Conversation", use_container_width=True, key="reset_chat"):
             st.session_state.messages        = []
             st.session_state.sources_history = []
-            bot.reset_memory()
+            bot.reset_memory(st.session_state.octobot_chat_history)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -11185,7 +11284,10 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                                 pass  # fall back to the English guide
                     else:
                         # General mode: try docs first, fall back to Gemini if not found
-                        answer, sources = bot.ask(guided_question)
+                        answer, sources = bot.ask(
+                            guided_question,
+                            chat_history=st.session_state.octobot_chat_history,
+                        )
                         if (st.session_state.chat_mode == "general"
                                 and "I could not find that information" in answer):
                             fallback_llm = _get_gemini_client("gemini-2.5-flash", 0.5, os.getenv("GEMINI_API_KEY"))
