@@ -10361,23 +10361,39 @@ elif st.session_state.page == "chat":
   display:flex!important;flex-direction:column!important;
   justify-content:center!important;align-items:center!important;
   /* ROOT CAUSE of the rectangular "container edge" around the whole
-     welcome section: the app's global stylesheet sets
-     `contain:layout style` on this same element (for paint/perf
-     reasons on other pages). Per the CSS Containment spec,
-     `contain:layout` makes the element a new containing block for any
-     `position:fixed` DESCENDANT — so .gocto-gate-bg below (a
-     position:fixed;inset:0 div meant to wash the ENTIRE viewport with
-     ambient background glow) was instead being resolved relative to
-     THIS box's own bounds, not the viewport. The glow abruptly
-     stopping at that box's edge is exactly the visible rectangle in
-     the screenshot — it was never an actual border/box-shadow. Undoing
-     containment here (gate-only, via source order) lets .gocto-gate-bg
-     span the true viewport again, so it blends into the page instead
-     of stopping at a box edge. Nothing else about this element's
-     layout (flex/centering/spacing above, animation elsewhere) reads
-     `contain`, so removing it has no visible side effect besides this. */
+     welcome section, verified with a real browser render of this
+     exact stylesheet against the actual gate markup — this was never
+     an actual border/box-shadow anywhere. It's a CSS containing-block
+     bug with TWO independent triggers on this same element, both of
+     which had to be neutralised:
+
+     1) The global stylesheet sets `contain:layout style` here (for
+        paint/perf on other pages).
+     2) The global stylesheet ALSO runs a `page-fadein` keyframe
+        animation here that animates `transform:translateY(...)` with
+        `animation-fill-mode:both` — so even after the 220ms entrance
+        finishes, the element's computed `transform` is a resolved
+        identity matrix, never the literal keyword `none`.
+
+     Per the CSS Containment / Transforms specs, EITHER of those alone
+     is enough to make an element the containing block for any
+     `position:fixed` DESCENDANT. .gocto-gate-bg below is exactly such
+     a descendant — a position:fixed;inset:0 div meant to wash the
+     ENTIRE viewport with ambient glow — so it was being resolved
+     relative to THIS box's own bounds instead of the viewport, and the
+     glow abruptly stopping at that box's edge is exactly the visible
+     rectangle. Neutralising only `contain` (as a previous attempt did)
+     left trigger #2 in place, which is why the rectangle persisted.
+     Both are undone here, gate-only, via source order: .gocto-gate-bg
+     spans the true viewport again and blends into the page. This does
+     not touch the gate's OWN entrance animations (logo pop-in, heading
+     rise-in, etc. below) — only this container's own, separate 220ms
+     fade-up-on-load, which the gate already re-animates every element
+     inside individually anyway. */
   contain:none!important;
+  animation:none!important;
 }
+
 
 
 /* ══════════════════════════════════════════════════════════════════
@@ -10685,12 +10701,12 @@ html[data-theme="dark"] .gocto-feat-card{
             'box-shadow:0 0 0 3px rgba(255,255,255,0.55),0 18px 40px rgba(60,100,255,0.30);">🐙</div>'
         )
         st.markdown(
-            f'<div class="gocto-logo-wrap"><div class="gocto-logo-aura"></div>{_logo_tag}</div>'
-            '<div class="gocto-heading"><h1>Gocto<span class="accent">Sailor</span></h1></div>'
-            '<div class="gocto-sub1">Your AI guide to the Pharos universe.</div>'
-            '<div class="gocto-sub2">Explore SPNs, Restaking, RWA, DeFi, building on Pharos, and more.</div>',
-            unsafe_allow_html=True,
-        )
+    f'<div class="gocto-logo-wrap"><div class="gocto-logo-aura"></div>{_logo_tag}</div>'
+    '<div class="gocto-heading"><h1>Gocto<span class="accent" style="margin-left: 8px;">Sailor</span></h1></div>'
+    '<div class="gocto-sub1">Your AI guide to the Pharos universe.</div>'
+    '<div class="gocto-sub2">Lets Explore </div>',
+    unsafe_allow_html=True,
+)
 
         # ── Name entry — a real st.form: Enter and the submit button
         # both trigger the exact same, single code path below. This is
