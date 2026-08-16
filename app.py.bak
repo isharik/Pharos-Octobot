@@ -470,7 +470,6 @@ def _get_http_session() -> requests.Session:
     return session
 
 
-@st.cache_resource(show_spinner=False)
 def get_logo_b64() -> str:
     for path, mime in [("pharos_logo.jpg","image/jpeg"),("pharos_logo.png","image/png")]:
         if os.path.exists(path):
@@ -512,21 +511,14 @@ def get_loading_logo_bands() -> list:
     except Exception:
         return []
 
-# ── PROS price — NEVER blocks the render thread ──────────────────────────
-# The nav bar (rendered on every page/rerun) reads this. Previously a cold
-# cache meant the very first script run of each browser session blocked on a
-# CoinGecko round-trip (up to ~9s worst case) before the UI could paint.
-# Now a single process-wide holder is refreshed by a background daemon and
-# shared across every session; get_pros_price() returns whatever is already
-# known — fresh, stale, or a neutral placeholder — instantly, so first paint
-# is never gated on the network. The real value appears on the next rerun.
-@st.cache_resource(show_spinner=False)
-def _pros_price_holder() -> dict:
-    return {"data": None, "fetching": False, "lock": threading.Lock()}
-
-def _fetch_pros_price_raw():
-    """Pure network fetch — no Streamlit/session access, safe on any thread."""
-    now = time.time()
+def get_pros_price() -> dict:
+    now    = time.time()
+    cached = st.session_state.get("pros_price_cache", {})
+    if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE:
+        return cached
+    # Stale cache: serve immediately while fetching fresh data
+    # (the updated result will appear on the next rerun)
+    result = None
     for attempt in range(2):
         try:
             r = _get_http_session().get(
@@ -538,7 +530,7 @@ def _fetch_pros_price_raw():
             data = r.json().get(COINGECKO_ASSET_ID, {})
             if not data:
                 raise ValueError("Empty response")
-            return {
+            result = {
                 "price_usd": data.get("usd"),
                 "market_cap_usd": data.get("usd_market_cap"),
                 "volume_24h": data.get("usd_24h_vol"),
@@ -546,46 +538,25 @@ def _fetch_pros_price_raw():
                 "last_updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
                 "fetched_at": now, "available": True, "error": None,
             }
+            break
         except requests.exceptions.Timeout:
             if attempt == 0:
                 time.sleep(0.2)
             continue
-        except Exception:
+        except Exception as e:
+            if attempt == 1 or not isinstance(e, requests.exceptions.ConnectionError):
+                prev = st.session_state.get("pros_price_cache", {})
+                result = {k: prev.get(k) for k in ["price_usd", "market_cap_usd", "volume_24h", "change_24h", "last_updated"]}
+                result.update({"fetched_at": now, "available": False, "error": str(e)})
             break
-    return None
-
-def _pros_price_refresh(holder: dict) -> None:
-    try:
-        res = _fetch_pros_price_raw()
-        if res:
-            holder["data"] = res      # keep last-good on failure (auto stale fallback)
-    finally:
-        holder["fetching"] = False
-
-def get_pros_price() -> dict:
-    now = time.time()
-    # Per-session fast path — unchanged behaviour once the session is warm.
-    cached = st.session_state.get("pros_price_cache", {})
-    if cached and now - cached.get("fetched_at", 0) < PRICE_CACHE:
-        return cached
-
-    holder = _pros_price_holder()
-    hdata = holder["data"]
-    stale = (not hdata) or (now - hdata.get("fetched_at", 0) >= PRICE_CACHE)
-    # Kick a single shared background refresh; the render thread never waits.
-    if stale and not holder["fetching"]:
-        with holder["lock"]:
-            if not holder["fetching"]:
-                holder["fetching"] = True
-                threading.Thread(target=_pros_price_refresh, args=(holder,),
-                                 daemon=True, name="pros-price").start()
-    if hdata:
-        st.session_state["pros_price_cache"] = hdata   # adopt shared value
-        return hdata
-    # Nothing known yet — return a neutral placeholder so the UI paints now.
-    return {"price_usd": None, "market_cap_usd": None, "volume_24h": None,
-            "change_24h": None, "last_updated": None,
-            "fetched_at": 0, "available": False, "error": None}
+    if result is None:
+        # Both attempts failed — return stale cache if available
+        prev = st.session_state.get("pros_price_cache", {})
+        if prev:
+            return prev
+        result = {"fetched_at": now, "available": False, "error": "Network unavailable"}
+    st.session_state["pros_price_cache"] = result
+    return result
 
 def get_pharos_news() -> list:
     now    = time.time()
@@ -3065,14 +3036,6 @@ def _octobot_worker(holder: dict) -> None:
             holder["chunk_count"] = bot.vectorstore._collection.count()
         except Exception:
             holder["chunk_count"] = None
-        # Warm the retrieval path ONCE, here on the background thread: the
-        # first embedding forward-pass (torch) + first Chroma similarity
-        # query are the slowest, so paying them now means the user's first
-        # real Chat question doesn't. Never touches the interactive thread.
-        try:
-            bot.retriever.invoke("pharos")
-        except Exception:
-            pass
         holder["bot"] = bot
     except Exception as e:
         holder["error"] = str(e) or e.__class__.__name__
@@ -9628,1366 +9591,424 @@ if st.session_state.page == "home":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "memory":
 
-    # Compact, structured on-chain intelligence dashboard — no hero, no
-    # ambient 3D room, no floating glass. inject_redesign_css gives us the
-    # var()-driven token system + nav guard; everything visual on this page
-    # is a fresh, flat, theme-aware design system (ml-* classes) so light
-    # and dark both read as a real product, not a translucent overlay.
-    inject_redesign_css("memory rd-wide")
+    inject_redesign_css("memory rd-hero-compact rd-wide")
 
+    # ── Dashboard-only styling — flat, minimal, var()-driven so both
+    # themes stay correct automatically without hand-duplicated dark
+    # rules (same token system used by the other rd-marker pages).
     st.markdown("""
 <style>
-/* ── Global ambient background stays VISIBLE on this page in both themes
-   (per design): we deliberately do NOT hide #aura-3d-canvas or repaint the
-   body. The dashboard instead rides on fully-opaque, elevated surfaces so
-   the data hierarchy reads crisply over the ambient grid. ── */
-
-/* ── Design tokens (light defaults, dark overrides). Defined at :root so
-   they're inherited EVERYWHERE this page's <style> is present — including the
-   Transaction Intelligence st.dialog, which Streamlit renders in a modal
-   portal OUTSIDE stMainBlockContainer. Scoping the tokens to the container
-   left the drawer unthemed; :root fixes that. New --ml-* names never collide
-   with the app's global --bg1/--t1 palette. ── */
-:root{
-    --ml-surface:#FFFFFF; --ml-surface2:#F7F8FB; --ml-inset:#F2F4F8;
-    --ml-border:#E6E8F0; --ml-border2:#D8DBE6;
-    --ml-t1:#0C1322; --ml-t2:#48526A; --ml-t3:#6B7488;
-    --ml-accent:#1A1AFF; --ml-accent-soft:rgba(26,26,255,0.07); --ml-accent-line:rgba(26,26,255,0.16);
-    --ml-ok:#1E9E54; --ml-ok-soft:rgba(30,158,84,0.11);
-    --ml-warn:#B07A00; --ml-warn-soft:rgba(176,122,0,0.12);
-    --ml-bad:#D64550; --ml-bad-soft:rgba(214,69,80,0.11);
-    --ml-shadow:0 2px 10px rgba(16,24,52,0.10), 0 1px 2px rgba(16,24,52,0.06);
-    --ml-shadow-h:0 6px 22px rgba(16,24,52,0.14);
+.mld-header{
+    background:var(--bg1);border:1px solid var(--border);border-radius:var(--rad-lg);
+    padding:1.5rem 1.7rem;margin-bottom:1rem;
 }
-html[data-theme="dark"]{
-    --ml-surface:#141824; --ml-surface2:#10131C; --ml-inset:#1A1F2C;
-    --ml-border:#242A38; --ml-border2:#2E3446;
-    --ml-t1:#EDEFF7; --ml-t2:#A6AEC0; --ml-t3:#6E7688;
-    --ml-accent:#6E86FF; --ml-accent-soft:rgba(110,134,255,0.13); --ml-accent-line:rgba(110,134,255,0.26);
-    --ml-ok:#37C978; --ml-ok-soft:rgba(55,201,120,0.14);
-    --ml-warn:#E0A93B; --ml-warn-soft:rgba(224,169,59,0.14);
-    --ml-bad:#F2686D; --ml-bad-soft:rgba(242,104,109,0.14);
-    --ml-shadow:0 2px 12px rgba(0,0,0,0.42), 0 1px 2px rgba(0,0,0,0.35);
-    --ml-shadow-h:0 8px 26px rgba(0,0,0,0.5);
+.mld-title{
+    font-family:var(--fd);font-size:1.6rem;font-weight:800;color:var(--t1);
+    letter-spacing:-0.02em;margin:0.35rem 0 0.4rem 0;
 }
-
-.ml-fb{font-family:'Inter','DM Sans',sans-serif;}
-.ml-fm{font-family:'DM Mono',ui-monospace,'SFMono-Regular',monospace;}
-
-/* Header */
-.ml-eyebrow{
-    display:inline-flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;
-    font-size:10px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
-    color:var(--ml-t2);margin-bottom:9px;
+.mld-sub{
+    font-family:var(--fb);font-size:13px;color:var(--t2);line-height:1.6;
+    max-width:640px;margin:0;
 }
-.ml-h1{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;letter-spacing:-0.02em;
-    color:var(--ml-t1);margin:0 0 4px 0;line-height:1.1;}
-.ml-sub{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ml-t2);line-height:1.55;margin:0;max-width:560px;}
-
-/* ══════════════ HERO BANNER — Memory Ledger feature header ══════════════
-   A self-contained dark-indigo glass panel (works over both themes) with a
-   faint grid, purple glow, gradient wordmark, glass action pills, and a 3D
-   glass "ledger" visual on the right. Marked with .ml-heromark so it never
-   picks up the flat data-card treatment. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark){
-    position:relative !important;overflow:hidden !important;
-    border-radius:18px !important;padding:1.1rem 2rem !important;margin-bottom:0 !important;
-    border:1px solid rgba(150,130,255,0.18) !important;
-    box-shadow:0 18px 44px rgba(16,9,42,0.36) !important;
-    background:
-      radial-gradient(560px 260px at 82% 22%, rgba(139,92,246,0.32), transparent 62%),
-      radial-gradient(360px 220px at 98% 98%, rgba(99,102,241,0.18), transparent 60%),
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 48px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 48px),
-      linear-gradient(118deg, #141126 0%, #1b1638 46%, #241a46 100%) !important;
+.mld-section-head{display:flex;align-items:center;gap:8px;margin:1.2rem 0 0.7rem 0;}
+.mld-section-title{font-family:var(--fd);font-size:14px;font-weight:800;color:var(--t1);letter-spacing:-0.01em;}
+.mld-section-count{
+    font-family:var(--fb);font-size:11px;font-weight:600;color:var(--t3);
+    background:var(--bg1);border:1px solid var(--border);border-radius:999px;padding:2px 9px;
 }
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] .ml-heromark){display:none !important;}
-.ml-heromark{display:none;}
-/* vertically centre the text / visual columns */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark)
-    > div > [data-testid="stHorizontalBlock"]{align-items:center !important;}
-
-.ml-hero-eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;
-    font-size:10.5px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#b9a7ff;margin-bottom:0.5rem;}
-.ml-hero-eyebrow .dot{width:6px;height:6px;border-radius:50%;background:#a78bfa;
-    box-shadow:0 0 0 3px rgba(167,139,250,0.16);}
-.ml-hero-title{font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-0.03em;line-height:1.02;
-    font-size:clamp(1.7rem,2.8vw,2.25rem);margin:0 0 0.5rem 0;
-    background:linear-gradient(96deg,#ffffff 0%,#e7dcff 42%,#a78bfa 84%);
-    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
-.ml-hero-sub{font-family:'Inter',sans-serif;font-size:13px;line-height:1.55;
-    color:rgba(226,222,250,0.72) !important;-webkit-text-fill-color:rgba(226,222,250,0.72) !important;
-    max-width:440px;margin:0 0 0.85rem 0;}
-
-/* Action pills — style BOTH the Ask OctoBot button and the Explorer link */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) .stButton button,
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) [data-testid="stLinkButton"] a{
-    background:rgba(255,255,255,0.05) !important;border:1px solid rgba(167,139,250,0.40) !important;
-    color:#ede9fe !important;-webkit-text-fill-color:#ede9fe !important;
-    border-radius:11px !important;min-height:40px !important;font-weight:600 !important;font-size:12.5px !important;
-    box-shadow:none !important;
-    transition:background 160ms ease,border-color 160ms ease,transform 160ms ease;
+.mld-card{
+    background:var(--bg1);border:1px solid var(--border);border-radius:var(--rad-lg);
+    padding:1.05rem 1.15rem;height:100%;display:flex;flex-direction:column;margin-bottom:0.6rem;
 }
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) .stButton button *,
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) [data-testid="stLinkButton"] a *{
-    color:#ede9fe !important;-webkit-text-fill-color:#ede9fe !important;
+.mld-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:0.6rem;}
+.mld-card-id{font-family:'DM Mono',ui-monospace,monospace;font-size:13.5px;font-weight:700;color:var(--t1);letter-spacing:0.01em;}
+.mld-badge{
+    display:inline-flex;align-items:center;gap:5px;font-family:var(--fb);font-size:9.5px;font-weight:700;
+    letter-spacing:0.06em;text-transform:uppercase;border-radius:6px;padding:3px 8px;
+    white-space:nowrap;flex-shrink:0;margin-bottom:4px;
 }
-@media (hover:hover) and (pointer:fine){
-  [data-testid="stMainBlockContainer"]:has(.rd-memory)
-      [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) .stButton button:hover,
-  [data-testid="stMainBlockContainer"]:has(.rd-memory)
-      [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-heromark) [data-testid="stLinkButton"] a:hover{
-      background:rgba(167,139,250,0.18) !important;border-color:rgba(167,139,250,0.70) !important;transform:translateY(-1px);
-  }
+.mld-badge.wallet{background:rgba(26,26,255,0.10);color:var(--blue);}
+.mld-badge.tx{background:rgba(31,168,85,0.12);color:var(--green);}
+.mld-time{font-family:var(--fb);font-size:10.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;}
+.mld-summary{
+    font-family:var(--fb);font-size:12.5px;color:var(--t2);line-height:1.6;margin:0 0 0.75rem 0;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
-
-/* Right visual — 3D glass ledger (compact) */
-.ml-hero-visual{position:relative;height:132px;display:flex;align-items:center;justify-content:center;perspective:780px;}
-.ml-hero-visual .glow{position:absolute;width:150px;height:150px;border-radius:50%;
-    background:radial-gradient(circle,rgba(167,139,250,0.40),transparent 64%);filter:blur(15px);}
-.ml-hero-visual .ring{position:absolute;width:206px;height:128px;border-radius:50%;
-    border:1px solid rgba(167,139,250,0.15);transform:rotateX(70deg);}
-.ml-ledger{position:relative;z-index:2;width:100px;height:122px;border-radius:13px;transform-style:preserve-3d;
-    transform:rotateY(-20deg) rotateX(6deg);
-    background:linear-gradient(150deg,rgba(64,52,116,0.92),rgba(30,24,60,0.96));
-    border:1px solid rgba(180,160,255,0.32);
-    box-shadow:0 24px 40px rgba(9,4,28,0.55), inset 0 1px 0 rgba(255,255,255,0.13);
-    animation:ml-hero-float 6s ease-in-out infinite;}
-.ml-ledger::before,.ml-ledger::after{content:"";position:absolute;inset:0;border-radius:13px;
-    background:linear-gradient(150deg,rgba(52,44,98,0.85),rgba(24,18,48,0.92));border:1px solid rgba(150,130,255,0.18);}
-.ml-ledger::before{transform:translateZ(-6px) translate(4px,4px);}
-.ml-ledger::after{transform:translateZ(-12px) translate(8px,8px);opacity:0.6;}
-.ml-ledger .face{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:7px;}
-.ml-ledger .octo{font-size:32px;line-height:1;filter:drop-shadow(0 4px 11px rgba(167,139,250,0.7));}
-.ml-ledger .lbl{font-family:'Inter',sans-serif;font-size:7.5px;font-weight:700;letter-spacing:0.15em;
-    color:#c4b5fd;text-transform:uppercase;}
-.ml-cube{position:absolute;width:16px;height:16px;border-radius:4px;
-    background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 5px 12px rgba(99,102,241,0.45);
-    animation:ml-cube-float 5s ease-in-out infinite;}
-.ml-cube.c1{top:10%;left:17%;}
-.ml-cube.c2{bottom:14%;left:9%;width:11px;height:11px;animation-delay:.8s;}
-.ml-cube.c3{top:16%;right:11%;width:12px;height:12px;animation-delay:1.4s;}
-.ml-cube.c4{bottom:9%;right:19%;animation-delay:.5s;}
-@keyframes ml-hero-float{0%,100%{transform:translateY(0) rotateY(-20deg) rotateX(6deg);}
-    50%{transform:translateY(-11px) rotateY(-20deg) rotateX(6deg);}}
-@keyframes ml-cube-float{0%,100%{transform:translateY(0) rotate(22deg);}50%{transform:translateY(-9px) rotate(22deg);}}
-@media (prefers-reduced-motion:reduce){.ml-ledger,.ml-cube{animation:none !important;}}
-@media (max-width:820px){.ml-hero-visual{display:none;}}
-
-/* KPI cards */
-.ml-kpi{
-    background:var(--ml-surface);border:1px solid var(--ml-border);border-radius:12px;
-    padding:1.05rem 1.15rem;box-shadow:var(--ml-shadow);height:100%;
+.mld-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0.7rem;}
+.mld-metric{flex:1 1 auto;min-width:74px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:6px 9px;}
+.mld-metric-lbl{font-family:var(--fb);font-size:8.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--t3);}
+.mld-metric-val{font-family:var(--fd);font-size:13px;font-weight:800;color:var(--t1);margin-top:1px;}
+.mld-tags .tag{margin:0 5px 5px 0;}
+.mld-empty{
+    background:var(--bg1);border:1px dashed var(--border2);border-radius:var(--rad-lg);
+    padding:2.8rem 2rem;text-align:center;margin-bottom:0.5rem;
 }
-.ml-kpi-top{display:flex;align-items:center;gap:8px;margin-bottom:11px;}
-.ml-kpi-ic{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;
-    background:var(--ml-accent-soft);}
-.ml-kpi-lbl{font-family:'Inter',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.05em;
-    text-transform:uppercase;color:var(--ml-t3);}
-.ml-kpi-val{font-family:'Syne',sans-serif;font-size:1.7rem;font-weight:800;letter-spacing:-0.02em;
-    color:var(--ml-t1);line-height:1.05;}
-.ml-kpi-sub{font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ml-t3);margin-top:6px;}
-
-/* Section label — its own clear vertical rhythm (space above, breath below) */
-.ml-seclabel{font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.07em;
-    text-transform:uppercase;color:var(--ml-t3);margin:1.4rem 0 0.7rem 0;}
-
-/* Connected wallet strip */
-.ml-conn{display:flex;align-items:center;gap:12px;background:var(--ml-surface);border:1px solid var(--ml-border);
-    border-radius:11px;padding:0.75rem 0.95rem;box-shadow:var(--ml-shadow);}
-.ml-conn-ic{width:30px;height:30px;border-radius:8px;background:var(--ml-inset);display:flex;align-items:center;
-    justify-content:center;font-size:14px;flex-shrink:0;}
-.ml-conn-lbl{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.08em;
-    text-transform:uppercase;color:var(--ml-t3);display:flex;align-items:center;gap:6px;}
-.ml-conn-val{font-family:'DM Mono',monospace;font-size:13.5px;font-weight:600;color:var(--ml-t1);}
-.ml-dot{width:7px;height:7px;border-radius:50%;background:var(--ml-ok);box-shadow:0 0 0 3px var(--ml-ok-soft);}
-/* Connected-wallet panel — spacious identity block: generous internal
-   padding, clear breathing room between label → address → metadata, and a
-   full-width address that wraps gracefully. Actions sit on a separate row. */
-.ml-conn-panel{background:var(--ml-surface);border:1px solid var(--ml-border);border-radius:12px;
-    box-shadow:var(--ml-shadow);padding:1.1rem 1.25rem;}
-.ml-conn2-lbl{display:flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;font-size:10px;
-    font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--ml-t3);}
-.ml-conn2-addr{font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--ml-t1);
-    line-height:1.5;word-break:break-all;margin-top:11px;}
-.ml-conn2-meta{font-family:'Inter',sans-serif;font-size:12px;color:var(--ml-t2);line-height:1.55;margin-top:11px;}
-
-/* Row card: wallet record */
-.ml-row-id{display:flex;align-items:center;gap:9px;}
-.ml-ava{width:32px;height:32px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
-    font-size:14px;background:linear-gradient(135deg,var(--ml-accent-soft),var(--ml-inset));
-    border:1px solid var(--ml-border);}
-.ml-addr{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ml-t1);line-height:1.2;}
-.ml-summary{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ml-t2);line-height:1.55;margin:0;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.ml-summary.clamp3{-webkit-line-clamp:3;}
-/* Wallet-profile row — identity left, metrics right-aligned, summary full
-   width below, then tags, then a ruled action row. One consistent rhythm. */
-.ml-row-id{display:flex;align-items:center;gap:11px;}
-.ml-row-metrics{display:flex;gap:22px;justify-content:flex-end;align-items:flex-start;}
-.ml-row-metrics .m{text-align:right;min-width:0;}
-.ml-row-metrics .l{font-family:'Inter',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.05em;
-    text-transform:uppercase;color:var(--ml-t3);}
-.ml-row-metrics .v{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--ml-t1);
-    margin-top:4px;white-space:nowrap;}
-.ml-row-time{font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ml-t3);margin-top:0.7rem;}
-
-/* Status / risk badges */
-.ml-badge{display:inline-flex;align-items:center;gap:4px;font-family:'Inter',sans-serif;font-size:9.5px;
-    font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border-radius:6px;padding:2px 7px;white-space:nowrap;}
-.ml-badge.neutral{background:var(--ml-inset);color:var(--ml-t2);}
-.ml-badge.ok{background:var(--ml-ok-soft);color:var(--ml-ok);}
-.ml-badge.warn{background:var(--ml-warn-soft);color:var(--ml-warn);}
-.ml-badge.bad{background:var(--ml-bad-soft);color:var(--ml-bad);}
-.ml-badge.accent{background:var(--ml-accent-soft);color:var(--ml-accent);}
-
-/* Metric chips inside a row / detail */
-.ml-metrics{display:flex;gap:7px;flex-wrap:wrap;}
-.ml-metric{flex:0 1 auto;min-width:0;}
-.ml-metric-lbl{font-family:'Inter',sans-serif;font-size:8.5px;font-weight:700;letter-spacing:0.05em;
-    text-transform:uppercase;color:var(--ml-t3);}
-.ml-metric-val{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--ml-t1);line-height:1.2;white-space:nowrap;}
-
-/* Tags */
-.ml-tags{display:flex;gap:5px;flex-wrap:wrap;}
-.ml-tag{font-family:'Inter',sans-serif;font-size:10.5px;font-weight:500;color:var(--ml-t2);
-    background:var(--ml-inset);border:1px solid var(--ml-border);border-radius:20px;padding:2px 9px;}
-.ml-time{font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ml-t3);white-space:nowrap;}
-
-/* Panels (detail view) */
-.ml-panel{background:var(--ml-surface);border:1px solid var(--ml-border);border-radius:12px;
-    padding:1rem 1.1rem;box-shadow:var(--ml-shadow);margin-bottom:0.6rem;}
-.ml-panel-h{font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.06em;
-    text-transform:uppercase;color:var(--ml-t3);margin:0 0 0.6rem 0;display:flex;align-items:center;gap:7px;}
-.ml-prose{font-family:'Inter',sans-serif;font-size:13px;color:var(--ml-t1);line-height:1.65;margin:0;}
-.ml-kv{display:flex;justify-content:space-between;gap:12px;padding:0.42rem 0;border-bottom:1px solid var(--ml-border);}
-.ml-kv:last-child{border-bottom:none;}
-.ml-kv-k{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ml-t3);flex-shrink:0;}
-.ml-kv-v{font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--ml-t1);text-align:right;
-    word-break:break-word;}
-.ml-kv-v.mono{font-family:'DM Mono',monospace;font-weight:500;font-size:11px;}
-
-/* Data table (transaction intelligence) */
-.ml-thead{display:flex;align-items:center;padding:0 0.9rem 0.55rem 0.9rem;margin-top:0.2rem;border-bottom:1px solid var(--ml-border);}
-.ml-th{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
-    color:var(--ml-t3);}
-.ml-tx-hash{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600;color:var(--ml-t1);}
-.ml-tx-amt{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--ml-t1);}
-.ml-tx-sum{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ml-t2);line-height:1.4;
-    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
-
-/* Empty state */
-.ml-empty{background:var(--ml-surface);border:1px dashed var(--ml-border2);border-radius:14px;
-    padding:3rem 2rem;text-align:center;box-shadow:var(--ml-shadow);margin-bottom:0.5rem;}
-.ml-empty-ic{font-size:26px;margin-bottom:0.55rem;opacity:0.8;}
-.ml-empty-t{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--ml-t1);margin-bottom:0.35rem;}
-.ml-empty-s{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ml-t3);max-width:420px;margin:0 auto;line-height:1.6;}
-
-/* ════ Intelligence report components (wallet + transaction OUTPUTS) ════
-   These build the generated-output presentation from typography, spacing and
-   hairlines rather than stacking boxes. Section = uppercase label + rule. */
-.ml-idhead{display:flex;align-items:center;gap:12px;margin:0.1rem 0 0.2rem 0;}
-.ml-idhead .ml-ava{width:38px;height:38px;font-size:16px;border-radius:10px;}
-.ml-idhead-addr{font-family:'DM Mono',monospace;font-size:16px;font-weight:600;color:var(--ml-t1);
-    line-height:1.2;word-break:break-all;}
-.ml-idhead-meta{display:flex;align-items:center;gap:7px;margin-top:6px;flex-wrap:wrap;}
-
-.ml-rs{margin-top:1.6rem;}
-.ml-rs.first{margin-top:0.5rem;}
-.ml-rs-h{display:flex;align-items:center;justify-content:space-between;gap:10px;
-    font-family:'Inter',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:0.09em;
-    text-transform:uppercase;color:var(--ml-t3);margin:0 0 0.75rem 0;
-    padding-bottom:0.45rem;border-bottom:1px solid var(--ml-border);}
-
-/* Metric strip — compact cells sharing hairline seams (no boxed cards) */
-.ml-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
-    background:var(--ml-border);border:1px solid var(--ml-border);border-radius:11px;overflow:hidden;}
-.ml-strip .cell{background:var(--ml-surface);padding:0.7rem 0.85rem;}
-.ml-strip .cell .l{font-family:'Inter',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.06em;
-    text-transform:uppercase;color:var(--ml-t3);}
-.ml-strip .cell .v{font-family:'Syne',sans-serif;font-size:1.12rem;font-weight:800;color:var(--ml-t1);
-    line-height:1.15;margin-top:4px;word-break:break-word;}
-
-/* Insight rows — restrained; a thin semantic rule, a bold finding, a line */
-.ml-ins{display:flex;gap:11px;padding:0.6rem 0;border-bottom:1px solid var(--ml-border);}
-.ml-ins:last-child{border-bottom:none;}
-.ml-ins .bar{width:3px;border-radius:2px;background:var(--ml-accent);flex-shrink:0;}
-.ml-ins.ok .bar{background:var(--ml-ok);}
-.ml-ins.warn .bar{background:var(--ml-warn);}
-.ml-ins.bad .bar{background:var(--ml-bad);}
-.ml-ins.mut .bar{background:var(--ml-border2);}
-.ml-ins .t{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:700;color:var(--ml-t1);}
-.ml-ins .d{font-family:'Inter',sans-serif;font-size:12px;color:var(--ml-t2);line-height:1.5;margin-top:2px;}
-
-/* Report prose — readable paragraphs, never one uninterrupted block */
-.ml-para{font-family:'Inter',sans-serif;font-size:13px;color:var(--ml-t1);line-height:1.7;margin:0 0 0.65rem 0;}
-.ml-para:last-child{margin-bottom:0;}
-.ml-callout{display:flex;gap:10px;align-items:flex-start;margin-top:0.9rem;padding:0.7rem 0.9rem;
-    background:var(--ml-accent-soft);border-radius:10px;}
-.ml-callout .k{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.07em;
-    text-transform:uppercase;color:var(--ml-accent);white-space:nowrap;padding-top:2px;}
-.ml-callout .t{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ml-t1);line-height:1.55;}
-
-/* Definition grid — dense two-column key/value */
-.ml-dl{display:grid;grid-template-columns:1fr 1fr;gap:0 1.6rem;}
-.ml-dl.one{grid-template-columns:1fr;}
-.ml-di{display:flex;justify-content:space-between;gap:12px;padding:0.44rem 0;
-    border-bottom:1px solid var(--ml-border);min-width:0;}
-.ml-di .k{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ml-t3);flex-shrink:0;}
-.ml-di .v{font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--ml-t1);
-    text-align:right;word-break:break-word;min-width:0;}
-.ml-di .v.mono{font-family:'DM Mono',monospace;font-weight:500;font-size:11px;}
-
-/* Transfer flow — FROM → amount → TO */
-.ml-flow{border:1px solid var(--ml-border);border-radius:12px;overflow:hidden;}
-.ml-flow .node{display:flex;align-items:center;gap:12px;padding:0.8rem 1rem;}
-.ml-flow .node .side{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.08em;
-    text-transform:uppercase;color:var(--ml-t3);width:38px;flex-shrink:0;}
-.ml-flow .node .addr{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ml-t1);word-break:break-all;}
-.ml-flow .mid{display:flex;align-items:center;gap:10px;padding:0.45rem 1rem;background:var(--ml-inset);
-    border-top:1px solid var(--ml-border);border-bottom:1px solid var(--ml-border);}
-.ml-flow .mid .amt{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--ml-t1);}
-.ml-flow .mid .cap{font-family:'Inter',sans-serif;font-size:11px;color:var(--ml-t3);}
-
-/* Evidence timeline */
-.ml-tl{display:flex;align-items:center;gap:12px;padding:0.6rem 0;border-bottom:1px solid var(--ml-border);}
-.ml-tl:last-child{border-bottom:none;}
-.ml-tl .dot{width:8px;height:8px;border-radius:50%;background:var(--ml-accent);flex-shrink:0;}
-.ml-tl .h{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:var(--ml-t1);}
-.ml-tl .m{font-family:'Inter',sans-serif;font-size:11px;color:var(--ml-t3);margin-top:1px;}
-.ml-tl .amt{font-family:'Syne',sans-serif;font-size:12.5px;font-weight:800;color:var(--ml-t1);margin-left:auto;white-space:nowrap;}
-
-/* Numbered steps (how a tx executed) */
-.ml-step{display:flex;gap:11px;padding:0.42rem 0;}
-.ml-step .n{flex-shrink:0;width:20px;height:20px;border-radius:6px;background:var(--ml-inset);color:var(--ml-t2);
-    font-family:'Inter',sans-serif;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
-.ml-step .x{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ml-t2);line-height:1.55;}
-.ml-atglance{background:var(--ml-surface2);border:1px solid var(--ml-border);border-radius:12px;padding:0.9rem 1rem;}
-/* Subtle, purposeful feedback — rows respond to hover, nothing flashy. */
-.ml-tl,.ml-strip .cell,.ml-ins{transition:background 140ms ease;}
-@media (hover:hover) and (pointer:fine){
-  .ml-tl:hover{background:var(--ml-surface2);}
-  .ml-strip .cell:hover{background:var(--ml-surface2);}
+.mld-empty-ic{font-size:28px;margin-bottom:0.6rem;opacity:0.75;}
+.mld-empty-title{font-family:var(--fd);font-size:15px;font-weight:800;color:var(--t1);margin-bottom:0.3rem;}
+.mld-empty-sub{font-family:var(--fb);font-size:12.5px;color:var(--t3);max-width:420px;margin:0 auto;line-height:1.6;}
+.mld-connected-chip{
+    display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);
+    border-radius:12px;padding:0.65rem 0.85rem;margin-bottom:0.7rem;
 }
-/* Copyable identifier (st.code) tuned to the report surfaces */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stCode"],
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stCode"] pre{
-    background:var(--ml-surface2) !important;border:1px solid var(--ml-border) !important;
-    border-radius:10px !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stCode"] code{
-    color:var(--ml-t1) !important;font-size:12.5px !important;
-}
-/* ── Transaction Intelligence dialog: theme the WHOLE modal ──
-   Streamlit renders the dialog panel in its fixed dark config theme, so in the
-   app's light mode the report's light content sat on a dark panel ("some black,
-   some white"). Retint the panel + native chrome (title, close, expander, code)
-   with our tokens so the modal is genuinely light in light mode and dark in
-   dark mode. Tokens are on :root, so they resolve inside this portal. */
-[data-testid="stDialog"] [role="dialog"]{
-    background:var(--ml-surface) !important;color:var(--ml-t1) !important;
-    border:1px solid var(--ml-border) !important;
-}
-[data-testid="stDialog"] [role="dialog"] h1,
-[data-testid="stDialog"] [role="dialog"] h2,
-[data-testid="stDialog"] [role="dialog"] h3{color:var(--ml-t1) !important;}
-[data-testid="stDialog"] button[aria-label="Close"] svg{fill:var(--ml-t2) !important;color:var(--ml-t2) !important;}
-[data-testid="stDialog"] [data-testid="stExpander"]{
-    background:var(--ml-surface2) !important;border:1px solid var(--ml-border) !important;border-radius:10px !important;
-}
-[data-testid="stDialog"] [data-testid="stExpander"] summary,
-[data-testid="stDialog"] [data-testid="stExpander"] summary *{color:var(--ml-t1) !important;}
-[data-testid="stDialog"] [data-testid="stCode"],
-[data-testid="stDialog"] [data-testid="stCode"] pre{
-    background:var(--ml-surface2) !important;border:1px solid var(--ml-border) !important;border-radius:10px !important;
-}
-[data-testid="stDialog"] [data-testid="stCode"] code{color:var(--ml-t1) !important;}
-@media (max-width:680px){ .ml-dl{grid-template-columns:1fr;} }
-
-/* ── Streamlit widget skinning on this page ── */
-/* Equal-height KPI / metric columns so cards align even when subtext wraps */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stHorizontalBlock"]:has(.ml-kpi){
-    align-items:stretch !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stHorizontalBlock"]:has(.ml-kpi) > [data-testid="stColumn"]{
-    display:flex !important;flex-direction:column !important;
-}
-/* Flatten bordered containers → clean data rows (no heavy floating shadow) */
-/* Streamlit 1.58 renders st.container(border=True) as a bordered stVerticalBlock
-   (there is NO stVerticalBlockBorderWrapper), so the old selector matched
-   nothing and our cards were transparent with only Streamlit's faint default
-   border — the real cause of the crowded/undefined feel. We tag each of our
-   cards with a hidden .ml-cardmark span and style THAT specific block: a stable
-   hook (no emotion-hash dependency) giving a proper surface, padding and
-   spacing in both themes. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-cardmark){
-    background:var(--ml-surface) !important;border:1px solid var(--ml-border) !important;
-    border-radius:12px !important;box-shadow:var(--ml-shadow) !important;
-    padding:1.15rem 1.3rem !important;margin-bottom:0.7rem !important;
-    transition:border-color 160ms ease, box-shadow 160ms ease;
-}
-/* Collapse the (empty) marker element so it adds no vertical gap */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] .ml-cardmark){
-    display:none !important;
-}
-.ml-cardmark{display:none;}
-@media (hover:hover) and (pointer:fine){
-  [data-testid="stMainBlockContainer"]:has(.rd-memory)
-      [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-cardmark):hover{
-      border-color:var(--ml-border2) !important;box-shadow:var(--ml-shadow-h) !important;
-  }
-}
-/* Transaction table rows — compact card variant with vertically-centred
-   columns so hash / badges / amount / summary / status / Inspect all align. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-txcard){
-    background:var(--ml-surface) !important;border:1px solid var(--ml-border) !important;
-    border-radius:12px !important;box-shadow:var(--ml-shadow) !important;
-    padding:0.85rem 1.1rem !important;margin-bottom:0.6rem !important;
-    transition:border-color 160ms ease, box-shadow 160ms ease;
-}
-/* Transaction row internals — identity (left), amount+status (right-aligned
-   near the action), a hairline rule, then summary + timestamp. */
-.ml-txrow-id{display:flex;align-items:center;gap:11px;min-width:0;flex-wrap:wrap;}
-.ml-txrow-amt{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0;}
-.ml-txrow-foot{margin-top:0.7rem;}
-.ml-txrow-foot .rule{border-top:1px solid var(--ml-border);margin-bottom:0.6rem;}
-.ml-txrow-foot .line{display:flex;align-items:baseline;justify-content:space-between;gap:16px;}
-.ml-txrow-foot .sum{font-family:'Inter',sans-serif;font-size:12px;color:var(--ml-t2);line-height:1.5;
-    flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
-.ml-txrow-foot .time{font-family:'Inter',sans-serif;font-size:11px;color:var(--ml-t3);
-    white-space:nowrap;flex-shrink:0;font-weight:500;}
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-txcard) [data-testid="stHorizontalBlock"]{
-    align-items:center !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory)
-    [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] .ml-txcard){display:none !important;}
-.ml-txcard{display:none;}
-@media (hover:hover) and (pointer:fine){
-  [data-testid="stMainBlockContainer"]:has(.rd-memory)
-      [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ml-txcard):hover{
-      border-color:var(--ml-border2) !important;box-shadow:var(--ml-shadow-h) !important;
-  }
-}
-/* Segmented control → Linear-style tab group. Streamlit renders it as
-   stButtonGroup with stBaseButton-segmented_control (idle) and
-   -segmented_controlActive (selected). Override the default red primary. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"]{
-    margin:6px 0 16px 0;
-}
-/* The two pills sit inside a single flex wrapper and are joined by a
-   margin-right:-1px border-collapse. Give that wrapper a real gap and reset
-   the join so the pills are cleanly separated. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] > div{
-    display:inline-flex !important;flex-wrap:wrap !important;gap:10px !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button{
-    margin:0 !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button{
-    min-height:38px !important;font-weight:600 !important;font-size:13px !important;
-    border-radius:9px !important;border:1px solid var(--ml-border) !important;
-    background:var(--ml-surface) !important;color:var(--ml-t2) !important;
-    box-shadow:var(--ml-shadow) !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button:hover{
-    border-color:var(--ml-accent-line) !important;color:var(--ml-t1) !important;
-    background:var(--ml-surface) !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"],
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"]:hover{
-    background:var(--ml-accent) !important;border-color:var(--ml-accent) !important;
-    color:#FFFFFF !important;box-shadow:var(--ml-shadow) !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] *{
-    color:#FFFFFF !important;-webkit-text-fill-color:#FFFFFF !important;
-}
-/* Selectbox + text inputs → uniformly themed field surface (root frame AND
-   the inner base-input), so it's a clean solid field, not a dark frame
-   around a white core. Legible in both modes. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInputRootElement"],
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInputRootElement"] [data-baseweb="base-input"],
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-baseweb="select"] > div{
-    background:var(--ml-surface) !important;border-color:var(--ml-border) !important;
-    box-shadow:var(--ml-shadow) !important;
-}
-/* CRITICAL: the global rd-marker CSS forces input text to near-white
-   (#F4F7FF) because the app's default inputs are dark. Our inputs are LIGHT
-   in light mode, so that made typed text invisible. Re-point input + option
-   text to the theme token so it's legible in BOTH modes. */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInput"] input,
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-baseweb="select"] *{
-    color:var(--ml-t1) !important;-webkit-text-fill-color:var(--ml-t1) !important;
-}
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInput"] input::placeholder{
-    color:var(--ml-t3) !important;-webkit-text-fill-color:var(--ml-t3) !important;
-}
-/* Focus ring → brand accent (not Streamlit's default red) */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInput"]:focus-within [data-testid="stTextInputRootElement"],
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-baseweb="select"]:focus-within > div{
-    border-color:var(--ml-accent) !important;box-shadow:0 0 0 3px var(--ml-accent-soft) !important;
-}
-/* Compact action buttons (keyed mlact_) */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [class*="st-key-mlact_"] button{
-    min-height:32px !important;height:32px !important;padding:0 11px !important;
-    font-size:11.5px !important;font-weight:600 !important;border-radius:8px !important;
-}
-/* Inputs a touch tighter */
-[data-testid="stMainBlockContainer"]:has(.rd-memory) [data-testid="stTextInput"] input{
-    min-height:40px !important;border-radius:9px !important;
-}
-:active .ml-press{transform:scale(0.985);}
+.mld-connected-ic{width:32px;height:32px;border-radius:8px;background:var(--bg1);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.mld-connected-lbl{font-family:var(--fb);font-size:9.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--t3);}
+.mld-connected-val{font-family:'DM Mono',ui-monospace,monospace;font-size:13px;font-weight:700;color:var(--t1);}
+.mld-detail-row{display:flex;justify-content:space-between;gap:10px;padding:0.4rem 0;border-bottom:1px solid var(--border);font-family:var(--fb);font-size:12px;}
+.mld-detail-row:last-child{border-bottom:none;}
+.mld-detail-k{color:var(--t3);flex-shrink:0;}
+.mld-detail-v{color:var(--t1);font-weight:600;text-align:right;word-break:break-all;}
 </style>
 """, unsafe_allow_html=True)
 
-    # Top-of-page clearance so the header sits clearly apart from the sticky
-    # nav banner, and the page opens with a calm breath of whitespace.
-    st.markdown('<div style="height:2rem;"></div>', unsafe_allow_html=True)
-
     entries = st.session_state.memory_entries
 
-    # ── small local helpers ──────────────────────────────────────────
-    def _short(s, head=6, tail=4):
-        s = s or ""
-        return (s[:head] + "…" + s[-tail:]) if len(s) > head + tail + 1 else s
+    # ── Header ─────────────────────────────────────
+    st.markdown(
+        '<div class="mld-header">'
+        '<div class="rd-eyebrow">🧠 OCTOBOT · ON-CHAIN INTELLIGENCE</div>'
+        '<div class="mld-title">Memory Ledger</div>'
+        '<p class="mld-sub">Every wallet profile and transaction OctoBot has synthesized for you, '
+        'organized in one place — read-only, on-chain data only, nothing ever signed or spent.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
-    def _risk_badge(risk):
-        r = str(risk or "").lower()
-        if "success" in r or "active" in r or "power" in r:
-            return "ok", str(risk)
-        if "fail" in r:
-            return "bad", str(risk)
-        if "pending" in r or "unknown" in r:
-            return "neutral", str(risk)
-        if "moderate" in r:
-            return "warn", str(risk)
-        return "neutral", str(risk)
+    # ── Stats row ────────────────────────────────
+    wallet_n = sum(1 for e in entries if e["type"] == "wallet")
+    tx_n     = sum(1 for e in entries if e["type"] == "tx")
+    last_ts  = max((e["created_at"] for e in entries), default=None)
 
-    def _find(entry_id):
-        return next((e for e in entries if e["id"] == entry_id), None)
-
-    # ── report-rendering helpers (structure existing data; no new logic) ──
-    def _to_num(v):
-        m = re.search(r"[-+]?\d*\.?\d+", str(v or ""))
-        return float(m.group()) if m else None
-
-    def _activity_level(txn):
-        if txn is None:      return "Unknown"
-        if txn == 0:         return "None"
-        if txn <= 20:        return "Low"
-        if txn <= 150:       return "Moderate"
-        return "High"
-
-    def _paragraphs(text, per=2):
-        sents = [s for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s]
-        if not sents:
-            return []
-        return [" ".join(sents[i:i + per]) for i in range(0, len(sents), per)]
-
-    def _wallet_insights(e, mdict):
-        """Turn the wallet's real numbers + AI tags into a few scannable
-        findings. Only emits an insight when the data actually supports it."""
-        out = []
-        txn = _to_num(mdict.get("Transactions"))
-        txn = int(txn) if txn is not None else None
-        bal = _to_num(mdict.get("Balance"))
-        act = _activity_level(txn)
-        risk = str(e.get("risk") or "").strip()
-        is_contract = str(mdict.get("Type", "")).lower().startswith("contract")
-
-        if is_contract:
-            out.append(("mut", "Contract address", "This address holds deployed code, not a personal wallet."))
-        if txn is not None and txn <= 5 and not is_contract:
-            out.append(("mut", "New wallet",
-                        f"Limited on-chain history — {txn} transaction{'s' if txn != 1 else ''} so far."))
-        if act not in ("Unknown", "None"):
-            cls = "ok" if act in ("Moderate", "High") else "mut"
-            out.append((cls, f"{act} activity",
-                        f"{txn} transaction{'s' if txn != 1 else ''} observed on Pharos."))
-        if bal is not None and bal > 0:
-            out.append(("ok", "PROS holder", f"Currently holds {mdict.get('Balance')}."))
-        elif bal == 0:
-            out.append(("mut", "No PROS balance", "Wallet currently holds no PROS."))
-        if risk and risk.lower() != "unknown":
-            rcls, _ = _risk_badge(risk)
-            out.append((rcls if rcls in ("ok", "warn", "bad") else "mut",
-                        f"{risk} risk profile", "Derived from observed on-chain behaviour."))
-        return out[:4]
-
-    def _ins_html(items):
-        return "".join(
-            f'<div class="ml-ins {c}"><div class="bar"></div><div>'
-            f'<div class="t">{esc(t)}</div><div class="d">{esc(d)}</div></div></div>'
-            for c, t, d in items
-        )
-
-    def _prose_section(text, title, lead=2, extra_html=""):
-        """Render AI analysis as spaced paragraphs; if it's long, keep the
-        lead visible and fold the rest into an expander (progressive
-        disclosure — short responses stay compact, long ones don't wall)."""
-        paras = _paragraphs(text or "") or ["No analysis available."]
-        head = "".join(f'<p class="ml-para">{esc(p)}</p>' for p in paras[:lead])
-        st.markdown(
-            f'<div class="ml-rs"><div class="ml-rs-h">{esc(title)}</div>{head}{extra_html}</div>',
-            unsafe_allow_html=True,
-        )
-        if len(paras) > lead:
-            with st.expander("Read full analysis"):
-                st.markdown(
-                    "".join(f'<p class="ml-para">{esc(p)}</p>' for p in paras[lead:]),
-                    unsafe_allow_html=True,
-                )
-
-    # ═══════════════════════════════════════════════════════════════
-    # WALLET DETAIL VIEW  (full inline dashboard — replaces the list)
-    # ═══════════════════════════════════════════════════════════════
-    def _render_wallet_detail(e):
-        addr = e["full_addr"]
-        mdict = {k: v for k, v in e.get("metrics", [])}
-        rcls, rtxt = _risk_badge(e.get("risk"))
-        txn = _to_num(mdict.get("Transactions"))
-        txn = int(txn) if txn is not None else None
-        activity = _activity_level(txn)
-        acct_type = str(mdict.get("Type", "Wallet"))
-
-        # ── Top action bar (back / explorer) ──────────────────────
-        hb1, _hbsp, hb3 = st.columns([1.1, 3.7, 2.0])
-        with hb1:
-            if st.button("← Back", key="mlact_back_detail", use_container_width=True):
-                st.session_state.ml_wallet_detail = None
-                st.rerun()
-        with hb3:
-            st.link_button("View on Explorer", e["explorer_url"], use_container_width=True)
-
-        # ── Identity header — eyebrow, copyable address, status badges ──
-        st.markdown(
-            '<div class="ml-eyebrow" style="margin-bottom:8px;">Wallet Intelligence</div>',
-            unsafe_allow_html=True,
-        )
-        # Full address as a copyable code line (st.code ships a copy button).
-        st.code(addr, language=None)
-        st.markdown(
-            f'<div class="ml-idhead-meta" style="margin:2px 0 0.2rem 0;">'
-            f'<span class="ml-badge {rcls}">{esc(rtxt)}</span>'
-            f'<span class="ml-badge neutral">{esc(acct_type)}</span>'
-            f'<span class="ml-time">Analyzed {esc(mem_relative_time(e["created_at"]))}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        main, side = st.columns([2.3, 1])
-
-        with main:
-            # 1 · Overview — compact metric strip
-            strip = [
-                ("Balance", str(mdict.get("Balance", "—"))),
-                ("Transactions", str(txn) if txn is not None else "—"),
-                ("Activity", activity),
-                ("Type", acct_type),
-            ]
-            strip_html = "".join(
-                f'<div class="cell"><div class="l">{esc(l)}</div><div class="v">{esc(v)}</div></div>'
-                for l, v in strip
-            )
+    def _mld_stat(col, icon, label, val, sub, color):
+        with col:
             st.markdown(
-                f'<div class="ml-rs first"><div class="ml-rs-h">Overview</div>'
-                f'<div class="ml-strip">{strip_html}</div></div>',
+                f'<div class="rd-stat"><div class="rd-stat-top">'
+                f'<div class="rd-stat-ic" style="background:{color}18;color:{color};">{icon}</div>'
+                f'<div class="rd-stat-lbl">{label}</div></div>'
+                f'<div class="rd-stat-val">{val}</div>'
+                f'<div class="rd-stat-sub">{sub}</div></div>',
                 unsafe_allow_html=True,
             )
+    s1, s2, s3, s4 = st.columns(4)
+    _mld_stat(s1, "🧠", "Total Memories",   len(entries), "wallets + transactions", "#1A1AFF")
+    _mld_stat(s2, "🔑", "Wallet Profiles",  wallet_n,     "AI-synthesized",         "#2D2DE0")
+    _mld_stat(s3, "🧾", "Transactions",     tx_n,         "explained on-chain",     "#1FA855")
+    _mld_stat(s4, "🕐", "Last Updated",
+              mem_relative_time(last_ts) if last_ts else "—", "most recent lookup", "#9499A8")
 
-            # 2 · Key insights — scannable findings from the real data
-            insights = _wallet_insights(e, mdict)
-            if insights:
-                st.markdown(
-                    f'<div class="ml-rs"><div class="ml-rs-h">Key insights</div>'
-                    f'{_ins_html(insights)}</div>',
-                    unsafe_allow_html=True,
-                )
+    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
 
-            # 3 · Wallet intelligence — structured prose (+ next step), long
-            #     analysis folds into an expander so it never walls the report.
-            callout = (f'<div class="ml-callout"><span class="k">Next step</span>'
-                       f'<span class="t">{esc(e["insight"])}</span></div>') if e.get("insight") else ""
-            _prose_section(e.get("summary") or "", "OctoBot intelligence", lead=2, extra_html=callout)
+    # ── Add memory — wallet profile / transaction lookup ─────────────
+    tab_wallet, tab_tx = st.tabs(["🔑  Wallet Profile", "🧾  Transaction Explainer"])
 
-            # 4 · Evidence — transactions OctoBot has explained (timeline)
-            tx_mems = [m for m in entries if m["type"] == "tx"]
-            if tx_mems:
-                rows = ""
-                for m in tx_mems[:8]:
-                    md = {k: v for k, v in m.get("metrics", [])}
-                    rows += (
-                        f'<div class="ml-tl"><div class="dot"></div>'
-                        f'<div style="min-width:0;"><div class="h">{esc(m["title"])}</div>'
-                        f'<div class="m">{esc((m.get("tags") or ["Transaction"])[0])} · '
-                        f'{esc(mem_relative_time(m["created_at"]))}</div></div>'
-                        f'<div class="amt">{esc(str(md.get("Value","—")))}</div></div>'
-                    )
-                st.markdown(
-                    f'<div class="ml-rs"><div class="ml-rs-h">Evidence · explained transactions'
-                    f'<span style="color:var(--ml-t3);font-weight:600;">{len(tx_mems)}</span></div>{rows}</div>',
-                    unsafe_allow_html=True,
-                )
-
-        with side:
-            tags_html = "".join(f'<span class="ml-tag">{esc(t)}</span>' for t in e.get("tags", []) if t) \
-                or '<span class="ml-tag">No tags</span>'
-            glance = [
-                ("Risk", f'<span class="ml-badge {rcls}">{esc(rtxt)}</span>'),
-                ("Balance", esc(str(mdict.get("Balance", "—")))),
-                ("Transactions", esc(str(txn) if txn is not None else "—")),
-                ("Activity", esc(activity)),
-                ("First seen", esc(mem_relative_time(e["created_at"]))),
-            ]
-            glance_html = "".join(
-                f'<div class="ml-di"><span class="k">{k}</span><span class="v">{v}</span></div>'
-                for k, v in glance
-            )
+    with tab_wallet:
+        if not st.session_state.wallet_address:
             st.markdown(
-                f'<div class="ml-atglance"><div class="ml-rs-h" style="margin-bottom:0.5rem;">At a glance</div>'
-                f'<div class="ml-dl one">{glance_html}</div>'
-                f'<div style="margin-top:0.8rem;"><div class="ml-metric-lbl" style="margin-bottom:6px;">Tags</div>'
-                f'<div class="ml-tags">{tags_html}</div></div></div>',
+                '<p style="font-family:var(--fb);font-size:12.5px;color:var(--t2);margin:0.5rem 0 0.8rem 0;">'
+                'Paste any Pharos wallet address to generate a read-only, AI-synthesized profile — '
+                'no signing, no gas, nothing installed.</p>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-            if st.button("💬 Ask OctoBot about this wallet", key="mlcta_detail_ask",
-                         use_container_width=True, type="primary"):
-                bal_v = str(mdict.get("Balance", "unknown"))
-                tx_v = str(txn if txn is not None else 0)
-                st.session_state["pending_q"] = (
-                    f"Tell me about the wallet {addr}. It has {tx_v} transactions and a balance of {bal_v}. "
-                    f"What should this wallet do next on Pharos?"
-                )
-                st.session_state.chat_mode = "general"
-                st.session_state.page = "chat"
-                st.rerun()
-            if st.button("🗑 Remove from ledger", key="mlact_detail_remove", use_container_width=True):
-                mem_remove(e["id"])
-                if e["full_addr"] == st.session_state.wallet_address:
-                    st.session_state.wallet_address = ""
-                    st.session_state.wallet_data = None
+            manual_addr = st.text_input(
+                "Wallet address", placeholder="0x1234...your Pharos wallet address",
+                key="manual_wallet_input", label_visibility="collapsed",
+            )
+            if st.button("🔎  View Profile", key="manual_wallet_btn"):
+                if valid_addr(manual_addr):
+                    st.session_state.wallet_address = manual_addr.strip()
+                    st.session_state.wallet_data    = None
                     st.session_state.wallet_profile = None
-                st.session_state.ml_wallet_detail = None
-                st.rerun()
-
-    # ═══════════════════════════════════════════════════════════════
-    # TRANSACTION DETAIL DRAWER (st.dialog — dashboard stays behind it)
-    # ═══════════════════════════════════════════════════════════════
-    @st.dialog("Transaction Intelligence", width="large")
-    def _tx_drawer(e):
-        md = {k: v for k, v in e.get("metrics", [])}
-        scls, stxt = _risk_badge(e.get("risk"))
-        category = (e.get("tags") or ["Transaction"])[0]
-
-        # Resolve the real transaction fields: persisted `tx` dict, enriched by
-        # the live fetch when this is the currently-loaded hash.
-        tx = dict(e.get("tx") or {})
-        live = st.session_state.tx_data if st.session_state.get("tx_hash_input") == e["full_addr"] else None
-        if live:
-            for k, v in live.items():
-                if v is not None:
-                    tx[k] = v
-        frm = tx.get("from_addr")
-        to = tx.get("to_addr")
-        val = tx.get("value_pros")
-        gas_used = tx.get("gas_used")
-        gas_price = tx.get("gas_price_gwei")
-        block = tx.get("block_number")
-        is_call = tx.get("is_contract_call")
-        amount_str = (f"{val:.4f} PROS" if isinstance(val, (int, float)) else str(md.get("Value", "—")))
-
-        # ── Header — eyebrow, copyable hash, status + category badges ──
-        st.markdown(
-            '<div class="ml-eyebrow" style="margin-bottom:8px;">Transaction Intelligence</div>',
-            unsafe_allow_html=True,
-        )
-        st.code(e["full_addr"], language=None)   # copyable transaction hash
-        st.markdown(
-            f'<div class="ml-idhead-meta" style="margin:2px 0 0.2rem 0;">'
-            f'<span class="ml-badge {scls}">{esc(stxt)}</span>'
-            f'<span class="ml-badge accent">{esc(category)}</span></div>',
-            unsafe_allow_html=True,
-        )
-
-        # ── 1 · What happened (lead summary; long text folds) ─────
-        _prose_section(e.get("summary") or "", "What happened", lead=2)
-
-        # ── 2 · Transfer flow (only with real from/to) ────────────
-        if frm and to:
-            cap = "Contract interaction" if (is_call and not (isinstance(val, (int, float)) and val > 0)) \
-                else amount_str
-            st.markdown(
-                f'<div class="ml-rs"><div class="ml-rs-h">Transfer</div>'
-                f'<div class="ml-flow">'
-                f'<div class="node"><span class="side">From</span><span class="addr">{esc(frm)}</span></div>'
-                f'<div class="mid"><span class="cap">↓ moves</span><span class="amt">{esc(cap)}</span></div>'
-                f'<div class="node"><span class="side">To</span><span class="addr">{esc(to)}</span></div>'
-                f'</div></div>',
-                unsafe_allow_html=True,
-            )
-
-        # ── 3 · Transaction details (hide unavailable fields) ─────
-        details = []
-        if frm: details.append(("From", esc(frm), True))
-        if to: details.append(("To", esc(to), True))
-        details.append(("Asset", "PROS", False))
-        if amount_str and amount_str != "—": details.append(("Amount", esc(amount_str), False))
-        details.append(("Status", esc(stxt), False))
-        if gas_used is not None: details.append(("Gas used", f"{int(gas_used):,}", False))
-        if gas_price is not None: details.append(("Gas price", f"{gas_price:.4f} Gwei", False))
-        if block is not None: details.append(("Block", f"#{block}", False))
-        if is_call is not None: details.append(("Method", "Contract call" if is_call else "Transfer", False))
-        details.append(("Tx hash", esc(e["full_addr"]), True))
-        det_html = "".join(
-            f'<div class="ml-di"><span class="k">{k}</span>'
-            f'<span class="v {"mono" if mono else ""}">{v}</span></div>'
-            for k, v, mono in details
-        )
-        st.markdown(
-            f'<div class="ml-rs"><div class="ml-rs-h">Transaction details</div>'
-            f'<div class="ml-dl">{det_html}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-        # ── 4 · How OctoBot reads it (steps) + risk signal ────────
-        if e.get("steps"):
-            steps_html = "".join(
-                f'<div class="ml-step"><div class="n">{i}</div><div class="x">{esc(s)}</div></div>'
-                for i, s in enumerate(e["steps"], 1)
-            )
-            st.markdown(
-                f'<div class="ml-rs"><div class="ml-rs-h">How it executed</div>{steps_html}</div>',
-                unsafe_allow_html=True,
-            )
-        if "fail" in stxt.lower():
-            st.markdown(
-                '<div class="ml-rs"><div class="ml-rs-h">Risk signal</div>'
-                '<div class="ml-ins bad"><div class="bar"></div><div>'
-                '<div class="t">Transaction failed</div>'
-                '<div class="d">Execution reverted — no state change persisted beyond the gas spent.</div>'
-                '</div></div></div>',
-                unsafe_allow_html=True,
-            )
-
-        with st.expander("Raw details"):
-            raw = [("Transaction hash", e["full_addr"], True)]
-            if tx.get("input_data") and tx["input_data"] not in ("0x", "0x0"):
-                raw.append(("Input data", tx["input_data"][:74] + ("…" if len(tx["input_data"]) > 74 else ""), True))
-            for k, v in e.get("metrics", []):
-                raw.append((k, str(v), False))
-            st.markdown(
-                "".join(f'<div class="ml-di"><span class="k">{esc(k)}</span>'
-                        f'<span class="v {"mono" if mono else ""}">{esc(str(v))}</span></div>'
-                        for k, v, mono in raw),
-                unsafe_allow_html=True,
-            )
-        st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-        d1, d2 = st.columns(2)
-        with d1:
-            if st.button("💬 Ask OctoBot", key="mlcta_drawer_ask", use_container_width=True, type="primary"):
-                st.session_state["pending_q"] = (
-                    f"Explain this Pharos transaction in more detail: {e['full_addr']}. {e.get('summary','')}"
+                    st.rerun()
+                else:
+                    st.error("Enter a valid 0x... wallet address (42 characters).")
+        else:
+            addr = st.session_state.wallet_address
+            short_addr = addr[:6] + "…" + addr[-4:]
+            wc1, wc2 = st.columns([4, 1])
+            with wc1:
+                st.markdown(
+                    f'<div class="mld-connected-chip"><div class="mld-connected-ic">🔗</div>'
+                    f'<div><div class="mld-connected-lbl">Connected Wallet</div>'
+                    f'<div class="mld-connected-val">{esc(short_addr)}</div></div></div>',
+                    unsafe_allow_html=True,
                 )
-                st.session_state.chat_mode = "general"
-                st.session_state.page = "chat"
+            with wc2:
+                if st.button("✕ Disconnect", key="disconnect_wallet", use_container_width=True):
+                    st.session_state.wallet_address  = ""
+                    st.session_state.wallet_data     = None
+                    st.session_state.wallet_profile  = None
+                    st.rerun()
+
+            if st.session_state.wallet_data is None:
+                with st.spinner("Reading on-chain activity from Pharos…"):
+                    st.session_state.wallet_data = fetch_pharos_onchain_data(addr)
+            data = st.session_state.wallet_data
+
+            if not data.get("available"):
+                st.warning(
+                    "⚠️ Could not reach Pharos RPC right now — this wallet may be new, "
+                    "or the network is temporarily unavailable. Your address was still read "
+                    "successfully — no funds or gas were used."
+                )
+
+            if st.session_state.wallet_profile is None:
+                with st.spinner("OctoBot is synthesising your intelligence profile…"):
+                    profile = synthesize_wallet_profile(data)
+                    st.session_state.wallet_profile = profile
+                    bal, tx_count = data.get("balance_pros"), data.get("tx_count")
+                    mem_upsert({
+                        "id": f"wallet:{addr}",
+                        "type": "wallet",
+                        "created_at": time.time(),
+                        "title": short_addr,
+                        "full_addr": addr,
+                        "summary": profile.get("summary", ""),
+                        "tags": profile.get("tags", []),
+                        "risk": profile.get("risk", "Unknown"),
+                        "insight": profile.get("insight", ""),
+                        "steps": None,
+                        "metrics": [
+                            ("Balance", f"{bal:.4f} PROS" if bal is not None else "—"),
+                            ("Transactions", tx_count if tx_count is not None else "—"),
+                            ("Type", "Contract" if data.get("is_contract") else "Wallet"),
+                        ],
+                        "explorer_url": PHAROS_EXPLORER_URL + "/address/" + addr,
+                    })
+                # Refresh so the stats row / ledger below reflect this
+                # new memory immediately, same run-then-rerun pattern
+                # already used elsewhere in the app after state changes.
                 st.rerun()
-        with d2:
-            st.link_button("🔍 View on Explorer", e["explorer_url"], use_container_width=True)
-        if st.button("🗑 Delete from ledger", key="mlact_drawer_del", use_container_width=True):
-            mem_remove(e["id"])
-            if e["full_addr"] == st.session_state.get("tx_hash_input"):
-                st.session_state.tx_hash_input = ""
-                st.session_state.tx_data = None
+
+            bal, tx_count = data.get("balance_pros"), data.get("tx_count")
+            st.markdown(
+                '<p style="font-family:var(--fb);font-size:12px;color:var(--green);margin:0.2rem 0 0.7rem 0;">'
+                '✓ Profile saved to your ledger below</p>',
+                unsafe_allow_html=True,
+            )
+            ca, cb = st.columns(2)
+            with ca:
+                if st.button("💬 Ask OctoBot about my profile", key="memory_to_chat", use_container_width=True):
+                    bal_display = f"{bal:.4f}" if bal is not None else "0"
+                    st.session_state["pending_q"] = (
+                        f"Based on my wallet with {tx_count or 0} transactions and "
+                        f"{bal_display} PROS balance, what should I do next on Pharos?"
+                    )
+                    st.session_state.chat_mode = "general"
+                    st.session_state.page = "chat"
+                    st.rerun()
+            with cb:
+                st.link_button("🔍 View on Pharos Explorer", PHAROS_EXPLORER_URL + "/address/" + addr,
+                                use_container_width=True)
+
+    with tab_tx:
+        st.markdown(
+            '<p style="font-family:var(--fb);font-size:12.5px;color:var(--t2);margin:0.5rem 0 0.8rem 0;">'
+            'Paste any Pharos transaction hash — OctoBot reads it on-chain and explains it in plain language.</p>',
+            unsafe_allow_html=True,
+        )
+        tx_input = st.text_input(
+            "Transaction hash", placeholder="0x...transaction hash from pharosscan.xyz",
+            key="tx_hash_field", label_visibility="collapsed",
+        )
+        if st.button("🧠  Explain this transaction", key="explain_tx_btn"):
+            cleaned = tx_input.strip()
+            if valid_txhash(cleaned):
+                st.session_state.tx_hash_input  = cleaned
+                st.session_state.tx_data        = None
                 st.session_state.tx_explanation = None
-            st.rerun()
-
-    # ═══════════════════════════════════════════════════════════════
-    # ROUTER: detail view vs. dashboard
-    # ═══════════════════════════════════════════════════════════════
-    _detail_id = st.session_state.get("ml_wallet_detail")
-    _detail_entry = _find(_detail_id) if _detail_id else None
-
-    if _detail_entry and _detail_entry["type"] == "wallet":
-        _render_wallet_detail(_detail_entry)
-
-    else:
-        if _detail_id and not _detail_entry:
-            st.session_state.ml_wallet_detail = None  # stale selection
-
-        # ── Hero banner ───────────────────────────────────────────
-        # A cohesive feature hero: text + actions on the left, a 3D glass
-        # ledger visual on the right, in one rounded dark-glass container.
-        with st.container(border=True):
-            st.markdown('<span class="ml-heromark"></span>', unsafe_allow_html=True)
-            h_txt, h_vis = st.columns([1.4, 1])
-            with h_txt:
-                st.markdown(
-                    '<div class="ml-hero-eyebrow"><span class="dot"></span>OctoBot · On-chain Intelligence</div>'
-                    '<h1 class="ml-hero-title">Memory Ledger</h1>'
-                    '<p class="ml-hero-sub">Your on-chain intelligence, organized by wallet and transaction — '
-                    'read-only, nothing ever signed or spent.</p>',
-                    unsafe_allow_html=True,
-                )
-                hb1, hb2, _hsp = st.columns([1.5, 1.3, 1.4])
-                with hb1:
-                    if st.button("💬  Ask OctoBot", key="mlcta_header_ask", use_container_width=True):
-                        st.session_state.chat_mode = "general"
-                        st.session_state.page = "chat"
-                        st.rerun()
-                with hb2:
-                    st.link_button("🔍  Explorer", PHAROS_EXPLORER_URL, use_container_width=True)
-            with h_vis:
-                st.markdown(
-                    '<div class="ml-hero-visual">'
-                    '<div class="glow"></div><div class="ring"></div>'
-                    '<div class="ml-cube c1"></div><div class="ml-cube c2"></div>'
-                    '<div class="ml-cube c3"></div><div class="ml-cube c4"></div>'
-                    '<div class="ml-ledger"><div class="face">'
-                    '<div class="octo">🐙</div><div class="lbl">Memory Ledger</div>'
-                    '</div></div></div>',
-                    unsafe_allow_html=True,
-                )
-        st.markdown('<div style="height:1.3rem;"></div>', unsafe_allow_html=True)
-
-        # ── KPI row ───────────────────────────────────────────────
-        wallet_n = sum(1 for e in entries if e["type"] == "wallet")
-        tx_n = sum(1 for e in entries if e["type"] == "tx")
-        last_ts = max((e["created_at"] for e in entries), default=None)
-
-        def _kpi(col, ic, lbl, val, sub):
-            with col:
-                st.markdown(
-                    f'<div class="ml-kpi"><div class="ml-kpi-top">'
-                    f'<div class="ml-kpi-ic">{ic}</div><div class="ml-kpi-lbl">{lbl}</div></div>'
-                    f'<div class="ml-kpi-val">{val}</div><div class="ml-kpi-sub">{sub}</div></div>',
-                    unsafe_allow_html=True,
-                )
-        k1, k2, k3, k4 = st.columns(4)
-        _kpi(k1, "🧠", "Total memories", len(entries), "Wallet profiles + tx insights")
-        _kpi(k2, "🔑", "Wallet profiles", wallet_n, "AI-synthesized profiles")
-        _kpi(k3, "🧾", "Transactions", tx_n, "Explained on-chain")
-        _kpi(k4, "🕐", "Last updated",
-             mem_relative_time(last_ts) if last_ts else "—", "Latest intelligence update")
-
-        st.markdown('<div style="height:0.9rem;"></div>', unsafe_allow_html=True)
-
-        # ── Primary segmented navigation ──────────────────────────
-        _opts = ["Wallet Profiles", "Transaction Intelligence"]
-        _cur = st.session_state.get("ml_view", "Wallet Profiles")
-        _sel = st.segmented_control(
-            "Memory type", _opts, default=_cur,
-            key="ml_view_seg", label_visibility="collapsed",
-        )
-        if _sel:
-            st.session_state.ml_view = _sel
-        view = st.session_state.get("ml_view", "Wallet Profiles")
-
-        # Global empty state — nothing captured at all
-        if not entries and not st.session_state.wallet_address and not st.session_state.tx_hash_input:
-            _empty_all = True
-        else:
-            _empty_all = False
-
-        # ══════════════════════════════════════════════════════════
-        # VIEW 1 — WALLET PROFILES
-        # ══════════════════════════════════════════════════════════
-        if view == "Wallet Profiles":
-
-            # Connected wallet OR add-wallet toolbar (single control)
-            if st.session_state.wallet_address:
-                addr = st.session_state.wallet_address
-                _cw = st.session_state.get("wallet_data") or {}
-                _bal, _txc = _cw.get("balance_pros"), _cw.get("tx_count")
-                _meta = []
-                if _bal is not None:
-                    _meta.append(f"{_bal:.4f} PROS")
-                if _txc is not None:
-                    _meta.append(f"{_txc} transaction" + ("s" if _txc != 1 else ""))
-                _meta_html = (f'<div class="ml-conn2-meta">{esc(" · ".join(_meta))}</div>'
-                              if _meta else "")
-                # Identity panel — self-styled so padding / breathing room are
-                # guaranteed regardless of Streamlit's container internals.
-                st.markdown(
-                    '<div class="ml-conn-panel">'
-                    '<div class="ml-conn2-lbl"><span class="ml-dot"></span>Connected wallet</div>'
-                    f'<div class="ml-conn2-addr">{esc(addr)}</div>'
-                    f'{_meta_html}</div>',
-                    unsafe_allow_html=True,
-                )
-                # Actions — on their own row, clearly separated from the card.
-                st.markdown('<div style="height:1.8rem;"></div>', unsafe_allow_html=True)
-                _sp, cbe, cbd = st.columns([2.6, 1.2, 1.2])
-                with cbe:
-                    st.link_button("Explorer", PHAROS_EXPLORER_URL + "/address/" + addr,
-                                   use_container_width=True)
-                with cbd:
-                    if st.button("Disconnect", key="mlact_disconnect", use_container_width=True):
-                        st.session_state.wallet_address = ""
-                        st.session_state.wallet_data = None
-                        st.session_state.wallet_profile = None
-                        st.rerun()
-                # Clear section break: end of Connected Wallet, start of the
-                # Wallet Profiles list below (hairline + balanced whitespace).
-                st.markdown(
-                    '<div style="height:1.1rem;border-bottom:1px solid var(--ml-border);'
-                    'margin-bottom:1.1rem;"></div>',
-                    unsafe_allow_html=True,
-                )
-
-                # Fetch + synthesize + file to ledger (preserves original flow)
-                if st.session_state.wallet_data is None:
-                    with st.spinner("Reading on-chain activity from Pharos…"):
-                        st.session_state.wallet_data = fetch_pharos_onchain_data(addr)
-                data = st.session_state.wallet_data
-                if not data.get("available"):
-                    st.warning("⚠️ Could not reach Pharos RPC — this wallet may be new, or the network is "
-                               "temporarily unavailable. Your address was still read; no funds or gas were used.")
-                if st.session_state.wallet_profile is None:
-                    with st.spinner("OctoBot is synthesising your intelligence profile…"):
-                        profile = synthesize_wallet_profile(data)
-                        st.session_state.wallet_profile = profile
-                        bal, tx_count = data.get("balance_pros"), data.get("tx_count")
-                        mem_upsert({
-                            "id": f"wallet:{addr}", "type": "wallet", "created_at": time.time(),
-                            "title": _short(addr), "full_addr": addr,
-                            "summary": profile.get("summary", ""), "tags": profile.get("tags", []),
-                            "risk": profile.get("risk", "Unknown"), "insight": profile.get("insight", ""),
-                            "steps": None,
-                            "metrics": [
-                                ("Balance", f"{bal:.4f} PROS" if bal is not None else "—"),
-                                ("Transactions", tx_count if tx_count is not None else "—"),
-                                ("Type", "Contract" if data.get("is_contract") else "Wallet"),
-                            ],
-                            "explorer_url": PHAROS_EXPLORER_URL + "/address/" + addr,
-                        })
-                    # Auto-open the freshly generated Wallet Intelligence report —
-                    # the user asked for it; don't make them click "View profile".
-                    st.session_state.ml_wallet_detail = f"wallet:{addr}"
-                    st.rerun()
+                st.rerun()
             else:
-                with st.container(border=True):
-                    st.markdown('<span class="ml-cardmark"></span>', unsafe_allow_html=True)
-                    st.markdown(
-                        '<div class="ml-seclabel" style="margin:0 0 0.7rem 0;">Profile a wallet</div>',
-                        unsafe_allow_html=True,
-                    )
-                    ac1, ac2 = st.columns([4.2, 1.3])
-                    with ac1:
-                        manual_addr = st.text_input(
-                            "Wallet address", placeholder="0x… any Pharos wallet address",
-                            key="manual_wallet_input", label_visibility="collapsed",
-                        )
-                    with ac2:
-                        if st.button("Analyze", key="mlact_analyze_wallet", use_container_width=True, type="primary"):
-                            if valid_addr(manual_addr):
-                                st.session_state.wallet_address = manual_addr.strip()
-                                st.session_state.wallet_data = None
-                                st.session_state.wallet_profile = None
-                                st.rerun()
-                            else:
-                                st.error("Enter a valid 0x… wallet address (42 characters).")
+                st.error("Enter a valid 0x... transaction hash (66 characters).")
 
-            wallet_entries = [e for e in entries if e["type"] == "wallet"]
+        if st.session_state.tx_hash_input:
+            tx_h = st.session_state.tx_hash_input
+            if st.session_state.tx_data is None:
+                with st.spinner("Reading transaction from Pharos…"):
+                    st.session_state.tx_data = fetch_pharos_transaction(tx_h)
+            tx_data = st.session_state.tx_data
 
-            # Toolbar: search / sort  (single, no duplicates)
-            if wallet_entries:
-                tb1, tb2 = st.columns([3.4, 1.4])
-                with tb1:
-                    st.session_state.mem_search = st.text_input(
-                        "Search wallets", value=st.session_state.mem_search,
-                        placeholder="🔍 Search wallets, addresses, summaries, tags…",
-                        key="mem_search_input_w", label_visibility="collapsed",
-                    )
-                with tb2:
-                    st.session_state.mem_sort = st.selectbox(
-                        "Sort", ["Newest first", "Oldest first"],
-                        index=["Newest first", "Oldest first"].index(st.session_state.mem_sort),
-                        key="mem_sort_input_w", label_visibility="collapsed",
-                    )
-
-            # Filter + sort
-            q = st.session_state.mem_search.strip().lower()
-            wl = list(wallet_entries)
-            if q:
-                wl = [e for e in wl if q in e["title"].lower() or q in e["full_addr"].lower()
-                      or q in e["summary"].lower() or any(q in t.lower() for t in e["tags"])]
-            wl.sort(key=lambda e: e["created_at"], reverse=(st.session_state.mem_sort == "Newest first"))
-
-            st.markdown(
-                f'<div class="ml-seclabel" style="margin:1.3rem 0 0.6rem 0;">'
-                f'Wallet profiles · {len(wl)}</div>', unsafe_allow_html=True)
-
-            if not wallet_entries:
-                st.markdown(
-                    '<div class="ml-empty"><div class="ml-empty-ic">🔑</div>'
-                    '<div class="ml-empty-t">No wallet profiles yet</div>'
-                    '<div class="ml-empty-s">Analyze any Pharos wallet above — OctoBot builds a read-only '
-                    'intelligence profile and files it here, ready to search and revisit.</div></div>',
-                    unsafe_allow_html=True,
-                )
-            elif not wl:
-                st.markdown(
-                    '<div class="ml-empty"><div class="ml-empty-ic">🔍</div>'
-                    '<div class="ml-empty-t">No wallets match your search</div>'
-                    '<div class="ml-empty-s">Try a different term, or clear the search.</div></div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("Clear search", key="mlact_clear_w"):
-                    st.session_state.mem_search = ""
-                    st.rerun()
+            if tx_data.get("error") and not tx_data.get("from_addr"):
+                st.warning("⚠️ " + str(tx_data.get("error", "Could not read this transaction.")))
             else:
-                for e in wl:
-                    mdict = {k: v for k, v in e.get("metrics", [])}
-                    rcls, rtxt = _risk_badge(e.get("risk"))
-                    with st.container(border=True):
-                        st.markdown('<span class="ml-cardmark"></span>', unsafe_allow_html=True)
-                        # Row 1 — identity (left) + key metrics (right)
-                        top_l, top_r = st.columns([3, 1.8])
-                        with top_l:
-                            st.markdown(
-                                f'<div class="ml-row-id"><div class="ml-ava">🔑</div>'
-                                f'<div style="min-width:0;"><div class="ml-addr">{esc(e["title"])}</div>'
-                                f'<div style="margin-top:7px;"><span class="ml-badge {rcls}">{esc(rtxt)}</span></div>'
-                                f'</div></div>',
-                                unsafe_allow_html=True,
-                            )
-                        with top_r:
-                            st.markdown(
-                                f'<div class="ml-row-metrics">'
-                                f'<div class="m"><div class="l">Balance</div>'
-                                f'<div class="v">{esc(str(mdict.get("Balance","—")))}</div></div>'
-                                f'<div class="m"><div class="l">Txns</div>'
-                                f'<div class="v">{esc(str(mdict.get("Transactions","—")))}</div></div>'
-                                f'</div>',
-                                unsafe_allow_html=True,
-                            )
-                        # Row 2 — AI summary (full width, wraps) + tags + timestamp
-                        tags_html = "".join(f'<span class="ml-tag">{esc(t)}</span>'
-                                            for t in (e.get("tags") or [])[:3] if t)
-                        st.markdown(
-                            f'<p class="ml-summary" style="margin:0.9rem 0 0 0;">'
-                            f'{esc(e.get("summary") or "No summary available.")}</p>'
-                            + (f'<div class="ml-tags" style="margin-top:0.7rem;">{tags_html}</div>'
-                               if tags_html else "")
-                            + f'<div class="ml-row-time">Analyzed {mem_relative_time(e["created_at"])}</div>',
-                            unsafe_allow_html=True,
-                        )
-                        # Row 3 — ruled action bar
-                        st.markdown(
-                            '<div style="border-top:1px solid var(--ml-border);margin:0.95rem 0 0.25rem 0;"></div>',
-                            unsafe_allow_html=True,
-                        )
-                        b1, b2, b3, _sp = st.columns([1.6, 1.5, 1.3, 3.1])
-                        with b1:
-                            if st.button("Open report", key=f"mlact_view_{e['id']}", use_container_width=True):
-                                st.session_state.ml_wallet_detail = e["id"]
-                                st.rerun()
-                        with b2:
-                            if st.button("Ask OctoBot", key=f"mlact_ask_{e['id']}", use_container_width=True):
-                                st.session_state["pending_q"] = (
-                                    f"Tell me about the wallet {e['full_addr']} — {e.get('summary','')}"
-                                )
-                                st.session_state.chat_mode = "general"
-                                st.session_state.page = "chat"
-                                st.rerun()
-                        with b3:
-                            if st.button("Remove", key=f"mlact_del_{e['id']}", use_container_width=True):
-                                mem_remove(e["id"])
-                                if e["full_addr"] == st.session_state.wallet_address:
-                                    st.session_state.wallet_address = ""
-                                    st.session_state.wallet_data = None
-                                    st.session_state.wallet_profile = None
-                                st.rerun()
+                short_hash = tx_h[:10] + "…" + tx_h[-6:]
+                status = tx_data.get("status")
+                status_label = ("✓ Success" if status == "success" else
+                                 "✕ Failed"  if status == "failed"  else "⏳ Pending")
 
-        # ══════════════════════════════════════════════════════════
-        # VIEW 2 — TRANSACTION INTELLIGENCE  (table-first)
-        # ══════════════════════════════════════════════════════════
-        else:
-            with st.container(border=True):
-                st.markdown('<span class="ml-cardmark"></span>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="ml-seclabel" style="margin:0 0 0.7rem 0;">Explain a transaction</div>',
-                    unsafe_allow_html=True,
-                )
-                tc1, tc2 = st.columns([4.2, 1.3])
-                with tc1:
-                    tx_input = st.text_input(
-                        "Transaction hash", placeholder="0x… transaction hash from pharosscan.xyz",
-                        key="tx_hash_field", label_visibility="collapsed",
-                    )
-                with tc2:
-                    if st.button("Explain", key="mlact_explain_tx", use_container_width=True, type="primary"):
-                        cleaned = tx_input.strip()
-                        if valid_txhash(cleaned):
-                            st.session_state.tx_hash_input = cleaned
-                            st.session_state.tx_data = None
-                            st.session_state.tx_explanation = None
-                            st.rerun()
-                        else:
-                            st.error("Enter a valid 0x… transaction hash (66 characters).")
-
-            # Clear section break: end of the explainer input, start of the
-            # Transaction Intelligence list below.
-            st.markdown(
-                '<div style="height:1.1rem;border-bottom:1px solid var(--ml-border);'
-                'margin-bottom:1.1rem;"></div>',
-                unsafe_allow_html=True,
-            )
-
-            # Resolve a freshly-submitted hash → fetch + explain + file
-            if st.session_state.tx_hash_input:
-                tx_h = st.session_state.tx_hash_input
-                if st.session_state.tx_data is None:
-                    with st.spinner("Reading transaction from Pharos…"):
-                        st.session_state.tx_data = fetch_pharos_transaction(tx_h)
-                tx_data = st.session_state.tx_data
-                if tx_data.get("error") and not tx_data.get("from_addr"):
-                    st.warning("⚠️ " + str(tx_data.get("error", "Could not read this transaction.")))
-                elif st.session_state.tx_explanation is None:
+                if st.session_state.tx_explanation is None:
                     with st.spinner("OctoBot is explaining this transaction…"):
                         explanation = explain_transaction(tx_data)
                         st.session_state.tx_explanation = explanation
-                        status = tx_data.get("status")
-                        status_label = ("✓ Success" if status == "success" else
-                                        "✕ Failed" if status == "failed" else "⏳ Pending")
                         value_pros, gas_used = tx_data.get("value_pros"), tx_data.get("gas_used")
                         mem_upsert({
-                            "id": f"tx:{tx_h}", "type": "tx", "created_at": time.time(),
-                            "title": tx_h[:10] + "…" + tx_h[-6:], "full_addr": tx_h,
+                            "id": f"tx:{tx_h}",
+                            "type": "tx",
+                            "created_at": time.time(),
+                            "title": short_hash,
+                            "full_addr": tx_h,
                             "summary": explanation.get("summary", ""),
                             "tags": [explanation.get("category", "Transaction")],
-                            "risk": status_label, "insight": None,
+                            "risk": status_label,
+                            "insight": None,
                             "steps": explanation.get("plain_steps", []),
                             "metrics": [
                                 ("Status", status_label),
                                 ("Value", f"{value_pros:.4f} PROS" if value_pros is not None else "—"),
                                 ("Gas Used", f"{gas_used:,}" if gas_used is not None else "—"),
                             ],
-                            # Persist the real on-chain fields so the Transaction
-                            # Intelligence report (transfer flow + details) renders
-                            # from actual data even after a rerun / from the ledger.
-                            "tx": {
-                                "from_addr": tx_data.get("from_addr"),
-                                "to_addr": tx_data.get("to_addr"),
-                                "value_pros": tx_data.get("value_pros"),
-                                "gas_used": tx_data.get("gas_used"),
-                                "gas_price_gwei": tx_data.get("gas_price_gwei"),
-                                "block_number": tx_data.get("block_number"),
-                                "is_contract_call": tx_data.get("is_contract_call"),
-                                "input_data": tx_data.get("input_data"),
-                            },
                             "explorer_url": PHAROS_EXPLORER_URL + "/tx/" + tx_h,
                         })
-                    # Auto-open the freshly generated Transaction Intelligence
-                    # report drawer on the next run (no "Inspect" click needed).
-                    st.session_state.ml_tx_autoopen = f"tx:{tx_h}"
                     st.rerun()
 
-            # Auto-open the report drawer once, right after analysis completes.
-            _auto_tx = st.session_state.pop("ml_tx_autoopen", None)
-            if _auto_tx:
-                _auto_e = _find(_auto_tx)
-                if _auto_e:
-                    _tx_drawer(_auto_e)
-
-            tx_entries = [e for e in entries if e["type"] == "tx"]
-
-            if tx_entries:
-                ts1, ts2 = st.columns([3.4, 1.4])
-                with ts1:
-                    st.session_state.mem_search = st.text_input(
-                        "Search transactions", value=st.session_state.mem_search,
-                        placeholder="🔍 Search hashes, summaries, categories…",
-                        key="mem_search_input_t", label_visibility="collapsed",
-                    )
-                with ts2:
-                    st.session_state.mem_sort = st.selectbox(
-                        "Sort", ["Newest first", "Oldest first"],
-                        index=["Newest first", "Oldest first"].index(st.session_state.mem_sort),
-                        key="mem_sort_input_t", label_visibility="collapsed",
-                    )
-
-            q = st.session_state.mem_search.strip().lower()
-            tl = list(tx_entries)
-            if q:
-                tl = [e for e in tl if q in e["title"].lower() or q in e["full_addr"].lower()
-                      or q in e["summary"].lower() or any(q in t.lower() for t in e["tags"])]
-            tl.sort(key=lambda e: e["created_at"], reverse=(st.session_state.mem_sort == "Newest first"))
-
-            st.markdown(
-                f'<div class="ml-seclabel" style="margin:1.3rem 0 0.6rem 0;">'
-                f'Transaction intelligence · {len(tl)}</div>', unsafe_allow_html=True)
-
-            if not tx_entries:
                 st.markdown(
-                    '<div class="ml-empty"><div class="ml-empty-ic">🧾</div>'
-                    '<div class="ml-empty-t">No transactions explained yet</div>'
-                    '<div class="ml-empty-s">Paste any Pharos transaction hash above — OctoBot reads it '
-                    'on-chain and explains it in plain language, then files it here.</div></div>',
+                    '<p style="font-family:var(--fb);font-size:12px;color:var(--green);margin:0.2rem 0 0.7rem 0;">'
+                    '✓ Explained — saved to your ledger below</p>',
                     unsafe_allow_html=True,
                 )
-            elif not tl:
-                st.markdown(
-                    '<div class="ml-empty"><div class="ml-empty-ic">🔍</div>'
-                    '<div class="ml-empty-t">No transactions match your search</div>'
-                    '<div class="ml-empty-s">Try a different term, or clear the search.</div></div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("Clear search", key="mlact_clear_t"):
-                    st.session_state.mem_search = ""
-                    st.rerun()
-            else:
-                for e in tl:
-                    md = {k: v for k, v in e.get("metrics", [])}
-                    scls, stxt = _risk_badge(e.get("risk"))
-                    action = (e.get("tags") or ["Transaction"])[0]
-                    with st.container(border=True):
-                        st.markdown('<span class="ml-txcard"></span>', unsafe_allow_html=True)
-                        # Row 1 — identity + action | amount + status | Inspect
-                        c_id, c_amt, c_btn = st.columns([4.4, 2.7, 1.5])
-                        with c_id:
-                            st.markdown(
-                                f'<div class="ml-txrow-id"><span class="ml-tx-hash">{esc(e["title"])}</span>'
-                                f'<span class="ml-badge accent">{esc(action)}</span></div>',
-                                unsafe_allow_html=True,
-                            )
-                        with c_amt:
-                            st.markdown(
-                                f'<div class="ml-txrow-amt"><span class="ml-tx-amt">{esc(str(md.get("Value","—")))}</span>'
-                                f'<span class="ml-badge {scls}">{esc(stxt)}</span></div>',
-                                unsafe_allow_html=True,
-                            )
-                        with c_btn:
-                            if st.button("Inspect", key=f"mlact_insp_{e['id']}", use_container_width=True):
-                                _tx_drawer(e)
-                        # Hairline rule, then plain-language summary + timestamp
-                        st.markdown(
-                            f'<div class="ml-txrow-foot"><div class="rule"></div>'
-                            f'<div class="line"><span class="sum">{esc(e.get("summary") or "—")}</span>'
-                            f'<span class="time">{mem_relative_time(e["created_at"])}</span></div></div>',
-                            unsafe_allow_html=True,
-                        )
+                ta, tb = st.columns(2)
+                with ta:
+                    if st.button("✕ Clear", key="clear_tx", use_container_width=True):
+                        st.session_state.tx_hash_input  = ""
+                        st.session_state.tx_data        = None
+                        st.session_state.tx_explanation = None
+                        st.rerun()
+                with tb:
+                    st.link_button("🔍 View on Pharos Explorer", PHAROS_EXPLORER_URL + "/tx/" + tx_h,
+                                    use_container_width=True)
 
-        st.markdown(
-            '<p class="ml-fb" style="font-size:11.5px;font-weight:500;color:var(--ml-t2);'
-            'text-align:center;margin-top:1.6rem;line-height:1.6;">'
-            'All memories are generated from public on-chain data only · No funds ever accessed · '
-            'Remove any entry anytime</p>',
-            unsafe_allow_html=True,
+    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+
+    # ── Ledger: search / filter / sort controls ───────────────────────
+    tc1, tc2, tc3 = st.columns([3, 1.2, 1.2])
+    with tc1:
+        st.session_state.mem_search = st.text_input(
+            "Search memories", value=st.session_state.mem_search,
+            placeholder="🔍 Search by address, hash, summary or tag…",
+            key="mem_search_input", label_visibility="collapsed",
+        )
+    with tc2:
+        st.session_state.mem_filter = st.selectbox(
+            "Category", ["All", "Wallet Profiles", "Transactions"],
+            index=["All", "Wallet Profiles", "Transactions"].index(st.session_state.mem_filter),
+            key="mem_filter_input", label_visibility="collapsed",
+        )
+    with tc3:
+        st.session_state.mem_sort = st.selectbox(
+            "Sort", ["Newest first", "Oldest first"],
+            index=["Newest first", "Oldest first"].index(st.session_state.mem_sort),
+            key="mem_sort_input", label_visibility="collapsed",
         )
 
+    # ── Filter + sort ──────────────────────────────
+    q = st.session_state.mem_search.strip().lower()
+    filtered = list(entries)
+    if st.session_state.mem_filter == "Wallet Profiles":
+        filtered = [e for e in filtered if e["type"] == "wallet"]
+    elif st.session_state.mem_filter == "Transactions":
+        filtered = [e for e in filtered if e["type"] == "tx"]
+    if q:
+        filtered = [
+            e for e in filtered
+            if q in e["title"].lower() or q in e["full_addr"].lower()
+            or q in e["summary"].lower() or any(q in t.lower() for t in e["tags"])
+        ]
+    filtered.sort(key=lambda e: e["created_at"], reverse=(st.session_state.mem_sort == "Newest first"))
+
+    # ── Empty state — no memories saved at all yet ────────────────────
+    if not entries:
+        st.markdown(
+            '<div class="mld-empty"><div class="mld-empty-ic">🧠</div>'
+            '<div class="mld-empty-title">No memories yet</div>'
+            '<div class="mld-empty-sub">Profile a wallet or explain a transaction above — '
+            'OctoBot will remember it here, ready to search and revisit anytime.</div></div>',
+            unsafe_allow_html=True,
+        )
+    # ── No-results state — filters/search hide everything ────────────
+    elif not filtered:
+        st.markdown(
+            '<div class="mld-empty"><div class="mld-empty-ic">🔍</div>'
+            '<div class="mld-empty-title">No memories match your filters</div>'
+            '<div class="mld-empty-sub">Try a different search term, or switch the category back to "All".</div></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Clear filters", key="mem_clear_filters"):
+            st.session_state.mem_search = ""
+            st.session_state.mem_filter = "All"
+            st.rerun()
+    else:
+        # ── Grouped sections — wallets and transactions kept apart
+        # rather than one continuous feed, each its own responsive grid ──
+        def _mld_render_group(title, icon, group):
+            if not group:
+                return
+            st.markdown(
+                f'<div class="mld-section-head"><span class="mld-section-title">{icon} {title}</span>'
+                f'<span class="mld-section-count">{len(group)}</span></div>',
+                unsafe_allow_html=True,
+            )
+            cols = st.columns(3)
+            for i, e in enumerate(group):
+                with cols[i % 3]:
+                    badge_cls = "wallet" if e["type"] == "wallet" else "tx"
+                    badge_txt = "Wallet" if e["type"] == "wallet" else "Transaction"
+                    tags_html = "".join(f'<span class="tag">{esc(t)}</span>' for t in e["tags"] if t)
+                    metrics_html = "".join(
+                        f'<div class="mld-metric"><div class="mld-metric-lbl">{esc(k)}</div>'
+                        f'<div class="mld-metric-val">{esc(str(v))}</div></div>'
+                        for k, v in e["metrics"]
+                    )
+                    st.markdown(
+                        f'<div class="mld-card">'
+                        f'<div class="mld-card-top">'
+                        f'<div><span class="mld-badge {badge_cls}">{badge_txt}</span><br>'
+                        f'<span class="mld-card-id">{esc(e["title"])}</span></div>'
+                        f'<span class="mld-time">{mem_relative_time(e["created_at"])}</span>'
+                        f'</div>'
+                        f'<p class="mld-summary">{esc(e["summary"]) or "No summary available."}</p>'
+                        f'<div class="mld-metrics">{metrics_html}</div>'
+                        f'<div class="mld-tags">{tags_html}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    with st.expander("View full details"):
+                        if e.get("insight"):
+                            st.markdown(f"**💡 Suggested next step:** {e['insight']}")
+                        if e.get("steps"):
+                            for s in e["steps"]:
+                                st.markdown(f"→ {s}")
+                        st.markdown(
+                            f'<div class="mld-detail-row"><span class="mld-detail-k">Full identifier</span>'
+                            f'<span class="mld-detail-v" style="font-family:monospace;font-size:11px;">{esc(e["full_addr"])}</span></div>'
+                            f'<div class="mld-detail-row"><span class="mld-detail-k">Risk / Status</span>'
+                            f'<span class="mld-detail-v">{esc(str(e["risk"]))}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                        da, db = st.columns(2)
+                        with da:
+                            st.link_button("🔍 Explorer", e["explorer_url"], use_container_width=True)
+                        with db:
+                            if st.button("🗑 Remove", key=f"mem_del_{e['id']}", use_container_width=True):
+                                mem_remove(e["id"])
+                                if e["type"] == "wallet" and e["full_addr"] == st.session_state.wallet_address:
+                                    st.session_state.wallet_address  = ""
+                                    st.session_state.wallet_data     = None
+                                    st.session_state.wallet_profile  = None
+                                if e["type"] == "tx" and e["full_addr"] == st.session_state.tx_hash_input:
+                                    st.session_state.tx_hash_input   = ""
+                                    st.session_state.tx_data         = None
+                                    st.session_state.tx_explanation  = None
+                                st.rerun()
+
+        if st.session_state.mem_filter in ("All", "Wallet Profiles"):
+            _mld_render_group("Wallet Profiles", "🔑", [e for e in filtered if e["type"] == "wallet"])
+        if st.session_state.mem_filter in ("All", "Transactions"):
+            _mld_render_group("Transactions", "🧾", [e for e in filtered if e["type"] == "tx"])
+
+    st.markdown(
+        '<p style="font-family:var(--fb);font-size:10.5px;color:var(--t3);text-align:center;margin-top:1.4rem;">'
+        'All memories are generated from public on-chain data only · No funds ever accessed · '
+        'Remove any entry anytime</p>',
+        unsafe_allow_html=True,
+    )
 
 # ═════════════════════════════════════════════
 # PAGE: CHAT

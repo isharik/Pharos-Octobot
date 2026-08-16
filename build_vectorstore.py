@@ -24,19 +24,21 @@ import shutil
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 
 load_dotenv()
 
 RAW_DOCS_DIR    = "raw_docs"
-CHROMA_DB_DIR   = "chroma_db"
+CHROMA_DB_DIR   = "chroma_gemini"
 COLLECTION_NAME = "pharos_docs"
 CHUNK_SIZE      = 1000
 CHUNK_OVERLAP   = 150
 
 # ── MUST match octobot.py exactly ──────────────────────────────
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# API embedder (no local torch/transformers). To rebuild from an existing
+# store instead of raw_docs, use rebuild_vectorstore_gemini.py.
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 
 def load_documents():
@@ -96,8 +98,9 @@ def build_vectorstore(chunks):
     print(f"\nGenerating embeddings using: {EMBEDDING_MODEL}")
     print("This may take several minutes for large doc sets...\n")
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        google_api_key=os.getenv("GEMINI_API_KEY"),
     )
 
     if os.path.exists(CHROMA_DB_DIR):

@@ -32,8 +32,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
@@ -44,11 +43,14 @@ load_dotenv()
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-CHROMA_DB_DIR   = "chroma_db"
+CHROMA_DB_DIR   = "chroma_gemini"
 COLLECTION_NAME = "pharos_docs"
 TOP_K           = 5
 GEMINI_MODEL    = "gemini-2.5-flash"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# Embeddings via Google's API instead of a local sentence-transformers model.
+# This drops torch + transformers (~1 GB) from the app entirely, so it boots
+# far faster and uses much less memory. MUST match what built chroma_gemini.
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # ─────────────────────────────────────────────
 # SYSTEM PROMPT — multilingual + anti-hallucination
@@ -103,8 +105,12 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
 # ─────────────────────────────────────────────
 
 @st.cache_resource(show_spinner=False)
-def _get_embeddings(model_name: str) -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(model_name=model_name)
+def _get_embeddings(model_name: str) -> GoogleGenerativeAIEmbeddings:
+    # API-based embedder — no local model download, no torch/transformers.
+    return GoogleGenerativeAIEmbeddings(
+        model=model_name,
+        google_api_key=os.getenv("GEMINI_API_KEY"),
+    )
 
 
 @st.cache_resource(show_spinner=False)

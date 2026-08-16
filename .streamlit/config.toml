@@ -1,0 +1,20 @@
+# Streamlit runtime config — performance / startup tuning.
+# Kept intentionally conservative so local development (hot reload) is
+# unaffected. Only removes work that never helps the user.
+
+[browser]
+# Don't POST anonymous usage telemetry on every session start.
+gatherUsageStats = false
+
+[server]
+# Never try to auto-open a browser tab / prompt for email on boot.
+headless = true
+# CRITICAL PERF FIX: the default watcher enumerates every imported module's
+# __path__ on startup and on every change-scan. Because this app imports
+# `transformers` (via the RAG embedder), that walk lazily triggers hundreds
+# of transformers model submodules — ~54KB of import errors and real, ongoing
+# CPU cost. Disabling the watcher removes that overhead entirely.
+# Tradeoff: editing app.py no longer auto hot-reloads — restart the server to
+# see code changes. During heavy UI editing, temporarily set this back to
+# "auto" (or "poll") and accept the transformers-walk overhead.
+fileWatcherType = "none"
