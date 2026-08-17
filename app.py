@@ -7395,6 +7395,7 @@ if _sailor:
     st.session_state.sailor_name = _sailor
     st.session_state.sailor_done = True
     st.session_state.page = "chat"
+    st.session_state._gate_cleanup_pending = True
     st.query_params.clear()
 
 # ─────────────────────────────────────────────
@@ -11069,6 +11070,33 @@ html[data-theme="dark"]{
 # ═════════════════════════════════════════════
 elif st.session_state.page == "chat":
 
+    # ── One-shot cleanup of the previous gate render ──────────────────
+    # Fires ONLY on the single rerun that just transitioned sailor_done
+    # False->True (flag is popped, so this never runs again on ordinary
+    # chat reruns — e.g. sending a message). The gate's WebGL scene lives
+    # in a position:fixed, full-viewport components.html iframe; Streamlit
+    # doesn't guarantee that iframe is removed from the DOM in the same
+    # instant this new page starts painting, so without this the old
+    # scene could still be visible, full-size, over the new chat page.
+    # This actively removes it instead of waiting on that teardown timing.
+    if st.session_state.pop("_gate_cleanup_pending", False):
+        components.html(
+            """<script>
+(function(){
+  try{
+    var pd = window.parent.document, root = pd.documentElement;
+    var old = pd.querySelectorAll('iframe[data-gocto-scene]');
+    for(var i=0;i<old.length;i++){ try{ old[i].remove(); }catch(e){} }
+    var fb = pd.querySelector('.gs-fallback'); if(fb) fb.remove();
+    var env = pd.querySelector('.gs-env'); if(env) env.remove();
+    root.classList.remove('gocto-webgl-on');
+    root.removeAttribute('data-gs-ready');
+  }catch(e){}
+})();
+</script>""",
+            height=0, width=0,
+        )
+
     # ── In-page loading placeholder while OctoBot initialises ──
     # Uses the skeleton system (not the fullscreen overlay — that is
     # startup-only). The nav-veil handles the page transition; this
@@ -11245,6 +11273,19 @@ section[data-testid="stMain"] [data-testid="stMainBlockContainer"]{
   max-width:1240px!important;margin:0 auto!important;padding:112px 2.4rem 4rem!important;
   min-height:100vh!important;display:flex!important;flex-direction:column!important;
   justify-content:center!important;contain:none!important;animation:none!important;background:transparent!important;}
+/* ── Hidden-until-ready ──────────────────────────────────────────────
+   On a COLD full-page reload (Home -> "Start Chat" does location.reload()),
+   fonts and the WebGL scene's first correct layout() pass both take real
+   time to arrive — without this, the browser paints whatever HTML/CSS it
+   has so far, which is exactly the "mascot in the wrong spot, oversized
+   ring" flash. Content stays invisible until the scene script confirms
+   fonts are loaded AND at least one paint has happened, then everything
+   fades in together in one frame. The nav bar is untouched (separate
+   chrome, not part of this list) so it can appear immediately as normal. */
+html:not([data-gs-ready]) [data-testid="stMainBlockContainer"],
+html:not([data-gs-ready]) .gs-env,
+html:not([data-gs-ready]) .gs-fallback{opacity:0!important;}
+[data-testid="stMainBlockContainer"]{transition:opacity 220ms ease!important;}
 [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"],
 [data-testid="stMainBlockContainer"] [data-testid="stHorizontalBlock"],
 [data-testid="stMainBlockContainer"] [data-testid="stColumn"],
@@ -11444,6 +11485,20 @@ canvas{display:block;}
     "https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"
   ];
+  /* Reveal the gate on the parent document once fonts are loaded and at
+     least one real paint has happened — independent of whether WebGL
+     itself ever succeeds (the CSS fallback mascot is a complete, valid
+     "ready" state on its own). Three signals race: real font-readiness,
+     a double-rAF paint tick, and a bounded safety timeout so this can
+     never hang the page open-ended if a signal never fires. */
+  try{
+    var _pw = window.parent, _pd = _pw.document, _root = _pd.documentElement;
+    var _revealed = false;
+    var _reveal = function(){ if(_revealed) return; _revealed = true; try{ _root.setAttribute('data-gs-ready','1'); }catch(e){} };
+    if(_pd.fonts && _pd.fonts.ready){ _pd.fonts.ready.then(_reveal).catch(_reveal); }
+    _pw.requestAnimationFrame(function(){ _pw.requestAnimationFrame(_reveal); });
+    _pw.setTimeout(_reveal, 1200);
+  }catch(e){}
   function loadThree(i){
     if(i>=URLS.length) return;                 /* give up -> CSS fallback stays */
     var s=document.createElement('script');
@@ -11458,6 +11513,7 @@ canvas{display:block;}
     function isDark(){ return root.getAttribute('data-theme')==='dark'; }
     var fe=window.frameElement;
     if(fe){
+      fe.setAttribute('data-gocto-scene','1');   // lets the next page find + remove this exact iframe
       fe.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;border:0;margin:0;padding:0;z-index:0;pointer-events:none;background:transparent;opacity:0;transition:opacity 350ms ease;';
       var p=fe.parentElement,g=0;
       while(p && g++<6){ try{ p.style.overflow='visible'; p.style.height='auto'; }catch(e){} p=p.parentElement; }
@@ -11653,6 +11709,12 @@ canvas{display:block;}
                 st.session_state.sailor_name = _clean_name
                 st.session_state.sailor_done = True
                 st.session_state.page = "chat"
+                # Consumed once, at the top of the chat branch, to actively
+                # purge this gate's WebGL iframe/fallback/env from the DOM
+                # instead of relying on Streamlit's own component-teardown
+                # timing — that's what was leaving the stale, oversized
+                # mascot briefly visible over the new chat page.
+                st.session_state._gate_cleanup_pending = True
                 st.rerun()
             else:
                 st.warning("Please enter your name to continue.")
