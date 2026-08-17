@@ -1036,57 +1036,109 @@ RWA_ASSETS = [
     ("pharos-network","PROS", "Pharos Network", "RWA-native L1"),
 ]
 
-def fetch_rwa_market() -> dict:
-    now    = time.time()
-    cached = st.session_state.get("rwa_market_cache", {})
-    if cached.get("rows") and now - cached.get("fetched_at", 0) < RWA_CACHE:
-        return cached
+def _fetch_rwa_market_raw():
+    """Pure network fetch — no Streamlit/session access (runs on a
+    live_fetch worker thread). Returns None on failure so the last-good
+    snapshot keeps serving (market data going briefly stale is fine)."""
+    ids = ",".join(a[0] for a in RWA_ASSETS)
+    r = _get_http_session().get(
+        "https://api.coingecko.com/api/v3/simple/price",
+        params={"ids": ids, "vs_currencies": "usd",
+                "include_24hr_change": "true", "include_market_cap": "true"},
+        timeout=4, headers={"Accept": "application/json"},
+    )
+    r.raise_for_status()
+    data = r.json()
     rows = []
-    try:
-        ids = ",".join(a[0] for a in RWA_ASSETS)
-        r = _get_http_session().get(
-            "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": ids, "vs_currencies": "usd",
-                    "include_24hr_change": "true", "include_market_cap": "true"},
-            timeout=4, headers={"Accept": "application/json"},
-        )
-        r.raise_for_status()
-        data = r.json()
-        for cid, sym, name, tag in RWA_ASSETS:
-            d = data.get(cid) or {}
-            if d.get("usd") is None:
-                continue
-            rows.append({"sym": sym, "name": name, "tag": tag,
-                         "price": d.get("usd"),
-                         "chg": d.get("usd_24h_change"),
-                         "mcap": d.get("usd_market_cap")})
-    except Exception:
-        rows = cached.get("rows", [])
-    out = {"rows": rows, "fetched_at": now,
-           "as_of": datetime.now(timezone.utc).strftime("%H:%M UTC")}
-    st.session_state["rwa_market_cache"] = out
-    return out
+    for cid, sym, name, tag in RWA_ASSETS:
+        d = data.get(cid) or {}
+        if d.get("usd") is None:
+            continue
+        rows.append({"sym": sym, "name": name, "tag": tag,
+                     "price": d.get("usd"),
+                     "chg": d.get("usd_24h_change"),
+                     "mcap": d.get("usd_market_cap")})
+    if not rows:
+        return None
+    return {"rows": rows, "as_of": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+
+def get_rwa_market():
+    """Non-blocking RWA market snapshot (see live_fetch). Returns
+    (data_dict, is_loading) — never stalls the render run."""
+    return live_fetch("rwa_market", _fetch_rwa_market_raw, RWA_CACHE,
+                       {"rows": [], "as_of": ""})
+
+def _fetch_price_chart_raw(days: str):
+    """Pure network fetch — no Streamlit/session access."""
+    url = ("https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
+           "/market_chart?vs_currency=usd&days=" + days)
+    r = _get_http_session().get(url, timeout=5, headers={"Accept":"application/json"})
+    r.raise_for_status()
+    prices = r.json().get("prices", [])
+    if not prices:
+        return None
+    df = pd.DataFrame(prices, columns=["time","price"])
+    df["time"] = pd.to_datetime(df["time"], unit="ms")
+    return df
 
 def get_price_chart_df(days: str = "1"):
-    now       = time.time()
-    cache_all = st.session_state.get("pros_chart_cache", {})
-    cached    = cache_all.get(days, {})
-    if cached.get("df") is not None and now - cached.get("fetched_at", 0) < CHART_CACHE:
-        return cached["df"]
-    try:
-        url = ("https://api.coingecko.com/api/v3/coins/" + COINGECKO_ASSET_ID +
-               "/market_chart?vs_currency=usd&days=" + days)
-        r = _get_http_session().get(url, timeout=5, headers={"Accept":"application/json"})
+    """Non-blocking chart data (see live_fetch). Returns (df_or_None,
+    is_loading) — never stalls the render run."""
+    return live_fetch("price_chart:" + days,
+                       lambda: _fetch_price_chart_raw(days), CHART_CACHE, None)
+
+# ── Network Dashboard live RPC stats — same non-blocking pattern ──
+NET_STATS_TTL = 15  # seconds; also the Network Dashboard fragment's auto-refresh cadence
+
+def _fetch_net_stats_raw() -> dict:
+    """Pure network fetch — no Streamlit/session access. Always returns a
+    result dict (success OR error), never None: unlike the fetchers above,
+    Network Dashboard should surface a real "RPC unreachable" state rather
+    than silently freezing on old block data forever."""
+    res = {"available": False, "fetched_at": time.time(),
+           "block_number": None, "block_time_s": None,
+           "tx_count": None, "gas_price_gwei": None,
+           "chain_id": None, "peer_count": None, "error": None}
+    def rpc(method, params=None):
+        r = _get_http_session().post(PHAROS_RPC_URL,
+            json={"jsonrpc":"2.0","id":1,"method":method,"params":params or []},
+            timeout=4, headers={"Content-Type":"application/json"})
         r.raise_for_status()
-        prices = r.json().get("prices", [])
-        if not prices: raise ValueError("Empty")
-        df = pd.DataFrame(prices, columns=["time","price"])
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
-        cache_all[days] = {"df": df, "fetched_at": now}
-        st.session_state["pros_chart_cache"] = cache_all
-        return df
-    except Exception:
-        return cached.get("df")
+        d = r.json()
+        if "error" in d: raise ValueError(d["error"])
+        return d.get("result")
+    try:
+        bn_hex = rpc("eth_blockNumber")
+        bn = int(bn_hex, 16)
+        res["block_number"] = bn
+        blk = rpc("eth_getBlockByNumber", [bn_hex, False])
+        if blk:
+            res["tx_count"] = len(blk.get("transactions", []))
+            ts = int(blk.get("timestamp","0x0"), 16)
+            par = rpc("eth_getBlockByNumber", [hex(bn-1), False])
+            if par:
+                res["block_time_s"] = max(0, ts - int(par.get("timestamp","0x0"), 16))
+        gp = rpc("eth_gasPrice")
+        if gp: res["gas_price_gwei"] = round(int(gp, 16) / 1e9, 6)
+        cid = rpc("eth_chainId")
+        if cid: res["chain_id"] = int(cid, 16)
+        try:
+            pc = rpc("net_peerCount")
+            if pc: res["peer_count"] = int(pc, 16)
+        except Exception:
+            pass
+        res["available"] = True
+    except Exception as e:
+        res["error"] = str(e)
+    return res
+
+def get_net_stats():
+    """Non-blocking Network Dashboard stats (see live_fetch). Returns
+    (stats_dict, is_loading)."""
+    default = {"available": False, "fetched_at": 0, "error": None,
+               "block_number": None, "block_time_s": None, "tx_count": None,
+               "gas_price_gwei": None, "chain_id": None, "peer_count": None}
+    return live_fetch("net_stats", _fetch_net_stats_raw, NET_STATS_TTL, default)
 
 def render_price_chart(df, chart_key="chart", days="1"):
     if df is None or df.empty:
@@ -1112,6 +1164,22 @@ def render_price_chart(df, chart_key="chart", days="1"):
         hoverlabel=dict(bgcolor="#F7F8FA", font_color="#14141F", bordercolor="#D6D9E0"),
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False}, key=chart_key)
+
+def render_chart_or_skeleton(days: str, chart_key: str) -> None:
+    """Shared call-site helper for the three price-chart usages (Chat,
+    Trade, Pulse): shows a chart-shaped skeleton (matching the real
+    chart's 180px height, so there's no layout jump) while the first
+    fetch for this range is in flight, else renders the real chart."""
+    df, loading = get_price_chart_df(days)
+    if loading:
+        st.markdown(
+            '<div class="page-skeleton" style="padding:0;">'
+            '<div class="skel-block" style="height:180px;"></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        render_price_chart(df, chart_key=chart_key, days=days)
 
 def speak_text(text: str) -> None:
     import json as _json, re as _re
@@ -8200,7 +8268,11 @@ components.html(
       }catch(e){}
     }
 
-    /* Reusable show-then-auto-dismiss */
+    /* Reusable show-then-fire. Dismissal is handled separately by the
+       caller (see __pnavGo) once the DESTINATION page's render has
+       actually settled — NOT on a fixed timer here. A fixed post-click
+       dismiss timer is exactly what let the previous page's DOM show
+       through on any page whose render took longer than the guess. */
     function navOverlayFlash(onShown){
       /* Make overlay re-showable (override .hidden if set from startup) */
       try{
@@ -8213,12 +8285,15 @@ components.html(
         }
       }catch(e){}
       navOverlayShow();
-      /* After brief show window, fire the actual nav then dismiss */
+      /* Brief minimum show window before firing the actual nav — keeps
+         the existing "Hold tight, Sailor" feel for instant pages. */
       setTimeout(function(){
         if(onShown) onShown();
-        setTimeout(navOverlayDismiss, 180);
       }, NAV_SHOW_MS);
     }
+
+    var NAV_SETTLE_MS   = 300;   /* quiet period after last DOM mutation = "settled" */
+    var NAV_HARD_MAX_MS = 6000;  /* absolute safety cap so overlay can never get stuck */
 
     window.__pnavGo = function(key){
       var btn = navButton(key);
@@ -8236,15 +8311,42 @@ components.html(
       navOverlayFlash(function(){
         /* Fire the actual Streamlit button click → triggers page rerun */
         btn.click();
-        /* Restore main content opacity after Streamlit re-renders */
-        if(m){
-          setTimeout(function(){
+
+        /* Content-driven dismissal (same MutationObserver + settle-timer
+           + hard-cap pattern as the startup overlay above): watch the
+           destination page's own render actually finish before hiding
+           the overlay and restoring opacity, instead of guessing a fixed
+           delay. This is what stops the previous page's DOM from being
+           exposed on slow/blocking-fetch pages. */
+        var navDone = false, navSettleTimer = null, navObs = null;
+        function finishNav(){
+          if(navDone) return;
+          navDone = true;
+          if(navSettleTimer){ clearTimeout(navSettleTimer); }
+          try{ if(navObs) navObs.disconnect(); }catch(e){}
+          navOverlayDismiss();
+          if(m){
             m.style.opacity = '1';
             setTimeout(function(){ m.style.transition=''; navBusy=false; }, 320);
-          }, 200);
-        } else {
-          navBusy = false;
+          } else {
+            navBusy = false;
+          }
         }
+        function scheduleNavSettle(){
+          clearTimeout(navSettleTimer);
+          navSettleTimer = setTimeout(finishNav, NAV_SETTLE_MS);
+        }
+        try{
+          var mm = doc.querySelector('[data-testid="stMain"]') || doc.body;
+          navObs = new MutationObserver(function(mts){
+            for(var i=0;i<mts.length;i++){
+              if(mts[i].addedNodes && mts[i].addedNodes.length){ scheduleNavSettle(); break; }
+            }
+          });
+          navObs.observe(mm, {childList:true, subtree:true});
+        }catch(e){}
+        scheduleNavSettle();                  /* in case no further mutations ever arrive */
+        setTimeout(finishNav, NAV_HARD_MAX_MS); /* absolute safety net */
       });
     };
 
@@ -12410,10 +12512,7 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
             if any(kw in q_lower for kw in ["price","market cap","pros","$pros","token"]):
                 with st.container(border=True):
                     st.markdown('<div class="chart-card-label">$PROS · 24H</div>', unsafe_allow_html=True)
-                    render_price_chart(
-                        get_price_chart_df(),
-                        chart_key="chat_chart_" + msg_idx
-                    )
+                    render_chart_or_skeleton("1", "chat_chart_" + msg_idx)
 
             # ── Sources ───────────────────────────────
             if sources:
@@ -13122,12 +13221,18 @@ elif st.session_state.page == "defi":
         st.markdown(_panel("📊 Live RWA Market",
                     "Live prices for leading real-world-asset tokens, alongside $PROS."),
                     unsafe_allow_html=True)
-        with st.spinner("Loading live market data…"):
-            _mk = fetch_rwa_market()
-        if not _mk.get("rows"):
+        _mk, _mk_loading = get_rwa_market()
+        if _mk_loading:
+            st.markdown(
+                '<div class="skel-card-grid">' +
+                ''.join('<div class="skel-card" style="height:88px;"></div>' for _ in range(len(RWA_ASSETS))) +
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        elif not _mk.get("rows"):
             st.error("Live RWA market data is temporarily unavailable — try again shortly.")
             if st.button("Retry", key="rwa_retry"):
-                st.session_state.pop("rwa_market_cache", None)
+                live_invalidate("rwa_market")
                 st.rerun()
         else:
             _cards = []
@@ -13143,7 +13248,7 @@ elif st.session_state.page == "defi":
             st.markdown(_stat_grid(_cards), unsafe_allow_html=True)
             st.caption(f"Live market data · as of {esc(_mk.get('as_of',''))}")
             if st.button("🔄 Refresh market data", key="rwa_refresh"):
-                st.session_state.pop("rwa_market_cache", None)
+                live_invalidate("rwa_market")
                 st.rerun()
 
     # ══ EXPLORER ════════════════════════════════════════════
@@ -13316,21 +13421,37 @@ elif st.session_state.page == "updates":
     # photo just fades in on top of it once it finishes loading).
     # Rendered inside a fragment (where supported) so the feed
     # re-fetches on a schedule without a full page rerun.
+    def _x_feed_status_html(live: bool, loading: bool) -> str:
+        # Three genuinely distinct states — "loading" means the process
+        # has never once successfully fetched yet (see live_fetch), which
+        # is very different from "we tried and it failed": showing the
+        # alarming amber "unreachable" copy during a first-ever fetch
+        # (e.g. right after a cold start / Streamlit Cloud wake) was
+        # misleading users into thinking the feed was broken when it was
+        # simply still warming up.
+        if loading:
+            return ('<span style="width:7px;height:7px;border-radius:50%;background:#94A3B8;'
+                     'display:inline-block;"></span>'
+                     'Loading the latest updates…')
+        if live:
+            return ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
+                     'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
+                     'Live from <b>@pharos_network</b> · refreshes automatically')
+        return ('<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
+                 'display:inline-block;"></span>'
+                 'Live feed temporarily unreachable — showing the latest known official updates')
+
     def _render_x_feed():
         posts = get_pharos_x_posts()[:12]
-        _live = st.session_state.get("pharos_x_cache", {}).get("live", False)
+        _cache = st.session_state.get("pharos_x_cache", {})
+        _live = _cache.get("live", False)
+        _loading = _cache.get("loading", False)
 
         if not posts:
             st.markdown(
                 '<div style="display:flex;align-items:center;gap:7px;font-size:11px;'
                 'color: #1E3A8A;margin-bottom:0.8rem;">'
-                + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
-                   'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
-                   'Live from <b>@pharos_network</b> · refreshes automatically'
-                   if _live else
-                   '<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
-                   'display:inline-block;"></span>'
-                   'Live feed temporarily unreachable — showing the latest known official updates')
+                + _x_feed_status_html(_live, _loading)
                 + '</div>',
                 unsafe_allow_html=True,
             )
@@ -13348,13 +13469,7 @@ elif st.session_state.page == "updates":
         st.markdown(
             '<div class="updc-headrow">'
             '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#1E3A8A;">'
-            + ('<span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
-               'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>'
-               'Live from <b>@pharos_network</b> · refreshes automatically'
-               if _live else
-               '<span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;'
-               'display:inline-block;"></span>'
-               'Live feed temporarily unreachable — showing the latest official updates')
+            + _x_feed_status_html(_live, _loading)
             + '</div>'
             + (f'<span class="updc-count">Page {_page + 1} of {_page_count}</span>' if _page_count > 1 else '')
             + '</div>',
@@ -13532,7 +13647,7 @@ elif st.session_state.page == "trade":
             if st.button("📈 Load chart", key="tr_load"):
                 st.session_state["trade_chart_loaded"] = True; st.rerun()
         else:
-            render_price_chart(get_price_chart_df(days=sd), chart_key="trade_chart_" + sd, days=sd)
+            render_chart_or_skeleton(sd, "trade_chart_" + sd)
 
     # CEX grid
     st.markdown(
@@ -15595,50 +15710,6 @@ elif st.session_state.page == "network":
 
     inject_redesign_css("network rd-hero-compact rd-wide")
 
-    # ── Live RPC stats fetcher ────────────────
-    def _fetch_net_stats() -> dict:
-        now    = time.time()
-        cached = st.session_state.get("net_stats_cache", {})
-        if cached and now - cached.get("fetched_at", 0) < 15:
-            return cached
-        res = {"available": False, "fetched_at": now,
-               "block_number": None, "block_time_s": None,
-               "tx_count": None, "gas_price_gwei": None,
-               "chain_id": None, "peer_count": None, "error": None}
-        def rpc(method, params=None):
-            r = _get_http_session().post(PHAROS_RPC_URL,
-                json={"jsonrpc":"2.0","id":1,"method":method,"params":params or []},
-                timeout=4, headers={"Content-Type":"application/json"})
-            r.raise_for_status()
-            d = r.json()
-            if "error" in d: raise ValueError(d["error"])
-            return d.get("result")
-        try:
-            bn_hex = rpc("eth_blockNumber")
-            bn = int(bn_hex, 16)
-            res["block_number"] = bn
-            blk = rpc("eth_getBlockByNumber", [bn_hex, False])
-            if blk:
-                res["tx_count"] = len(blk.get("transactions", []))
-                ts = int(blk.get("timestamp","0x0"), 16)
-                par = rpc("eth_getBlockByNumber", [hex(bn-1), False])
-                if par:
-                    res["block_time_s"] = max(0, ts - int(par.get("timestamp","0x0"), 16))
-            gp = rpc("eth_gasPrice")
-            if gp: res["gas_price_gwei"] = round(int(gp, 16) / 1e9, 6)
-            cid = rpc("eth_chainId")
-            if cid: res["chain_id"] = int(cid, 16)
-            try:
-                pc = rpc("net_peerCount")
-                if pc: res["peer_count"] = int(pc, 16)
-            except Exception:
-                pass
-            res["available"] = True
-        except Exception as e:
-            res["error"] = str(e)
-        st.session_state["net_stats_cache"] = res
-        return res
-
     # ── Header ────────────────────────────────
     st.markdown(
         '<div style="background:linear-gradient(135deg,#0C0C1A 0%,#0A1A6E 100%);'
@@ -15662,22 +15733,41 @@ elif st.session_state.page == "network":
     rc_sp, rc1, rc2 = st.columns([5, 1.5, 1.6])
     with rc1:
         if st.button("🔄 Refresh", key="net_refresh", use_container_width=True, type="primary"):
-            st.session_state["net_stats_cache"] = {}
+            live_invalidate("net_stats")
             st.rerun()
     with rc2:
         st.markdown('<div style="font-size:11px;color:#39445D;padding:0.7rem 0;text-align:left;">🟢 Live · auto 15s</div>',
                     unsafe_allow_html=True)
 
-    ns = _fetch_net_stats()
+    # ── Stats block, isolated in its own auto-refreshing fragment ──
+    # st.fragment(run_every=...) re-runs ONLY this function on its own
+    # timer — the rest of the page (header, nav, everything below) is
+    # untouched, so a real 15s auto-refresh no longer needs a full-page
+    # rerun (previously this page had no real timer at all, despite its
+    # own "auto 15s" label — see PROJECT notes). get_net_stats() is
+    # non-blocking (live_fetch), so this fragment's own reruns never
+    # stall waiting on the RPC either.
+    def _render_net_stats():
+        ns, ns_loading = get_net_stats()
 
-    if not ns["available"]:
-        st.markdown(
-            f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:14px;'
-            f'padding:1rem 1.4rem;font-size:13px;color:#B91C1C;margin-bottom:1rem;">'
-            f'⚠️ RPC unreachable: {ns.get("error","Unknown error")}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
+        if ns_loading:
+            st.markdown(
+                '<div class="skel-card-grid">' +
+                ''.join('<div class="skel-card" style="height:110px;"></div>' for _ in range(6)) +
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            return
+
+        if not ns["available"]:
+            st.markdown(
+                f'<div style="background:#FFF0F0;border:1.5px solid #E5484D;border-radius:14px;'
+                f'padding:1rem 1.4rem;font-size:13px;color:#B91C1C;margin-bottom:1rem;">'
+                f'⚠️ RPC unreachable: {ns.get("error","Unknown error")}</div>',
+                unsafe_allow_html=True,
+            )
+            return
+
         bts  = f'{ns["block_time_s"]}s'  if ns["block_time_s"]     is not None else "—"
         gwei = f'{ns["gas_price_gwei"]} Gwei' if ns["gas_price_gwei"] is not None else "—"
         blkn = f'{ns["block_number"]:,}' if ns["block_number"]      is not None else "—"
@@ -15710,6 +15800,9 @@ elif st.session_state.page == "network":
                 with _col:
                     st.markdown(_tiles[_row + _i], unsafe_allow_html=True)
         st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+
+    _render_net_stats = st.fragment(run_every=NET_STATS_TTL)(_render_net_stats)
+    _render_net_stats()
 
     # ── Featured Mainnet status card + Available Networks (side by side) ──
     st.markdown('<div style="height:0.8rem;"></div>', unsafe_allow_html=True)
@@ -16166,7 +16259,7 @@ elif st.session_state.page == "pulse":
             horizontal=True, key="pulse_range", label_visibility="collapsed",
         )
         _pulse_days = {"24H": "1", "7D": "7", "30D": "30", "1Y": "365"}[_pulse_range]
-        render_price_chart(get_price_chart_df(_pulse_days), chart_key="pulse_chart", days=_pulse_days)
+        render_chart_or_skeleton(_pulse_days, "pulse_chart")
 
     with _pc_right:
         _lbl   = _cp.get("label", "Neutral")
