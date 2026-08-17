@@ -587,11 +587,62 @@ def get_pros_price() -> dict:
             "change_24h": None, "last_updated": None,
             "fetched_at": 0, "available": False, "error": None}
 
-def get_pharos_news() -> list:
-    now    = time.time()
-    cached = st.session_state.get("pharos_news_cache", {})
-    if cached.get("items") and now - cached.get("fetched_at", 0) < NEWS_CACHE:
-        return cached["items"]
+# ── Shared NON-BLOCKING live-data fetch ─────────────────────────────────
+# ROOT-CAUSE FIX for cross-page "ghosting". Live-data pages used to fetch
+# synchronously during their render run. While that run was blocked on the
+# network, Streamlit kept the PREVIOUS page's elements on screen (its
+# stale-element behaviour) — so the old page showed through the new one.
+#
+# live_fetch() never blocks the render thread: it returns whatever is already
+# known (fresh, stale, or a caller-supplied default) instantly, and refreshes
+# in a background daemon that writes a PROCESS-WIDE holder (shared across every
+# session, warmed once at startup by _prewarm_worker). With the network off the
+# render path, each page's script run finishes immediately, so Streamlit
+# genuinely unmounts the previous page instead of leaving it visible while data
+# loads. This is a single shared mechanism — every live page (now and future)
+# gets the fix by routing its fetch through live_fetch().
+@st.cache_resource(show_spinner=False)
+def _live_holder(key: str) -> dict:
+    return {"data": None, "at": 0.0, "fetching": False, "lock": threading.Lock()}
+
+def live_invalidate(key: str) -> None:
+    """Force the next live_fetch(key) to refresh in the background (used by
+    'Refresh feed' buttons). Non-blocking — current data still serves."""
+    try:
+        _live_holder(key)["at"] = 0.0
+    except Exception:
+        pass
+
+def live_fetch(key, fetch_fn, ttl, default):
+    """Return (value, is_loading). fetch_fn MUST be pure (no st.* /
+    session_state — it runs on a worker thread) and return the value, or
+    None to keep the last-good value. Never blocks the caller."""
+    now = time.time()
+    h = _live_holder(key)
+    data = h["data"]
+    stale = (data is None) or (now - h["at"] >= ttl)
+    if stale and not h["fetching"]:
+        with h["lock"]:
+            if not h["fetching"]:
+                h["fetching"] = True
+                def _worker(_h=h, _fn=fetch_fn):
+                    try:
+                        v = _fn()
+                        if v is not None:
+                            _h["data"] = v
+                            _h["at"] = time.time()
+                    except Exception:
+                        pass
+                    finally:
+                        _h["fetching"] = False
+                threading.Thread(target=_worker, daemon=True, name="live-" + str(key)).start()
+    if data is not None:
+        return data, False
+    return default, True
+
+
+def _fetch_pharos_news_raw():
+    """Pure network fetch for Pharos news — no Streamlit/session access."""
     items = []
     for attempt in range(2):
         try:
@@ -617,9 +668,6 @@ def get_pharos_news() -> list:
                         })
                 break
             elif r.status_code == 429:
-                # Rate limited — use stale cache if available
-                if cached.get("items"):
-                    return cached["items"]
                 break
         except requests.exceptions.Timeout:
             if attempt == 0:
@@ -627,10 +675,10 @@ def get_pharos_news() -> list:
             continue
         except Exception:
             break
-    # Fall back to stale cache rather than returning empty if network fails
-    if not items and cached.get("items"):
-        return cached["items"]
-    st.session_state["pharos_news_cache"] = {"items": items, "fetched_at": now}
+    return items or None    # None → keep last-good in the holder
+
+def get_pharos_news() -> list:
+    items, _loading = live_fetch("news", _fetch_pharos_news_raw, NEWS_CACHE, [])
     return items
 
 # ─────────────────────────────────────────────
@@ -936,28 +984,11 @@ _SEL_ALLOWANCE        = "0xdd62ed3e"  # allowance(address,address) — same as E
 _SEL_APPROVE          = "0x095ea7b3"  # approve(address,uint256)
 
 
-def get_pharos_x_posts() -> list:
-    """Latest posts from the official Pharos Network X account.
-    Live-source layered fetch, briefly cached, official-news-first.
-    Uses stale-while-revalidate: serves stale cache instantly while
-    refreshing in the background so the UI is never blocked."""
-    now    = time.time()
-    cached = st.session_state.get("pharos_x_cache", {})
-
-    # Serve cached items immediately if fresh enough
-    if cached.get("items") and now - cached.get("fetched_at", 0) < X_FEED_CACHE:
-        return cached["items"]
-
-    # If we have stale items and a fetch is already in progress, return stale
-    if cached.get("items") and cached.get("fetching"):
-        return cached["items"]
-
-    # Mark that a fetch is in progress to prevent concurrent fetches
-    if cached.get("items"):
-        cached["fetching"] = True
-        st.session_state["pharos_x_cache"] = cached
-
-    items, live = [], False
+def _fetch_pharos_x_raw():
+    """Pure network fetch for the @pharos_network X feed — no Streamlit /
+    session access (runs on a worker thread). Returns
+    {'items': [...], 'live': bool}, or None to keep the last-good value."""
+    items = []
     token = _x_bearer_token()
     if token:
         try:
@@ -966,29 +997,31 @@ def get_pharos_x_posts() -> list:
             items = []
     if not items:
         items = _fetch_nitter_rss()
-    live = bool(items)
     if not items:
-        # Keep serving the previous good fetch if the network blips.
-        prev = cached.get("items")
-        if prev:
-            st.session_state["pharos_x_cache"] = {
-                "items": prev, "fetched_at": now,
-                "live": cached.get("live", False), "fetching": False,
-            }
-            return prev
-        items = list(_PHAROS_X_FALLBACK)
-
-    # Prioritise official announcements / launches / partnerships /
-    # campaigns / protocol updates (stable sort keeps recency order).
+        return None   # network blip — keep last-good; wrapper supplies fallback
+    live = True
+    # Prioritise official announcements / launches / partnerships / campaigns /
+    # protocol updates (stable sort keeps recency order).
     def _prio(p):
         t = (p.get("text") or "").lower()
         return 0 if any(k in t for k in _X_PRIORITY_TERMS) else 1
-    items = sorted(items, key=_prio)
+    return {"items": sorted(items, key=_prio), "live": live}
 
+def get_pharos_x_posts() -> list:
+    """Latest @pharos_network posts — non-blocking (see live_fetch). Never
+    stalls the render run, so navigating to a page that shows this feed does
+    not leave the previous page visible while the feed loads."""
+    payload, loading = live_fetch(
+        "xposts", _fetch_pharos_x_raw, X_FEED_CACHE,
+        {"items": list(_PHAROS_X_FALLBACK), "live": False},
+    )
+    # Mirror the 'live'/'loading' flags for the Updates page's existing reader.
     st.session_state["pharos_x_cache"] = {
-        "items": items, "fetched_at": now, "live": live, "fetching": False,
+        "items": payload.get("items", []),
+        "live": payload.get("live", False),
+        "loading": loading,
     }
-    return items
+    return payload.get("items", [])
 
 # ─────────────────────────────────────────────
 # LIVE RWA MARKET SNAPSHOT — public CoinGecko, cached, key-free
@@ -3098,16 +3131,24 @@ def _prewarm_done() -> dict:
 
 def _prewarm_worker() -> None:
     time.sleep(0.5)  # let OctoBot init grab resources first
+    # Warm the PROCESS-WIDE live holders directly with the pure fetchers (safe
+    # off the script thread — they never touch st.session_state). This makes
+    # the first visit to any live page instant, so its render run doesn't block
+    # and the previous page is cleanly unmounted (no ghosting).
+    for _k, _fn in (("news", _fetch_pharos_news_raw), ("xposts", _fetch_pharos_x_raw)):
+        try:
+            _h = _live_holder(_k)
+            _v = _fn()
+            if _v is not None:
+                _h["data"] = _v
+                _h["at"] = time.time()
+        except Exception:
+            pass
     try:
-        get_pros_price()
-    except Exception:
-        pass
-    try:
-        get_pharos_x_posts()
-    except Exception:
-        pass
-    try:
-        get_pharos_news()
+        _ph = _pros_price_holder()
+        _pr = _fetch_pros_price_raw()
+        if _pr:
+            _ph["data"] = _pr
     except Exception:
         pass
 
@@ -7255,10 +7296,12 @@ div:has(> div > div.st-key-updates_next){
                box-shadow 220ms ease,border-color 180ms ease;
 }
 .updc-card-v2:hover{
-    transform:translateY(-5px);
-    box-shadow:0 16px 44px rgba(26,26,255,0.13),0 4px 14px rgba(26,26,255,0.07);
-    border-color:rgba(26,26,255,0.28);
+    transform:perspective(1000px) rotateX(3.5deg) translateY(-6px);
+    box-shadow:0 20px 48px rgba(26,26,255,0.16),0 5px 16px rgba(26,26,255,0.08);
+    border-color:rgba(26,26,255,0.30);
 }
+.updc-card-v2:hover .updc-logo-tile::before{animation-duration:2.8s;}   /* energize on hover */
+.updc-card-v2:hover .updc-logo-tile::after{animation-duration:2.6s;}
 .updc-logo-tile{
     width:100%;aspect-ratio:16/7;
     display:flex;align-items:center;justify-content:center;
@@ -7269,15 +7312,18 @@ div:has(> div > div.st-key-updates_next){
     background-image:radial-gradient(circle,rgba(255,255,255,0.08) 1px,transparent 1px);
     background-size:14px 14px;
     pointer-events:none;
+    animation:updc-dots 26s linear infinite;   /* slow living drift */
 }
 .updc-logo-inner{
-    position:relative;z-index:1;
+    position:relative;z-index:2;
     width:64px;height:64px;border-radius:16px;
     display:flex;align-items:center;justify-content:center;
     background:rgba(255,255,255,0.12);
     border:1.5px solid rgba(255,255,255,0.2);
     box-shadow:0 4px 24px rgba(0,0,0,0.3);
     backdrop-filter:blur(4px);
+    animation:updc-float 4.6s ease-in-out infinite;   /* gentle hover-in-place */
+    will-change:transform;
 }
 .updc-logo-inner img{
     width:44px;height:44px;object-fit:contain;border-radius:10px;
@@ -7300,6 +7346,35 @@ html[data-theme="dark"] .updc-card-v2:hover{
 }
 html[data-theme="dark"] .updc-logo-inner{
     background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);
+}
+
+/* ══ Live-feed thumbnails — "alive & live" motion + depth (GPU-only) ══
+   A pulsing halo behind the logo, a slow diagonal light sweep, a drifting
+   dot field, and a floating logo. Everything animates transform/opacity or
+   background-position, and all of it is disabled under reduced-motion. */
+.updc-logo-tile::before{content:"";position:absolute;z-index:0;left:50%;top:50%;
+    width:150px;height:150px;transform:translate(-50%,-50%);border-radius:50%;
+    background:radial-gradient(circle,rgba(167,139,250,0.55),transparent 68%);
+    filter:blur(6px);pointer-events:none;
+    animation:updc-halo 5s ease-in-out infinite;}
+.updc-logo-tile::after{content:"";position:absolute;z-index:1;top:-10%;left:-60%;
+    width:42%;height:120%;pointer-events:none;transform:skewX(-16deg);
+    background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0.22) 50%,transparent 100%);
+    animation:updc-sheen 6s ease-in-out infinite;}
+@keyframes updc-halo{0%,100%{opacity:0.4;transform:translate(-50%,-50%) scale(0.9);}
+    50%{opacity:0.72;transform:translate(-50%,-50%) scale(1.12);}}
+@keyframes updc-sheen{0%{left:-60%;}55%,100%{left:135%;}}
+@keyframes updc-dots{to{background-position:14px 28px;}}
+@keyframes updc-float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+/* stagger so cards don't pulse in lockstep — feels organic, not mechanical */
+.updc-card-v2:nth-child(2n) .updc-logo-inner{animation-delay:-1.6s;}
+.updc-card-v2:nth-child(3n) .updc-logo-inner{animation-delay:-2.9s;}
+.updc-card-v2:nth-child(2n) .updc-logo-tile::before{animation-delay:-2.1s;}
+.updc-card-v2:nth-child(3n) .updc-logo-tile::after{animation-delay:-3.2s;}
+@media (prefers-reduced-motion:reduce){
+  .updc-logo-inner,.updc-logo-pattern,
+  .updc-logo-tile::before,.updc-logo-tile::after{animation:none !important;}
+  .updc-logo-tile::before{opacity:0.5;}
 }
 
 
@@ -11065,413 +11140,513 @@ elif st.session_state.page == "chat":
 
     if not st.session_state.sailor_done:
         # ══════════════════════════════════════════════════════════════
-        # Welcome gate — rendered with REAL Streamlit widgets, not an
-        # isolated components.html iframe.
+        #  Welcome gate — "GoctoSailor" premium interactive 3D landing.
         #
-        # The previous implementation put the name input and button
-        # inside a components.html iframe (a separate, sandboxed HTML
-        # document) and then tried to bridge a JS event on that button
-        # back into Streamlit's actual widget tree from outside it —
-        # first via a full browser navigation (visibly reloaded the
-        # whole app), then via simulated DOM/keyboard events on hidden
-        # native widgets (unreliable: React's controlled-input/keyboard
-        # handling does not reliably accept synthetic events, so
-        # nothing happened at all). Both were workarounds for the same
-        # root problem: the interactive elements were never real
-        # Streamlit widgets in the first place.
-        #
-        # This version has no iframe and no JS bridging whatsoever.
-        # The name input and submit button are genuine st.text_input /
-        # st.form_submit_button widgets, rendered directly in this
-        # script like every other widget in the app. st.form() is
-        # Streamlit's own built-in mechanism for "Enter and the submit
-        # button do the same thing" — pressing Enter inside a form
-        # submits it exactly like clicking its submit button, with a
-        # single, standard Streamlit rerun. There is exactly one
-        # submission path and one place that decides what happens next.
+        #  A genuine WebGL scene (Three.js) renders the mascot on a glossy
+        #  podium inside a glass bubble, with orbiting pearls, a sweeping
+        #  orbital ring, drifting motes and cursor parallax. It lives INSIDE
+        #  a components.html iframe styled to sit fixed behind the UI — so
+        #  when the user navigates away, Streamlit unmounts the iframe and
+        #  the whole scene (WebGL context + listeners) is torn down with it.
+        #  That is what prevents the old "previous 3D scene leaking behind
+        #  the next page" bug. A CSS scene is the fallback if WebGL can't
+        #  initialise. The name input + Start Chat stay REAL st.form widgets
+        #  (one submit path, unchanged behaviour).
         # ══════════════════════════════════════════════════════════════
-
-        # Hide sidebar/toolbar/chat-input behind the gate, and restyle
-        # the plain Streamlit form/input/button to match the existing
-        # visual design (glassy card, gradient button, etc.) — CSS only,
-        # same DOM elements Streamlit always renders.
         st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+/* ── Spacing scale (shared both themes) — used for relationships between
+   elements; component sizing (radii, shadows) is intentionally NOT on
+   this scale. ── */
+:root{
+  --gs-s2:8px; --gs-s3:12px; --gs-s4:16px; --gs-s5:20px; --gs-s6:24px; --gs-s7:32px; --gs-s8:40px;
+}
+/* ── Semantic tokens: one identity, two moods ── */
+:root{
+  --gs-bg:#EEF0F9; --gs-bg-2:#E4E8F4;
+  /* --gs-text-2/3 darkened further: the app's own default aura background
+     is now restored behind this page in light mode (a textured, medium-
+     toned blue/grey 3D grid, not the flat light wash these were originally
+     tuned against), so both need real margin to stay legible against a
+     busier, darker-than-white backdrop. */
+  --gs-text:#161A2E; --gs-text-2:#383F5C; --gs-text-3:#464C68;
+  --gs-border:rgba(20,26,52,0.10); --gs-input:#FFFFFF; --gs-input-border:rgba(20,26,52,0.10);
+  --gs-placeholder:rgba(20,26,52,0.42);
+  --gs-badge:#FFFFFF; --gs-badge-shadow:0 10px 26px -12px rgba(40,54,130,0.30);
+  --gs-pill:rgba(255,255,255,0.85); --gs-pill-border:rgba(20,26,52,0.08);
+  /* Deeper/more saturated than the dark-mode gradient on purpose: this
+     pair sits directly on the app's own blue/purple aura background (now
+     restored in light mode), so it needs real contrast against a
+     same-family backdrop rather than a neutral one. */
+  --gs-g1:#2531D6; --gs-g2:#6D28D9;
+  --gs-accent:#5A63F0; --gs-ring:rgba(90,99,240,0.24);
+  --gs-online:#12B981;
+  --gs-shadow:0 24px 60px -30px rgba(40,54,130,0.34);
+  --gs-cta-shadow:0 16px 34px -14px rgba(96,80,240,0.55);
+  --gs-ease:cubic-bezier(0.23,1,0.32,1);
+  --gs-env-1:rgba(150,165,255,0.16); --gs-env-2:rgba(190,165,255,0.12);
+}
+html[data-theme="dark"]{
+  --gs-bg:#0A0C16; --gs-bg-2:#070812;
+  --gs-text:#F1F3FB; --gs-text-2:#AEB5CC; --gs-text-3:#828AA6;
+  --gs-border:rgba(255,255,255,0.10); --gs-input:#141726; --gs-input-border:rgba(255,255,255,0.12);
+  --gs-placeholder:rgba(255,255,255,0.42);
+  --gs-badge:#161A2A; --gs-badge-shadow:0 12px 30px -14px rgba(0,0,0,0.7);
+  --gs-pill:rgba(24,28,44,0.7); --gs-pill-border:rgba(255,255,255,0.10);
+  --gs-g1:#6E7BFF; --gs-g2:#9B6BFF;
+  --gs-accent:#7E8BFF; --gs-ring:rgba(126,139,255,0.30);
+  --gs-online:#22C98A;
+  --gs-shadow:0 30px 70px -32px rgba(0,0,0,0.72);
+  --gs-cta-shadow:0 18px 38px -14px rgba(96,80,240,0.6);
+  --gs-env-1:rgba(80,105,215,0.22); --gs-env-2:rgba(120,95,225,0.16);
+}
+
+/* ── Keep the app nav + theme toggle; hide only the chat chrome ── */
 [data-testid="stSidebar"],[data-testid="stDecoration"],[data-testid="stToolbar"],
 [data-testid="stBottom"],[data-testid="stBottomBlockContainer"],
 [data-testid="stChatInput"]{display:none!important;}
-/* Center the whole gate (logo, heading, form, feature cards) as one
-   group in the space below the fixed top nav (nav sits at top:14px,
-   height:64px — clears around 90-100px). True vertical centering
-   within that remaining space, not just a fixed top offset. */
-[data-testid="stMainBlockContainer"]{max-width:640px!important;margin:0 auto!important;
-  padding:0 1.25rem 2rem!important;
-  min-height:calc(100vh - 100px)!important;
-  margin-top:100px!important;
-  display:flex!important;flex-direction:column!important;
-  justify-content:center!important;align-items:center!important;
-  /* ROOT CAUSE of the rectangular "container edge" around the whole
-     welcome section, verified with a real browser render of this
-     exact stylesheet against the actual gate markup — this was never
-     an actual border/box-shadow anywhere. It's a CSS containing-block
-     bug with TWO independent triggers on this same element, both of
-     which had to be neutralised:
 
-     1) The global stylesheet sets `contain:layout style` here (for
-        paint/perf on other pages).
-     2) The global stylesheet ALSO runs a `page-fadein` keyframe
-        animation here that animates `transform:translateY(...)` with
-        `animation-fill-mode:both` — so even after the 220ms entrance
-        finishes, the element's computed `transform` is a resolved
-        identity matrix, never the literal keyword `none`.
+/* On this page, dark mode only: swap the app's perspective-grid aura for
+   the custom gs-env wash. Light mode instead keeps the app's own DEFAULT
+   global background (the aura grid) showing through — gs-env's tinted
+   background is neutralised below so nothing covers it. Page-scoped —
+   every other page keeps the global ambient in both themes as before. */
+html[data-theme="dark"] #aura-3d-canvas{display:none!important;}
+html:not([data-theme="dark"]) .gs-env{background:none!important;}
+[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"],
+section[data-testid="stMain"],.stApp,.main{background:transparent!important;}
+/* This app's own CSS collapses stApp/stAppViewContainer/stMain to
+   clientHeight:0 with overflow:hidden (their normal design assumes
+   content fits one viewport). This gate's mobile layout is taller than
+   one viewport, so — gate-scoped only — restore natural height/scroll on
+   that ancestor chain so the page can actually be scrolled to reach the
+   feature row below the fold, instead of clipping it. */
+[data-testid="stApp"],[data-testid="stAppViewContainer"],section[data-testid="stMain"]{
+  height:auto!important;min-height:100vh!important;
+  overflow:visible!important;overflow-y:visible!important;}
 
-     Per the CSS Containment / Transforms specs, EITHER of those alone
-     is enough to make an element the containing block for any
-     `position:fixed` DESCENDANT. .gocto-gate-bg below is exactly such
-     a descendant — a position:fixed;inset:0 div meant to wash the
-     ENTIRE viewport with ambient glow — so it was being resolved
-     relative to THIS box's own bounds instead of the viewport, and the
-     glow abruptly stopping at that box's edge is exactly the visible
-     rectangle. Neutralising only `contain` (as a previous attempt did)
-     left trigger #2 in place, which is why the rectangle persisted.
-     Both are undone here, gate-only, via source order: .gocto-gate-bg
-     spans the true viewport again and blends into the page. This does
-     not touch the gate's OWN entrance animations (logo pop-in, heading
-     rise-in, etc. below) — only this container's own, separate 220ms
-     fade-up-on-load, which the gate already re-animates every element
-     inside individually anyway. */
-  contain:none!important;
-  animation:none!important;
-}
+/* ── Page shell — vertically centred on desktop. Safe now: the ancestor
+   overflow fix below already guarantees content taller than one viewport
+   can scroll (nothing gets clipped); when content is SHORTER than the
+   viewport (the common case) centring fills the flex container's
+   min-height:100vh floor so the composition sits mid-screen instead of
+   pinned to the top. Padding kept modest + roughly balanced top/bottom
+   so centring does the visual work rather than a large asymmetric pad. ── */
+/* Higher-specificity selector (matches the pattern already used by this
+   gate's own media queries below) — the app has a GLOBAL, equally-
+   !important, equal-specificity `[data-testid="stMainBlockContainer"]{
+   padding-top:72px}` rule (nav clearance, applies to every page) whose
+   cascade-order relative to this block isn't reliably guaranteed across
+   separate st.markdown() calls. The extra ancestor qualifier here wins
+   regardless of source order. */
+section[data-testid="stMain"] [data-testid="stMainBlockContainer"]{
+  max-width:1240px!important;margin:0 auto!important;padding:112px 2.4rem 4rem!important;
+  min-height:100vh!important;display:flex!important;flex-direction:column!important;
+  justify-content:center!important;contain:none!important;animation:none!important;background:transparent!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"],
+[data-testid="stMainBlockContainer"] [data-testid="stHorizontalBlock"],
+[data-testid="stMainBlockContainer"] [data-testid="stColumn"],
+[data-testid="stMainBlockContainer"] [data-testid="stElementContainer"],
+[data-testid="stMainBlockContainer"] [data-testid="stForm"],
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlockBorderWrapper"]{
+  background:transparent!important;border:none!important;box-shadow:none!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"]{gap:0!important;}
+/* The single top-level stVerticalBlock defaults to flex-grow, stretching
+   to fill 100% of the container's available height — which silently
+   defeats `justify-content:center` above (nothing left to center when
+   the child already consumes all the space). Sizing it to its own
+   content lets the parent's centring actually apply. */
+section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+  flex:none!important;}
+/* Content must sit ABOVE the fixed WebGL scene (which is z-index:0). */
+[data-testid="stMainBlockContainer"] [data-testid="stColumn"],
+[data-testid="stMainBlockContainer"] [data-testid="stForm"],
+.gs-pillrow,.gs-feats,.gs-content{position:relative;z-index:3;}
 
-
-
-/* ══════════════════════════════════════════════════════════════════
-   Kill every default Streamlit wrapper background/border/shadow
-   inside the gate — using ONLY simple selectors (element, attribute,
-   class), no :not() with a descendant combinator inside it anywhere.
-   The previous version of this rule used
-   ":not(div[data-testid='stForm'] *)" — a :not() containing a
-   combinator. That specific form of :not() requires full CSS
-   Selectors Level 4 "complex selector in :not()" support, which is
-   narrower than ordinary :not()/:has() support and can cause the
-   ENTIRE selector list to be silently invalid and dropped by the
-   browser, meaning this rule may never have applied at all — which
-   would explain why the rectangle survived every previous attempt at
-   this exact fix. Rewritten below with only simple selectors: every
-   div under stMainBlockContainer is targeted directly (no exclusion
-   needed in the selector itself), and the form's own real card
-   styling is reasserted afterward on div[data-testid="stForm"]
-   specifically — a plain, ordinary selector with no :not() at all —
-   so it always wins regardless of any browser's :not() support level.
-   ══════════════════════════════════════════════════════════════════ */
-[data-testid="stMainBlockContainer"]{
-  background:transparent!important;background-color:transparent!important;
-  background-image:none!important;border:none!important;
-  outline:none!important;box-shadow:none!important;
-}
-[data-testid="stMainBlockContainer"] div{
-  background:transparent!important;
-  background-color:transparent!important;
-  background-image:none!important;
-  border:none!important;
-  outline:none!important;
-  box-shadow:none!important;
-}
-/* Reassert every element that must keep its own real styling — plain
-   selectors only, applied AFTER the blanket rule above so they always
-   win on source order + matching specificity, with no :not() at all
-   involved in getting these to apply. */
-div.gocto-gate-bg{
+/* ── CSS environment (background colour + soft glows), always painted
+   behind the WebGL canvas so the scene has depth even before/without it. ── */
+.gs-env{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   background:
-    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.14) 0%, transparent 70%),
-    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.12) 0%, transparent 70%),
-    radial-gradient(circle 560px at 50% 96%, rgba(90,150,255,0.10) 0%, transparent 72%)!important;
+    radial-gradient(120% 100% at 78% 14%, var(--gs-env-2) 0%, transparent 56%),
+    radial-gradient(90% 80% at 12% 60%, var(--gs-env-1) 0%, transparent 60%),
+    radial-gradient(140% 120% at 50% -10%, var(--gs-bg) 0%, var(--gs-bg-2) 100%);}
+
+/* ── CSS fallback mascot (left) — only shown if WebGL never initialises ── */
+.gs-fallback{position:fixed;left:6%;top:52%;transform:translateY(-50%);width:300px;height:300px;
+  z-index:0;pointer-events:none;display:flex;align-items:center;justify-content:center;
+  transition:opacity 0.5s ease;animation:gs-rise 0.35s var(--gs-ease) both;}
+html.gocto-webgl-on .gs-fallback{opacity:0!important;}
+.gs-fallback::before{content:"";position:absolute;inset:-8%;border-radius:50%;
+  background:radial-gradient(circle, var(--gs-env-1) 0%, transparent 70%);filter:blur(30px);}
+.gs-fallback img{position:relative;width:230px;height:230px;object-fit:cover;border-radius:50%;
+  box-shadow:0 0 0 8px var(--gs-badge),var(--gs-shadow);animation:gs-bob 6s ease-in-out infinite;}
+.gs-fallback-fallback{position:relative;width:230px;height:230px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:96px;
+  background:radial-gradient(circle at 35% 30%,#5B7BFF,#8B5CF6);box-shadow:0 0 0 8px var(--gs-badge),var(--gs-shadow);}
+@keyframes gs-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+
+/* ── Top pills (inline, near the wordmark) ── */
+.gs-pillrow{display:flex;gap:var(--gs-s3);margin:0 0 var(--gs-s6);animation:gs-rise 0.35s var(--gs-ease) both;}
+.gs-pill{display:inline-flex;align-items:center;gap:var(--gs-s2);padding:9px 18px;border-radius:999px;
+  background:var(--gs-pill);border:1px solid var(--gs-pill-border);backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);font-family:'Inter',system-ui;font-size:12.5px;font-weight:600;
+  color:var(--gs-text-2);box-shadow:0 6px 16px -10px rgba(40,54,130,0.28);}
+.gs-pill svg{width:14px;height:14px;}
+.gs-pill-dot{width:8px;height:8px;border-radius:50%;background:var(--gs-online);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--gs-online) 22%,transparent);}
+
+/* ── Wordmark + copy ── */
+.gs-wm{font-family:'Plus Jakarta Sans',system-ui;font-weight:800;letter-spacing:-0.035em;
+  font-size:clamp(2.9rem,6vw,4.9rem);line-height:0.98;color:var(--gs-text)!important;margin:0 0 var(--gs-s5);
+  animation:gs-rise 0.35s var(--gs-ease) 0.03s both;}
+.gs-wm span{margin-left:0.16em;background:linear-gradient(105deg,var(--gs-g1),var(--gs-g2));-webkit-background-clip:text;
+  background-clip:text;-webkit-text-fill-color:transparent;}
+.gs-tag{font-family:'Plus Jakarta Sans',system-ui;font-weight:700;font-size:clamp(1.05rem,2vw,1.5rem);
+  letter-spacing:-0.01em;color:var(--gs-text);margin:0 0 var(--gs-s3);animation:gs-rise 0.35s var(--gs-ease) 0.05s both;}
+.gs-sub{font-family:'Inter',system-ui;font-weight:400;font-size:clamp(0.95rem,1.35vw,1.06rem);
+  line-height:1.6;color:var(--gs-text-2);max-width:34ch;margin:0 0 var(--gs-s7);
+  animation:gs-rise 0.35s var(--gs-ease) 0.07s both;}
+.gs-sub b{color:var(--gs-accent);font-weight:600;}
+@keyframes gs-rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── Chat entry ── */
+[data-testid="stMainBlockContainer"] [data-testid="stForm"]{max-width:520px;margin:0 0 var(--gs-s3)!important;padding:0!important;
+  animation:gs-rise 0.35s var(--gs-ease) 0.09s both;}
+.gs-field-label{font-family:'Inter',system-ui;font-size:12px;font-weight:600;letter-spacing:0.03em;
+  text-transform:uppercase;color:var(--gs-text-3);margin:0 0 var(--gs-s4);}
+/* field surface painted on RootElement / base-input (Streamlit base is dark) */
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stTextInputRootElement"],
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-baseweb="input"],
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-baseweb="base-input"]{
+  border-radius:10px!important;background:var(--gs-input)!important;background-color:var(--gs-input)!important;
+  border:1.5px solid var(--gs-input-border)!important;box-shadow:var(--gs-shadow)!important;
+  transition:border-color 200ms var(--gs-ease),box-shadow 200ms var(--gs-ease)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-baseweb="base-input"]{border:none!important;box-shadow:none!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stTextInput"]:focus-within [data-testid="stTextInputRootElement"]{
+  border-color:var(--gs-accent)!important;box-shadow:0 0 0 4px var(--gs-ring),var(--gs-shadow)!important;}
+/* input with a user glyph left + a sparkle right (both drawn as bg images) —
+   taller vertical padding (1rem -> 1.2rem) for a more comfortable, premium
+   field height, matched by the CTA below so both read as one consistent
+   height/radius language rather than two mismatched controls. */
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stTextInput"] input{
+  padding:1.2rem 3rem 1.2rem 3rem!important;background:transparent!important;background-color:transparent!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%238a90a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E"),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%238b5cf6'%3E%3Cpath d='M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7z'/%3E%3C/svg%3E")!important;
+  background-repeat:no-repeat,no-repeat!important;background-position:18px center,right 18px center!important;
+  border:none!important;border-radius:10px!important;font-family:'Inter',system-ui!important;
+  font-size:15px!important;font-weight:500!important;color:var(--gs-text)!important;
+  -webkit-text-fill-color:var(--gs-text)!important;caret-color:var(--gs-accent)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
+  color:var(--gs-placeholder)!important;-webkit-text-fill-color:var(--gs-placeholder)!important;opacity:1!important;}
+/* gradient CTA with a send glyph — same radius + a taller pad than before
+   so it matches the input's new height, and a larger gap above it so the
+   two controls read as clearly separate steps, not stacked on top of
+   each other. */
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"]{margin-top:var(--gs-s5)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
+  padding:1.15rem 1.3rem!important;border-radius:10px!important;border:none!important;
+  background:linear-gradient(100deg,var(--gs-g1),var(--gs-g2))!important;color:#fff!important;
+  font-family:'Plus Jakarta Sans',system-ui!important;font-size:15.5px!important;font-weight:700!important;
+  letter-spacing:0.01em!important;box-shadow:var(--gs-cta-shadow)!important;
+  background-image:linear-gradient(100deg,var(--gs-g1),var(--gs-g2)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 2L11 13'/%3E%3Cpath d='M22 2l-7 20-4-9-9-4z'/%3E%3C/svg%3E")!important;
+  background-repeat:no-repeat,no-repeat!important;background-position:center,right 22px center!important;
+  transition:filter 180ms var(--gs-ease),transform 140ms var(--gs-ease),box-shadow 180ms var(--gs-ease)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button p,
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button div,
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button span{
+  color:#fff!important;-webkit-text-fill-color:#fff!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover{
+  filter:brightness(1.06);box-shadow:0 22px 44px -14px rgba(96,80,240,0.68)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button:active{transform:scale(0.985)!important;}
+[data-testid="stMainBlockContainer"] [data-testid="stForm"] [data-testid="stFormSubmitButton"] button:focus-visible{
+  outline:none!important;box-shadow:0 0 0 4px var(--gs-ring),var(--gs-cta-shadow)!important;}
+
+/* ── Feature rail — deliberately NOT four boxed cards: a hairline-topped
+   metadata rail (like a stat strip), so these read as supporting
+   credibility markers rather than four more UI panels competing with the
+   name-input/CTA above. Vertical dividers separate items instead of card
+   chrome; badges are smaller and undecorated (no shadow/hover-lift) so
+   they stay visually secondary, per hierarchy: identity > input+CTA >
+   mascot > features > environment. ── */
+.gs-feats{display:flex;flex-wrap:wrap;max-width:1160px;margin:64px auto 0;width:100%;
+  padding-top:var(--gs-s6);border-top:1px solid var(--gs-border);
+  animation:gs-rise 0.35s var(--gs-ease) 0.12s both;}
+.gs-feat{display:flex;align-items:flex-start;gap:var(--gs-s3);flex:1 1 240px;padding:0 var(--gs-s6);}
+.gs-feat:first-child{padding-left:0;}
+.gs-feat:not(:first-child){border-left:1px solid var(--gs-border);}
+.gs-badge{flex:none;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  background:var(--gs-badge);}
+.gs-badge svg{width:18px;height:18px;stroke:url(#gsgrad);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.gs-feat-t{font-family:'Plus Jakarta Sans',system-ui;font-size:13px;font-weight:700;color:var(--gs-text);
+  line-height:1.25;margin:0 0 var(--gs-s2);}
+.gs-feat-d{font-family:'Inter',system-ui;font-size:12px;font-weight:400;color:var(--gs-text-3);line-height:1.45;}
+
+/* ── Responsive ── */
+@media (max-width:900px){
+  section[data-testid="stMain"] [data-testid="stMainBlockContainer"]{padding:360px 1.4rem 3.5rem!important;
+    min-height:auto!important;justify-content:flex-start!important;}
+  [data-testid="stMainBlockContainer"] [data-testid="stHorizontalBlock"]{flex-direction:column!important;gap:0!important;}
+  [data-testid="stMainBlockContainer"] [data-testid="stColumn"]{width:100%!important;flex:0 0 auto!important;min-width:0!important;}
+  [data-testid="stMainBlockContainer"] [data-testid="stForm"]{max-width:100%;}
+  .gs-fallback{left:50%;top:118px;transform:translateX(-50%);width:220px;height:220px;}
+  .gs-fallback img,.gs-fallback-fallback{width:172px;height:172px;}
+  .gs-sub{max-width:100%;}
+  /* Dividers only read correctly in a single row — once items wrap to
+     multiple rows the left-border pattern would leave stray disconnected
+     lines, so drop dividers here and separate rows with gap instead. */
+  .gs-feats{row-gap:var(--gs-s6);column-gap:var(--gs-s5);margin-top:var(--gs-s8);}
+  .gs-feat{flex:1 1 45%;border-left:none!important;padding:0!important;}
 }
-html[data-theme="dark"] div.gocto-gate-bg{
-  background:
-    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.20) 0%, transparent 70%),
-    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.16) 0%, transparent 70%),
-    radial-gradient(circle 560px at 50% 96%, rgba(60,110,255,0.14) 0%, transparent 72%)!important;
-}
-div.gocto-logo-aura{
-  background:radial-gradient(circle, rgba(90,130,255,0.35) 0%, rgba(160,110,255,0.18) 45%, transparent 72%)!important;
-}
-div.gocto-feat-card{
-  background:rgba(255,255,255,0.5)!important;
-  border:1px solid rgba(120,140,230,0.16)!important;
-  box-shadow:0 2px 10px rgba(60,90,220,0.05)!important;
-}
-html[data-theme="dark"] div.gocto-feat-card{
-  background:rgba(20,24,44,0.45)!important;
-  border-color:rgba(90,110,180,0.22)!important;
-}
-div[data-testid="stForm"]{
-  background:rgba(255,255,255,0.66)!important;
-  border:1.5px solid rgba(120,140,230,0.20)!important;
-  box-shadow:0 10px 34px rgba(60,90,220,0.10),inset 0 1px 0 rgba(255,255,255,0.9)!important;
-}
-/* Dark mode: the gate's own card container previously carried a
-   translucent fill + border + drop shadow, which reads as a separate
-   boxed panel floating over the ambient background instead of part of
-   it. Layout (padding/border-radius/margin/animation, set further
-   below) is untouched — only the outline/background/shadow that made
-   the panel visually separate are removed, so the section blends into
-   the page's existing background effects (.gocto-gate-bg / the app's
-   global aura) instead of sitting inside a visible container. */
-html[data-theme="dark"] div[data-testid="stForm"]{
-  background:transparent!important;
-  border:none!important;
-  box-shadow:none!important;
-  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-}
-/* Defensive: current Streamlit renders st.form()'s outer element as a
-   bordered container (data-testid="stVerticalBlockBorderWrapper"), and
-   the app has an existing GLOBAL, page-agnostic rule (written for
-   chart-range-button panels elsewhere) that paints ANY such wrapper
-   with a background + border + box-shadow. That unscoped rule would
-   otherwise leak a second, unwanted boxed-panel look onto this form.
-   Neutralised here specifically for the gate (scoped under
-   stMainBlockContainer for higher selector specificity, so it wins
-   regardless of source order) without touching that rule's intended
-   use elsewhere in the app. */
-[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlockBorderWrapper"],
-[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlockBorderWrapper"]>div>div[data-testid="stVerticalBlock"]{
-  background:transparent!important;
-  border:none!important;
-  box-shadow:none!important;
-}
-/* Everything inside the form (the input wrapper, the button) also
-   needs its own real styling reasserted, since it too is a <div>
-   caught by the blanket rule above. Values match the form's existing
-   input/button CSS defined later in this same style block — repeated
-   here only so the blanket rule can never strip them first. */
-div[data-testid="stForm"] [data-baseweb="input"]{
-  background:linear-gradient(#fff,#fff) padding-box,
-             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
-  border:1.5px solid transparent!important;
-  box-shadow:0 2px 10px rgba(60,90,220,0.08)!important;
-}
-html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]{
-  background:linear-gradient(#1B2036,#1B2036) padding-box,
-             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
-  box-shadow:0 2px 10px rgba(0,0,0,0.25)!important;
-}
-div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
-  background:linear-gradient(135deg,#3A7BFF 0%,#8B5CF6 100%)!important;
-  border:none!important;
-  box-shadow:0 4px 18px rgba(80,90,240,0.38)!important;
+@media (max-width:560px){
+  section[data-testid="stMain"] [data-testid="stMainBlockContainer"]{padding:315px 1.2rem 2.75rem!important;}
+  .gs-fallback{top:104px;width:184px;height:184px;}
+  .gs-fallback img,.gs-fallback-fallback{width:150px;height:150px;}
+  .gs-feat{flex:1 1 100%;}
 }
 
-[data-testid="stMainBlockContainer"] > div{width:100%;
-  flex:0 0 auto!important;height:auto!important;min-height:0!important;
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion:reduce){
+  .gs-pillrow,.gs-wm,.gs-tag,.gs-sub,.gs-feats,.gs-fallback,
+  [data-testid="stMainBlockContainer"] [data-testid="stForm"]{animation:gs-fade 0.4s ease both!important;}
+  .gs-fallback img{animation:none!important;}
+  @keyframes gs-fade{from{opacity:0;}to{opacity:1;}}
 }
-[data-testid="stMainBlockContainer"] > div > div[data-testid="stVerticalBlock"]{
-  height:auto!important;min-height:0!important;
-}
-[data-testid="stVerticalBlock"]{gap:0!important;}
-
-/* ── Background wash behind the gate content — subtle, no mascot ── */
-.gocto-gate-bg{
-  position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
-  background:
-    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.14) 0%, transparent 70%),
-    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.12) 0%, transparent 70%),
-    radial-gradient(circle 560px at 50% 96%, rgba(90,150,255,0.10) 0%, transparent 72%);
-}
-html[data-theme="dark"] .gocto-gate-bg{
-  background:
-    radial-gradient(circle 520px at 20% 8%, rgba(90,130,255,0.20) 0%, transparent 70%),
-    radial-gradient(circle 480px at 84% 18%, rgba(160,110,255,0.16) 0%, transparent 70%),
-    radial-gradient(circle 560px at 50% 96%, rgba(60,110,255,0.14) 0%, transparent 72%);
-}
-
-/* ── Hero logo ── */
-.gocto-logo-wrap{position:relative;width:104px;height:104px;margin:0 auto 1.1rem;
-  animation:gocto-popIn 0.7s cubic-bezier(0.34,1.5,0.64,1) both,
-            gocto-logoFloat 5s ease-in-out infinite 0.8s;}
-@keyframes gocto-popIn{from{opacity:0;transform:scale(0.6) translateY(-16px);}to{opacity:1;transform:scale(1) translateY(0);}}
-@keyframes gocto-logoFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
-.gocto-logo-aura{position:absolute;inset:-26px;border-radius:50%;
-  background:radial-gradient(circle, rgba(90,130,255,0.35) 0%, rgba(160,110,255,0.18) 45%, transparent 72%);
-  filter:blur(18px);z-index:-1;animation:gocto-auraPulse 4.2s ease-in-out infinite;}
-@keyframes gocto-auraPulse{0%,100%{opacity:0.75;transform:scale(1);}50%{opacity:1;transform:scale(1.08);}}
-.gocto-logo-wrap img{display:block;width:104px;height:104px;object-fit:cover;border-radius:50%;
-  box-shadow:0 0 0 3px rgba(255,255,255,0.55),0 18px 40px rgba(60,100,255,0.30),0 4px 14px rgba(60,100,255,0.18);}
-html[data-theme="dark"] .gocto-logo-wrap img{
-  box-shadow:0 0 0 3px rgba(255,255,255,0.10),0 18px 44px rgba(90,130,255,0.35),0 4px 14px rgba(0,0,0,0.4);}
-
-/* ── Heading / subtext ── */
-.gocto-heading{text-align:center;margin-bottom:0.55rem;
-  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.18s both;}
-@keyframes gocto-riseIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
-.gocto-heading h1{font-family:'Syne','DM Sans',system-ui;font-weight:800;letter-spacing:-0.03em;
-  font-size:clamp(1.7rem,5vw,2.4rem);color:#14142B;line-height:1.15;margin:0;}
-html[data-theme="dark"] .gocto-heading h1{color:#F1F3FF;}
-.gocto-heading .accent{background:linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%);
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
-.gocto-sub1{font-size:15px;font-weight:600;color:#4A5178;text-align:center;margin-bottom:0.3rem;
-  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.26s both;}
-.gocto-sub2{font-size:13.5px;color:#8288A6;text-align:center;max-width:400px;line-height:1.6;
-  margin:0 auto 1.7rem;animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.32s both;}
-html[data-theme="dark"] .gocto-sub1{color:#C6CBE8;}
-html[data-theme="dark"] .gocto-sub2{color:#8F96BE;}
-
-/* ── Name entry: real st.form, restyled to match the card design ── */
-div[data-testid="stForm"]{
-  border-radius:22px!important;padding:1.5rem 1.6rem!important;
-  background:rgba(255,255,255,0.66)!important;
-  border:1.5px solid rgba(120,140,230,0.20)!important;
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  box-shadow:0 10px 34px rgba(60,90,220,0.10),inset 0 1px 0 rgba(255,255,255,0.9)!important;
-  animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.4s both;
-  margin-bottom:1.4rem!important;max-width:560px;margin-left:auto;margin-right:auto;
-}
-/* Same rationale as the earlier dark-mode stForm rule above: no
-   border, no fill, no shadow — the card blends into the global
-   background. border-radius/padding/margin/animation on the light-mode
-   rule above are inherited as-is (never overridden here), so spacing
-   and layout are unchanged — only the visible edge is gone. */
-html[data-theme="dark"] div[data-testid="stForm"]{
-  background:transparent!important;
-  border:none!important;
-  box-shadow:none!important;
-  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-}
-.gocto-name-title{font-family:'Syne','DM Sans',system-ui;font-size:16px;font-weight:800;
-  color:#14142B;text-align:center;margin-bottom:0.9rem;}
-html[data-theme="dark"] .gocto-name-title{color:#EDEFFF;}
-
-/* Restore breathing room between the name input and the Start Chat
-   button — the global [data-testid="stVerticalBlock"]{gap:0} rule
-   above (needed elsewhere on the gate) also zeroed the gap *inside*
-   the form between its two children, crushing them together. Scoped
-   back in just for the form's own inner blocks. */
-div[data-testid="stForm"] [data-testid="stVerticalBlock"]{gap:0.9rem!important;}
-div[data-testid="stForm"] [data-testid="stElementContainer"]{margin-bottom:0!important;}
-
-/* ── Name input: gradient-ring treatment, light + dark aware.
-   Streamlit wraps the real <input> in a [data-baseweb="input"] div
-   that draws its own border/background — styling the bare <input>
-   alone (as before) left that wrapper's default box visible
-   underneath, which is the plain grey/black-bordered box seen in
-   testing. Both the wrapper and the input itself are targeted here,
-   and with higher specificity than the app's existing global
-   dark-mode input rule (html[data-theme="dark"] [data-baseweb="input"]
-   input) so this doesn't get silently overridden by it. ── */
-div[data-testid="stForm"] [data-baseweb="input"]{
-  border-radius:16px!important;
-  background:linear-gradient(#fff,#fff) padding-box,
-             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
-  border:1.5px solid transparent!important;
-  box-shadow:0 2px 10px rgba(60,90,220,0.08)!important;
-  transition:box-shadow 200ms ease!important;
-}
-div[data-testid="stForm"] [data-baseweb="input"]:focus-within{
-  box-shadow:0 0 0 4px rgba(58,123,255,0.14),0 2px 14px rgba(60,90,220,0.16)!important;
-}
-/* Dark mode: a clearly dark-navy fill (not near-black) with a visibly
-   lighter placeholder — the previous #12151F read too close to black
-   next to the gradient border and made the placeholder hard to see. */
-html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]{
-  background:linear-gradient(#1B2036,#1B2036) padding-box,
-             linear-gradient(120deg,#3A7BFF 0%,#8B5CF6 55%,#E85BB0 100%) border-box!important;
-  box-shadow:0 2px 10px rgba(0,0,0,0.25)!important;
-}
-html[data-theme="dark"] div[data-testid="stForm"] [data-baseweb="input"]:focus-within{
-  box-shadow:0 0 0 4px rgba(139,92,246,0.18),0 2px 14px rgba(0,0,0,0.3)!important;
-}
-/* Light mode (default): the input's own background is white/near-white
-   (see the [data-baseweb="input"] gradient fill above), so the entered
-   text color here MUST be dark for any contrast — this was previously
-   hardcoded to #FFFFFF, i.e. white text on a white field, which is why
-   a typed name was invisible. Dark mode gets its own override below. */
-div[data-testid="stForm"] [data-testid="stTextInput"] input{
-  padding:0.85rem 1.1rem!important;background:transparent!important;
-  background-color:transparent!important;
-  border:none!important;border-radius:16px!important;
-  font-size:14.5px!important;font-weight:500!important;
-  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
-  caret-color:#3A7BFF!important;
-}
-html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input{
-  color:#F5F6FF!important;-webkit-text-fill-color:#F5F6FF!important;
-  background:transparent!important;background-color:transparent!important;
-  caret-color:#8B5CF6!important;
-}
-/* Focus state: no separate color rule needed — the input keeps the
-   same theme-correct text color above while focused, it just isn't
-   re-declared here, so it can never accidentally inherit the wrong
-   value from a later, more general selector. */
-div[data-testid="stForm"] [data-testid="stTextInput"] input:focus{
-  color:#14142B!important;-webkit-text-fill-color:#14142B!important;
-}
-html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input:focus{
-  color:#F5F6FF!important;-webkit-text-fill-color:#F5F6FF!important;
-}
-/* Placeholder ("Enter your name to begin…") — dark/black in light
-   mode, white/light in dark mode, each with enough contrast against
-   its own input background to read clearly without being mistaken
-   for entered text. */
-div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
-  color:#2B2E45!important;opacity:0.62!important;
-}
-html[data-theme="dark"] div[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
-  color:#F5F6FF!important;opacity:0.55!important;
-}
-div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
-  padding:0.85rem 1.3rem!important;border-radius:16px!important;border:none!important;
-  background:linear-gradient(135deg,#3A7BFF 0%,#8B5CF6 100%)!important;
-  color:#fff!important;font-size:14px!important;font-weight:700!important;
-  box-shadow:0 4px 18px rgba(80,90,240,0.38)!important;width:100%;
-  transition:transform 150ms cubic-bezier(0.34,1.5,0.64,1),box-shadow 150ms ease;
-}
-div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover{
-  transform:translateY(-1px) scale(1.02);box-shadow:0 6px 24px rgba(80,90,240,0.5)!important;}
-
-/* ── Feature cards ── */
-.gocto-features{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
-  max-width:560px;margin:0 auto;animation:gocto-riseIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.5s both;}
-@media (max-width:420px){.gocto-features{grid-template-columns:1fr;}}
-.gocto-feat-card{display:flex;align-items:center;gap:9px;padding:0.75rem 0.85rem;
-  background:rgba(255,255,255,0.5);border:1px solid rgba(120,140,230,0.16);border-radius:14px;
-  font-size:12px;font-weight:600;color:#4A5178;box-shadow:0 2px 10px rgba(60,90,220,0.05);}
-html[data-theme="dark"] .gocto-feat-card{
-  background:rgba(20,24,44,0.45);border-color:rgba(90,110,180,0.22);color:#B7BEE4;}
 </style>
-<div class="gocto-gate-bg"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="gsgrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#5A63F0"/><stop offset="1" stop-color="#8B5CF6"/>
+  </linearGradient>
+</defs></svg>
 """, unsafe_allow_html=True)
 
-        # Hero logo (Chat_logo.jpg is the only logo/mascot on this page)
-        _logo_tag = (
-            f'<img src="{_chat_logo_b64}" alt="OctoBot">'
-            if _chat_logo_b64 else
-            '<div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#3A7BFF,#8B5CF6);'
-            'display:flex;align-items:center;justify-content:center;font-size:44px;'
-            'box-shadow:0 0 0 3px rgba(255,255,255,0.55),0 18px 40px rgba(60,100,255,0.30);">🐙</div>'
+        # CSS environment (background colour + soft glows), always painted
+        st.markdown('<div class="gs-env" aria-hidden="true"></div>', unsafe_allow_html=True)
+
+        # CSS fallback mascot (hidden once WebGL signals it is on)
+        _fb_inner = (
+            f'<img src="{_chat_logo_b64}" alt="GoctoSailor mascot">'
+            if _chat_logo_b64 else '<div class="gs-fallback-fallback">🐙</div>'
         )
+        st.markdown(f'<div class="gs-fallback" aria-hidden="true">{_fb_inner}</div>', unsafe_allow_html=True)
+
+        # ── Genuine WebGL scene (Three.js) inside a self-contained iframe.
+        #    It styles its own host iframe to fixed/fullscreen, reads the
+        #    parent's cursor + theme, and tears itself down on unload. ──
+        _GOCTO_SCENE_TPL = r'''<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;overflow:hidden;background:transparent;}
+canvas{display:block;}
+</style></head><body>
+<script>
+(function(){
+  var MASCOT = "__MASCOT__";
+  var URLS = [
+    "https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"
+  ];
+  function loadThree(i){
+    if(i>=URLS.length) return;                 /* give up -> CSS fallback stays */
+    var s=document.createElement('script');
+    s.src=URLS[i];
+    s.onload=function(){ if(window.THREE){ try{ start(); }catch(e){} } else { loadThree(i+1); } };
+    s.onerror=function(){ loadThree(i+1); };
+    document.head.appendChild(s);
+  }
+  function start(){
+    if(window.__gsStarted) return; window.__gsStarted=true;
+    var pw=window.parent, pd=pw.document, root=pd.documentElement;
+    function isDark(){ return root.getAttribute('data-theme')==='dark'; }
+    var fe=window.frameElement;
+    if(fe){
+      fe.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;border:0;margin:0;padding:0;z-index:0;pointer-events:none;background:transparent;opacity:0;transition:opacity 350ms ease;';
+      var p=fe.parentElement,g=0;
+      while(p && g++<6){ try{ p.style.overflow='visible'; p.style.height='auto'; }catch(e){} p=p.parentElement; }
+    }
+    var W=pw.innerWidth,H=pw.innerHeight;
+    var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(pw.devicePixelRatio||1,2));
+    renderer.setSize(W,H); renderer.setClearColor(0x000000,0);
+    if('outputEncoding' in renderer && THREE.sRGBEncoding) renderer.outputEncoding=THREE.sRGBEncoding;
+    document.body.appendChild(renderer.domElement);
+    var scene=new THREE.Scene();
+    var camera=new THREE.PerspectiveCamera(38,W/H,0.1,100); camera.position.set(0,0,6.6);
+    var pmrem=new THREE.PMREMGenerator(renderer);
+    function makeEnv(dark){
+      var c=document.createElement('canvas'); c.width=16; c.height=64;
+      var g=c.getContext('2d'); var grd=g.createLinearGradient(0,0,0,64);
+      if(dark){ grd.addColorStop(0,'#232a45'); grd.addColorStop(1,'#0a0c16'); }
+      else{ grd.addColorStop(0,'#ffffff'); grd.addColorStop(1,'#dbe0f2'); }
+      g.fillStyle=grd; g.fillRect(0,0,16,64);
+      var tex=new THREE.CanvasTexture(c); tex.mapping=THREE.EquirectangularReflectionMapping;
+      var env=pmrem.fromEquirectangular(tex).texture; tex.dispose(); return env;
+    }
+    var world=new THREE.Group(); scene.add(world);
+    var hemi=new THREE.HemisphereLight(0xffffff,0x8492c4,0.9); scene.add(hemi);
+    var key=new THREE.DirectionalLight(0xffffff,1.1); key.position.set(3,5,4); scene.add(key);
+    var rim=new THREE.PointLight(0x7c8bff,0.9,40); rim.position.set(-4,-1.5,3); scene.add(rim);
+    /* Proportions below are calibrated against this exact camera (fov 38,
+       distance 6.6 -> visible height ~4.55 world units at z=0). Sizes are
+       chosen as fractions of that so the mascot reads as a modest ~20% of
+       viewport width, matching the reference composition, instead of the
+       first pass which used arbitrary units ~2x too large for this FOV.
+       (No podium/platform mesh — removed per design direction; the
+       mascot + glass bubble float on their own.) */
+    var mascot=new THREE.Group(); mascot.scale.setScalar(1.5); world.add(mascot);
+    /* Mascot photo on a PlaneGeometry (not CircleGeometry — its fan-mapped
+       UVs badly distort a square source photo) with a soft circular alpha
+       mask generated at runtime, so a plain rectangular photo reads as a
+       clean vignetted circle exactly like the reference's framed portrait. */
+    var maskCanvas=document.createElement('canvas'); maskCanvas.width=256; maskCanvas.height=256;
+    var mctx=maskCanvas.getContext('2d');
+    var mgrad=mctx.createRadialGradient(128,128,96,128,128,128);
+    mgrad.addColorStop(0,'rgba(255,255,255,1)'); mgrad.addColorStop(0.86,'rgba(255,255,255,1)'); mgrad.addColorStop(1,'rgba(255,255,255,0)');
+    mctx.fillStyle=mgrad; mctx.fillRect(0,0,256,256);
+    var alphaTex=new THREE.CanvasTexture(maskCanvas);
+    var discMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,alphaMap:alphaTex});
+    var disc=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.95),discMat); disc.position.set(0,0.14,0.02); mascot.add(disc);
+    var frameMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.2,metalness:0.35});
+    var frame=new THREE.Mesh(new THREE.TorusGeometry(0.485,0.022,18,72),frameMat); frame.position.copy(disc.position); mascot.add(frame);
+    if(MASCOT){
+      new THREE.TextureLoader().load(MASCOT,function(t){
+        if('encoding' in t && THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding;
+        if('colorSpace' in t && THREE.SRGBColorSpace) t.colorSpace=THREE.SRGBColorSpace;
+        discMat.map=t; discMat.opacity=1; discMat.needsUpdate=true; signalOn();
+      },undefined,function(){ signalOn(); });
+    } else { pw.setTimeout(signalOn,50); }
+    /* depthWrite:false is required here: `transparent:true` alone does NOT
+       stop a material from writing the depth buffer, and this sphere's
+       near hemisphere sits CLOSER to the camera than the mascot disc
+       inside it — without this, its depth writes silently discard every
+       fragment behind it (bubble, ring, mascot alike) despite 12% opacity. */
+    var bubbleMat=new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.08,metalness:0,transparent:true,opacity:0.08,depthWrite:false,clearcoat:1,clearcoatRoughness:0.1});
+    var bubble=new THREE.Mesh(new THREE.SphereGeometry(0.68,48,48),bubbleMat); bubble.position.set(0,0.1,0); world.add(bubble);
+    var pearlMat=new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.16,metalness:0.1,clearcoat:1,clearcoatRoughness:0.12});
+    var pearls=[]; var defs=[[1.25,0.0,0.35,0.88,0.036],[1.5,1.3,-0.3,0.64,0.046],[1.1,2.5,0.15,0.8,0.029],[1.7,3.7,0.45,0.54,0.039],[1.35,5.0,-0.2,0.74,0.033],[1.85,0.7,0.1,0.48,0.042]];
+    for(var i=0;i<defs.length;i++){ var d=defs[i]; var s=new THREE.Mesh(new THREE.SphereGeometry(d[4],28,28),pearlMat); s.userData={r:d[0],a:d[1],y:d[2],spd:d[3]}; world.add(s); pearls.push(s); }
+    var ringMat=new THREE.MeshBasicMaterial({color:0x9aa6e8,transparent:true,opacity:0.45,depthWrite:false});
+    var ring=new THREE.Mesh(new THREE.TorusGeometry(1.35,0.005,10,140),ringMat); ring.rotation.x=Math.PI*0.46; ring.rotation.y=0.18; world.add(ring);
+    var pcnt=42, pg=new THREE.BufferGeometry(), pos=new Float32Array(pcnt*3);
+    for(var j=0;j<pcnt;j++){ pos[j*3]=(Math.random()-0.5)*6.5; pos[j*3+1]=(Math.random()-0.5)*4.2; pos[j*3+2]=(Math.random()-0.5)*3; }
+    pg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    var motesMat=new THREE.PointsMaterial({color:0x8a97e0,size:0.022,transparent:true,opacity:0.5,depthWrite:false});
+    var motes=new THREE.Points(pg,motesMat); world.add(motes);
+    function layout(){
+      W=pw.innerWidth; H=pw.innerHeight; camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H);
+      var narrow=W<900;
+      /* Shifted further left (wide mode) so the mascot reads as clearly
+         separate from the text column instead of sitting close beside
+         it — paired with a wider spacer column on the Streamlit side so
+         the text itself starts further right. Also shifted up so the
+         mascot aligns with the wordmark band near the top of the
+         top-flowing page, leaving the lower portion of the viewport
+         clear for the feature rail below. Y brought slightly down from
+         the first pass now that there's no podium below needing
+         clearance. */
+      world.position.x = narrow?0:-2.15;
+      world.position.y = narrow?2.1:0.3;
+      world.scale.setScalar(narrow?(W<560?0.6:0.72):1.02);
+    }
+    layout(); pw.addEventListener('resize',layout,{passive:true});
+    function applyTheme(){
+      var dark=isDark();
+      if(scene.environment) scene.environment.dispose && scene.environment.dispose();
+      scene.environment=makeEnv(dark);
+      hemi.intensity=dark?0.55:0.95; key.intensity=dark?0.85:1.1;
+      rim.color.set(dark?0x8b6bff:0x7c8bff); rim.intensity=dark?1.2:0.9;
+      frameMat.color.set(dark?0x3a4260:0xffffff); bubbleMat.opacity=dark?0.06:0.08;
+      ringMat.color.set(dark?0x6c78c8:0x9aa6e8); motesMat.color.set(dark?0x9aa7f0:0x8a97e0);
+    }
+    applyTheme();
+    var mo=new MutationObserver(applyTheme);
+    try{ mo.observe(root,{attributes:true,attributeFilter:['data-theme']}); }catch(e){}
+    /* Reduced motion: per WCAG this means LESS motion, not zero — camera
+       parallax (the biggest, most disorienting movement) is switched off
+       entirely by simply never attaching the mousemove listener, while
+       ambient life (mascot breathing, pearl drift, ring/mote rotation)
+       continues at ~1/8 amplitude and speed so the scene still reads as
+       alive rather than a frozen frame. */
+    var reduced=false;
+    try{ reduced = !!(pw.matchMedia && pw.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
+    var motionK = reduced ? 0.12 : 1;
+    var mx=0,my=0,tx=0,ty=0;
+    var onMove=null;
+    if(!reduced){
+      onMove=function(e){ mx=(e.clientX/pw.innerWidth-0.5)*2; my=(e.clientY/pw.innerHeight-0.5)*2; };
+      pw.addEventListener('mousemove',onMove,{passive:true});
+    }
+    var t0=Date.now(),raf;
+    function tick(){
+      raf=requestAnimationFrame(tick);
+      var t=(Date.now()-t0)/1000;
+      tx+=(mx-tx)*0.05; ty+=(my-ty)*0.05;
+      world.rotation.y=tx*0.2; world.rotation.x=-ty*0.12;
+      camera.position.x=tx*0.55; camera.position.y=-ty*0.36; camera.lookAt(world.position.x*0.35,0,0);
+      mascot.position.y=Math.sin(t*1.2*motionK)*0.06*motionK; mascot.rotation.y=tx*0.14; mascot.rotation.x=-ty*0.06;
+      for(var i=0;i<pearls.length;i++){ var u=pearls[i].userData; var a=u.a+t*u.spd*motionK; pearls[i].position.set(Math.cos(a)*u.r,u.y+Math.sin(t*0.8*motionK+i)*0.22,Math.sin(a)*u.r*0.5); }
+      ring.rotation.z=t*0.05*motionK; motes.rotation.y=t*0.02*motionK;
+      renderer.render(scene,camera);
+    }
+    tick();
+    var flagged=false;
+    function signalOn(){ if(flagged) return; flagged=true; try{ root.classList.add('gocto-webgl-on'); if(fe) fe.style.opacity='1'; }catch(e){} }
+    pw.setTimeout(signalOn,700);
+    function cleanup(){ try{ cancelAnimationFrame(raf); pw.removeEventListener('mousemove',onMove); pw.removeEventListener('resize',layout); mo.disconnect(); root.classList.remove('gocto-webgl-on'); renderer.dispose(); pmrem.dispose(); }catch(e){} }
+    window.addEventListener('pagehide',cleanup); window.addEventListener('unload',cleanup);
+  }
+  loadThree(0);
+})();
+</script></body></html>'''
+        _gocto_scene_html = _GOCTO_SCENE_TPL.replace("__MASCOT__", _chat_logo_b64 or "")
+        components.html(_gocto_scene_html, height=0, width=0)
+
+        # ── Content (right-weighted; the left space shows the 3D scene) ──
+        # Spacer column widened (was 0.9/1.1) to match the mascot's further-
+        # left position — keeps clear separation between mascot and text
+        # instead of the two sitting close together.
+        _sp, _content = st.columns([1.2, 1.0], gap="large", vertical_alignment="center")
+        with _content:
+            st.markdown(
+                '<div class="gs-content">'
+                '<div class="gs-pillrow">'
+                '<span class="gs-pill"><svg viewBox="0 0 24 24" fill="#8b5cf6"><path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7z"/></svg>Powered by Pharos</span>'
+                '<span class="gs-pill"><span class="gs-pill-dot"></span>Online</span>'
+                '</div>'
+                '<h1 class="gs-wm">Gocto<span>Sailor</span></h1>'
+                '<p class="gs-tag">Your AI guide to the Pharos universe.</p>'
+                '<p class="gs-sub">Explore SPNs, Restaking, RWA, DeFi, building on <b>Pharos</b>, and more.</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            # ── Name entry — a real st.form: Enter and the submit button
+            # both trigger the exact same single code path below. ──
+            with st.form("sailor_gate_form", clear_on_submit=False):
+                st.markdown('<div class="gs-field-label">Start a conversation</div>', unsafe_allow_html=True)
+                _name_val = st.text_input(
+                    "Your name",
+                    value="",
+                    placeholder="Enter your name to begin…",
+                    label_visibility="collapsed",
+                    key="gate_name_field",
+                )
+                _submitted = st.form_submit_button("Start Chat", use_container_width=True)
+
+        # ── Feature markers (full width, visually secondary) ──
         st.markdown(
-            f'<div class="gocto-logo-wrap"><div class="gocto-logo-aura"></div>{_logo_tag}</div>'
-            '<div class="gocto-heading"><h1>Gocto<span class="accent">Sailor</span></h1></div>'
-            '<div class="gocto-sub1">Your AI guide to the Pharos universe.</div>'
-            '<div class="gocto-sub2">Explore SPNs, Restaking, RWA, DeFi, building on Pharos, and more.</div>',
+            '<div class="gs-feats">'
+            '<div class="gs-feat"><span class="gs-badge"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>'
+            '<div><div class="gs-feat-t">Verified Pharos Docs</div><div class="gs-feat-d">Reliable. Accurate. Always up to date.</div></div></div>'
+            '<div class="gs-feat"><span class="gs-badge"><svg viewBox="0 0 24 24"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><path d="M12 8v6M9 10l3-2 3 2"/></svg></span>'
+            '<div><div class="gs-feat-t">Built for the Pharos Ecosystem</div><div class="gs-feat-d">Deeply integrated. Ecosystem aware.</div></div></div>'
+            '<div class="gs-feat"><span class="gs-badge"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></span>'
+            '<div><div class="gs-feat-t">Private &amp; Secure</div><div class="gs-feat-d">Your conversations stay confidential.</div></div></div>'
+            '<div class="gs-feat"><span class="gs-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg></span>'
+            '<div><div class="gs-feat-t">Multi-language Support</div><div class="gs-feat-d">Talk in your language. Get answers instantly.</div></div></div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
-        # ── Name entry — a real st.form: Enter and the submit button
-        # both trigger the exact same, single code path below. This is
-        # the one source of truth for the transition. ──
-        with st.form("sailor_gate_form", clear_on_submit=False):
-            st.markdown('<div class="gocto-name-title">What should we explore today?</div>', unsafe_allow_html=True)
-            _name_val = st.text_input(
-                "Your name",
-                value="",
-                placeholder="Enter your name to begin…",
-                label_visibility="collapsed",
-                key="gate_name_field",
-            )
-            _submitted = st.form_submit_button("Start Chat →", use_container_width=True)
-
+        # ── Single submit path (behaviour unchanged) ──
         if _submitted:
             _clean_name = (_name_val or "").strip()
             if _clean_name:
@@ -11481,17 +11656,6 @@ html[data-theme="dark"] .gocto-feat-card{
                 st.rerun()
             else:
                 st.warning("Please enter your name to continue.")
-
-        # Feature cards
-        st.markdown(
-            '<div class="gocto-features">'
-            '<div class="gocto-feat-card">✓&nbsp;&nbsp;Verified Pharos Docs</div>'
-            '<div class="gocto-feat-card">◈&nbsp;&nbsp;Built for the Pharos Ecosystem</div>'
-            '<div class="gocto-feat-card">🔒&nbsp;&nbsp;Private &amp; Secure</div>'
-            '<div class="gocto-feat-card">🌐&nbsp;&nbsp;Multi-language Support</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
 
         st.stop()
 
@@ -11918,7 +12082,7 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
                      if st.session_state.chat_mode == "general"
                      else "Docs only mode: OctoBot answers strictly from verified Pharos documentation.")
         st.markdown(
-            '<div class="welcome-card" style="animation:page-fadein 0.5s cubic-bezier(0.4,0,0.2,1) both;">'
+            '<div class="welcome-card" style="animation:page-fadein 0.2s cubic-bezier(0.4,0,0.2,1) both;">'
             '<h3>Hi ' + esc(name) + '! 👋 Welcome aboard</h3>'
             '<p>Ask me anything about Pharos Network — SPNs, Native Restaking, RWA, consensus, '
             'building on Pharos, or the $PROS token. <em>' + mode_note + '</em></p>'
@@ -13244,6 +13408,7 @@ elif st.session_state.page == "updates":
         st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
     with col2:
         if st.button("🔄 Refresh feed", key="refresh_news"):
+            live_invalidate("xposts")   # force a background refresh of the feed
             st.session_state.pop("pharos_x_cache", None)
             st.session_state.pop("updates_feed_page", None)
             st.rerun()
@@ -16033,6 +16198,7 @@ elif st.session_state.page == "pulse":
     if st.button("↻ Refresh pulse", key="pulse_refresh"):
         st.session_state.pop("pulse_market_cache", None)
         st.session_state.pop("pulse_ai_cache", None)
+        live_invalidate("news")   # force a background refresh of the news holder
         st.session_state.pop("pharos_news_cache", None)
         st.rerun()
 
