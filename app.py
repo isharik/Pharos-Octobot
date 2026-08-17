@@ -7431,7 +7431,7 @@ for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("�
         st.rerun()
 
 # ── New top navigation bar (replicates the reference design) ─
-# Layout: [orange logo tile] [v1.2 badge] [Products ⌄ · Campaigns ·
+# Layout: [orange logo tile] [v2.0 badge] [Products ⌄ · Campaigns ·
 # Updates · Explore ⌄] ... [🔍 Quick search  ⌘K] [X] [GitHub] [Discord]
 # Rendered once at module level → identical appearance, dimensions and
 # fixed position on every page of the app.
