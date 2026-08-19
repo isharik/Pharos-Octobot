@@ -17264,9 +17264,9 @@ html,body{
 
 /* Sidebar — hugs the left edge, extra gutter before the member list */
 #sb{
-  width:clamp(180px,15vw,232px);flex-shrink:0;height:100%;
+  width:clamp(176px,14vw,224px);flex-shrink:0;height:100%;
   display:flex;flex-direction:column;
-  padding:clamp(24px,3vh,40px) clamp(20px,1.6vw,30px) 22px clamp(18px,1.6vw,30px);
+  padding:clamp(24px,3vh,40px) clamp(12px,1vw,18px) 22px clamp(6px,0.8vw,14px);
 }
 #sb-title{font-size:clamp(21px,1.7vw,27px);font-weight:800;color:var(--c-title);line-height:1.12;letter-spacing:-0.5px;margin-bottom:7px;}
 #sb-sub{font-size:11.5px;font-weight:500;color:var(--c-faint);margin-bottom:22px;letter-spacing:0.1px;}
