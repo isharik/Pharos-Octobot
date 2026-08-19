@@ -613,6 +613,19 @@ def live_invalidate(key: str) -> None:
     except Exception:
         pass
 
+def live_reset(key: str) -> None:
+    """Drop the last-good value entirely so the NEXT live_fetch(key) reports
+    is_loading=True again and refetches from scratch. Used by the retry
+    button on a data-heavy page's error screen (see _heavy_page_gate): a
+    plain live_invalidate would keep serving the failed/empty snapshot, so
+    the loading screen would never reappear on retry."""
+    try:
+        h = _live_holder(key)
+        h["data"] = None
+        h["at"]   = 0.0
+    except Exception:
+        pass
+
 def live_fetch(key, fetch_fn, ttl, default):
     """Return (value, is_loading). fetch_fn MUST be pure (no st.* /
     session_state — it runs on a worker thread) and return the value, or
@@ -1180,6 +1193,241 @@ def render_chart_or_skeleton(days: str, chart_key: str) -> None:
         )
     else:
         render_price_chart(df, chart_key=chart_key, days=days)
+
+
+# ── Dedicated full-page loading / error screen for data-heavy pages ──────
+# Used ONLY by the pages that must fetch heavy live/on-chain/market data
+# before they can render anything meaningful (Network Dashboard, Market
+# Pulse) and by the chat-init step. Rendered as the ONLY content of its
+# run — the caller st.stop()s or st.rerun()s immediately after — so the
+# previous page's elements are fully replaced (zero render leak) while the
+# data loads. The sync animation is pure CSS, so it keeps moving even while
+# the server thread is briefly busy. Theme-aware; uses the app's own
+# background + fonts (no redesign, just the existing visual language).
+def _data_sync_screen(title, message, active_step=0,
+                      steps=("Connecting", "Fetching", "Preparing"),
+                      mode="loading", emojis=("🔗", "📡", "✨")):
+    # Transparent, in-flow, centered — it sits ON the app's own background
+    # (no opaque card / box), the way it looked originally. It is rendered
+    # ONCE per visit and the data is polled in an isolated st.fragment (see
+    # _heavy_page_gate), so the whole page never re-runs underneath it: the
+    # spinner never resets and there's no flicker. The steps light up in
+    # sequence purely via CSS, so keeping the markup static is what lets the
+    # animation stay smooth.
+    if mode == "error":
+        wrap_style = "min-height:52vh;display:flex;align-items:center;justify-content:center;padding:2rem 1rem;text-align:center;"
+        hide_cls = ""
+        visual = '<div class="ods-err">!</div>'
+        steps_html = ""
+    else:
+        wrap_style = "min-height:66vh;display:flex;align-items:center;justify-content:center;padding:2rem 1rem;text-align:center;"
+        hide_cls = " ods-hidepage"   # activates the hide-everything-else rules
+        visual = '<div class="ods-ring"><div class="ods-tile">🐙</div></div>'
+        _chips = []
+        for _i, _s in enumerate(steps):
+            _em = emojis[_i] if _i < len(emojis) else ""
+            _emh = f'<span class="ods-em">{_em}</span>' if _em else ''
+            _chips.append(f'<span class="ods-step">{_emh}<i></i>{_s}</span>')
+        steps_html = ('<div class="ods-steps ods-auto">'
+                      + '<span class="ods-arrow">→</span>'.join(_chips)
+                      + '</div>')
+    return (
+        '<style>'
+        '.octo-dsync{width:100%;}'
+        '.octo-dsync .ods-inner{max-width:460px;width:100%;margin:0 auto;}'
+        '.ods-ring{width:92px;height:92px;margin:0 auto 1.5rem;border-radius:50%;'
+        'background:conic-gradient(from 0deg,rgba(26,26,255,0) 40deg,#1A1AFF 320deg,rgba(26,26,255,0) 360deg);'
+        '-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));'
+        'mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));'
+        'animation:odsSpin 1.05s linear infinite;position:relative;}'
+        '.ods-tile{position:absolute;inset:0;margin:auto;width:52px;height:52px;border-radius:16px;'
+        'display:flex;align-items:center;justify-content:center;font-size:26px;'
+        'background:linear-gradient(145deg,#1A1AFF,#0000CC);'
+        'box-shadow:0 6px 22px rgba(26,26,255,0.45);animation:odsPulse 1.8s ease-in-out infinite;}'
+        '.ods-title{font-family:Syne,sans-serif;font-size:1.35rem;font-weight:800;color:#0C0C1A;'
+        'letter-spacing:-0.01em;margin-bottom:0.5rem;}'
+        '.ods-msg{font-family:Inter,sans-serif;font-size:0.95rem;color:#5B5F6E;line-height:1.6;margin-bottom:1.5rem;}'
+        '.ods-steps{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}'
+        # Each chip carries the blue "active" styling; in ods-auto they fade
+        # in one-by-one (pure CSS), so the sequence advances without Python
+        # re-rendering the loader.
+        '.ods-step{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;'
+        'letter-spacing:0.02em;padding:6px 13px;border-radius:20px;'
+        'border:1px solid rgba(26,26,255,0.4);color:#1A1AFF;background:rgba(26,26,255,0.08);}'
+        '.ods-step i{width:7px;height:7px;border-radius:50%;background:#1A1AFF;display:inline-block;}'
+        # Per-phase emoji cue — hidden until the phase lights up, then it
+        # pops in gently (scale + fade) in sync with the step, then holds.
+        '.ods-em{display:inline-block;font-size:13px;line-height:1;}'
+        '.ods-steps.ods-auto .ods-em{opacity:0;transform:scale(0.5);'
+        'animation:odsEmPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;}'
+        '.ods-steps.ods-auto .ods-step{opacity:0.28;animation:odsFade 0.45s ease forwards;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(1){animation-delay:0.15s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(3){animation-delay:1.05s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(5){animation-delay:1.95s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(1) .ods-em{animation-delay:0.25s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(3) .ods-em{animation-delay:1.15s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(5) .ods-em{animation-delay:2.05s;}'
+        '.ods-steps.ods-auto .ods-step:nth-child(5) i{animation:odsBlink 1s ease-in-out 1.95s infinite;}'
+        '.ods-arrow{color:#9499A8;font-size:12px;}'
+        '.ods-err{width:72px;height:72px;margin:0 auto 1.4rem;border-radius:20px;font-size:34px;font-weight:800;'
+        'display:flex;align-items:center;justify-content:center;color:#E5484D;'
+        'background:rgba(229,72,77,0.1);border:1.5px solid rgba(229,72,77,0.3);}'
+        '@keyframes odsSpin{to{transform:rotate(360deg);}}'
+        '@keyframes odsPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}'
+        '@keyframes odsBlink{0%,100%{opacity:1;}50%{opacity:0.3;}}'
+        '@keyframes odsFade{to{opacity:1;}}'
+        '@keyframes odsEmPop{to{opacity:1;transform:scale(1);}}'
+        'html[data-theme="dark"] .ods-title{color:#F2F4FB;}'
+        'html[data-theme="dark"] .ods-msg{color:#AEB4C8;}'
+        'html[data-theme="dark"] .ods-step{border-color:rgba(99,102,241,0.5);'
+        'background:rgba(60,80,255,0.16);color:#9FB0FF;}'
+        'html[data-theme="dark"] .ods-step i{background:#9FB0FF;}'
+        # While the LOADING loader (.ods-hidepage) is on screen: collapse the
+        # sidebar, make ALL main content invisible (the stale previous page
+        # Streamlit hasn't trimmed yet), then re-show ONLY the loader and pin
+        # it fixed so it centres over the full width. visibility (unlike
+        # display) is overridable on a descendant, which is what lets just the
+        # loader show while everything else in stMain is hidden — and the
+        # .stApp background stays visible, so the spinner sits on the real
+        # background with no card and no stale page. Self-cleaning: gone when
+        # the loader element is. Not applied to the error card (no
+        # .ods-hidepage) so its Retry button stays visible/clickable.
+        'body:has(.ods-hidepage) [data-testid="stSidebar"]{display:none!important;}'
+        'body:has(.ods-hidepage) section[data-testid="stMain"]{visibility:hidden!important;}'
+        # Also hide Streamlit's fixed bottom container (the chat-input bar),
+        # which lives OUTSIDE stMain — otherwise it shows as a stray bar at
+        # the bottom of the loader screen.
+        'body:has(.ods-hidepage) [data-testid="stBottom"]{display:none!important;}'
+        'body:has(.ods-hidepage) .ods-hidepage{visibility:visible!important;'
+        'position:fixed!important;top:0!important;left:0!important;'
+        'width:100vw!important;height:100vh!important;min-height:0!important;z-index:95000;'
+        'display:flex!important;align-items:center;justify-content:center;padding:2rem 1rem;}'
+        '</style>'
+        f'<div class="octo-dsync{hide_cls}" style="{wrap_style}"><div class="ods-inner">'
+        + visual +
+        f'<div class="ods-title">{title}</div>'
+        f'<div class="ods-msg">{message}</div>'
+        + steps_html +
+        '</div></div>'
+    )
+
+
+def _show_body_loader(title, message, steps, emojis):
+    """Show the body-level page loader. Renders an invisible .ods-hidepage
+    sentinel — its mere presence in the DOM is what the CSS keys on to reveal
+    the (perfectly viewport-centred) loader and hide the page — plus a tiny
+    script that fills in its title / message / steps + per-step emojis."""
+    import json as _json
+    _sj = _json.dumps(list(steps))
+    _ej = _json.dumps(list(emojis))
+    st.markdown('<span class="ods-hidepage" style="display:none"></span>',
+                unsafe_allow_html=True)
+    components.html(
+        "<script>(function(){try{window.parent.__octoShowLoader(" +
+        _json.dumps(title) + "," + _json.dumps(message) + "," +
+        _json.dumps(_sj) + "," + _json.dumps(_ej) + ");}catch(e){}})();</script>",
+        height=0, width=0,
+    )
+
+
+def _hide_body_loader():
+    """Remove the .ods-hidepage sentinel(s) so the body loader auto-hides and
+    the page becomes visible again."""
+    components.html(
+        "<script>(function(){try{window.parent.__octoHideLoader();}catch(e){}})();</script>",
+        height=0, width=0,
+    )
+
+
+def _heavy_page_gate(gate_key, state_fn, title, loading_msg, retry_reset_fn,
+                     steps=("Connecting", "Fetching", "Preparing"),
+                     max_wait=14.0, poll=0.3, prepare_fn=None, min_show=2.6,
+                     emojis=("🔗", "📡", "✨")):
+    """Loading→ready/error gate for a data-heavy page.
+
+    state_fn() -> (status, err) with status in {'ready','loading','error'}.
+    Returns True ONLY when the real page should render. Otherwise it has
+    rendered a full-page loading (or error) screen and the caller MUST
+    st.stop() right away.
+
+    IMPLEMENTATION — the loader is drawn ONCE, then the data is polled inside
+    an isolated st.fragment(run_every=...). This matters for three reasons:
+      • The main run REACHES st.stop() normally, so Streamlit trims the
+        previous page's elements — no stale prior page (e.g. chat's tall
+        layout + sidebar) lingers behind the loader. The loader can therefore
+        be transparent and sit on the real app background, no opaque cover.
+      • Only the fragment re-runs on its timer, never the whole page — so the
+        nav bar / iframes don't re-render and nothing flickers.
+      • Because the loader markup is drawn once and never replaced, its
+        spinner never resets; the steps advance purely via CSS.
+    When the data is ready (and min_show has elapsed) the fragment flips a
+    flag and triggers a full rerun, so the real page renders on the next run.
+
+    Shows on EVERY fresh visit (per-visit `_gate_done_<key>`, cleared on
+    navigation). prepare_fn (optional) is a blocking prep step (e.g. an LLM
+    summary) run on each poll."""
+    done_key = "_gate_done_" + gate_key
+    t0_key   = "_gate_t0_" + gate_key
+    err_key  = "_gate_err_" + gate_key
+
+    if st.session_state.get(done_key):
+        # Do NOT force the loader down here. The .ods-hidepage sentinel from
+        # the previous run is still in the DOM, so the page renders while
+        # hidden and only reveals when Streamlit trims the sentinel at the
+        # END of this run — i.e. once the real page is fully rendered. Hiding
+        # early (removing the sentinel now) is what briefly exposed the stale
+        # previous page behind the fading loader.
+        return True
+
+    # A prior poll flagged an error → show error + retry (no loader/fragment).
+    if st.session_state.get(err_key):
+        _hide_body_loader()
+        st.markdown(
+            _data_sync_screen(title, st.session_state[err_key], mode="error"),
+            unsafe_allow_html=True,
+        )
+        _e1, _e2, _e3 = st.columns([2, 1.1, 2])
+        with _e2:
+            if st.button("↺ Retry", key="retry_" + gate_key,
+                         use_container_width=True, type="primary"):
+                st.session_state.pop(err_key, None)
+                st.session_state.pop(t0_key, None)
+                st.session_state.pop(done_key, None)
+                try:
+                    retry_reset_fn()
+                except Exception:
+                    pass
+                st.rerun()
+        return False
+
+    if t0_key not in st.session_state:
+        st.session_state[t0_key] = time.time()
+
+    # Show the body-level loader ONCE (stable → smooth animation).
+    _show_body_loader(title, loading_msg, steps, emojis)
+
+    # Poll the data in an isolated fragment so the whole page never re-runs.
+    @st.fragment(run_every=poll)
+    def _gate_poll():
+        elapsed = time.time() - st.session_state.get(t0_key, time.time())
+        status, err = state_fn()
+        if prepare_fn is not None:
+            try:
+                prepare_fn()
+            except Exception:
+                pass
+        if status == "error" or (status != "ready" and elapsed > max_wait):
+            st.session_state[err_key] = (err or "Live data is temporarily "
+                                         "unavailable right now. Please try again in a moment.")
+            st.rerun(scope="app")
+        elif status == "ready" and elapsed >= min_show:
+            st.session_state[done_key] = True
+            st.session_state.pop(t0_key, None)
+            st.rerun(scope="app")
+
+    _gate_poll()
+    return False
+
 
 def speak_text(text: str) -> None:
     import json as _json, re as _re
@@ -3317,14 +3565,12 @@ load_octobot(start=True)
 PULSE_CACHE = 300
 PULSE_AI_CACHE = 600
 
-def fetch_market_pulse() -> dict:
-    """Live PROS market snapshot. CoinMarketCap first (if CMC_API_KEY /
-    COINMARKETCAP_API_KEY is set), CoinGecko otherwise. Cached 5 min."""
-    now = time.time()
-    cached = st.session_state.get("pulse_market_cache", {})
-    if cached.get("data") and now - cached.get("fetched_at", 0) < PULSE_CACHE:
-        return cached["data"]
-
+def _fetch_market_pulse_raw() -> dict:
+    """Pure network fetch for the $PROS market snapshot — NO Streamlit /
+    session access (runs on a live_fetch worker thread). CoinMarketCap
+    first (if CMC_API_KEY / COINMARKETCAP_API_KEY is set), CoinGecko
+    otherwise. Returns the data dict on success, or None so the last-good
+    snapshot keeps serving (brief market staleness is fine)."""
     data = {"available": False, "source": ""}
 
     cmc_key = os.getenv("CMC_API_KEY") or os.getenv("COINMARKETCAP_API_KEY")
@@ -3387,9 +3633,16 @@ def fetch_market_pulse() -> dict:
         except Exception:
             pass
 
-    if data.get("available"):
-        st.session_state["pulse_market_cache"] = {"data": data, "fetched_at": now}
-    return data if data.get("available") else (cached.get("data") or data)
+    return data if data.get("available") else None
+
+
+def get_market_pulse():
+    """Non-blocking $PROS market snapshot (see live_fetch). Returns
+    (data_dict, is_loading) — never stalls the render run, so the Market
+    Pulse page's dedicated loading screen can show while this fetches on a
+    background thread."""
+    return live_fetch("market_pulse", _fetch_market_pulse_raw, PULSE_CACHE,
+                      {"available": False, "source": ""})
 
 
 def compute_community_pulse(market: dict, news: list) -> dict:
@@ -5423,12 +5676,12 @@ html[data-theme="dark"] [data-testid="stBottomBlockContainer"]{
 
 /* ── HERO IMPROVEMENTS ── */
 .hero{
-    padding:2rem 0 1.5rem 0!important;
-    margin-top: -7.65rem !important;
+    padding:0.9rem 0 1.1rem 0!important;
+    margin-top: -5.4rem !important;
 }
 .hero-logo-wrap{margin-bottom:0.7rem!important;margin-top:-2rem!important;}
 .hero-title{font-size:2.95rem!important;font-weight:600!important;letter-spacing:-0.015em!important;line-height:1.18!important;}
-.hero-sub{font-size:1.02rem!important;margin-bottom:1.1rem!important;}
+.hero-sub{font-size:1.02rem!important;margin-bottom:0.85rem!important;}
 
 /* ── MICRO INTERACTIONS ──
    NOTE: .camp-card already has a specific-property transition defined
@@ -7485,6 +7738,7 @@ NAV_PAGES = [
     ("🌐", "Network",   "network"),
     ("⚡", "SPNs",      "spns"),
     ("⏳", "Chronos",   "chronos"),
+    ("👥", "Community", "community"),
 ]
 # ── Hidden functional nav buttons ────────────────────────────
 # These are the REAL Streamlit navigation actions — identical keys and
@@ -7500,7 +7754,7 @@ for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("�
         st.rerun()
 
 # ── New top navigation bar (replicates the reference design) ─
-# Layout: [orange logo tile] [v2.0 badge] [Products ⌄ · Campaigns ·
+# Layout: [blue logo tile] [v2.0 badge] [Products ⌄ · Campaigns ·
 # Updates · Explore ⌄] ... [🔍 Quick search  ⌘K] [X] [GitHub] [Discord]
 # Rendered once at module level → identical appearance, dimensions and
 # fixed position on every page of the app.
@@ -7521,6 +7775,7 @@ _pnav_dd_explore = [
     ("🌐", "Network",       "network"),
     ("📡", "Market Pulse",  "pulse"),
     ("🧠", "Memory Ledger", "memory"),
+    ("👥", "Community",     "community"),
 ]
 
 def _pnav_dd_items(items):
@@ -7881,7 +8136,7 @@ else:
 _pnav_html = (
     '<div class="pnav-fixed"><nav class="pnav">'
     '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
-    '<div class="pnav-ver">v1.2<span class="pnav-caret"></span></div>'
+    '<div class="pnav-ver">v2.0<span class="pnav-caret"></span></div>'
     '<div class="pnav-links">'
     '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
     '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
@@ -8299,6 +8554,25 @@ components.html(
       var btn = navButton(key);
       if (!btn) return;
       if (navBusy){ btn.click(); return; }
+      /* Pages that render their OWN dedicated full-page loading screen
+         (Network, Market Pulse, Chat) must NOT also get the branded
+         "Hold tight, Sailor" nav overlay — it sits on top and covers their
+         loader for the first couple of seconds, so it looks like no loader
+         shows. Just fire the nav: the Python view-change veil covers the
+         swap and the page's own dedicated loader takes over immediately. */
+      var DEDICATED_LOADER = { network:1, pulse:1, chat:1 };
+      if (DEDICATED_LOADER[key]){
+        /* Network / Pulse: fire the veil IMMEDIATELY so the previous page
+           can't flash behind their loader during the brief two-rerun window.
+           CHAT is excluded on purpose — its welcome page must open INSTANTLY
+           with no veil covering it, and its prep loader hides the page on its
+           own — so clicking Chat opens right away with no delay. */
+        if (key === 'network' || key === 'pulse'){
+          try{ if(window.__octoVeil) window.__octoVeil(); }catch(e){}
+        }
+        btn.click();
+        return;
+      }
       navBusy = true;
       var m = mainEl();
 
@@ -9226,17 +9500,133 @@ if not st.session_state.get("_overlay_js_injected"):
   /* do NOT use display:none — we need to re-show without reflow */
   visibility:hidden;
 }
-/* Nav-transition veil — kept for fallback, lightweight GPU-only */
+/* Universal page-transition veil. Matches the app's own background in
+   each theme (light .stApp = #B8C4D8, dark = #0B0E1A), so a transition
+   looks like the page briefly blanking to its own background — no dark
+   flash in light mode — and is fully OPAQUE while on, so the outgoing
+   page can never show through the incoming one. Appears fast (80ms) to
+   cover instantly, fades out slower (260ms) for a smooth reveal. */
 #octo-nav-veil{
   position:fixed;inset:0;z-index:88888;
-  background:#06071A;
+  background:#B8C4D8;
   opacity:0;pointer-events:none;
-  transition:opacity 180ms cubic-bezier(0.4,0,0.2,1);
+  transition:opacity 260ms cubic-bezier(0.4,0,0.2,1);
 }
+html[data-theme="dark"] #octo-nav-veil{ background:#0B0E1A; }
 #octo-nav-veil.on{
-  opacity:0.72;pointer-events:none;
-  transition:opacity 140ms cubic-bezier(0.4,0,0.2,1);
+  opacity:1;pointer-events:auto;
+  transition:opacity 80ms cubic-bezier(0.4,0,0.2,1);
 }
+
+/* ── Body-level dedicated page loader ───────────────────────────────
+   A DIRECT child of <body>, so position:fixed anchors to the true
+   viewport — always perfectly centred, never offset/clipped by the
+   centred, max-width (and occasionally transformed) Streamlit content
+   container. Shown, and the page hidden, purely by the presence of a
+   .ods-hidepage sentinel anywhere in the DOM. The .stApp background stays
+   visible behind it (only the main content / sidebar / bottom bar are
+   hidden), so the spinner sits on the real background — no card. */
+#octo-page-loader{
+  position:fixed; inset:0; width:100vw; height:100vh; z-index:95000;
+  display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:2rem 1rem;
+  opacity:0; pointer-events:none;
+  /* OWN opaque, continuous, full-viewport background (light theme) — matches
+     the app's real aura + gradient style with a subtle diagonal grid, so the
+     loader reads as one complete full-screen page. Being opaque it fully
+     covers the nav, the stray WebGL grid canvas, and the previous page — no
+     seam, no half-height grid, nothing showing through underneath. */
+  background-color:#9DAABF;
+  background-image:
+    repeating-linear-gradient(-28deg, transparent 0px, transparent 38px, rgba(140,165,210,0.12) 38px, rgba(140,165,210,0.12) 40px, transparent 40px, transparent 78px),
+    repeating-linear-gradient(62deg, transparent 0px, transparent 55px, rgba(120,150,200,0.08) 55px, rgba(120,150,200,0.08) 57px, transparent 57px, transparent 114px),
+    radial-gradient(circle at 15% 20%, rgba(26,26,255,0.14), transparent 35%),
+    radial-gradient(circle at 85% 30%, rgba(80,110,220,0.12), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(200,215,255,0.18), transparent 50%),
+    linear-gradient(180deg, var(--bg1), var(--bg), var(--bg2));
+  background-attachment:fixed;
+  /* No opacity transition: show/hide is instant, driven by the sentinel.
+     A fade-out would leave the loader lingering over the newly-revealed
+     page for a moment, reading as a leak. */
+}
+/* Dark theme — same continuous aura + gradient over the app's dark base. */
+html[data-theme="dark"] #octo-page-loader{
+  background-color:#0B0E1A;
+  background-image:
+    repeating-linear-gradient(-28deg, transparent 0px, transparent 38px, rgba(120,140,210,0.06) 38px, rgba(120,140,210,0.06) 40px, transparent 40px, transparent 78px),
+    repeating-linear-gradient(62deg, transparent 0px, transparent 55px, rgba(100,120,200,0.05) 55px, rgba(100,120,200,0.05) 57px, transparent 57px, transparent 114px),
+    radial-gradient(circle at 15% 20%, rgba(60,80,255,0.16), transparent 38%),
+    radial-gradient(circle at 85% 30%, rgba(60,90,200,0.12), transparent 42%),
+    radial-gradient(circle at 50% 100%, rgba(30,40,90,0.30), transparent 55%),
+    linear-gradient(180deg, #10131F, #0B0E1A, #070912);
+}
+body:has(.ods-hidepage) #octo-page-loader{ opacity:1; pointer-events:auto; }
+/* Hide EVERY app-view child (header/nav, main content, sidebar and any
+   Streamlit wrapper divs) behind the loader — not just section[stMain] —
+   so no stray content box shows through the transparent loader. The
+   .stApp / stAppViewContainer background layers are ::before/::after
+   pseudo-elements (not children), so the real textured background still
+   shows; and the loader itself lives at <body> level, outside this
+   container, so it stays visible. */
+body:has(.ods-hidepage) [data-testid="stAppViewContainer"] > *{ visibility:hidden !important; }
+body:has(.ods-hidepage) [data-testid="stSidebar"]{ display:none !important; }
+body:has(.ods-hidepage) [data-testid="stBottom"]{ display:none !important; }
+/* Keep the top nav bar visible over the loader (escape hatch + preserves
+   the existing look) — visibility:visible on this descendant overrides the
+   hidden ancestor above. */
+body:has(.ods-hidepage) .pnav{ visibility:visible !important; }
+/* Kill any leftover Chat-welcome-gate layers while the loader is up — the
+   gate makes .stApp transparent and drops in fixed background washes
+   (.gs-env / .gs-fallback) + a WebGL scene; if any of that lingers during
+   the name → chat prep loader it shows as an uneven horizontal band behind
+   the transparent loader. Hiding them and restoring the app's own solid
+   base colour guarantees ONE consistent background across the viewport. */
+body:has(.ods-hidepage) .gs-env,
+body:has(.ods-hidepage) .gs-fallback,
+body:has(.ods-hidepage) iframe[data-gocto-scene]{ display:none !important; }
+body:has(.ods-hidepage) [data-testid="stApp"]{ background-color:#B8C4D8 !important; }
+html[data-theme="dark"] body:has(.ods-hidepage) [data-testid="stApp"]{ background-color:#0B0E1A !important; }
+#octo-page-loader .opl-inner{ max-width:460px; width:100%; }
+#octo-page-loader .ods-ring{ width:92px; height:92px; margin:0 auto 1.5rem; border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(26,26,255,0) 40deg,#1A1AFF 320deg,rgba(26,26,255,0) 360deg);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));
+  animation:odsSpin 1.05s linear infinite; position:relative; }
+#octo-page-loader .ods-tile{ position:absolute; inset:0; margin:auto; width:52px; height:52px; border-radius:16px;
+  display:flex; align-items:center; justify-content:center; font-size:26px;
+  background:linear-gradient(145deg,#1A1AFF,#0000CC);
+  box-shadow:0 6px 22px rgba(26,26,255,0.45); animation:odsPulse 1.8s ease-in-out infinite; }
+#octo-page-loader .ods-title{ font-family:Syne,sans-serif; font-size:1.35rem; font-weight:800; color:#0C0C1A;
+  letter-spacing:-0.01em; margin-bottom:0.5rem; }
+#octo-page-loader .ods-msg{ font-family:Inter,sans-serif; font-size:0.95rem; color:#5B5F6E; line-height:1.6; margin-bottom:1.5rem; }
+#octo-page-loader .ods-steps{ display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
+#octo-page-loader .ods-step{ display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700;
+  letter-spacing:0.02em; padding:6px 13px; border-radius:20px;
+  border:1px solid rgba(26,26,255,0.4); color:#1A1AFF; background:rgba(26,26,255,0.08); }
+#octo-page-loader .ods-step i{ width:7px; height:7px; border-radius:50%; background:#1A1AFF; display:inline-block; }
+#octo-page-loader .ods-em{ display:inline-block; font-size:13px; line-height:1; }
+#octo-page-loader .ods-steps.ods-auto .ods-step{ opacity:0.28; animation:odsFade 0.45s ease forwards; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(1){ animation-delay:0.15s; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(3){ animation-delay:1.05s; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(5){ animation-delay:1.95s; }
+#octo-page-loader .ods-steps.ods-auto .ods-em{ opacity:0; transform:scale(0.5);
+  animation:odsEmPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(1) .ods-em{ animation-delay:0.25s; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(3) .ods-em{ animation-delay:1.15s; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(5) .ods-em{ animation-delay:2.05s; }
+#octo-page-loader .ods-steps.ods-auto .ods-step:nth-child(5) i{ animation:odsBlink 1s ease-in-out 1.95s infinite; }
+#octo-page-loader .ods-arrow{ color:#9499A8; font-size:12px; }
+@keyframes odsSpin{ to{ transform:rotate(360deg); } }
+@keyframes odsPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
+@keyframes odsBlink{ 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+@keyframes odsFade{ to{ opacity:1; } }
+@keyframes odsEmPop{ to{ opacity:1; transform:scale(1); } }
+html[data-theme="dark"] #octo-page-loader .ods-title{ color:#F2F4FB; }
+html[data-theme="dark"] #octo-page-loader .ods-msg{ color:#AEB4C8; }
+html[data-theme="dark"] #octo-page-loader .ods-step{ border-color:rgba(99,102,241,0.5);
+  background:rgba(60,80,255,0.16); color:#9FB0FF; }
+html[data-theme="dark"] #octo-page-loader .ods-step i{ background:#9FB0FF; }
+
 /* ── Blue tile ─────────────────────────────────────────────────── */
 #octo-nav-overlay .onv-wrap{
   position:relative;
@@ -9404,6 +9794,95 @@ if not st.session_state.get("_overlay_js_injected"):
     /* Hard cap: never block UI beyond 5 seconds */
     hardTimer = setTimeout(dismiss, HARD_MAX_MS);
 
+    /* ── Universal page-transition veil ───────────────────────────────
+       Driven from Python (see the components.html trigger just before the
+       router). It covers EVERY navigation path — in-page buttons, home
+       cards, the name-gate form submit — not only the top-nav clicks that
+       route through __pnavGo. Python calls this at the very top of the new
+       run whenever the view identity changes, so the outgoing page is
+       hidden behind the app's own background colour while the incoming
+       page streams in. Dismissal is content-driven (MutationObserver +
+       settle timer + hard cap), never a blind fixed delay — the exact
+       pattern the startup + nav overlays already use. */
+    var veilSettle = null, veilObs = null, veilHardCap = null;
+    function veilDismissNow(){
+      try{ var vl = doc.getElementById('octo-nav-veil'); if(vl) vl.classList.remove('on'); }catch(e){}
+      if(veilSettle){ clearTimeout(veilSettle); veilSettle = null; }
+      if(veilHardCap){ clearTimeout(veilHardCap); veilHardCap = null; }
+      try{ if(veilObs){ veilObs.disconnect(); veilObs = null; } }catch(e){}
+    }
+    window.__octoVeil = function(){
+      try{
+        /* If the branded "Hold tight, Sailor" overlay is already covering
+           the screen (a top-nav __pnavGo transition), let it own the
+           transition — don't stack a second cover under it. */
+        var ov = doc.getElementById('octo-nav-overlay');
+        if(ov){
+          var os = window.getComputedStyle(ov);
+          if(os.opacity !== '0' && os.visibility !== 'hidden' && os.display !== 'none'){ return; }
+        }
+        var vl = doc.getElementById('octo-nav-veil');
+        if(!vl) return;
+        vl.classList.add('on');
+        function scheduleVeilSettle(){
+          if(veilSettle) clearTimeout(veilSettle);
+          veilSettle = setTimeout(veilDismissNow, 240);
+        }
+        try{
+          if(veilObs){ veilObs.disconnect(); }
+          var mm = doc.querySelector('[data-testid="stMain"]') || doc.body;
+          veilObs = new MutationObserver(function(mts){
+            /* If a dedicated page loader has appeared, it now covers the
+               screen itself (opaque hide of the old page) — hand off to it
+               immediately so the veil doesn't linger as a solid backdrop
+               over the loader's textured background. */
+            if(doc.querySelector('.ods-hidepage')){ veilDismissNow(); return; }
+            for(var i=0;i<mts.length;i++){
+              if(mts[i].addedNodes && mts[i].addedNodes.length){ scheduleVeilSettle(); break; }
+            }
+          });
+          veilObs.observe(mm, {childList:true, subtree:true});
+        }catch(e){}
+        if(veilHardCap) clearTimeout(veilHardCap);
+        scheduleVeilSettle();                    /* in case no mutation ever arrives */
+        veilHardCap = setTimeout(veilDismissNow, 5000);  /* absolute safety net */
+      }catch(e){}
+    };
+
+    /* ── Body-level page loader control ───────────────────────────────
+       Populate the loader's title / message / steps (+ per-step emoji).
+       Visibility is driven purely by CSS: whenever a .ods-hidepage sentinel
+       exists in the DOM the loader is shown and the page hidden; __octoHide
+       removes any sentinels so the loader auto-hides. */
+    window.__octoShowLoader = function(title, msg, stepsJson, emojisJson){
+      try{
+        var pl = doc.getElementById('octo-page-loader'); if(!pl) return;
+        var tl = doc.getElementById('opl-title'); if(tl) tl.textContent = title || '';
+        var mg = doc.getElementById('opl-msg');   if(mg) mg.textContent = msg || '';
+        var sc = doc.getElementById('opl-steps');
+        if(sc){
+          var arr = [], ems = [];
+          try{ arr = JSON.parse(stepsJson); }catch(e){}
+          try{ ems = JSON.parse(emojisJson); }catch(e){}
+          var html = '';
+          for(var i=0;i<arr.length;i++){
+            if(i>0) html += '<span class="ods-arrow">→</span>';
+            var em = ems[i] ? ('<span class="ods-em">' + ems[i] + '</span>') : '';
+            html += '<span class="ods-step">' + em + '<i></i>' + arr[i] + '</span>';
+          }
+          sc.innerHTML = html;
+          /* restart the staggered step/emoji animation from the top */
+          sc.classList.remove('ods-auto'); void sc.offsetWidth; sc.classList.add('ods-auto');
+        }
+      }catch(e){}
+    };
+    window.__octoHideLoader = function(){
+      try{
+        var s = doc.querySelectorAll('.ods-hidepage');
+        for(var i=0;i<s.length;i++){ try{ s[i].remove(); }catch(e){} }
+      }catch(e){}
+    };
+
     /* Tab shimmer for in-page tab switches ─────────────── */
     doc.addEventListener('click', function(e){
       var tabBtn = e.target && e.target.closest
@@ -9459,6 +9938,22 @@ if not st.session_state.get("_overlay_js_injected"):
         vl_.id='octo-nav-veil';
         PW.document.body.appendChild(vl_);
       }
+      /* Body-level page loader (a DIRECT child of <body> so position:fixed
+         anchors to the true viewport and is never offset/clipped by
+         Streamlit's centered, max-width, sometimes-transformed content
+         container). Its content is set by __octoShowLoader; the CSS shows it
+         and hides the page whenever a .ods-hidepage sentinel is present. */
+      if(!PW.document.getElementById('octo-page-loader')){
+        var pl_=PW.document.createElement('div');
+        pl_.id='octo-page-loader';
+        pl_.innerHTML='<div class="opl-inner">'+
+          '<div class="ods-ring"><div class="ods-tile">🐙</div></div>'+
+          '<div class="ods-title" id="opl-title"></div>'+
+          '<div class="ods-msg" id="opl-msg"></div>'+
+          '<div class="ods-steps ods-auto" id="opl-steps"></div>'+
+        '</div>';
+        PW.document.body.appendChild(pl_);
+      }
       /* Floating hamburger sidebar toggle (#octo-sb-btn) removed per
          request — it duplicated Streamlit's own native sidebar
          collapse/expand arrow (the "«" control built into the sidebar
@@ -9493,6 +9988,52 @@ if not st.session_state.get("_overlay_js_injected"):
     components.html(_overlay_html, height=0, scrolling=False)
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  UNIVERSAL PAGE-TRANSITION VEIL TRIGGER
+#  Covers EVERY navigation path, not just the top-nav clicks that route
+#  through __pnavGo: any in-page button, home card, or the name-gate form
+#  submit changes the view identity below, and we call the parent-window
+#  veil at the very top of the new run so the previous page cannot show
+#  through while the new one streams in. The veil removes itself once the
+#  new page's DOM settles (see __octoVeil in OCTO_OVERLAY_BOOT). This
+#  component is emitted at the SAME position every run (stable — no DOM
+#  churn); it only *fires* the veil when the view actually changed, so
+#  ordinary same-page reruns (sending a chat message, refresh buttons,
+#  tab switches) never flash it.
+# ══════════════════════════════════════════════════════════════════════
+_view_key = f"{st.session_state.page}:{int(bool(st.session_state.get('sailor_done', False)))}"
+_prev_view_key = st.session_state.get("_last_view_key")
+st.session_state["_last_view_key"] = _view_key
+_view_changed = _prev_view_key is not None and _prev_view_key != _view_key
+
+# On every navigation, clear the "loader already shown" flags for the
+# pages that have a dedicated loading screen, so their loader plays again
+# each time the page is opened (not just the first, uncached visit). This
+# only fires on a real view change — the loaders' own poll-loop reruns and
+# in-page interactions keep the same view key, so they never reset it.
+if _view_changed:
+    for _gk in ("net_stats", "market_pulse"):
+        st.session_state.pop("_gate_done_" + _gk, None)
+        st.session_state.pop("_gate_t0_" + _gk, None)
+        st.session_state.pop("_gate_cy_" + _gk, None)
+    st.session_state.pop("_chatprep_done", None)
+    st.session_state.pop("_chat_prep_t0", None)
+
+# Skip the transition veil when opening the Chat WELCOME page (page == chat
+# and the name hasn't been entered yet): that screen is light and instant,
+# so covering it with the veil only adds a perceived delay. Clicking Chat
+# should show the welcome page immediately. (The prep loader after the name
+# is entered still gets covered — it hides the page on its own.)
+_is_welcome_gate = (st.session_state.page == "chat"
+                    and not st.session_state.get("sailor_done", False))
+_fire_veil = _view_changed and not _is_welcome_gate
+components.html(
+    "<script>(function(){try{if(" + ("true" if _fire_veil else "false") +
+    " && window.parent.__octoVeil){window.parent.__octoVeil();}}catch(e){}})();</script>",
+    height=0, width=0,
+)
+
+
 # ═════════════════════════════════════════════
 # PAGE: HOME
 # ═════════════════════════════════════════════
@@ -9518,131 +10059,270 @@ if st.session_state.page == "home":
     st.markdown(
         '<div class="hero">'
         '<div class="hero-eyebrow"><div class="live-dot"></div>Live On Pharos Network </div>'
-        '<h1 class="hero-title">Your <span>Pharos</span> Command Center</h1>'
+        '<h1 class="hero-title">Your Pharos <span>Command Center</span></h1>'
         '<p class="hero-sub">Ask OctoBot anything about Pharos, track live $PROS price, explore active campaigns, read the latest updates, and trade — all in one place.</p>'
-        '<div style="margin-bottom:1.2rem;">' + price_pill + '</div>'
+        '<div style="margin-bottom:0.85rem;"><span class="hero-price-cap">' + price_pill + '</span></div>'
         '<div class="hero-actions">'
-        '<a class="hbtn hbtn-ghost" href="' + PHAROS_DISCORD_URL + '" target="_blank">Join the Pharos Discord for more updates and insights 🌊↗</a>'
+        '<div class="hero-chat-cta" data-pnav-go="chat" role="button" tabindex="0">'
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.5 7.5L3 21l2-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg>'
+        'Chat with OctoBot</div>'
         '</div>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # Feature badges — polished static display, not clickable buttons
+    # Feature cards — four equal-width highlights (matches reference image)
     st.markdown(
-        '<div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:1.2rem;">'
+        '<style>'
+        '.hero-chat-cta{display:inline-flex;align-items:center;gap:8px;cursor:pointer;'
+        'font-family:\'Inter\',sans-serif;font-size:14px;font-weight:600;color:#fff;letter-spacing:0.01em;'
+        'background:linear-gradient(135deg,#3B6BFF 0%,#2563EB 100%);'
+        'border-radius:22px;padding:7px 20px;box-shadow:0 6px 16px rgba(37,99,235,0.26);'
+        'transition:transform 160ms cubic-bezier(0.23,1,0.32,1),box-shadow .2s ease;}'
+        '.hero-chat-cta:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(37,99,235,0.32);}'
+        '.hero-chat-cta:active{transform:scale(0.98);}'
+        '.hero-chat-cta svg{width:16px;height:16px;}'
+        '.hfeat-row{display:flex;gap:14px;width:100%;margin-bottom:1.1rem;}'
+        '.hfeat{flex:1;display:flex;align-items:flex-start;gap:10px;'
+        'background:rgba(255,255,255,0.72);border:1px solid rgba(0,0,0,0.05);border-radius:13px;'
+        'padding:0.7rem 0.9rem;backdrop-filter:blur(6px);box-shadow:0 1px 5px rgba(20,20,60,0.04);}'
+        '.hfeat-ic{width:30px;height:30px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}'
+        '.hfeat-ic svg{width:16px;height:16px;}'
+        '.hfeat-t{font-family:\'Inter\',sans-serif;font-size:13px;font-weight:600;color:#0C0C1A;line-height:1.25;letter-spacing:-0.01em;}'
+        '.hfeat-d{font-size:10.5px;color:#7A7F96;margin-top:2px;line-height:1.42;}'
+        '.hfeat-blue .hfeat-ic{background:rgba(90,120,255,0.12);color:#4A6BFF;}'
+        '.hfeat-purple .hfeat-ic{background:rgba(160,120,255,0.14);color:#8B5CF6;}'
+        '.hfeat-pink .hfeat-ic{background:rgba(255,120,180,0.13);color:#EC5AA0;}'
+        'html[data-theme="dark"] .hfeat{background:rgba(22,26,44,0.7);border-color:rgba(255,255,255,0.08);}'
+        'html[data-theme="dark"] .hfeat-t{color:#F2F4FB;}'
+        'html[data-theme="dark"] .hfeat-d{color:#AEB4C8;}'
+        '@media (max-width:820px){.hfeat-row{flex-wrap:wrap;}.hfeat{flex:1 1 46%;}}'
+        # live price capsule
+        '.hero-price-cap{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:20px;'
+        'background:rgba(255,255,255,0.65);border:1px solid rgba(0,0,0,0.08);box-shadow:0 2px 8px rgba(20,20,60,0.06);}'
+        'html[data-theme="dark"] .hero-price-cap{background:rgba(22,26,44,0.6);border-color:rgba(255,255,255,0.1);}'
+        # slimmer docs strip
+        '.docs-banner{padding:0.5rem 1.25rem!important;}'
+        # white "Live On Pharos Network" pill
+        '.hero-eyebrow{background:rgba(255,255,255,0.8)!important;color:#0C0C1A!important;font-weight:600!important;'
+        'padding:6px 14px!important;border:1px solid rgba(0,0,0,0.06)!important;box-shadow:0 2px 8px rgba(20,20,60,0.05)!important;}'
+        'html[data-theme="dark"] .hero-eyebrow{background:rgba(28,32,50,0.82)!important;color:#EDEFF7!important;'
+        'border-color:rgba(255,255,255,0.1)!important;}'
+        # heading — "Your Pharos" dark, "Command Center" in clean blue
+        '.hero-title{color:#000000!important;font-weight:600!important;}'
+        'html[data-theme="dark"] .hero-title{color:#EDEFF7!important;}'
+        '.hero-title span{background:linear-gradient(90deg,#2348FF,#3D5BFF)!important;'
+        '-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}'
+        # combined Memory Ledger + Payment Agent card
+        '.hc{position:relative;display:flex;width:100%;border-radius:20px;overflow:hidden;margin-bottom:0.8rem;'
+        'border:1px solid rgba(255,255,255,0.06);box-shadow:0 12px 34px rgba(12,12,40,0.22);}'
+        '.hc-half{position:relative;flex:1;min-width:0;min-height:206px;padding:1.3rem 1.5rem;'
+        'display:flex;flex-direction:column;overflow:hidden;isolation:isolate;}'
+        '.hc-ml{background:radial-gradient(120% 130% at 100% 0%,#211d55 0%,#12112e 46%,#0a0a1c 100%);}'
+        '.hc-pa{background:radial-gradient(120% 130% at 0% 0%,#0e3d24 0%,#0a2416 46%,#071510 100%);'
+        'border-left:1px solid rgba(255,255,255,0.06);}'
+        '.hc-ml .hf-glow{background:radial-gradient(58% 60% at 74% 34%,rgba(122,112,255,0.2),transparent 72%);}'
+        '.hc-pa .hf-glow{background:radial-gradient(58% 60% at 74% 36%,rgba(60,220,130,0.17),transparent 72%);}'
+        '.hc-body{position:relative;z-index:5;max-width:57%;}'
+        '.hc-btn{position:relative;z-index:6;margin-top:auto;align-self:flex-start;display:inline-flex;'
+        'align-items:center;gap:7px;cursor:pointer;text-decoration:none;font-family:\'Inter\',sans-serif;'
+        'font-size:12px;font-weight:600;color:#fff;border-radius:10px;padding:8px 15px;'
+        'transition:transform 160ms cubic-bezier(0.23,1,0.32,1),box-shadow .2s ease;}'
+        '.hc-btn:hover{transform:translateY(-1px);}'
+        '.hc-btn:active{transform:scale(0.98);}'
+        '.hc-btn-ml{background:linear-gradient(135deg,#6D28D9,#7C3AED);box-shadow:0 5px 14px rgba(109,40,217,0.3);}'
+        '.hc-btn-pa{background:linear-gradient(135deg,#0EA95B,#14B866);box-shadow:0 5px 14px rgba(16,169,91,0.3);}'
+        '.hc::after{content:"";position:absolute;left:50%;top:50%;width:26px;height:2px;border-radius:2px;'
+        'transform:translate(-50%,-50%);z-index:6;background:linear-gradient(90deg,rgba(150,130,255,0.55),rgba(90,240,160,0.55));}'
+        '.hc::before{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:50%;'
+        'transform:translate(-50%,-50%);z-index:7;background:#dfe2ff;box-shadow:0 0 8px rgba(150,150,255,0.7);}'
+        '@media (max-width:760px){.hc{flex-direction:column;}'
+        '.hc-pa{border-left:none;border-top:1px solid rgba(255,255,255,0.06);}'
+        '.hc::before,.hc::after{display:none;}.hc-body{max-width:62%;}}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hfeat-row">'
 
-        '<div style="display:inline-flex;align-items:center;gap:9px;'
-        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
-        'border-radius:12px;padding:0.55rem 1.1rem;'
-        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
-        '<span style="font-size:16px;line-height:1;">💬</span>'
-        '<div>'
-        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">Multilingual</div>'
-        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Ask in any language</div>'
-        '</div></div>'
+        '<div class="hfeat hfeat-blue">'
+        '<div class="hfeat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.5 7.5L3 21l2-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg></div>'
+        '<div><div class="hfeat-t">Ask Anything</div><div class="hfeat-d">Multilingual support 50+ languages</div></div>'
+        '</div>'
 
-        '<div style="display:inline-flex;align-items:center;gap:9px;'
-        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
-        'border-radius:12px;padding:0.55rem 1.1rem;'
-        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
-        '<span style="font-size:16px;line-height:1;">🌐</span>'
-        '<div>'
-        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">50+ Languages</div>'
-        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Hindi, Arabic, Chinese & more</div>'
-        '</div></div>'
+        '<div class="hfeat hfeat-blue">'
+        '<div class="hfeat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg></div>'
+        '<div><div class="hfeat-t">Live Markets</div><div class="hfeat-d">Real-time $PROS price and charts</div></div>'
+        '</div>'
 
-        '<div style="display:inline-flex;align-items:center;gap:9px;'
-        'background:#FFFFFF;border:1px solid rgba(0,0,0,0.09);'
-        'border-radius:12px;padding:0.55rem 1.1rem;'
-        'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
-        '<span style="font-size:16px;line-height:1;">📊</span>'
-        '<div>'
-        '<div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:#0C0C1A;line-height:1.2;">Real-time Markets</div>'
-        '<div style="font-size:10px;color:#7A7F96;margin-top:1px;">Live $PROS price & chart</div>'
-        '</div></div>'
+        '<div class="hfeat hfeat-purple">'
+        '<div class="hfeat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>'
+        '<div><div class="hfeat-t">Campaigns</div><div class="hfeat-d">Explore active campaigns &amp; quests</div></div>'
+        '</div>'
+
+        '<div class="hfeat hfeat-blue">'
+        '<div class="hfeat-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></div>'
+        '<div><div class="hfeat-t">All-in-One</div><div class="hfeat-d">Trade, insights, updates and more</div></div>'
+        '</div>'
 
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Memory Ledger + Payment Agent — elegant side-by-side cards ──
-    home_card_col1, home_card_col2 = st.columns(2, gap="medium")
+    # ── Memory Ledger + Payment Agent — premium 3D feature cards ──
+    st.markdown("""<style>
+/* Collapse invisible style-injection containers so their phantom flex gaps
+   don't push the home section down (the <style> still applies when hidden). */
+.stMainBlockContainer [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style){display:none!important;}
+/* Lift the whole home section a touch closer to the nav bar. */
+.stMainBlockContainer > div[data-testid="stVerticalBlock"]{margin-top:-2.2rem!important;}
+.hf-card{position:relative;overflow:hidden;border-radius:22px;min-height:222px;
+  padding:1.65rem 1.7rem;display:flex;align-items:center;isolation:isolate;
+  transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s ease;}
+.hf-card:hover{transform:translateY(-3px);}
+.hf-body{position:relative;z-index:5;max-width:58%;}
+.hf-scene{position:absolute;top:0;bottom:0;right:-3%;width:47%;perspective:720px;pointer-events:none;z-index:1;}
+.hf-glow{position:absolute;inset:0;z-index:0;pointer-events:none;}
+.hf-dots{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(circle,rgba(255,255,255,.05) 1px,transparent 1px);background-size:20px 20px;}
+.hf-plat{position:absolute;left:50%;top:66%;width:142px;height:142px;
+  transform:translate(-50%,-50%) rotateX(66deg);border-radius:50%;box-shadow:inset 0 0 26px rgba(0,0,0,.5);}
+.hf-plat::before{content:"";position:absolute;inset:19%;border-radius:50%;border:1.5px solid rgba(255,255,255,.14);}
+.hf-plat::after{content:"";position:absolute;inset:38%;border-radius:50%;border:1px solid rgba(255,255,255,.1);}
+.hf-beam{position:absolute;left:50%;top:70%;width:160px;height:48px;transform:translate(-50%,-50%);border-radius:50%;filter:blur(9px);z-index:0;}
+.hf-orbit{position:absolute;left:50%;top:57%;width:178px;height:178px;transform:translate(-50%,-50%) rotateX(70deg);transform-style:preserve-3d;}
+.hf-orbit-ring{width:100%;height:100%;border-radius:50%;position:relative;animation:hfSpinZ 24s linear infinite;}
+.hf-orbit-dot{position:absolute;top:-3px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;}
+.hf-core{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);z-index:3;}
+.hf-core-in{animation:hfFloat 5s ease-in-out infinite;}
+.hf-chip{position:absolute;border-radius:9px;padding:6px 8px;z-index:4;display:flex;flex-direction:column;gap:3px;box-shadow:0 6px 16px rgba(0,0,0,.32);}
+.hf-chip i{display:block;height:3px;border-radius:2px;background:currentColor;opacity:.8;}
+@keyframes hfFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes hfFloatB{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes hfSpinZ{to{transform:rotateZ(360deg)}}
+@keyframes hfPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.ml-card{background:radial-gradient(120% 130% at 100% 0%,#211d55 0%,#12112e 46%,#0a0a1c 100%);
+  border:1px solid rgba(126,124,255,.16);box-shadow:0 12px 34px rgba(24,20,90,.3),inset 0 1px 0 rgba(255,255,255,.05);}
+.ml-card:hover{box-shadow:0 18px 46px rgba(40,34,140,.42),inset 0 1px 0 rgba(255,255,255,.06);}
+.ml-card .hf-glow{background:radial-gradient(58% 54% at 73% 44%,rgba(122,112,255,.32) 0%,transparent 70%);}
+.ml-plat{background:radial-gradient(circle at 50% 42%,#4a49b8 0%,#24236e 46%,#14133e 100%);
+  box-shadow:inset 0 0 24px rgba(0,0,0,.5),0 0 0 1px rgba(150,150,255,.22),0 0 20px rgba(110,100,255,.32);}
+.ml-beam{background:radial-gradient(ellipse,rgba(130,120,255,.45) 0%,transparent 72%);}
+.ml-orbit .hf-orbit-ring{border:1px solid rgba(150,150,255,.28);}
+.ml-orbit .hf-orbit-dot{background:#B9B0FF;box-shadow:0 0 9px #8B87FF;}
+.ml-brain{width:82px;height:73px;filter:drop-shadow(0 3px 10px rgba(130,120,255,.5));}
+.ml-chip{color:#B7B0FF;background:rgba(58,56,138,.4);border:1px solid rgba(150,150,255,.26);backdrop-filter:blur(3px);}
+.ml-chip1{top:15%;right:5%;width:52px;animation:hfFloatB 6s ease-in-out infinite;}
+.ml-chip2{bottom:13%;left:1%;width:38px;animation:hfFloatB 6.6s ease-in-out .5s infinite;}
+.pa-card{background:radial-gradient(120% 130% at 100% 0%,#0e3d24 0%,#0a2416 46%,#071510 100%);
+  border:1px solid rgba(74,220,140,.16);box-shadow:0 12px 34px rgba(10,60,30,.3),inset 0 1px 0 rgba(255,255,255,.05);}
+.pa-card:hover{box-shadow:0 18px 46px rgba(16,110,54,.42),inset 0 1px 0 rgba(255,255,255,.06);}
+.pa-card .hf-glow{background:radial-gradient(58% 54% at 73% 46%,rgba(60,220,130,.28) 0%,transparent 70%);}
+.pa-plat{background:radial-gradient(circle at 50% 42%,#1fae72 0%,#0f6a44 46%,#0a3a28 100%);
+  box-shadow:inset 0 0 24px rgba(0,0,0,.5),0 0 0 1px rgba(90,240,160,.24),0 0 20px rgba(60,220,130,.32);}
+.pa-beam{background:radial-gradient(ellipse,rgba(70,230,150,.42) 0%,transparent 72%);}
+.pa-orbit .hf-orbit-ring{border:1px solid rgba(90,240,160,.28);}
+.pa-orbit .hf-orbit-dot{background:#8BFFB0;box-shadow:0 0 9px #45E39B;}
+.pa-coin{width:76px;height:76px;border-radius:50%;position:relative;
+  box-shadow:0 8px 18px rgba(6,60,30,.5),0 0 0 2px rgba(70,230,150,.3),0 0 18px rgba(60,220,130,.4),inset 0 2px 6px rgba(255,255,255,.22);}
+.pa-coin img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;}
+.pa-coin::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1px solid rgba(120,255,180,.32);}
+.pa-node{position:absolute;border-radius:50%;z-index:4;background:#8BFFB0;box-shadow:0 0 10px #45E39B;}
+.pa-node1{top:19%;right:9%;width:8px;height:8px;animation:hfPulse 2.6s ease-in-out infinite,hfFloatB 6s ease-in-out infinite;}
+.pa-node2{bottom:19%;right:27%;width:6px;height:6px;animation:hfPulse 3s ease-in-out .6s infinite;}
+.pa-node3{top:46%;left:1%;width:6px;height:6px;animation:hfPulse 2.4s ease-in-out .3s infinite;}
+@media (max-width:680px){.hf-body{max-width:64%;}.hf-scene{width:42%;right:-6%;}}
+@media (prefers-reduced-motion:reduce){
+  .hf-core-in,.hf-orbit-ring,.hf-chip,.pa-node,.hf-card{animation:none!important;transition:none!important;}
+  .hf-card:hover{transform:none!important;}
+}
+</style>""", unsafe_allow_html=True)
 
-    with home_card_col1:
-        # Memory Ledger card
-        st.markdown(
-            '<div style="background:linear-gradient(135deg,#0C0C1A 0%,#1414E8 100%);'
-            'border-radius:20px;padding:1.6rem 1.6rem 1.2rem 1.6rem;'
-            'box-shadow:0 8px 32px rgba(20,20,90,0.22);position:relative;overflow:hidden;'
-            'min-height:170px;display:flex;flex-direction:column;justify-content:space-between;">'
-            '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;'
-            'background:radial-gradient(circle,rgba(100,130,255,0.18) 0%,transparent 70%);pointer-events:none;"></div>'
-            '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);'
-            'background-size:18px 18px;pointer-events:none;"></div>'
-            '<div style="position:relative;z-index:1;">'
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">'
-            '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
-            'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
-            'border:1px solid rgba(255,255,255,0.12);">🧠</div>'
-            '<div>'
-            '<div style="display:flex;align-items:center;gap:7px;">'
-            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#FFFFFF;">Memory Ledger</span>'
-            '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
-            'color:#9FB4FF;background:rgba(159,180,255,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(159,180,255,0.25);">New</span>'
-            '</div>'
-            '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">On-chain wallet intelligence</div>'
-            '</div></div>'
-            '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;margin-bottom:1rem;">'
-            'Connect your wallet — OctoBot reads on-chain activity and personalises every answer.</div>'
-            '</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div class="connect-wallet-btn-wrap">', unsafe_allow_html=True)
-        if st.button("🔗 View Wallet Profile →", key="home_memory_btn", use_container_width=True):
-            st.session_state.page = "memory"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    # ── Combined Memory Ledger + Payment Agent card (buttons live on the card) ──
+    st.markdown(
+        '<div class="hc">'
+        # Memory Ledger half
+        '<div class="hc-half hc-ml">'
+        '<div class="hf-glow"></div><div class="hf-dots"></div>'
+        '<div class="hf-scene">'
+        '<div class="hf-beam ml-beam"></div>'
+        '<div class="hf-orbit ml-orbit"><div class="hf-orbit-ring"><span class="hf-orbit-dot"></span></div></div>'
+        '<div class="hf-plat ml-plat"></div>'
+        '<div class="hf-core"><div class="hf-core-in">'
+        '<svg class="ml-brain" viewBox="0 0 100 90" fill="none">'
+        '<defs><linearGradient id="mlbrn" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#C7BFFF"/><stop offset="1" stop-color="#6E6BFF"/></linearGradient></defs>'
+        '<g stroke="url(#mlbrn)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M50 13C42 7 29 9 26 19 15 20 11 32 19 39 13 47 17 60 29 60"/>'
+        '<path d="M50 13C58 7 71 9 74 19 85 20 89 32 81 39 87 47 83 60 71 60"/>'
+        '<path d="M29 60C31 71 45 77 50 69 55 77 69 71 71 60"/>'
+        '<path d="M50 14V70"/>'
+        '<path d="M34 25C40 27 42 33 38 38"/><path d="M66 25C60 27 58 33 62 38"/>'
+        '<path d="M27 45C34 44 39 49 37 55"/><path d="M73 45C66 44 61 49 63 55"/>'
+        '</g><g fill="#DCD6FF">'
+        '<circle cx="50" cy="26" r="1.7"/><circle cx="37" cy="42" r="1.5"/>'
+        '<circle cx="63" cy="42" r="1.5"/><circle cx="50" cy="56" r="1.7"/></g></svg>'
+        '</div></div>'
+        '<div class="hf-chip ml-chip ml-chip1"><i style="width:100%"></i><i style="width:68%"></i><i style="width:84%"></i></div>'
+        '<div class="hf-chip ml-chip ml-chip2"><i style="width:100%"></i><i style="width:58%"></i></div>'
+        '</div>'
+        '<div class="hc-body">'
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.7rem;">'
+        '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
+        'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
+        'border:1px solid rgba(255,255,255,0.12);">🧠</div>'
+        '<div>'
+        '<div style="display:flex;align-items:center;gap:7px;">'
+        '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;">Memory Ledger</span>'
+        '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+        'color:#9FB4FF;background:rgba(159,180,255,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(159,180,255,0.25);">New</span>'
+        '</div>'
+        '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">On-chain wallet intelligence</div>'
+        '</div></div>'
+        '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;">'
+        'Connect your wallet — OctoBot reads on-chain activity and personalises every answer.</div>'
+        '</div>'
+        '<div class="hc-btn hc-btn-ml" data-pnav-go="memory" role="button" tabindex="0">🔗 View Wallet Profile →</div>'
+        '</div>'
+        # Payment Agent half
+        '<div class="hc-half hc-pa">'
+        '<div class="hf-glow"></div><div class="hf-dots"></div>'
+        '<div class="hf-scene">'
+        '<div class="hf-beam pa-beam"></div>'
+        '<div class="hf-orbit pa-orbit"><div class="hf-orbit-ring"><span class="hf-orbit-dot"></span></div></div>'
+        '<div class="hf-plat pa-plat"></div>'
+        '<div class="hf-core"><div class="hf-core-in"><div class="pa-coin">'
+        '<img src="' + logo_b64 + '" alt="Pharos"/>'
+        '</div></div></div>'
+        '<span class="pa-node pa-node1"></span><span class="pa-node pa-node2"></span><span class="pa-node pa-node3"></span>'
+        '</div>'
+        '<div class="hc-body">'
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.7rem;">'
+        '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
+        'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
+        'border:1px solid rgba(255,255,255,0.12);">💸</div>'
+        '<div>'
+        '<div style="display:flex;align-items:center;gap:7px;">'
+        '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;">Payment Agent</span>'
+        '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
+        'color:#8BFFB0;background:rgba(139,255,176,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(139,255,176,0.25);">Beta</span>'
+        '</div>'
+        '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">AI-powered PROS transfers</div>'
+        '</div></div>'
+        '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;">'
+        'Send PROS with plain English — "Send 5 PROS to 0x1234…" and OctoBot handles the rest.</div>'
+        '</div>'
+        '<div class="hc-btn hc-btn-pa" data-pnav-go="pay" role="button" tabindex="0">💸 Open Payment Agent →</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
-    with home_card_col2:
-        # Payment Agent card
-        st.markdown(
-            '<div style="background:linear-gradient(135deg,#0A2A0A 0%,#166016 100%);'
-            'border-radius:20px;padding:1.6rem 1.6rem 1.2rem 1.6rem;'
-            'box-shadow:0 8px 32px rgba(10,60,20,0.22);position:relative;overflow:hidden;'
-            'min-height:170px;display:flex;flex-direction:column;justify-content:space-between;">'
-            '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;'
-            'background:radial-gradient(circle,rgba(139,255,176,0.15) 0%,transparent 70%);pointer-events:none;"></div>'
-            '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);'
-            'background-size:18px 18px;pointer-events:none;"></div>'
-            '<div style="position:relative;z-index:1;">'
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">'
-            '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);'
-            'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;'
-            'border:1px solid rgba(255,255,255,0.12);">💸</div>'
-            '<div>'
-            '<div style="display:flex;align-items:center;gap:7px;">'
-            '<span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:#FFFFFF;">Payment Agent</span>'
-            '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;'
-            'color:#8BFFB0;background:rgba(139,255,176,0.18);border-radius:8px;padding:2px 7px;border:1px solid rgba(139,255,176,0.25);">Beta</span>'
-            '</div>'
-            '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">AI-powered PROS transfers</div>'
-            '</div></div>'
-            '<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.6;margin-bottom:1rem;">'
-            'Send PROS with plain English — "Send 5 PROS to 0x1234…" and OctoBot handles the rest.</div>'
-            '</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div style="margin-top:0.6rem;"></div>', unsafe_allow_html=True)
-        if st.button("💸 Open Payment Agent →", key="home_pay_btn", use_container_width=True):
-            st.session_state.page = "pay"; st.rerun()
-
-    st.markdown('<div style="margin-bottom:0.8rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-bottom:0.2rem;"></div>', unsafe_allow_html=True)
 
     # ── Docs badge banner ─────────────────────
     st.markdown(
-        '<div class="docs-banner">'
+        '<div class="docs-banner" style="margin-top:-18px;">'
         '<div class="docs-banner-left">'
         '<span class="docs-banner-icon">📄</span>'
         '<span class="docs-banner-text"><strong>Pharos Documentation</strong> — Full technical docs, API reference, guides, and tutorials</span>'
@@ -11199,72 +11879,14 @@ elif st.session_state.page == "chat":
             height=0, width=0,
         )
 
-    # ── In-page loading placeholder while OctoBot initialises ──
-    # Uses the skeleton system (not the fullscreen overlay — that is
-    # startup-only). The nav-veil handles the page transition; this
-    # placeholder covers only the chat content area while the bot loads.
-    _lp = st.empty()
-    with _lp.container():
-        st.markdown(
-            '<div class="page-skeleton" style="max-width:720px;margin:0 auto;">'
-            '<div class="skel-block" style="height:64px;border-radius:16px;"></div>'
-            '<div class="skel-block" style="height:40px;border-radius:10px;width:60%;"></div>'
-            '<div class="skel-block" style="height:120px;border-radius:16px;"></div>'
-            '<div class="skel-block" style="height:80px;border-radius:16px;width:80%;"></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-    # Wait on the init worker instead of spin-rerunning the whole app.
-    # Common case: OctoBot is ready within this wait and the chat renders
-    # on the FIRST run — no rerun, no flash, no wasted CPU. Slow case: we
-    # rerun at most once every few seconds, so the init thread actually
-    # gets the CPU it needs. The hard timeout inside load_octobot() still
-    # guarantees this state always terminates.
-    _octo = octobot_wait(8.0)
-
-    if not _octo["done"]:
-        st.rerun()
-
-    _lp.empty()
-
-    if _octo.get("error") or _octo.get("bot") is None:
-        _err = esc(_octo.get("error") or "Unknown initialisation error")
-        st.markdown(
-            '<div style="max-width:560px;margin:3rem auto;background:#FFFFFF;'
-            'border:1px solid #F3C7C7;border-radius:18px;padding:1.6rem 1.8rem;'
-            'box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
-            '<div style="font-size:26px;margin-bottom:0.4rem;">⚠️</div>'
-            '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
-            'color:#14141F;margin-bottom:0.35rem;">Knowledge base failed to load</div>'
-            '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.55;">' + _err + '</div>'
-            '<div style="font-size:11.5px;color:#9499A8;margin-top:0.6rem;">'
-            'If this is the first run, build the index with '
-            '<code>python build_vectorstore.py</code>, then retry.</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        _c1, _c2 = st.columns([1, 3])
-        with _c1:
-            if st.button("↺ Retry loading", key="octo_retry"):
-                _octobot_reset()
-                st.rerun()
-        st.stop()
-
-    bot = _octo["bot"]
-
-    # ── Settings moved to sidebar — just get chunk count here ──
-    chunk_count = _octo.get("chunk_count")
-    if chunk_count is None:
-        try:
-            chunk_count = bot.vectorstore._collection.count()
-        except Exception:
-            chunk_count = 0
-
-    # ── Sidebar — price + controls + examples ──────────────────
-    # ══════════════════════════════════════════════════════════════════
-    #  GATE FIRST — must run before sidebar/control deck so nothing
-    #  from the chat UI leaks through while the welcome screen is active
+    # ── Welcome gate renders FIRST, before any RAG/vector-DB work ──────
+    #  The GoctoSailor welcome + name-entry screen needs nothing from the
+    #  knowledge base, so it must not wait on it. Rendering it before
+    #  octobot_wait() is what makes the Chat shell appear instantly
+    #  instead of the old blank → logo → full staged load. OctoBot keeps
+    #  warming on its background thread the whole time the user is on the
+    #  gate, so by the time they submit their name the wait below is
+    #  usually already satisfied.
     # ══════════════════════════════════════════════════════════════════
     _chat_logo_b64 = get_chat_logo_b64()
 
@@ -11407,6 +12029,10 @@ section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > [data-testi
 [data-testid="stMainBlockContainer"] [data-testid="stColumn"],
 [data-testid="stMainBlockContainer"] [data-testid="stForm"],
 .gs-pillrow,.gs-feats,.gs-content{position:relative;z-index:3;}
+/* Suppress Streamlit's spurious "Missing Submit Button" warning that flashes
+   red inside the name form during progressive render — the form always has a
+   submit button, so any alert inside this gate's form is a false positive. */
+body:has(.gs-env) [data-testid="stForm"] [data-testid="stAlert"]{display:none!important;}
 
 /* ── CSS environment (background colour + soft glows), always painted
    behind the WebGL canvas so the scene has depth even before/without it. ── */
@@ -11423,8 +12049,8 @@ section[data-testid="stMain"] [data-testid="stMainBlockContainer"] > [data-testi
 html.gocto-webgl-on .gs-fallback{opacity:0!important;}
 .gs-fallback::before{content:"";position:absolute;inset:-8%;border-radius:50%;
   background:radial-gradient(circle, var(--gs-env-1) 0%, transparent 70%);filter:blur(30px);}
-.gs-fallback img{position:relative;width:230px;height:230px;object-fit:cover;border-radius:50%;
-  box-shadow:0 0 0 8px var(--gs-badge),var(--gs-shadow);animation:gs-bob 6s ease-in-out infinite;}
+.gs-fallback img{position:relative;width:300px;height:266px;object-fit:cover;border-radius:50%;
+  box-shadow:0 0 0 7px var(--gs-badge),var(--gs-shadow);animation:gs-bob 6s ease-in-out infinite;}
 .gs-fallback-fallback{position:relative;width:230px;height:230px;border-radius:50%;display:flex;
   align-items:center;justify-content:center;font-size:96px;
   background:radial-gradient(circle at 35% 30%,#5B7BFF,#8B5CF6);box-shadow:0 0 0 8px var(--gs-badge),var(--gs-shadow);}
@@ -11649,7 +12275,7 @@ canvas{display:block;}
        first pass which used arbitrary units ~2x too large for this FOV.
        (No podium/platform mesh — removed per design direction; the
        mascot + glass bubble float on their own.) */
-    var mascot=new THREE.Group(); mascot.scale.setScalar(1.5); world.add(mascot);
+    var mascot=new THREE.Group(); mascot.scale.set(1.96,1.74,1.74); world.add(mascot);
     /* Mascot photo on a PlaneGeometry (not CircleGeometry — its fan-mapped
        UVs badly distort a square source photo) with a soft circular alpha
        mask generated at runtime, so a plain rectangular photo reads as a
@@ -11822,6 +12448,96 @@ canvas{display:block;}
                 st.warning("Please enter your name to continue.")
 
         st.stop()
+
+    # ══════════════════════════════════════════════════════════════════
+    #  PAST THE GATE — the user has entered their name. Only now do we
+    #  need the RAG bot, so this is where we wait on it (never before the
+    #  welcome screen has painted). In the common case OctoBot finished
+    #  warming while the user was on the gate, so this is a no-op and the
+    #  chat renders on the first run with no rerun and no flash.
+    # ══════════════════════════════════════════════════════════════════
+    # Dedicated full-page "Preparing your chat" loader — the same dual-ring
+    # sync screen used by the data-heavy pages, replacing the old content-
+    # area skeleton. It fully covers the welcome screen while OctoBot's
+    # knowledge base finishes initialising, so the name → chat transition
+    # never shows a blank / logo-only / half-rendered intermediate state.
+    #
+    # It is held for a MINIMUM window (CHAT_PREP_MIN) even when OctoBot is
+    # already warm, so entering a name always reads as a proper load rather
+    # than a sub-second flash — and by the time it clears, the real chat is
+    # guaranteed to have finished initialising underneath it. The three
+    # steps pace themselves across that window via elapsed time.
+    # The loader plays on every fresh visit to chat — the _chatprep_done
+    # flag is cleared on navigation (see the view-change block before the
+    # router) — but NOT on in-chat reruns like sending a message, which keep
+    # the same view key, so the flag stays set and we skip straight to the
+    # bot instead of re-showing "Preparing your chat" on every message.
+    if not st.session_state.get("_chatprep_done"):
+        # Same approach as _heavy_page_gate: draw the loader ONCE (transparent,
+        # on the app background) and poll OctoBot readiness in an isolated
+        # fragment. The main run reaches st.stop() normally so the stale
+        # welcome/gate DOM is trimmed; only the fragment re-runs, so nothing
+        # flickers and the spinner never resets.
+        CHAT_PREP_MIN = 3.5   # minimum seconds the loader stays up
+        if "_chat_prep_t0" not in st.session_state:
+            st.session_state["_chat_prep_t0"] = time.time()
+        _show_body_loader(
+            "Preparing your chat",
+            "Hold on, sailor — initializing your AI guide…",
+            ("Waking up", "Loading knowledge", "Preparing chat"),
+            ("☕", "📚", "✨"))
+
+        @st.fragment(run_every=0.3)
+        def _chatprep_poll():
+            _elapsed = time.time() - st.session_state.get("_chat_prep_t0", time.time())
+            _o = octobot_wait(0.0)   # non-blocking status check
+            if (_o.get("done") and _elapsed >= CHAT_PREP_MIN) or _elapsed > 14:
+                st.session_state["_chatprep_done"] = True
+                st.session_state.pop("_chat_prep_t0", None)
+                st.rerun(scope="app")
+
+        _chatprep_poll()
+        st.stop()
+    else:
+        # Loader already played for this visit — grab the bot handle (warm →
+        # instant). Do NOT hide the loader early: the sentinel stays until
+        # Streamlit trims it at the end of this run, so the chat console
+        # renders while hidden and reveals only once fully built — no stale
+        # gate/console flashing behind the fading loader.
+        _octo = octobot_wait(8.0)
+
+    if _octo.get("error") or _octo.get("bot") is None:
+        _err = esc(_octo.get("error") or "Unknown initialisation error")
+        st.markdown(
+            '<div style="max-width:560px;margin:3rem auto;background:#FFFFFF;'
+            'border:1px solid #F3C7C7;border-radius:18px;padding:1.6rem 1.8rem;'
+            'box-shadow:0 2px 12px rgba(20,20,60,0.06);">'
+            '<div style="font-size:26px;margin-bottom:0.4rem;">⚠️</div>'
+            '<div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;'
+            'color:#14141F;margin-bottom:0.35rem;">Knowledge base failed to load</div>'
+            '<div style="font-size:12.5px;color:#5B5F6E;line-height:1.55;">' + _err + '</div>'
+            '<div style="font-size:11.5px;color:#9499A8;margin-top:0.6rem;">'
+            'If this is the first run, build the index with '
+            '<code>python build_vectorstore.py</code>, then retry.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        _c1, _c2 = st.columns([1, 3])
+        with _c1:
+            if st.button("↺ Retry loading", key="octo_retry"):
+                _octobot_reset()
+                st.rerun()
+        st.stop()
+
+    bot = _octo["bot"]
+
+    # ── Settings moved to sidebar — just get chunk count here ──
+    chunk_count = _octo.get("chunk_count")
+    if chunk_count is None:
+        try:
+            chunk_count = bot.vectorstore._collection.count()
+        except Exception:
+            chunk_count = 0
 
     # ── Sidebar (only shown in actual chat, not on gate) ──────────────
     with st.sidebar:
@@ -15708,6 +16424,32 @@ html[data-theme="dark"] .chronos-face{
 # ═════════════════════════════════════════════
 elif st.session_state.page == "network":
 
+    # ── Dedicated loading gate ────────────────────────────────────────
+    # Network Dashboard needs live on-chain RPC data before it can show
+    # anything meaningful. get_net_stats() is non-blocking (live_fetch), so
+    # we show a full-page sync screen and let the RPC calls run on a
+    # background thread; the real page renders only once the first result
+    # is in. (The 15s auto-refresh fragment below is unaffected — is_loading
+    # is only ever True on the very first fetch, so this gate never fires on
+    # a refresh, just on first open.)
+    def _net_gate_state():
+        _ns, _ns_loading = get_net_stats()
+        if _ns_loading:
+            return ("loading", None)
+        if not _ns.get("available"):
+            return ("error", "Couldn't reach the Pharos RPC right now — "
+                             + (str(_ns.get("error")) if _ns.get("error") else "the node may be busy."))
+        return ("ready", None)
+
+    if not _heavy_page_gate(
+            "net_stats", _net_gate_state,
+            "Syncing Network Dashboard",
+            "Hold on, sailor — syncing the latest on-chain data…",
+            lambda: live_reset("net_stats"),
+            steps=("Connecting to RPC", "Fetching blocks", "Preparing"),
+            emojis=("🔗", "📦", "✨")):
+        st.stop()
+
     inject_redesign_css("network rd-hero-compact rd-wide")
 
     # ── Header ────────────────────────────────
@@ -16168,7 +16910,44 @@ elif st.session_state.page == "spns":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "pulse":
 
-    _mp   = fetch_market_pulse()
+    # ── Dedicated loading gate ────────────────────────────────────────
+    # Market Pulse needs the live $PROS market snapshot (non-blocking via
+    # get_market_pulse) AND an AI-read community sentiment (compute_
+    # community_pulse — blocks on Gemini the first time, then caches). We
+    # show a full-page sync screen until BOTH are ready: the market data is
+    # fetched on a background thread; the AI summary is warmed by
+    # prepare_fn AFTER the loader is painted, so a cached-market/uncached-AI
+    # path can never briefly expose the previous page.
+    def _pulse_gate_state():
+        _m, _m_loading = get_market_pulse()
+        if _m_loading:
+            return ("loading", None)
+        if not _m.get("available"):
+            return ("error", "Live $PROS market data is temporarily unavailable right now.")
+        if not st.session_state.get("pulse_ai_cache", {}).get("data"):
+            return ("loading", None)   # market ready, AI still to warm
+        return ("ready", None)
+
+    def _pulse_prepare():
+        _m, _m_loading = get_market_pulse()
+        if (not _m_loading) and _m.get("available") \
+                and not st.session_state.get("pulse_ai_cache", {}).get("data"):
+            compute_community_pulse(_m, get_pharos_news())   # caches to session
+            return True
+        return False
+
+    if not _heavy_page_gate(
+            "market_pulse", _pulse_gate_state,
+            "Syncing Market Pulse",
+            "Hold on, sailor — syncing the latest market data…",
+            lambda: (live_reset("market_pulse"),
+                     st.session_state.pop("pulse_ai_cache", None)),
+            steps=("Connecting", "Fetching market", "Preparing"),
+            emojis=("🔗", "📈", "✨"),
+            prepare_fn=_pulse_prepare):
+        st.stop()
+
+    _mp, _ = get_market_pulse()
     _pn   = get_pharos_news()
     _cp   = compute_community_pulse(_mp, _pn)
 
@@ -16351,30 +17130,548 @@ elif st.session_state.page == "pulse":
 
     st.markdown('<div style="margin-bottom:0.6rem;"></div>', unsafe_allow_html=True)
     if st.button("↻ Refresh pulse", key="pulse_refresh"):
-        st.session_state.pop("pulse_market_cache", None)
-        st.session_state.pop("pulse_ai_cache", None)
-        live_invalidate("news")   # force a background refresh of the news holder
+        # Manual refresh updates IN PLACE — no full loading screen (that is
+        # only for opening the page). Keep serving the current market + AI
+        # snapshot while fresh market data and news are pulled on background
+        # threads; they swap in on the next tick. (pulse_ai_cache is left
+        # intact so the gate below stays 'ready' and doesn't re-loader.)
+        live_invalidate("market_pulse")
+        live_invalidate("news")
         st.session_state.pop("pharos_news_cache", None)
         st.rerun()
 
 
-st.markdown('<div style="margin-top:2rem;"></div>', unsafe_allow_html=True)
-st.markdown(
-    
-    '<div style="text-align:center;padding:1rem 0 0.5rem 0;'
-    'border-top:1px solid #D0D3E0;margin-top:1rem;">'
-    '<span style="font-size:15px;color:#FFFFFF;">Built by&nbsp;</span>'
-    '<strong style="font-size:15px;color:#0C0C1A;">Echo</strong>'
-    '<span style="font-size:15px;color:#FFFFFF;">&nbsp;·&nbsp;</span>'
-    '<span style="font-size:15px;color:#FFFFFF;">Discord:&nbsp;</span>'
-    '<strong style="font-size:15px;color:#0C0C1A;">@echoplex99</strong>'
-    '<span style="font-size:15px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
-    '<a href="https://x.com/isharik99" target="_blank" '
-    'style="font-size:15px;font-weight:600;color:#1A1AFF;text-decoration:none;">@isharik99 on X ↗</a>'
-    '<span style="font-size:15px;color:#7A7F96;">&nbsp;·&nbsp;</span>'
-    '<a href="https://github.com/isharik/Pharos-Octobot" target="_blank" '
-    'style="font-size:15px;font-weight:600;color:#1A1AFF;text-decoration:none;">'
-    'GitHub ↗</a>'
-    '</div>',
-    unsafe_allow_html=True,
-)
+# ═════════════════════════════════════════════
+# PAGE: PHAROS COMMUNITY
+# ═════════════════════════════════════════════
+elif st.session_state.page == "community":
+    inject_redesign_css("community rd-hero-compact rd-wide")
+
+    # ── Load Discord member data + local profile images ──────────────────────
+    _DC_IMGS_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Community images")
+    _DC_MBRS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "pharos-community", "data", "members.json")
+
+    @st.cache_data(show_spinner=False, ttl=3600)
+    def _load_dc_members():
+        try:
+            with open(_DC_MBRS_FILE, "r", encoding="utf-8") as _f:
+                return json.load(_f)
+        except Exception:
+            return []
+
+    @st.cache_resource(show_spinner=False)
+    def _load_dc_imgs_b64():
+        _result = {}
+        if not os.path.isdir(_DC_IMGS_DIR):
+            return _result
+        for _fname in os.listdir(_DC_IMGS_DIR):
+            if _fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                try:
+                    with open(os.path.join(_DC_IMGS_DIR, _fname), "rb") as _ff:
+                        _ext = "png" if _fname.lower().endswith('.png') else "jpeg"
+                        _result[_fname] = "data:image/" + _ext + ";base64," + base64.b64encode(_ff.read()).decode()
+                except Exception:
+                    pass
+        return _result
+
+    _dc_members = _load_dc_members()
+    _dc_imgs    = _load_dc_imgs_b64()
+
+    _members_for_js = []
+    for _m in _dc_members:
+        _img_b64 = _dc_imgs.get(_m.get("image_file") or "", "")
+        _members_for_js.append({
+            "id":    _m["id"],
+            "name":  _m["name"],
+            "x":     _m.get("x_username"),
+            "roles": _m["roles"],
+            "img":   _img_b64,
+        })
+
+    _members_json = json.dumps(_members_for_js, ensure_ascii=False)
+
+    # ── Community page: directory list + 3D interactive sphere ──────────────
+    _WALL_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+/* ── Theme tokens — LIGHT is the default :root; dark overrides below.
+      The iframe body is transparent, so it inherits the app's page bg;
+      these tokens keep text/surfaces/borders readable in both modes.   */
+:root{
+  --ease-out:cubic-bezier(0.23,1,0.32,1);
+  --c-title:#0B1020;
+  --c-text:#1A2138;
+  --c-soft:rgba(24,32,58,0.62);
+  --c-faint:rgba(24,32,58,0.42);
+  --c-label:rgba(24,32,58,0.60);
+  --c-surface:rgba(255,255,255,0.72);
+  --c-surface-2:rgba(22,32,80,0.045);
+  --c-border:rgba(22,32,80,0.13);
+  --c-border-soft:rgba(22,32,80,0.08);
+  --c-accent:#3a51ff;
+  --c-accent-text:#2c40df;
+  --c-accent-bg:rgba(58,81,255,0.11);
+  --c-hover:rgba(58,81,255,0.08);
+  --c-avatar-bg:#eaeef7;
+  --c-node-border:rgba(22,32,80,0.16);
+  --c-tip-bg:rgba(255,255,255,0.97);
+  --c-tip-border:rgba(22,32,80,0.12);
+  --c-scroll:rgba(58,81,255,0.24);
+  --c-vignette:radial-gradient(ellipse 60% 56% at 50% 47%,rgba(205,216,244,0.55) 0%,rgba(205,216,244,0.18) 45%,transparent 74%);
+  --c-glow:rgba(60,90,220,0.10);
+  --c-shadow:0 18px 50px rgba(20,30,70,0.16);
+}
+:root[data-theme="dark"]{
+  --c-title:#FFFFFF;
+  --c-text:#EDEFF7;
+  --c-soft:rgba(255,255,255,0.60);
+  --c-faint:rgba(255,255,255,0.34);
+  --c-label:rgba(255,255,255,0.54);
+  --c-surface:rgba(16,20,36,0.62);
+  --c-surface-2:rgba(255,255,255,0.05);
+  --c-border:rgba(255,255,255,0.10);
+  --c-border-soft:rgba(255,255,255,0.065);
+  --c-accent:#6d82ff;
+  --c-accent-text:#aeb9ff;
+  --c-accent-bg:rgba(96,124,255,0.16);
+  --c-hover:rgba(96,124,255,0.10);
+  --c-avatar-bg:rgba(10,12,26,0.85);
+  --c-node-border:rgba(255,255,255,0.13);
+  --c-tip-bg:rgba(11,14,26,0.97);
+  --c-tip-border:rgba(255,255,255,0.10);
+  --c-scroll:rgba(120,150,255,0.28);
+  --c-vignette:radial-gradient(ellipse 60% 56% at 50% 47%,rgba(4,6,18,0.58) 0%,rgba(4,6,18,0.30) 45%,transparent 74%);
+  --c-glow:rgba(40,70,200,0.14);
+  --c-shadow:0 20px 55px rgba(0,0,0,0.5);
+}
+
+/* Transparent — the app's own global background shows through, no card */
+html,body{
+  width:100%;height:100%;min-height:100%;overflow:hidden;
+  font-family:'Inter',system-ui,sans-serif;
+  color:var(--c-text);-webkit-user-select:none;user-select:none;
+  background:transparent;
+}
+
+/* ── Three-panel layout: sidebar | directory list | 3D sphere ── */
+#app{display:flex;width:100%;height:100%;min-height:100%;}
+
+/* Sidebar — hugs the left edge, extra gutter before the member list */
+#sb{
+  width:clamp(180px,15vw,232px);flex-shrink:0;height:100%;
+  display:flex;flex-direction:column;
+  padding:clamp(24px,3vh,40px) clamp(20px,1.6vw,30px) 22px clamp(18px,1.6vw,30px);
+}
+#sb-title{font-size:clamp(21px,1.7vw,27px);font-weight:800;color:var(--c-title);line-height:1.12;letter-spacing:-0.5px;margin-bottom:7px;}
+#sb-sub{font-size:11.5px;font-weight:500;color:var(--c-faint);margin-bottom:22px;letter-spacing:0.1px;}
+#sw{position:relative;margin-bottom:22px;}
+#si{width:100%;padding:10px 12px 10px 32px;border:1px solid var(--c-border);border-radius:11px;background:var(--c-surface-2);color:var(--c-text);font-size:12.5px;outline:none;transition:border-color 0.16s var(--ease-out),background 0.16s;}
+#si::placeholder{color:var(--c-faint);}
+#si:focus{border-color:var(--c-accent);background:var(--c-hover);}
+#sic{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:0.5;color:var(--c-soft);pointer-events:none;font-size:13px;}
+.sdiv{height:1px;background:var(--c-border-soft);margin-bottom:16px;}
+#catnav{display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;scrollbar-width:none;}
+#catnav::-webkit-scrollbar{display:none;}
+.cat{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:none;background:transparent;color:var(--c-soft);font-size:13px;font-weight:500;cursor:pointer;text-align:left;width:100%;transition:background 0.15s var(--ease-out),color 0.15s;}
+.cat:hover{background:var(--c-hover);color:var(--c-text);}
+.cat.on{background:var(--c-accent-bg);color:var(--c-accent-text);font-weight:650;}
+.cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cat-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cat-n{font-size:11px;color:var(--c-faint);font-variant-numeric:tabular-nums;font-weight:600;}
+.cat.on .cat-n{color:var(--c-accent-text);}
+#sb-foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft);font-size:10.5px;color:var(--c-faint);line-height:1.7;}
+
+/* Directory panel — clear gutter from sidebar, generous spacing */
+#dir{width:clamp(300px,27vw,440px);flex-shrink:0;height:100%;overflow-y:auto;padding:clamp(24px,3vh,40px) clamp(20px,1.6vw,30px) 40px;border-left:1px solid var(--c-border-soft);scrollbar-width:thin;scrollbar-color:var(--c-scroll) transparent;}
+#dir::-webkit-scrollbar{width:4px;}
+#dir::-webkit-scrollbar-track{background:transparent;}
+#dir::-webkit-scrollbar-thumb{background:var(--c-scroll);border-radius:3px;}
+.rsec{margin-bottom:32px;}
+.rsec.hid{display:none;}
+.sec-hdr{display:flex;align-items:center;gap:9px;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--c-border-soft);}
+.rdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.rlabel{font-size:11.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--c-label);flex:1;}
+.rcount{font-size:11px;font-weight:600;color:var(--c-faint);font-variant-numeric:tabular-nums;}
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:24px 16px;justify-items:center;}
+.ac{display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;width:100%;max-width:88px;border-radius:12px;padding:6px 4px;animation:acin 0.4s var(--ease-out) both;transition:background 0.15s var(--ease-out);}
+@keyframes acin{from{opacity:0;transform:scale(0.9) translateY(5px);}to{opacity:1;transform:none;}}
+.ac.hid{display:none;}
+.ac.hl,.ac:hover{background:var(--c-hover);}
+.av{width:66px;height:66px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid var(--c-border);color:var(--c-faint);transition:transform 0.2s var(--ease-out),box-shadow 0.2s var(--ease-out),border-color 0.2s;background:var(--c-avatar-bg);display:flex;align-items:center;justify-content:center;}
+.ac:hover .av,.ac.hl .av{transform:scale(1.07);box-shadow:0 6px 18px var(--c-glow);border-color:var(--c-accent);}
+.av img{width:100%;height:100%;object-fit:cover;display:block;}
+.avname{font-size:11px;font-weight:500;color:var(--c-soft);text-align:center;width:100%;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 0.15s;}
+.ac:hover .avname,.ac.hl .avname{color:var(--c-text);}
+#noRes{display:none;padding:56px 0;text-align:center;color:var(--c-faint);font-size:12.5px;}
+
+/* Globe panel — soft localized vignette for sphere contrast (no hard edge),
+   with comfortable padding so the sphere never collides with the list */
+#globe-wrap{flex:1;min-width:0;height:100%;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  padding:clamp(20px,2vw,44px);background:var(--c-vignette);}
+#globe-wrap::before{content:'';position:absolute;width:min(52vw,52vh,540px);height:min(52vw,52vh,540px);border-radius:50%;background:radial-gradient(circle,var(--c-glow) 0%,transparent 68%);pointer-events:none;}
+#globe-lbl{position:absolute;top:clamp(20px,3vh,38px);left:0;right:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:3.4px;text-transform:uppercase;color:var(--c-label);pointer-events:none;}
+#globe-hint{position:absolute;bottom:clamp(16px,2.4vh,32px);left:0;right:0;text-align:center;font-size:10.5px;font-weight:500;color:var(--c-faint);letter-spacing:0.6px;pointer-events:none;}
+#scene-wrap{position:relative;cursor:grab;display:flex;align-items:center;justify-content:center;}
+#scene-wrap.dg{cursor:grabbing;}
+#sph{width:0;height:0;transform-style:preserve-3d;will-change:transform;}
+.snode{position:absolute;top:0;left:0;transform-style:preserve-3d;cursor:pointer;}
+.sni{border-radius:50%;overflow:hidden;border:2px solid var(--c-node-border);color:var(--c-faint);background:var(--c-avatar-bg);display:flex;align-items:center;justify-content:center;
+  transition:transform 0.34s var(--ease-out),box-shadow 0.34s var(--ease-out),border-color 0.28s var(--ease-out);}
+.snode.hl .sni{border-color:var(--c-accent)!important;box-shadow:0 0 0 3px var(--c-accent-bg),0 10px 30px var(--c-glow);}
+.sni img{width:100%;height:100%;object-fit:cover;display:block;}
+
+/* Anchored profile tooltip — eases smoothly toward the focused member */
+#tp{position:fixed;z-index:600;pointer-events:none;padding:13px 16px;border-radius:14px;background:var(--c-tip-bg);border:1px solid var(--c-tip-border);box-shadow:var(--c-shadow);backdrop-filter:blur(20px);max-width:236px;
+  opacity:0;transform:scale(0.96) translateX(-8px);transform-origin:left center;
+  transition:opacity 0.2s var(--ease-out),transform 0.2s var(--ease-out);}
+#tp.sh{opacity:1;transform:scale(1) translateX(0);}
+#tp.right-anchor{transform-origin:right center;transform:scale(0.96) translateX(8px);}
+#tp.right-anchor.sh{transform:scale(1) translateX(0);}
+#tpn{font-size:14.5px;font-weight:700;color:var(--c-title);margin-bottom:3px;}
+#tpx{font-size:11px;font-weight:500;color:var(--c-accent-text);margin-bottom:9px;}
+#tpr{display:flex;flex-wrap:wrap;gap:5px;}
+.tr{padding:3px 9px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:0.2px;}
+
+/* Modal */
+#mod{position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(4,6,16,0.55);backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity 0.22s var(--ease-out);}
+#mod.op{opacity:1;pointer-events:all;}
+#mc{background:var(--c-tip-bg);border:1px solid var(--c-tip-border);box-shadow:var(--c-shadow);border-radius:22px;padding:30px 28px;width:300px;max-width:90vw;transform:scale(0.92) translateY(18px);transition:transform 0.24s var(--ease-out);position:relative;}
+#mod.op #mc{transform:scale(1) translateY(0);}
+#mx{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-soft);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.14s,color 0.14s;}
+#mx:hover{background:var(--c-hover);color:var(--c-text);}
+#mi{width:86px;height:86px;border-radius:50%;object-fit:cover;border:2px solid var(--c-border);margin:0 auto 16px;display:block;}
+#mf{width:86px;height:86px;border-radius:50%;border:2px solid var(--c-border);color:var(--c-faint);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:var(--c-avatar-bg);}
+#mn2{text-align:center;font-size:19px;font-weight:700;color:var(--c-title);margin-bottom:5px;}
+#mxl{text-align:center;font-size:12.5px;font-weight:500;color:var(--c-accent-text);text-decoration:none;display:block;margin-bottom:16px;}
+#mxl:hover{text-decoration:underline;}
+#mr{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;}
+.mr{padding:4px 11px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:0.3px;}
+
+/* Compress intelligently on narrow viewports */
+@media(max-width:960px){
+  #sb{width:clamp(160px,20vw,196px);}
+  #dir{width:clamp(260px,34vw,320px);}
+  .agrid{grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:18px 12px;}
+  .av{width:56px;height:56px;}
+  #sb-title{font-size:20px;}
+}
+@media(max-width:640px){
+  #sb{display:none;}
+  #dir{border-left:none;}
+}
+@media (prefers-reduced-motion:reduce){
+  .ac{animation:none;}
+  .sni,#tp{transition-duration:0.01ms;}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="sb">
+    <div id="sb-title">Pharos<br>Community</div>
+    <div id="sb-sub"></div>
+    <div id="sw"><span id="sic">⌕</span><input id="si" type="text" placeholder="Search…"></div>
+    <div class="sdiv"></div>
+    <nav id="catnav"></nav>
+    <div id="sb-foot">More members<br>coming soon.</div>
+  </aside>
+  <div id="dir"><div id="noRes">No members match your search.</div></div>
+  <div id="globe-wrap">
+    <div id="globe-lbl">Community Sphere</div>
+    <div id="scene-wrap"><div id="sph"></div></div>
+    <div id="globe-hint">Drag to rotate · Hover to explore</div>
+  </div>
+</div>
+
+<div id="tp"><div id="tpn"></div><div id="tpx"></div><div id="tpr"></div></div>
+<div id="mod"><div id="mc"><button id="mx">×</button><div id="mm"></div><div id="mn2"></div><a id="mxl" target="_blank" rel="noopener noreferrer"></a><div id="mr"></div></div></div>
+
+<script>
+(function(){
+'use strict';
+
+var MEMBERS = __MEMBERS__;
+
+var RC={
+  'Admin':              {bg:'rgba(251,191,36,.18)',  bd:'rgba(251,191,36,.45)',  tx:'#fbbf24'},
+  'Sea Keeper':         {bg:'rgba(6,182,212,.14)',   bd:'rgba(6,182,212,.38)',   tx:'#22d3ee'},
+  'Underwater Monster': {bg:'rgba(139,92,246,.14)',  bd:'rgba(139,92,246,.38)',  tx:'#a78bfa'},
+  'Rising Storyteller': {bg:'rgba(236,72,153,.14)',  bd:'rgba(236,72,153,.38)',  tx:'#f472b6'},
+  'Elder Storyteller':  {bg:'rgba(249,115,22,.18)',  bd:'rgba(249,115,22,.38)',  tx:'#fb923c'},
+  'Observer':           {bg:'rgba(100,116,139,.12)', bd:'rgba(100,116,139,.28)', tx:'#94a3b8'},
+};
+
+var GHOST='<svg viewBox="0 0 24 24" fill="none" style="width:46%;height:46%;color:currentColor;"><circle cx="12" cy="8.5" r="3.5" fill="currentColor"/><path d="M4.5 20c0-4.142 3.358-7.5 7.5-7.5s7.5 3.358 7.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>';
+
+var SECS=[
+  {key:'Admin',              label:'Admin',              color:'#fbbf24',members:[]},
+  {key:'Sea Keeper',         label:'Sea Keeper',         color:'#22d3ee',members:[]},
+  {key:'Elder Storyteller',  label:'Elder Storyteller',  color:'#fb923c',members:[]},
+  {key:'Underwater Monster', label:'Underwater Monster', color:'#a78bfa',members:[]},
+  {key:'Rising Storyteller', label:'Rising Storyteller', color:'#f472b6',members:[]},
+  {key:'Observer',           label:'Observer',           color:'#94a3b8',members:[]},
+];
+
+function primaryKey(m){
+  var r=m.roles;
+  if(r.indexOf('Admin')>=0) return 'Admin';
+  if(r.indexOf('Sea Keeper')>=0) return 'Sea Keeper';
+  if(r.indexOf('Elder Storyteller')>=0) return 'Elder Storyteller';
+  if(r.indexOf('Underwater Monster')>=0) return 'Underwater Monster';
+  if(r.indexOf('Rising Storyteller')>=0) return 'Rising Storyteller';
+  return 'Observer';
+}
+MEMBERS.forEach(function(m){var sec=SECS.find(function(s){return s.key===primaryKey(m);});if(sec)sec.members.push(m);});
+
+function badge(role,cls){var c=RC[role]||RC['Observer'];return '<span class="'+cls+'" style="background:'+c.bg+';border:1px solid '+c.bd+';color:'+c.tx+'">'+role+'</span>';}
+function shortName(n){return (n.split('|')[0]||n).trim();}
+
+var nodeMap={}, cardMap={};
+var tp=document.getElementById('tp');
+var mod=document.getElementById('mod');
+var dir=document.getElementById('dir');
+var siEl=document.getElementById('si');
+var noRes=document.getElementById('noRes');
+document.getElementById('sb-sub').textContent=MEMBERS.length+' Members · Builders, Creators & Explorers';
+
+// ── Theme sync: mirror the parent app's light/dark choice, live ──
+function syncTheme(){
+  var t='light';
+  try{ t=window.parent.document.documentElement.getAttribute('data-theme'); }catch(e){}
+  document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light');
+}
+syncTheme();
+try{ new MutationObserver(syncTheme).observe(window.parent.document.documentElement,{attributes:true,attributeFilter:['data-theme']}); }catch(e){}
+
+// ── Sidebar nav ─────────────────────────────────────────────
+var catnav=document.getElementById('catnav');
+function mkBtn(key,label,color,count){
+  var btn=document.createElement('button');
+  btn.className='cat'+(key==='All'?' on':''); btn.dataset.r=key;
+  btn.innerHTML='<span class="cat-dot" style="background:'+(color||'var(--c-accent)')+'"></span>'
+    +'<span class="cat-label">'+label+'</span><span class="cat-n">'+count+'</span>';
+  return btn;
+}
+catnav.appendChild(mkBtn('All','All',null,MEMBERS.length));
+SECS.forEach(function(s){if(s.members.length)catnav.appendChild(mkBtn(s.key,s.label,s.color,s.members.length));});
+
+// ── Directory list ──────────────────────────────────────────
+var allCards=[];
+SECS.forEach(function(sec){
+  if(!sec.members.length) return;
+  var section=document.createElement('div'); section.className='rsec'; section.dataset.key=sec.key;
+  var hdr=document.createElement('div'); hdr.className='sec-hdr';
+  hdr.innerHTML='<span class="rdot" style="background:'+sec.color+'"></span><span class="rlabel">'+sec.label+'</span><span class="rcount">'+sec.members.length+'</span>';
+  section.appendChild(hdr);
+  var grid=document.createElement('div'); grid.className='agrid';
+  sec.members.forEach(function(m,mi){
+    var card=document.createElement('div'); card.className='ac'; card.dataset.id=m.id; card.style.animationDelay=(mi*14)+'ms';
+    var av=document.createElement('div'); av.className='av';
+    if(m.img){var img=document.createElement('img');img.src=m.img;img.alt=m.name;img.loading='lazy';av.appendChild(img);}
+    else av.innerHTML=GHOST;
+    card.appendChild(av);
+    var nm=document.createElement('div'); nm.className='avname'; nm.textContent=shortName(m.name); nm.title=m.name;
+    card.appendChild(nm);
+    card.addEventListener('mouseenter',function(){var sn=nodeMap[m.id];if(sn)sn.classList.add('hl');});
+    card.addEventListener('mouseleave',function(){var sn=nodeMap[m.id];if(sn)sn.classList.remove('hl');});
+    card.addEventListener('click',function(e){e.stopPropagation();openModal(m);});
+    grid.appendChild(card);
+    allCards.push({card:card,m:m,secKey:sec.key});
+    cardMap[m.id]=card;
+  });
+  section.appendChild(grid);
+  dir.insertBefore(section,noRes);
+});
+
+// ── 3D Sphere ──────────────────────────────────────────────
+var sph=document.getElementById('sph');
+var sceneWrap=document.getElementById('scene-wrap');
+var R=0, nodeSize=0, sphereNodes=[];
+var rotX=18, rotY=0, velX=0, velY=0, dragging=false, lastMX=0, lastMY=0, hovering=false;
+
+function buildSphere(){
+  sph.innerHTML=''; nodeMap={}; sphereNodes=[];
+  var goldenAngle=Math.PI*(3-Math.sqrt(5));
+  var N=MEMBERS.length;
+  MEMBERS.forEach(function(m,i){
+    var yU=1-(i/(N-1))*2;
+    var rU=Math.sqrt(Math.max(0,1-yU*yU));
+    var theta=goldenAngle*i;
+    var xU=Math.cos(theta)*rU, zU=Math.sin(theta)*rU;
+    var lon=theta*180/Math.PI;
+    var lat=Math.asin(Math.max(-1,Math.min(1,yU)))*180/Math.PI;
+    var pkey=primaryKey(m); var rc=RC[pkey]||RC['Observer'];
+    var snode=document.createElement('div'); snode.className='snode'; snode.dataset.mid=m.id;
+    var hs=nodeSize/2;
+    snode.style.transform='rotateY('+lon+'deg) rotateX('+(-lat)+'deg) translateZ('+R+'px) translateX(-'+hs+'px) translateY(-'+hs+'px)';
+    snode.style.width=nodeSize+'px'; snode.style.height=nodeSize+'px';
+    var sni=document.createElement('div'); sni.className='sni';
+    sni.style.width=nodeSize+'px'; sni.style.height=nodeSize+'px';
+    sni.style.borderColor=rc.bd;
+    if(m.img){var img=document.createElement('img');img.src=m.img;img.alt=m.name;img.loading='lazy';sni.appendChild(img);}
+    else sni.innerHTML='<svg viewBox="0 0 24 24" fill="none" style="width:52%;height:52%;color:currentColor;"><circle cx="12" cy="8.5" r="3.5" fill="currentColor"/><path d="M4.5 20c0-4.142 3.358-7.5 7.5-7.5s7.5 3.358 7.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>';
+    snode.appendChild(sni);
+    snode.addEventListener('mouseenter',function(){focusMember(m,snode);});
+    snode.addEventListener('mouseleave',function(){blurMember(m,snode);});
+    snode.addEventListener('click',function(e){e.stopPropagation();openModal(m);});
+    sph.appendChild(snode);
+    nodeMap[m.id]=snode;
+    sphereNodes.push({snode:snode,sni:sni,m:m,x3:xU,y3:yU,z3:zU});
+  });
+  var buf=nodeSize*2.2;
+  sceneWrap.style.width=(R*2+buf)+'px'; sceneWrap.style.height=(R*2+buf)+'px';
+  sceneWrap.style.perspective=(R*5.5)+'px';
+}
+
+function applyRot(){
+  sph.style.transform='rotateX('+rotX+'deg) rotateY('+rotY+'deg)';
+  var rxR=rotX*Math.PI/180, ryR=rotY*Math.PI/180;
+  var cosX=Math.cos(rxR),sinX=Math.sin(rxR),cosY=Math.cos(ryR),sinY=Math.sin(ryR);
+  sphereNodes.forEach(function(n){
+    var x0=n.x3,y0=n.y3,z0=n.z3;
+    var y1=y0*cosX-z0*sinX, z1=y0*sinX+z0*cosX;
+    var z2=-x0*sinY+z1*cosY;
+    var depth=(z2+1)/2;
+    var focused=n.snode.classList.contains('hl');
+    // Focused node eases up to a larger scale (CSS transition handles the easing);
+    // the depth cue keeps depth ordering for everything else.
+    n.sni.style.opacity=focused?1:(0.22+depth*0.78).toFixed(3);
+    n.sni.style.transform=focused?'scale(1.55)':'scale('+(0.62+depth*0.38).toFixed(3)+')';
+  });
+}
+
+sceneWrap.addEventListener('mousedown',function(e){dragging=true;lastMX=e.clientX;lastMY=e.clientY;velX=velY=0;sceneWrap.classList.add('dg');e.preventDefault();});
+document.addEventListener('mousemove',function(e){if(!dragging)return;var dx=e.clientX-lastMX,dy=e.clientY-lastMY;rotY+=dx*0.38;rotX-=dy*0.38;rotX=Math.max(-85,Math.min(85,rotX));velY=dx*0.38;velX=-dy*0.38;lastMX=e.clientX;lastMY=e.clientY;});
+document.addEventListener('mouseup',function(){dragging=false;sceneWrap.classList.remove('dg');});
+sceneWrap.addEventListener('touchstart',function(e){var t=e.touches[0];lastMX=t.clientX;lastMY=t.clientY;velX=velY=0;},{passive:true});
+sceneWrap.addEventListener('touchmove',function(e){var t=e.touches[0];var dx=t.clientX-lastMX,dy=t.clientY-lastMY;rotY+=dx*0.32;rotX-=dy*0.32;rotX=Math.max(-85,Math.min(85,rotX));velY=dx*0.32;velX=-dy*0.32;lastMX=t.clientX;lastMY=t.clientY;e.preventDefault();},{passive:false});
+
+(function loop(){
+  // Hovering pauses all drift so the focused member stays perfectly still.
+  if(!dragging&&!hovering){velX*=0.88;velY*=0.88;rotX+=velX;rotY+=velY;rotX=Math.max(-85,Math.min(85,rotX));if(Math.abs(velX)<0.05&&Math.abs(velY)<0.05)rotY+=0.06;}
+  applyRot();requestAnimationFrame(loop);
+})();
+
+// ── Filtering ───────────────────────────────────────────────
+var activeRole='All', searchQ='';
+function applyFilter(){
+  var anyVis=false;
+  allCards.forEach(function(c){
+    var roleOk=activeRole==='All'||c.secKey===activeRole;
+    var q=searchQ.toLowerCase();
+    var textOk=!q||c.m.name.toLowerCase().includes(q)||(c.m.x&&c.m.x.toLowerCase().includes(q))||c.m.roles.some(function(r){return r.toLowerCase().includes(q);});
+    var vis=roleOk&&textOk; c.card.classList[vis?'remove':'add']('hid'); if(vis)anyVis=true;
+  });
+  document.querySelectorAll('.rsec').forEach(function(sec){sec.classList[sec.querySelectorAll('.ac:not(.hid)').length?'remove':'add']('hid');});
+  noRes.style.display=anyVis?'none':'block';
+  sphereNodes.forEach(function(n){
+    var roleOk=activeRole==='All'||primaryKey(n.m)===activeRole;
+    var q=searchQ.toLowerCase();
+    var textOk=!q||n.m.name.toLowerCase().includes(q)||(n.m.x&&n.m.x.toLowerCase().includes(q))||n.m.roles.some(function(r){return r.toLowerCase().includes(q);});
+    n.snode.style.pointerEvents=(roleOk&&textOk)?'auto':'none';
+    n.sni.style.filter=(roleOk&&textOk)?'':'brightness(0.15) saturate(0.1)';
+  });
+}
+document.querySelectorAll('.cat').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.cat').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');activeRole=btn.dataset.r;applyFilter();dir.scrollTop=0;});});
+siEl.addEventListener('input',function(){searchQ=siEl.value.trim();applyFilter();});
+
+// ── Smooth focus: pause the sphere, highlight, glide the profile card in ──
+function focusMember(m,snode){
+  hovering=true;
+  snode.classList.add('hl');
+  var card=cardMap[m.id];
+  if(card){card.classList.add('hl');card.scrollIntoView({block:'nearest',behavior:'smooth'});}
+  showTip(m,snode);
+}
+function blurMember(m,snode){
+  hovering=false;
+  snode.classList.remove('hl');
+  var card=cardMap[m.id];
+  if(card)card.classList.remove('hl');
+  tp.classList.remove('sh');
+}
+function showTip(m,snode){
+  document.getElementById('tpn').textContent=m.name;
+  document.getElementById('tpx').textContent=m.x||'';
+  document.getElementById('tpr').innerHTML=m.roles.map(function(r){return badge(r,'tr');}).join('');
+  // Anchor the card beside the focused node (origin-aware), then ease it in.
+  tp.classList.remove('sh');
+  var tw=tp.offsetWidth||230, th=tp.offsetHeight||100, gap=20;
+  var r=snode.getBoundingClientRect();
+  var left=r.right+gap, right=false;
+  if(left+tw>window.innerWidth-10){left=r.left-gap-tw;right=true;}
+  if(left<10){left=Math.min(window.innerWidth-tw-10,r.right+gap);right=false;}
+  var top=Math.max(10,Math.min(window.innerHeight-th-10, r.top+r.height/2-th/2));
+  tp.classList.toggle('right-anchor',right);
+  tp.style.left=Math.round(left)+'px'; tp.style.top=Math.round(top)+'px';
+  void tp.offsetWidth;            // commit the start transform, then ease in
+  tp.classList.add('sh');
+}
+
+// ── Modal ────────────────────────────────────────────────────
+function openModal(m){
+  var mm=document.getElementById('mm'); mm.innerHTML='';
+  if(m.img){var img=document.createElement('img');img.id='mi';img.src=m.img;img.alt=m.name;mm.appendChild(img);}
+  else{var fd=document.createElement('div');fd.id='mf';fd.innerHTML=GHOST;mm.appendChild(fd);}
+  document.getElementById('mn2').textContent=m.name;
+  var mxl=document.getElementById('mxl');
+  if(m.x){mxl.textContent=m.x;mxl.href='https://x.com/'+m.x.replace('@','');mxl.style.display='block';}
+  else mxl.style.display='none';
+  document.getElementById('mr').innerHTML=m.roles.map(function(r){return badge(r,'mr');}).join('');
+  mod.classList.add('op');
+}
+mod.addEventListener('click',function(e){if(e.target===mod)mod.classList.remove('op');});
+document.getElementById('mx').addEventListener('click',function(){mod.classList.remove('op');});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')mod.classList.remove('op');});
+
+// ── Stretch the host iframe to fill the viewport (kills the fixed card) ──
+function fitFrame(){
+  try{
+    var frame=null, frames=window.parent.document.querySelectorAll('iframe');
+    frames.forEach(function(f){if(f.contentWindow===window)frame=f;});
+    if(!frame) return;
+    frame.style.cssText='border:0!important;display:block!important;background:transparent!important;width:100%!important;';
+    frame.setAttribute('scrolling','no');
+    // Clear any fixed height Streamlit set on the iframe's wrappers so they don't clip us
+    var p=frame.parentElement, hops=0;
+    while(p && hops<4){ p.style.height='auto'; p.style.background='transparent'; p=p.parentElement; hops++; }
+    var top=frame.getBoundingClientRect().top;
+    var avail=Math.max(560,Math.round(window.parent.innerHeight-top-6));
+    frame.style.height=avail+'px'; frame.setAttribute('height',avail);
+  }catch(e){}
+}
+
+// ── Init: fit frame, measure globe, build sphere responsively ──
+function init(){
+  fitFrame();
+  var gw=document.getElementById('globe-wrap');
+  var W=gw.clientWidth||420, H=gw.clientHeight||700;
+  // Scale sphere to the available area, leaving comfortable margin so it never
+  // collides with the member list; nodes scale up a little for recognisability.
+  R=Math.round(Math.min(W*0.42,H*0.44));
+  R=Math.max(155,Math.min(R,452));
+  nodeSize=Math.round(Math.max(32,Math.min(54,R*0.135)));
+  buildSphere(); applyRot();
+}
+
+var _rz;
+window.addEventListener('resize',function(){clearTimeout(_rz);_rz=setTimeout(init,120);});
+requestAnimationFrame(function(){requestAnimationFrame(function(){fitFrame();requestAnimationFrame(init);});});
+
+})();
+</script>
+</body>
+</html>"""
+
+    _wall_html = _WALL_HTML.replace('__MEMBERS__', _members_json)
+    # Initial height ≈ one viewport; JS (fitFrame) stretches the iframe to fill
+    # the real available space so there is no fixed-size card.
+    components.html(_wall_html, height=900, scrolling=False)
+
