@@ -4343,8 +4343,9 @@ html[data-theme="dark"] .stButton>button{
 html[data-theme="dark"] .stButton>button:hover{
     background:#1D2233 !important;border-color:#3A4260 !important;color:#FFFFFF !important;
 }
-/* Keep the aura canvas dots readable on dark */
-html[data-theme="dark"] #aura-3d-canvas{mix-blend-mode:lighten;}
+/* The aura canvas now paints its own opaque atmospheric base, so it
+   composites normally over the page rather than blending with the backdrop. */
+html[data-theme="dark"] #aura-3d-canvas{mix-blend-mode:normal;}
 
 /* ══════════════════════════════════════════════════════════
    DARK MODE · automatic text-contrast adjust
@@ -7759,6 +7760,15 @@ for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("�
 # Rendered once at module level → identical appearance, dimensions and
 # fixed position on every page of the app.
 _pg = st.session_state.page
+# Authoritative per-run page marker on the parent <html>. The scroll self-heal
+# watchdog reads this to know when the Community full-bleed layout is active, so
+# it never has to guess from Streamlit's unpredictable iframe lifecycle.
+components.html(
+    "<script>try{window.parent.document.documentElement.setAttribute('data-octo-page',"
+    + repr(str(_pg)) +
+    ");}catch(e){}</script>",
+    height=0,
+)
 _PNAV_GITHUB_URL = "https://github.com/isharik/Pharos-Octobot"
 
 _pnav_dd_products = [
@@ -9258,36 +9268,97 @@ components.html(
       if (sp){ e.preventDefault(); openPalette(); }
     }, true);
 
-    /* ── AMBIENT · glassy perspective grid room ──
-       Four grid-lined walls (floor, ceiling, left, right) projected to a
-       central vanishing point — a wireframe room seen head-on, like the
-       reference. Very faint, glassy, almost transparent. Depth lines
-       scroll toward the viewer so the room feels alive without being
-       busy. Theme-aware, delta-time, pauses when hidden, vanishing point
-       drifts gently. Zero per-frame allocations beyond the closing glow. */
+    /* ── AMBIENT · living 3D aura atmosphere ──
+       A premium, continuously animated spatial background: a theme-aware
+       base wash, large volumetric aura blobs (rendered to a half-res
+       offscreen buffer then upscaled for cheap natural bloom/diffusion),
+       slow flowing translucent ribbons with luminous edges, and drifting
+       light particles across several depth layers. The centre is kept
+       calm and readable. Very subtle smoothed cursor parallax. Deep navy /
+       indigo / violet / cyan in dark; white / pale blue / lavender silk in
+       light. Delta-time, pauses when hidden, honours reduced-motion, and
+       keeps per-frame fill cost low for a steady 60fps. The click-ripple
+       glow system (used app-wide via __octoRipple) is preserved. */
     try{
       var host = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
       var cv = doc.createElement('canvas');
       cv.id = 'aura-3d-canvas';
       cv.setAttribute('aria-hidden', 'true');
-      cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;';
+      /* z-index:-1 keeps the now-opaque aura BEHIND the app content (it still
+         paints above the ancestor page background, so the atmosphere shows in
+         every gap between the glass surfaces). At z:0 the opaque base would
+         cover the static main content. */
+      cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;';
       host.appendChild(cv);
       var ctx = null;
       try{ ctx = cv.getContext('2d', {alpha:true, desynchronized:true}); }catch(e){}
       if (!ctx) ctx = cv.getContext('2d');
       var DPR = Math.min(window.devicePixelRatio || 1, 2);
+      /* Half-res offscreen buffer for the big, soft volumetric aura blobs.
+         Painting the heavy translucent gradients at half resolution and
+         upscaling gives natural diffusion/bloom for a fraction of the fill
+         cost — the single biggest 60fps win here. */
+      var AB = doc.createElement('canvas');
+      var abx = AB.getContext('2d');
+      var ABS = 0.5;
       function fit(){
         cv.width  = (window.innerWidth  * DPR) | 0;
         cv.height = (window.innerHeight * DPR) | 0;
+        AB.width  = Math.max(1, (window.innerWidth  * ABS) | 0);
+        AB.height = Math.max(1, (window.innerHeight * ABS) | 0);
       }
       fit();
-      window.addEventListener('resize', fit, {passive:true});
 
       function isDark(){ return doc.documentElement.getAttribute('data-theme') === 'dark'; }
+      var REDUCE = false;
+      try{ REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_e){}
 
       var t0 = 0, running = true;
-      var CELLS = 12;     /* grid divisions along each wall edge */
-      var DEPTH = 14;     /* number of scrolling depth lines      */
+
+      window.addEventListener('resize', function(){
+        fit();
+        if (REDUCE && !running){ running = true; requestAnimationFrame(tick); }
+      }, {passive:true});
+      /* under reduced-motion the loop idles — repaint once on theme change */
+      try{ new MutationObserver(function(){
+        if (REDUCE && !running){ running = true; requestAnimationFrame(tick); }
+      }).observe(doc.documentElement, {attributes:true, attributeFilter:['data-theme']}); }catch(_e){}
+
+      /* ── very subtle cursor parallax, smoothed toward the pointer ── */
+      var pxT = 0, pyT = 0, pxS = 0, pyS = 0;
+      doc.addEventListener('pointermove', function(e){
+        pxT = (e.clientX / (window.innerWidth  || 1)) - 0.5;
+        pyT = (e.clientY / (window.innerHeight || 1)) - 0.5;
+      }, {passive:true});
+
+      /* ── aura form definitions (all positions are viewport fractions) ──
+         Blobs hug the edges/corners so the centre stays calm; ribbons live
+         in the upper & lower thirds. Each element carries a depth used for
+         parallax + organic drift. Particles are seeded deterministically. */
+      var BLOBS = [
+        {x:0.15, y:0.20, r:0.56, ci:0, d:0.9, ax:0.07, ay:0.055, sp:0.120, ph:0.0},
+        {x:0.87, y:0.18, r:0.48, ci:1, d:0.7, ax:0.08, ay:0.060, sp:0.105, ph:1.7},
+        {x:0.83, y:0.83, r:0.62, ci:2, d:1.0, ax:0.07, ay:0.065, sp:0.095, ph:3.1},
+        {x:0.17, y:0.85, r:0.46, ci:3, d:0.6, ax:0.08, ay:0.055, sp:0.130, ph:4.6}
+      ];
+      /* 5 flowing waveform layers at different depths, frequencies, amplitudes
+         and speeds — some barely visible, a couple providing the primary motion.
+         `a` scales each layer's opacity so the stack reads as organic energy. */
+      var RIBBONS = [
+        {y:0.13, amp:0.050, th:0.12, freq:2.3, sp:0.085, sp2:0.22, ph:0.4, ci:1, d:0.8, drift:0.036, a:1.00},
+        {y:0.86, amp:0.062, th:0.16, freq:1.9, sp:0.075, sp2:0.19, ph:2.2, ci:2, d:1.0, drift:0.044, a:1.00},
+        {y:0.50, amp:0.038, th:0.10, freq:2.7, sp:0.065, sp2:0.26, ph:4.1, ci:3, d:0.5, drift:0.026, a:0.55},
+        {y:0.30, amp:0.044, th:0.09, freq:3.1, sp:0.055, sp2:0.30, ph:1.1, ci:0, d:0.4, drift:0.030, a:0.45},
+        {y:0.68, amp:0.052, th:0.11, freq:1.6, sp:0.095, sp2:0.16, ph:5.3, ci:2, d:0.7, drift:0.040, a:0.65}
+      ];
+      /* one slow travelling light pulse that crosses the field at long intervals */
+      var PULSE = {t:-6, dur:7.0, gap:11.0, y:0.5, ci:1};
+      var PARTS = [];
+      (function(){ var s=1357; for(var i=0;i<46;i++){
+        s=(s*1103515245+12345)&0x7fffffff; var a=s/0x7fffffff;
+        s=(s*1103515245+12345)&0x7fffffff; var b=s/0x7fffffff;
+        s=(s*1103515245+12345)&0x7fffffff; var c2=s/0x7fffffff;
+        PARTS.push({x:a, y:b, r:0.6+c2*1.8, sp:0.010+c2*0.030, ph:a*6.283, d:0.4+b*0.8}); } })();
 
       /* click glows — a small pool of ripples, no per-frame allocation.
          Each glow carries its own colour so paintGlow is self-contained
@@ -9369,63 +9440,116 @@ components.html(
         if (!cv.isConnected){ host.appendChild(cv); }
 
         var dark = isDark();
-        var rgb = dark ? '150,168,255' : '52,64,130';   /* darker light-mode lines */
-        var rgbGlow = dark ? '150,168,255' : '30,40,120';
-        /* glassy but clearly visible */
-        var aLine = dark ? 0.13 : 0.16;
+        /* smooth the parallax toward the pointer (kept very subtle) */
+        pxS += (pxT - pxS) * 0.045;
+        pyS += (pyT - pyS) * 0.045;
+        var COLS = dark
+          ? ['99,102,241', '59,130,246', '139,92,246', '34,211,238']
+          : ['150,180,255', '190,170,255', '120,190,255', '255,205,230'];
 
-        /* vanishing point — near centre, drifting gently */
-        var vx = W * 0.5 + Math.cos(time * 0.12) * W * 0.03;
-        var vy = H * 0.5 + Math.sin(time * 0.10) * H * 0.03;
+        /* ── base wash (deep navy → indigo → violet / pale lavender silk) ── */
+        var base = ctx.createLinearGradient(0, 0, W, H);
+        if (dark){ base.addColorStop(0, '#080a1e'); base.addColorStop(0.55, '#0a0b26'); base.addColorStop(1, '#0b0820'); }
+        else     { base.addColorStop(0, '#f4f6ff'); base.addColorStop(0.55, '#eef0ff'); base.addColorStop(1, '#f7f2ff'); }
+        ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
 
-        ctx.lineWidth = 1;
+        /* ── volumetric aura blobs → half-res offscreen, then upscaled ── */
+        var mn = Math.min(AB.width, AB.height);
+        abx.setTransform(1, 0, 0, 1, 0, 0);
+        abx.clearRect(0, 0, AB.width, AB.height);
+        abx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+        var aIn = dark ? 0.16 : 0.30;
+        for (var bi = 0; bi < BLOBS.length; bi++){
+          var b = BLOBS[bi];
+          var bx = (b.x + Math.sin(time * b.sp + b.ph) * b.ax + pxS * b.d * 0.06) * AB.width;
+          var by = (b.y + Math.cos(time * b.sp * 1.1 + b.ph) * b.ay + pyS * b.d * 0.06) * AB.height;
+          var br = b.r * mn;
+          var gb = abx.createRadialGradient(bx, by, 0, bx, by, br);
+          gb.addColorStop(0,   'rgba(' + COLS[b.ci] + ',' + aIn + ')');
+          gb.addColorStop(0.5, 'rgba(' + COLS[b.ci] + ',' + (aIn * 0.45) + ')');
+          gb.addColorStop(1,   'rgba(' + COLS[b.ci] + ',0)');
+          abx.fillStyle = gb;
+          abx.beginPath(); abx.arc(bx, by, br, 0, Math.PI * 2); abx.fill();
+        }
+        abx.globalCompositeOperation = 'source-over';
+        ctx.imageSmoothingEnabled = true;
+        ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+        ctx.drawImage(AB, 0, 0, W, H);
+        ctx.globalCompositeOperation = 'source-over';
 
-        /* Each wall edge on the near (screen) plane is the full viewport
-           rectangle; every point converges to (vx,vy). We draw:
-             • perspective "depth" rectangles scrolling outward
-             • straight grid rails from near-plane divisions to the VP */
-
-        /* ── depth rectangles (scrolling toward viewer) ── */
-        var speed = 0.22;
-        var phase = (time * speed) % 1;
-        for (var r = 0; r < DEPTH; r++){
-          var depth = (r + phase) / DEPTH;      /* 0 far … 1 near */
-          var d = Math.pow(depth, 1.9);          /* perspective spacing */
-          if (d < 0.045) continue;               /* keep a clear open centre — no collapse to a point */
-          var x0 = vx + (0     - vx) * d;
-          var y0 = vy + (0     - vy) * d;
-          var x1 = vx + (W     - vx) * d;
-          var y1 = vy + (H     - vy) * d;
+        /* ── flowing translucent ribbons: two-harmonic organic wave that visibly
+           deforms and travels, so the background reads as a living atmosphere ── */
+        var N = 30;
+        for (var ri = 0; ri < RIBBONS.length; ri++){
+          var rb = RIBBONS[ri];
+          var yb = rb.y * H + Math.sin(time * rb.sp + rb.ph) * rb.drift * H + pyS * rb.d * 30;
+          var amp = rb.amp * H, th = rb.th * H, ra = (rb.a || 1);
+          var aR = (dark ? 0.11 : 0.17) * ra;
+          var kx = rb.freq / W * 6.283, phx = pxS * 0.7;
+          var wy = function(x, off, a){        // top/bottom edge share this deformation
+            return Math.sin(x * kx + time * rb.sp2 + rb.ph + off + phx) * a
+                 + Math.sin(x * kx * 0.5 + time * rb.sp2 * 1.7 + rb.ph * 1.3) * a * 0.34;
+          };
           ctx.beginPath();
-          ctx.rect(x0, y0, x1 - x0, y1 - y0);
-          ctx.strokeStyle = 'rgba(' + rgb + ',' + (aLine * (0.4 + 0.6 * depth)) + ')';
-          ctx.stroke();
+          for (var i = 0; i <= N; i++){ var x = i / N * W; var y = yb + wy(x, 0, amp); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+          for (var jj = N; jj >= 0; jj--){ var x2 = jj / N * W; var y2 = yb + th + wy(x2, 0.9, amp * 0.7); ctx.lineTo(x2, y2); }
+          ctx.closePath();
+          var rg = ctx.createLinearGradient(0, yb - amp, 0, yb + th + amp);
+          rg.addColorStop(0,   'rgba(' + COLS[rb.ci] + ',0)');
+          rg.addColorStop(0.5, 'rgba(' + COLS[rb.ci] + ',' + aR + ')');
+          rg.addColorStop(1,   'rgba(' + COLS[rb.ci] + ',0)');
+          ctx.fillStyle = rg;
+          if (dark) ctx.globalCompositeOperation = 'lighter';
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+          /* luminous leading edge with soft shading for dimensionality */
+          ctx.beginPath();
+          for (var k = 0; k <= N; k++){ var xk = k / N * W; var yk = yb + wy(xk, 0, amp); if (k === 0) ctx.moveTo(xk, yk); else ctx.lineTo(xk, yk); }
+          ctx.strokeStyle = dark ? ('rgba(' + COLS[rb.ci] + ',' + (0.30 * ra) + ')') : ('rgba(255,255,255,' + (0.5 * ra) + ')');
+          ctx.lineWidth = 1.4; ctx.stroke();
         }
 
-        /* ── grid rails: each fades to transparent BEFORE reaching the
-           centre, so there is no starburst convergence point — the lines
-           read as a continuous flowing grid rather than emerging from a
-           hole. `stop` = fraction of the way to the VP where the line
-           ends; a per-rail gradient makes the fade smooth. ── */
-        var stop = 0.82;   /* rails end 82% of the way in → open centre */
-        function rail(sx, sy){
-          var ex = sx + (vx - sx) * stop;
-          var ey = sy + (vy - sy) * stop;
-          var g = ctx.createLinearGradient(sx, sy, ex, ey);
-          g.addColorStop(0,   'rgba(' + rgb + ',' + aLine + ')');
-          g.addColorStop(0.7, 'rgba(' + rgb + ',' + (aLine * 0.6) + ')');
-          g.addColorStop(1,   'rgba(' + rgb + ',0)');
-          ctx.strokeStyle = g;
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        /* ── occasional slow travelling light pulse (irregular, subtle) ── */
+        (function(){
+          var cyc = PULSE.dur + PULSE.gap, lt = ((time - PULSE.t) % cyc);
+          if (lt < 0) lt += cyc;
+          if (lt < PULSE.dur){
+            var prog = lt / PULSE.dur, px = prog * (W + 200) - 100;
+            var py = PULSE.y * H + Math.sin(time * 0.4) * H * 0.12 + pyS * 40;
+            var fade = Math.sin(prog * Math.PI), pr = 90 + 40 * Math.sin(time * 2);
+            var lg = ctx.createRadialGradient(px, py, 0, px, py, pr);
+            lg.addColorStop(0,   'rgba(' + COLS[PULSE.ci] + ',' + (0.16 * fade) + ')');
+            lg.addColorStop(0.4, 'rgba(' + COLS[PULSE.ci] + ',' + (0.05 * fade) + ')');
+            lg.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+            ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+          }
+        })();
+
+        /* ── drifting light particles across depth layers ── */
+        for (var pi = 0; pi < PARTS.length; pi++){
+          var p = PARTS[pi];
+          var yy = (((p.y - time * p.sp) % 1) + 1) % 1;
+          var xx = (p.x + pxS * p.d * 0.03) * W;
+          var ppy = yy * H + pyS * p.d * 20;
+          var tw = 0.5 + 0.5 * Math.sin(time * 1.3 + p.ph);
+          ctx.beginPath();
+          ctx.fillStyle = dark ? ('rgba(190,205,255,' + (0.06 + 0.16 * tw) + ')')
+                               : ('rgba(120,140,220,' + (0.05 + 0.12 * tw) + ')');
+          ctx.arc(xx, ppy, p.r, 0, Math.PI * 2); ctx.fill();
         }
-        for (var c = 0; c <= CELLS; c++){
-          var fx = (c / CELLS) * W;
-          var fy = (c / CELLS) * H;
-          rail(fx, 0);   /* ceiling */
-          rail(fx, H);   /* floor   */
-          rail(0,  fy);  /* left    */
-          rail(W,  fy);  /* right   */
-        }
+
+        /* ── keep the centre calm/readable + soft edge vignette for depth ── */
+        var md = Math.min(W, H);
+        var cm = ctx.createRadialGradient(W * 0.5, H * 0.5, md * 0.06, W * 0.5, H * 0.5, md * 0.62);
+        if (dark){ cm.addColorStop(0, 'rgba(8,10,26,0.34)'); cm.addColorStop(1, 'rgba(8,10,26,0)'); }
+        else     { cm.addColorStop(0, 'rgba(255,255,255,0.40)'); cm.addColorStop(1, 'rgba(255,255,255,0)'); }
+        ctx.fillStyle = cm; ctx.fillRect(0, 0, W, H);
+        var vg = ctx.createRadialGradient(W * 0.5, H * 0.5, md * 0.5, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
+        if (dark){ vg.addColorStop(0, 'rgba(3,4,14,0)'); vg.addColorStop(1, 'rgba(3,4,14,0.55)'); }
+        else     { vg.addColorStop(0, 'rgba(214,220,245,0)'); vg.addColorStop(1, 'rgba(206,214,240,0.5)'); }
+        ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 
         /* ── click glows: a soft expanding ring + warm bloom, sleek and
            quick, tinted to the grid colour ── */
@@ -9438,10 +9562,43 @@ components.html(
           if (gg.life < 0) gg.life = 0;
           paintGlow(gg.x, gg.y, gg.life, gg.rgb);
         }
-        requestAnimationFrame(tick);
+        if (!REDUCE || anyGlow){ requestAnimationFrame(tick); } else { running = false; }
       }
       requestAnimationFrame(tick);
     }catch(err){ /* ambient background is decorative — never break the app */ }
+
+    /* ── SCROLL SELF-HEAL (root-cause fix for app-wide stuck scrolling) ──
+       The Community page's fitFrame() sets inline overflow:visible + height:auto
+       on the shared scroll container (section[data-testid="stMain"]) so it can
+       render full-bleed. Those inline styles were never cleared on leaving the
+       page, which left the ENTIRE app unable to scroll (the native scrollbar and
+       wheel both dead) until a full reload. We restore them the instant the
+       Community iframe is gone — a proper lifecycle restore, not a mask. This
+       also heals any state that is already stuck. */
+    try{
+      var SCROLL_SELS = ['[data-testid="stMain"]','[data-testid="stAppViewContainer"]','[data-testid="stMainBlockContainer"]'];
+      function communityActive(){
+        // Authoritative: the Python router stamps data-octo-page every run, so
+        // this is immune to Streamlit's unpredictable iframe lifecycle. Only the
+        // Community page legitimately needs the full-bleed (overflow:visible).
+        return doc.documentElement.getAttribute('data-octo-page') === 'community';
+      }
+      function healScroll(){
+        if (communityActive()) return;                 // Community legitimately owns the viewport
+        for (var i=0;i<SCROLL_SELS.length;i++){
+          var e = doc.querySelector(SCROLL_SELS[i]); if(!e) continue;
+          if (e.style.overflow  === 'visible') e.style.overflow  = '';
+          if (e.style.overflowY === 'visible') e.style.overflowY = '';
+          if (e.style.height    === 'auto')    e.style.height    = '';
+        }
+      }
+      var _healT = 0;
+      function scheduleHeal(){ if(_healT) return; _healT = setTimeout(function(){ _healT=0; healScroll(); }, 180); }
+      var _mo = new MutationObserver(scheduleHeal);
+      _mo.observe(doc.body, {childList:true, subtree:true});
+      setInterval(healScroll, 1500);                 // backstop for any missed transition
+      healScroll();
+    }catch(_e){}
   }
 
   /* Inject once into the parent realm so it survives Streamlit reruns
@@ -17190,8 +17347,9 @@ elif st.session_state.page == "community":
         })
 
     _members_json = json.dumps(_members_for_js, ensure_ascii=False)
+    _logo_b64 = get_logo_b64()   # Pharos brand logo for the orbital core
 
-    # ── Community page: directory list + 3D interactive sphere ──────────────
+    # ── Community page: single-member spotlight + orbital visualization ──────
     _WALL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17200,477 +17358,1270 @@ elif st.session_state.page == "community":
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 
-/* ── Theme tokens — LIGHT is the default :root; dark overrides below.
-      The iframe body is transparent, so it inherits the app's page bg;
-      these tokens keep text/surfaces/borders readable in both modes.   */
+/* ── Theme tokens (light default, dark override mirrors the app) ── */
 :root{
-  --ease-out:cubic-bezier(0.23,1,0.32,1);
-  --c-title:#0B1020;
-  --c-text:#1A2138;
-  --c-soft:rgba(24,32,58,0.62);
-  --c-faint:rgba(24,32,58,0.42);
-  --c-label:rgba(24,32,58,0.60);
-  --c-surface:rgba(255,255,255,0.72);
-  --c-surface-2:rgba(22,32,80,0.045);
-  --c-border:rgba(22,32,80,0.13);
-  --c-border-soft:rgba(22,32,80,0.08);
-  --c-accent:#3a51ff;
-  --c-accent-text:#2c40df;
-  --c-accent-bg:rgba(58,81,255,0.11);
-  --c-hover:rgba(58,81,255,0.08);
-  --c-avatar-bg:#eaeef7;
-  --c-node-border:rgba(22,32,80,0.16);
-  --c-tip-bg:rgba(255,255,255,0.97);
-  --c-tip-border:rgba(22,32,80,0.12);
-  --c-scroll:rgba(58,81,255,0.24);
-  --c-vignette:radial-gradient(ellipse 60% 56% at 50% 47%,rgba(205,216,244,0.55) 0%,rgba(205,216,244,0.18) 45%,transparent 74%);
-  --c-glow:rgba(60,90,220,0.10);
-  --c-shadow:0 18px 50px rgba(20,30,70,0.16);
+  --e:cubic-bezier(0.22,1,0.36,1);
+  --txt:#0B1020; --txt2:#44506e; --txt3:#6b7599;
+  --panel:rgba(255,255,255,0.72); --panel-brd:rgba(20,30,80,0.12);
+  --chip:rgba(20,30,80,0.05); --chip-brd:rgba(20,30,80,0.10);
+  --field:rgba(255,255,255,0.7); --field-brd:rgba(20,30,80,0.14);
+  --accent:#6a5bff; --accent-soft:rgba(106,91,255,0.12); --accent-brd:rgba(106,91,255,0.4);
+  --accent-txt:#4b3ee0;
+  --scroll:rgba(106,91,255,0.28);
 }
 :root[data-theme="dark"]{
-  --c-title:#FFFFFF;
-  --c-text:#EDEFF7;
-  --c-soft:rgba(255,255,255,0.60);
-  --c-faint:rgba(255,255,255,0.34);
-  --c-label:rgba(255,255,255,0.54);
-  --c-surface:rgba(16,20,36,0.62);
-  --c-surface-2:rgba(255,255,255,0.05);
-  --c-border:rgba(255,255,255,0.10);
-  --c-border-soft:rgba(255,255,255,0.065);
-  --c-accent:#6d82ff;
-  --c-accent-text:#aeb9ff;
-  --c-accent-bg:rgba(96,124,255,0.16);
-  --c-hover:rgba(96,124,255,0.10);
-  --c-avatar-bg:rgba(10,12,26,0.85);
-  --c-node-border:rgba(255,255,255,0.13);
-  --c-tip-bg:rgba(11,14,26,0.97);
-  --c-tip-border:rgba(255,255,255,0.10);
-  --c-scroll:rgba(120,150,255,0.28);
-  --c-vignette:radial-gradient(ellipse 60% 56% at 50% 47%,rgba(4,6,18,0.58) 0%,rgba(4,6,18,0.30) 45%,transparent 74%);
-  --c-glow:rgba(40,70,200,0.14);
-  --c-shadow:0 20px 55px rgba(0,0,0,0.5);
+  --txt:#EDEFF7; --txt2:#AEB6D8; --txt3:#7C86AE;
+  --panel:rgba(13,17,40,0.55); --panel-brd:rgba(130,150,255,0.13);
+  --chip:rgba(255,255,255,0.045); --chip-brd:rgba(255,255,255,0.09);
+  --field:rgba(8,12,30,0.6); --field-brd:rgba(130,150,255,0.16);
+  --accent:#8b7bff; --accent-soft:rgba(120,110,255,0.16); --accent-brd:rgba(140,130,255,0.45);
+  --accent-txt:#c3bcff;
+  --scroll:rgba(130,140,255,0.3);
 }
 
-/* Transparent — the app's own global background shows through, no card */
-html,body{
-  width:100%;height:100%;min-height:100%;overflow:hidden;
-  font-family:'Inter',system-ui,sans-serif;
-  color:var(--c-text);-webkit-user-select:none;user-select:none;
-  background:transparent;
-}
+html,body{width:100%;height:100%;min-height:100%;overflow:hidden;background:transparent;
+  font-family:'Inter',system-ui,sans-serif;color:var(--txt);-webkit-user-select:none;user-select:none;}
 
-/* ── Three-panel layout: sidebar | directory list | 3D sphere ── */
-#app{display:flex;width:100%;height:100%;min-height:100%;}
+/* ── Layout: left filters | center spotlight | right orbital ── */
+#wrap{display:flex;gap:clamp(16px,1.7vw,26px);width:100%;height:100%;
+  max-width:none;margin:0;padding:clamp(34px,4vh,58px) clamp(18px,2vw,34px) clamp(16px,2.4vh,30px) clamp(4px,0.4vw,10px);}
+.panel{border:1px solid var(--panel-brd);background:var(--panel);border-radius:22px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);position:relative;overflow:hidden;}
 
-/* Sidebar — hugs the left edge, extra gutter before the member list */
-#sb{
-  width:clamp(176px,14vw,224px);flex-shrink:0;height:100%;
-  display:flex;flex-direction:column;
-  padding:clamp(24px,3vh,40px) clamp(12px,1vw,18px) 22px clamp(6px,0.8vw,14px);
-}
-#sb-title{font-size:clamp(21px,1.7vw,27px);font-weight:800;color:var(--c-title);line-height:1.12;letter-spacing:-0.5px;margin-bottom:7px;}
-#sb-sub{font-size:11.5px;font-weight:500;color:var(--c-faint);margin-bottom:22px;letter-spacing:0.1px;}
-#sw{position:relative;margin-bottom:22px;}
-#si{width:100%;padding:10px 12px 10px 32px;border:1px solid var(--c-border);border-radius:11px;background:var(--c-surface-2);color:var(--c-text);font-size:12.5px;outline:none;transition:border-color 0.16s var(--ease-out),background 0.16s;}
-#si::placeholder{color:var(--c-faint);}
-#si:focus{border-color:var(--c-accent);background:var(--c-hover);}
-#sic{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:0.5;color:var(--c-soft);pointer-events:none;font-size:13px;}
-.sdiv{height:1px;background:var(--c-border-soft);margin-bottom:16px;}
-#catnav{display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;scrollbar-width:none;}
+/* ══ LEFT ══ */
+#left{width:clamp(210px,18%,264px);flex-shrink:0;display:flex;flex-direction:column;padding:24px 20px;}
+#lt-title{font-size:clamp(22px,1.9vw,28px);font-weight:800;line-height:1.1;letter-spacing:-0.6px;color:var(--txt);}
+#lt-sub{font-size:11.5px;font-weight:500;color:var(--txt3);margin:9px 0 20px;line-height:1.5;}
+#lt-search{position:relative;margin-bottom:18px;}
+#lt-search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--txt3);opacity:0.8;pointer-events:none;}
+#si{width:100%;height:44px;padding:0 12px 0 36px;border-radius:12px;border:1px solid var(--field-brd);
+  background:var(--field);color:var(--txt);font-size:12.5px;outline:none;transition:border-color 0.18s var(--e),box-shadow 0.18s var(--e);}
+#si::placeholder{color:var(--txt3);}
+#si:focus{border-color:var(--accent-brd);box-shadow:0 0 0 3px var(--accent-soft);}
+#catnav{display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1;margin:0 -6px;padding:0 6px;scrollbar-width:none;}
 #catnav::-webkit-scrollbar{display:none;}
-.cat{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:none;background:transparent;color:var(--c-soft);font-size:13px;font-weight:500;cursor:pointer;text-align:left;width:100%;transition:background 0.15s var(--ease-out),color 0.15s;}
-.cat:hover{background:var(--c-hover);color:var(--c-text);}
-.cat.on{background:var(--c-accent-bg);color:var(--c-accent-text);font-weight:650;}
-.cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cat{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;border:none;background:transparent;
+  color:var(--txt2);font-size:13px;font-weight:550;cursor:pointer;text-align:left;width:100%;transition:background 0.15s var(--e),color 0.15s;}
+.cat:hover{background:var(--chip);color:var(--txt);}
+.cat.on{background:var(--accent-soft);color:var(--accent-txt);}
+.cat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 7px currentColor;}
 .cat-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cat-n{font-size:11px;color:var(--c-faint);font-variant-numeric:tabular-nums;font-weight:600;}
-.cat.on .cat-n{color:var(--c-accent-text);}
-#sb-foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft);font-size:10.5px;color:var(--c-faint);line-height:1.7;}
+.cat-n{font-size:11.5px;color:var(--txt3);font-variant-numeric:tabular-nums;font-weight:600;}
+.cat.on .cat-n{color:var(--accent-txt);}
+#lt-foot{margin-top:16px;display:flex;align-items:center;gap:12px;padding:15px;border-radius:14px;
+  background:var(--chip);border:1px solid var(--chip-brd);}
+#lt-foot .fic{width:38px;height:38px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  background:var(--accent-soft);color:var(--accent-txt);}
+#lt-foot .ftx b{display:block;font-size:12px;font-weight:650;color:var(--txt);}
+#lt-foot .ftx span{font-size:11px;color:var(--txt3);}
 
-/* Directory panel — clear gutter from sidebar, generous spacing */
-#dir{width:clamp(300px,27vw,440px);flex-shrink:0;height:100%;overflow-y:auto;padding:clamp(24px,3vh,40px) clamp(20px,1.6vw,30px) 40px;border-left:1px solid var(--c-border-soft);scrollbar-width:thin;scrollbar-color:var(--c-scroll) transparent;}
-#dir::-webkit-scrollbar{width:4px;}
-#dir::-webkit-scrollbar-track{background:transparent;}
-#dir::-webkit-scrollbar-thumb{background:var(--c-scroll);border-radius:3px;}
-.rsec{margin-bottom:32px;}
-.rsec.hid{display:none;}
-.sec-hdr{display:flex;align-items:center;gap:9px;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--c-border-soft);}
-.rdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.rlabel{font-size:11.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--c-label);flex:1;}
-.rcount{font-size:11px;font-weight:600;color:var(--c-faint);font-variant-numeric:tabular-nums;}
-.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:24px 16px;justify-items:center;}
-.ac{display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;width:100%;max-width:88px;border-radius:12px;padding:6px 4px;animation:acin 0.4s var(--ease-out) both;transition:background 0.15s var(--ease-out);}
-@keyframes acin{from{opacity:0;transform:scale(0.9) translateY(5px);}to{opacity:1;transform:none;}}
-.ac.hid{display:none;}
-.ac.hl,.ac:hover{background:var(--c-hover);}
-.av{width:66px;height:66px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid var(--c-border);color:var(--c-faint);transition:transform 0.2s var(--ease-out),box-shadow 0.2s var(--ease-out),border-color 0.2s;background:var(--c-avatar-bg);display:flex;align-items:center;justify-content:center;}
-.ac:hover .av,.ac.hl .av{transform:scale(1.07);box-shadow:0 6px 18px var(--c-glow);border-color:var(--c-accent);}
-.av img{width:100%;height:100%;object-fit:cover;display:block;}
-.avname{font-size:11px;font-weight:500;color:var(--c-soft);text-align:center;width:100%;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 0.15s;}
-.ac:hover .avname,.ac.hl .avname{color:var(--c-text);}
-#noRes{display:none;padding:56px 0;text-align:center;color:var(--c-faint);font-size:12.5px;}
+/* ══ CENTER — 3D member carousel ══ */
+#center{width:clamp(360px,40%,600px);flex-shrink:0;display:flex;flex-direction:column;
+  padding:clamp(10px,1.2vh,16px) 10px;}
+#stage{flex:1;display:flex;flex-direction:column;position:relative;border-radius:22px;overflow:hidden;
+  background:radial-gradient(ellipse 82% 52% at 50% 30%,rgba(80,60,190,0.26),transparent 62%),
+             linear-gradient(165deg,#141a3e 0%,#0c1030 60%,#0a0c26 100%);
+  border:1px solid rgba(130,140,255,0.14);box-shadow:0 24px 60px rgba(4,6,22,0.45);}
+.st-glow{position:absolute;inset:0;pointer-events:none;opacity:0.55;
+  background:radial-gradient(circle at 22% 12%,rgba(120,90,255,0.14),transparent 40%),
+            radial-gradient(circle at 82% 90%,rgba(34,211,238,0.08),transparent 45%);}
+/* carousel viewport */
+#carousel{position:absolute;inset:0;perspective:1500px;perspective-origin:50% 46%;
+  touch-action:pan-y;cursor:grab;}
+#carousel.dragging{cursor:grabbing;}
+.mcard{position:absolute;top:46%;left:50%;width:clamp(230px,62%,330px);
+  transform-style:preserve-3d;will-change:transform,opacity;
+  backface-visibility:hidden;user-select:none;}
+.mc-inner{position:relative;border-radius:22px;padding:26px 22px 24px;transform-style:preserve-3d;
+  background:linear-gradient(168deg,rgba(30,34,70,0.72),rgba(14,17,42,0.82));
+  border:1px solid rgba(150,160,255,0.16);
+  box-shadow:0 30px 70px -18px rgba(3,5,22,0.7),inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter:blur(10px);display:flex;flex-direction:column;align-items:center;
+  transition:transform 0.35s var(--e),box-shadow 0.35s var(--e),border-color 0.35s var(--e);}
+/* glass reflection sweep */
+.mc-inner::before{content:'';position:absolute;inset:0;border-radius:22px;pointer-events:none;
+  background:linear-gradient(150deg,rgba(255,255,255,0.10) 0%,transparent 32%);opacity:0.7;}
+.mcard.active .mc-inner{border-color:rgba(170,180,255,0.28);
+  box-shadow:0 40px 90px -20px rgba(3,5,22,0.8),0 0 40px -8px var(--pc,rgba(130,110,255,0.35)),inset 0 1px 0 rgba(255,255,255,0.08);}
+.mc-role{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;
+  font-size:10.5px;font-weight:650;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#e8ebff;
+  transform:translateZ(30px);margin-bottom:10px;}
+.mc-role .rd{width:7px;height:7px;border-radius:50%;box-shadow:0 0 7px currentColor;}
+.mc-halo{position:absolute;top:16%;left:50%;width:min(72%,260px);aspect-ratio:1;border-radius:50%;
+  transform:translate(-50%,0) translateZ(4px);pointer-events:none;
+  background:radial-gradient(circle,var(--pc,rgba(120,95,255,0.22)),transparent 66%);opacity:0.55;}
+.mc-avatar{position:relative;width:clamp(120px,15vw,176px);aspect-ratio:1;border-radius:50%;
+  transform:translateZ(72px);display:flex;align-items:center;justify-content:center;margin-top:4px;}
+.mc-avatar .ring{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid var(--pc,rgba(140,120,255,0.65));
+  box-shadow:0 0 30px -4px var(--pc,rgba(140,120,255,0.5));opacity:0.9;}
+.mc-avatar .ph{position:absolute;inset:0;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.14);
+  background:#10142c;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.28);
+  box-shadow:0 16px 40px rgba(4,6,26,0.5);}
+.mc-avatar .ph img{width:100%;height:100%;object-fit:cover;display:block;}
+.mc-badge{position:absolute;right:0;bottom:6px;width:42px;height:42px;border-radius:50%;transform:translateZ(90px);
+  display:flex;align-items:center;justify-content:center;color:#fff;border:2px solid rgba(255,255,255,0.16);
+  box-shadow:0 8px 22px rgba(0,0,0,0.4);}
+.mc-name{margin-top:22px;font-size:clamp(20px,2vw,27px);font-weight:750;color:#fff;letter-spacing:-0.4px;
+  transform:translateZ(48px);text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mc-user{margin-top:4px;font-size:12.5px;font-weight:500;color:#9aa6d8;transform:translateZ(42px);min-height:16px;}
+.mc-roles{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:14px;transform:translateZ(38px);max-width:94%;}
+.mc-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:10.5px;font-weight:600;}
+.mc-pill .pd{width:6px;height:6px;border-radius:50%;}
+.mc-note{margin-top:15px;font-size:12px;line-height:1.55;font-style:italic;color:rgba(200,207,242,0.78);
+  text-align:center;max-width:94%;transform:translateZ(30px);
+  border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;}
+/* prev/next */
+.nav-btn{position:absolute;top:44%;z-index:20;width:46px;height:46px;border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#dfe3ff;
+  background:rgba(16,20,44,0.72);border:1px solid rgba(150,160,255,0.22);backdrop-filter:blur(8px);
+  transition:transform 0.16s var(--e),box-shadow 0.2s var(--e),background 0.2s;}
+.nav-btn:hover{background:rgba(30,26,70,0.88);box-shadow:0 0 22px rgba(120,100,255,0.4);}
+.nav-btn:active{transform:scale(0.92);}
+#prev{left:12px;} #next{right:12px;}
+/* counter */
+.st-foot{position:absolute;left:0;right:0;bottom:0;padding:14px 20px 18px;z-index:15;
+  display:flex;flex-direction:column;align-items:center;gap:9px;pointer-events:none;
+  background:linear-gradient(0deg,rgba(10,12,38,0.55),transparent);}
+.st-count{font-size:13px;font-weight:600;color:#c6ccf0;font-variant-numeric:tabular-nums;}
+.st-count b{color:#fff;} .st-count span{color:#7d86b4;margin:0 3px;}
+.dots{display:flex;gap:6px;align-items:center;}
+.dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.18);transition:width 0.25s var(--e),background 0.25s var(--e);}
+.dot.on{width:22px;border-radius:4px;background:var(--accent);}
 
-/* Globe panel — soft localized vignette for sphere contrast (no hard edge),
-   with comfortable padding so the sphere never collides with the list */
-#globe-wrap{flex:1;min-width:0;height:100%;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
-  padding:clamp(20px,2vw,44px);background:var(--c-vignette);}
-#globe-wrap::before{content:'';position:absolute;width:min(52vw,52vh,540px);height:min(52vw,52vh,540px);border-radius:50%;background:radial-gradient(circle,var(--c-glow) 0%,transparent 68%);pointer-events:none;}
-#globe-lbl{position:absolute;top:clamp(20px,3vh,38px);left:0;right:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:3.4px;text-transform:uppercase;color:var(--c-label);pointer-events:none;}
-#globe-hint{position:absolute;bottom:clamp(16px,2.4vh,32px);left:0;right:0;text-align:center;font-size:10.5px;font-weight:500;color:var(--c-faint);letter-spacing:0.6px;pointer-events:none;}
-#scene-wrap{position:relative;cursor:grab;display:flex;align-items:center;justify-content:center;}
-#scene-wrap.dg{cursor:grabbing;}
-#sph{width:0;height:0;transform-style:preserve-3d;will-change:transform;}
-.snode{position:absolute;top:0;left:0;transform-style:preserve-3d;cursor:pointer;}
-.sni{border-radius:50%;overflow:hidden;border:2px solid var(--c-node-border);color:var(--c-faint);background:var(--c-avatar-bg);display:flex;align-items:center;justify-content:center;
-  transition:transform 0.34s var(--ease-out),box-shadow 0.34s var(--ease-out),border-color 0.28s var(--ease-out);}
-.snode.hl .sni{border-color:var(--c-accent)!important;box-shadow:0 0 0 3px var(--c-accent-bg),0 10px 30px var(--c-glow);}
-.sni img{width:100%;height:100%;object-fit:cover;display:block;}
+/* ══ Expanded member modal ══ */
+#cmod{position:fixed;inset:0;z-index:1500;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:rgba(4,6,18,0.66);backdrop-filter:blur(14px);
+  opacity:0;pointer-events:none;transition:opacity 0.22s var(--e);}
+#cmod.open{opacity:1;pointer-events:auto;}
+#cmod-card{position:relative;width:min(400px,94vw);max-height:92vh;overflow-y:auto;
+  border-radius:24px;padding:34px 28px 26px;text-align:center;
+  background:linear-gradient(168deg,rgba(32,36,74,0.94),rgba(12,15,38,0.96));
+  border:1px solid rgba(160,170,255,0.2);
+  box-shadow:0 44px 100px -24px rgba(0,0,0,0.75),inset 0 1px 0 rgba(255,255,255,0.07);
+  transform:scale(0.9);opacity:0;transition:transform 0.34s cubic-bezier(0.34,1.56,0.64,1),opacity 0.24s var(--e);
+  scrollbar-width:thin;scrollbar-color:rgba(120,140,255,0.3) transparent;}
+#cmod.open #cmod-card{transform:scale(1);opacity:1;}
+#cmod-card::-webkit-scrollbar{width:4px;} #cmod-card::-webkit-scrollbar-thumb{background:rgba(120,140,255,0.3);border-radius:3px;}
+#cmod-glow{position:absolute;top:-10%;left:50%;width:70%;aspect-ratio:1;transform:translateX(-50%);pointer-events:none;
+  border-radius:50%;background:radial-gradient(circle,var(--pc,rgba(120,95,255,0.28)),transparent 66%);opacity:0.6;}
+#cmod-x{position:absolute;top:14px;right:14px;z-index:3;width:34px;height:34px;border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#cfd6ff;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);transition:background 0.15s,transform 0.15s;}
+#cmod-x:hover{background:rgba(255,255,255,0.14);} #cmod-x:active{transform:scale(0.92);}
+.cmod-avatar{position:relative;width:132px;height:132px;margin:6px auto 0;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;}
+.cmod-avatar .ring{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid var(--pc,rgba(140,120,255,0.7));
+  box-shadow:0 0 34px -4px var(--pc,rgba(140,120,255,0.55));}
+.cmod-avatar .ph{position:absolute;inset:0;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.16);
+  background:#10142c;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.28);
+  box-shadow:0 16px 40px rgba(4,6,26,0.55);}
+.cmod-avatar .ph img{width:100%;height:100%;object-fit:cover;display:block;}
+.cmod-name{margin-top:18px;font-size:24px;font-weight:750;color:#fff;letter-spacing:-0.4px;}
+.cmod-user{margin-top:5px;font-size:13px;font-weight:500;color:#9fb0ff;text-decoration:none;display:inline-block;}
+.cmod-user:hover{text-decoration:underline;}
+.cmod-roles{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:15px;}
+.cmod-desc{margin:16px auto 0;font-size:13.5px;line-height:1.62;font-style:italic;color:rgba(212,219,248,0.9);max-width:94%;}
+.cmod-echo{margin:16px auto 0;max-width:94%;padding:13px 16px;border-radius:14px;text-align:left;
+  background:linear-gradient(160deg,rgba(120,95,255,0.10),rgba(30,40,90,0.14));
+  border:1px solid rgba(150,160,255,0.16);}
+.cmod-echo-lbl{display:block;font-size:10px;font-weight:800;letter-spacing:1.6px;color:var(--pc,#9fb0ff);margin-bottom:6px;}
+.cmod-echo-txt{font-size:12.5px;line-height:1.6;color:rgba(200,207,240,0.86);}
+.cmod-echo-txt .sig{display:block;margin-top:6px;font-style:italic;color:var(--pc,#9fb0ff);opacity:0.9;}
+.cmod-actions{display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap;}
+.cmod-btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:12px;cursor:pointer;
+  font-size:13px;font-weight:650;border:1px solid transparent;transition:transform 0.14s var(--e),box-shadow 0.18s,background 0.18s;}
+.cmod-btn:active{transform:scale(0.96);}
+.cmod-dl{color:#fff;background:linear-gradient(180deg,#6a5bff,#5545e6);box-shadow:0 8px 22px -6px rgba(90,70,255,0.6);}
+.cmod-dl:hover{box-shadow:0 10px 28px -6px rgba(90,70,255,0.75);}
+.cmod-share{color:#e8ebff;background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.14);}
+.cmod-share:hover{background:rgba(255,255,255,0.12);}
+@media (prefers-reduced-motion:reduce){#cmod-card{transition:opacity 0.2s ease;}}
 
-/* Anchored profile tooltip — eases smoothly toward the focused member */
-#tp{position:fixed;z-index:600;pointer-events:none;padding:13px 16px;border-radius:14px;background:var(--c-tip-bg);border:1px solid var(--c-tip-border);box-shadow:var(--c-shadow);backdrop-filter:blur(20px);max-width:236px;
-  opacity:0;transform:scale(0.96) translateX(-8px);transform-origin:left center;
-  transition:opacity 0.2s var(--ease-out),transform 0.2s var(--ease-out);}
-#tp.sh{opacity:1;transform:scale(1) translateX(0);}
-#tp.right-anchor{transform-origin:right center;transform:scale(0.96) translateX(8px);}
-#tp.right-anchor.sh{transform:scale(1) translateX(0);}
-#tpn{font-size:14.5px;font-weight:700;color:var(--c-title);margin-bottom:3px;}
-#tpx{font-size:11px;font-weight:500;color:var(--c-accent-text);margin-bottom:9px;}
-#tpr{display:flex;flex-wrap:wrap;gap:5px;}
-.tr{padding:3px 9px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:0.2px;}
+/* ══ RIGHT — orbital viz (always dark stage) ══ */
+#right{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:22px;
+  background:radial-gradient(ellipse 70% 60% at 50% 46%,#141a44 0%,#0a0e2a 46%,#060818 100%);
+  border:1px solid rgba(130,140,255,0.13);}
+#right .rgrid{position:absolute;inset:0;pointer-events:none;opacity:0.5;
+  background:radial-gradient(circle at 50% 46%,rgba(110,90,255,0.16),transparent 55%);}
+.viz-hd{position:absolute;top:18px;left:18px;right:18px;display:flex;justify-content:space-between;z-index:6;pointer-events:none;}
+.gpill{display:inline-flex;align-items:center;gap:9px;padding:9px 14px;border-radius:13px;
+  background:rgba(12,16,40,0.6);border:1px solid rgba(150,160,255,0.16);backdrop-filter:blur(10px);}
+.gpill .gi{color:#9aa6e0;display:flex;} .gpill b{font-size:13px;color:#fff;font-weight:700;line-height:1;}
+.gpill small{font-size:10px;color:#8189b8;display:block;margin-top:2px;}
+.gpill.live b{color:#c9f7e5;} .live-dot{width:7px;height:7px;border-radius:50%;background:#34e0a1;box-shadow:0 0 8px #34e0a1;}
+#scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;cursor:grab;}
+#scene.dg{cursor:grabbing;}
+#orbits{position:absolute;top:50%;left:50%;transform-style:preserve-3d;pointer-events:none;}
+.orbit{position:absolute;top:50%;left:50%;border:1px solid rgba(150,160,255,0.13);border-radius:50%;
+  transform-style:preserve-3d;}
+#stack{position:relative;transform-style:preserve-3d;will-change:transform;}
+#core{position:absolute;top:50%;left:50%;width:96px;height:96px;border-radius:50%;transform:translate(-50%,-50%) translateZ(0);will-change:transform;
+  display:flex;align-items:center;justify-content:center;z-index:2;
+  background:radial-gradient(circle,#3a2f8f 0%,#1a1e5c 60%,#0e1240 100%);
+  box-shadow:0 0 60px 6px rgba(120,90,255,0.5),inset 0 0 22px rgba(160,140,255,0.3);
+  border:1px solid rgba(170,150,255,0.4);}
+#core::after{content:'';position:absolute;inset:-9px;border-radius:50%;border:1px solid rgba(160,150,255,0.28);}
+#core img{width:52%;height:52%;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));}
+#core .clogo-fb{font-size:34px;font-weight:800;color:#c9c0ff;}
+.node{position:absolute;top:0;left:0;transform-style:preserve-3d;cursor:pointer;}
+.node .nv{border-radius:50%;overflow:hidden;border:2px solid var(--nc,rgba(150,160,255,0.5));background:#0d1130;
+  display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);
+  box-shadow:0 0 0 1px rgba(0,0,0,0.3);transition:box-shadow 0.25s var(--e),border-color 0.25s var(--e);
+  will-change:transform,opacity;backface-visibility:hidden;}
+.node .nv img{width:100%;height:100%;object-fit:cover;display:block;}
+.node.hl .nv,.node.active .nv{border-color:#fff;box-shadow:0 0 16px 2px var(--nc,rgba(150,160,255,0.8)),0 0 0 2px rgba(255,255,255,0.5);}
+.viz-ctrl{position:absolute;left:20px;right:20px;bottom:20px;height:56px;z-index:6;display:flex;align-items:center;justify-content:center;gap:0;
+  border-radius:15px;background:rgba(10,14,34,0.66);border:1px solid rgba(150,160,255,0.15);backdrop-filter:blur(12px);box-shadow:0 12px 34px rgba(3,5,20,0.4);}
+.ctrl{display:flex;align-items:center;gap:9px;padding:0 22px;font-size:12.5px;font-weight:550;color:#b6bde8;}
+.ctrl svg{width:15px;height:15px;color:#8e97c8;}
+.ctrl+.ctrl{border-left:1px solid rgba(150,160,255,0.14);}
 
-/* Modal */
-#mod{position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(4,6,16,0.55);backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity 0.22s var(--ease-out);}
-#mod.op{opacity:1;pointer-events:all;}
-#mc{background:var(--c-tip-bg);border:1px solid var(--c-tip-border);box-shadow:var(--c-shadow);border-radius:22px;padding:30px 28px;width:300px;max-width:90vw;transform:scale(0.92) translateY(18px);transition:transform 0.24s var(--ease-out);position:relative;}
-#mod.op #mc{transform:scale(1) translateY(0);}
-#mx{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-soft);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.14s,color 0.14s;}
-#mx:hover{background:var(--c-hover);color:var(--c-text);}
-#mi{width:86px;height:86px;border-radius:50%;object-fit:cover;border:2px solid var(--c-border);margin:0 auto 16px;display:block;}
-#mf{width:86px;height:86px;border-radius:50%;border:2px solid var(--c-border);color:var(--c-faint);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:var(--c-avatar-bg);}
-#mn2{text-align:center;font-size:19px;font-weight:700;color:var(--c-title);margin-bottom:5px;}
-#mxl{text-align:center;font-size:12.5px;font-weight:500;color:var(--c-accent-text);text-decoration:none;display:block;margin-bottom:16px;}
-#mxl:hover{text-decoration:underline;}
-#mr{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;}
-.mr{padding:4px 11px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:0.3px;}
-
-/* Compress intelligently on narrow viewports */
-@media(max-width:960px){
-  #sb{width:clamp(160px,20vw,196px);}
-  #dir{width:clamp(260px,34vw,320px);}
-  .agrid{grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:18px 12px;}
-  .av{width:56px;height:56px;}
-  #sb-title{font-size:20px;}
+/* ══ Responsive ══ */
+@media(max-width:1180px){
+  #left{width:clamp(190px,20%,230px);}
+  #center{width:clamp(280px,34%,380px);}
 }
-@media(max-width:640px){
-  #sb{display:none;}
-  #dir{border-left:none;}
+@media(max-width:900px){
+  #wrap{flex-wrap:wrap;overflow-y:auto;}
+  #left{width:100%;order:1;}
+  #center{width:calc(50% - 12px);order:2;min-height:440px;}
+  #right{width:calc(50% - 12px);order:3;min-height:440px;}
+}
+@media(max-width:680px){
+  #center,#right{width:100%;}
 }
 @media (prefers-reduced-motion:reduce){
-  .ac{animation:none;}
-  .sni,#tp{transition-duration:0.01ms;}
+  #tilt{transition:none;} #person{animation:none!important;}
 }
+
+/* NOTE: the loading screen is rendered as a true full-viewport overlay in the
+   PARENT document (above the navbar + all page content) — see buildParentLoader()
+   in the script. Its styles are injected into the parent head there. */
 </style>
 </head>
 <body>
+<div id="wrap">
 
-<div id="app">
-  <aside id="sb">
-    <div id="sb-title">Pharos<br>Community</div>
-    <div id="sb-sub"></div>
-    <div id="sw"><span id="sic">⌕</span><input id="si" type="text" placeholder="Search…"></div>
-    <div class="sdiv"></div>
+  <!-- LEFT -->
+  <aside id="left" class="panel">
+    <div id="lt-title">Pharos<br>Community</div>
+    <div id="lt-sub"></div>
+    <div id="lt-search">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="si" type="text" placeholder="Search community...">
+    </div>
     <nav id="catnav"></nav>
-    <div id="sb-foot">More members<br>coming soon.</div>
+    <div id="lt-foot">
+      <div class="fic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 20v-2a4 4 0 0 0-3-3.87M16 4.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="ftx"><b>More members</b><span>coming soon.</span></div>
+    </div>
   </aside>
-  <div id="dir"><div id="noRes">No members match your search.</div></div>
-  <div id="globe-wrap">
-    <div id="globe-lbl">Community Sphere</div>
-    <div id="scene-wrap"><div id="sph"></div></div>
-    <div id="globe-hint">Drag to rotate · Hover to explore</div>
-  </div>
+
+  <!-- CENTER -->
+  <section id="center">
+    <div id="stage">
+      <div class="st-glow" aria-hidden="true"></div>
+      <div id="carousel"></div>
+      <button id="prev" class="nav-btn" aria-label="Previous member"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button id="next" class="nav-btn" aria-label="Next member"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="st-foot">
+        <div class="st-count"><b class="cur">1</b><span>/</span><b class="tot">1</b></div>
+        <div class="dots"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <section id="right">
+    <div class="rgrid"></div>
+    <div class="viz-hd">
+      <div class="gpill"><span class="gi"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 20v-2a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><b class="onl">0</b><small>Members online</small></div></div>
+      <div class="gpill live"><span class="live-dot"></span><b>Live now</b></div>
+    </div>
+    <div id="scene"><div id="stack"><div id="orbits"></div><div id="core"></div></div></div>
+    <div class="viz-ctrl">
+      <div class="ctrl"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11.5V6a2 2 0 1 1 4 0v5M13 11V4.5a2 2 0 1 1 4 0V11M9 11.5V9a2 2 0 1 0-4 0v3.5c0 3.5 2.5 7.5 7 7.5s6-3.5 6-6.5V11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Drag to rotate</div>
+      <div class="ctrl"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="3" width="12" height="18" rx="6" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Scroll to zoom</div>
+      <div class="ctrl"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Hover to explore</div>
+    </div>
+  </section>
+
 </div>
 
-<div id="tp"><div id="tpn"></div><div id="tpx"></div><div id="tpr"></div></div>
-<div id="mod"><div id="mc"><button id="mx">×</button><div id="mm"></div><div id="mn2"></div><a id="mxl" target="_blank" rel="noopener noreferrer"></a><div id="mr"></div></div></div>
+<!-- Expanded member card modal -->
+<div id="cmod" aria-hidden="true">
+  <div id="cmod-card" role="dialog" aria-modal="true">
+    <button id="cmod-x" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div id="cmod-glow" aria-hidden="true"></div>
+    <div class="cmod-avatar"><div class="ring"></div><div class="ph"></div></div>
+    <div class="cmod-name"></div>
+    <a class="cmod-user" target="_blank" rel="noopener noreferrer"></a>
+    <div class="cmod-roles"></div>
+    <p class="cmod-desc"></p>
+    <div class="cmod-echo">
+      <span class="cmod-echo-lbl">A NOTE FROM ECHO</span>
+      <p class="cmod-echo-txt"></p>
+    </div>
+    <div class="cmod-actions">
+      <button class="cmod-btn cmod-dl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download</button>
+      <button class="cmod-btn cmod-share"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.2h3.7l-8 9.1 9.4 12.5h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9zm-1.3 19.4h2L6.5 3.3H4.4L17.6 20.6z"/></svg>Share on X</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
 'use strict';
-
 var MEMBERS = __MEMBERS__;
+var LOGO = '__LOGO__';
+
+// ── Cinematic full-screen loader — rendered in the PARENT document so it sits
+//    above the navbar and all page content, edge-to-edge, no gaps. ──────────────
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+try{ fitFrame(); }catch(e){}
+(function buildParentLoader(){
+  var P, PD; try{ P=window.parent; PD=P.document; if(!PD||!PD.body) return; }catch(e){ return; }
+  // guard: remove any loader left over from a previous render
+  var old=PD.getElementById('pharos-loader'); if(old&&old.parentNode)old.parentNode.removeChild(old);
+  var oldS=PD.getElementById('pharos-loader-style'); if(oldS&&oldS.parentNode)oldS.parentNode.removeChild(oldS);
+
+  var CSS=`
+/* ── Album-opening loader: two curved panels of avatar cards that swing
+   open from a bright central seam. True full-viewport opaque overlay in the
+   parent doc — no leak, no gaps. Center holds ONLY the opening + glow. ── */
+#pharos-loader{position:fixed;inset:0;width:100vw;height:100vh;z-index:2147483000;overflow:hidden;
+  perspective:1500px;perspective-origin:50% 50%;
+  opacity:1;transition:opacity 0.62s cubic-bezier(0.4,0,0.2,1);
+  background:
+   radial-gradient(ellipse 46% 62% at 50% 50%, rgba(52,102,214,0.16), transparent 62%),
+   radial-gradient(ellipse 120% 78% at 50% 122%, rgba(2,5,16,0.94), transparent 60%),
+   linear-gradient(180deg,#070d24 0%,#050a1c 46%,#03060f 100%),#03060f;}
+#pharos-loader.pl-hide{opacity:0;pointer-events:none;}
+#pharos-loader #pl-book{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d;will-change:transform;z-index:2;}
+#pharos-loader .pl-side{position:absolute;left:0;top:0;transform-style:preserve-3d;will-change:transform;}
+#pharos-loader .pl-wall{position:absolute;left:0;top:0;transform-style:preserve-3d;}
+#pharos-loader .pl-cell{position:absolute;left:0;top:0;border-radius:14px;overflow:hidden;background:#0b1030;
+  border:1px solid rgba(152,178,255,0.16);box-shadow:0 14px 34px rgba(2,4,14,0.55);
+  backface-visibility:hidden;will-change:opacity,transform;}
+#pharos-loader .pl-cell img{width:100%;height:100%;object-fit:cover;display:block;}
+#pharos-loader .pl-cell::after{content:'';position:absolute;inset:0;border-radius:14px;pointer-events:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.13),inset 0 0 24px rgba(4,8,22,0.35);}
+#pharos-loader #pl-seam{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(10vw,132px);height:122vh;z-index:3;pointer-events:none;mix-blend-mode:screen;filter:blur(16px);
+  background:radial-gradient(ellipse 50% 50% at 50% 50%, rgba(210,230,255,0.72), rgba(120,170,255,0.22) 42%, transparent 76%);}
+#pharos-loader #pl-floor{position:absolute;left:0;right:0;bottom:0;height:24vh;z-index:1;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(58,108,220,0.05) 46%,rgba(96,146,238,0.10));
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000);mask-image:linear-gradient(180deg,transparent,#000);}
+#pharos-loader #pl-prog{position:absolute;left:50%;bottom:clamp(26px,5vh,46px);transform:translateX(-50%);display:flex;gap:9px;z-index:4;}
+#pharos-loader #pl-prog i{width:6px;height:6px;border-radius:50%;background:rgba(150,180,255,0.32);transition:background .35s ease,box-shadow .35s ease;}
+#pharos-loader #pl-prog i.on{background:rgba(198,224,255,0.95);box-shadow:0 0 10px rgba(150,192,255,0.8);}
+@media (prefers-reduced-motion:reduce){#pharos-loader .pl-cell{transition:none!important;}}
+`;
+  var style=PD.createElement('style'); style.id='pharos-loader-style'; style.textContent=CSS; PD.head.appendChild(style);
+
+  var root=PD.createElement('div'); root.id='pharos-loader';
+  function el(cls){var d=PD.createElement('div');if(cls)d.className=cls;return d;}
+  var REDUCE=false; try{ REDUCE=P.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(_e){}
+  function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+  function easeOutQuint(p){return 1-Math.pow(1-p,5);}
+
+  var vw=P.innerWidth||1280, vh=P.innerHeight||800;
+  var all=shuffle(MEMBERS.filter(function(m){return m.img;}).map(function(m){return m.img;}));
+  var N=all.length;
+
+  // SCROLL SAFETY: never lock the document's overflow (a torn-down iframe could
+  // leave it stuck). Instead we block wheel/touch ONLY on the loader element
+  // (added after append), so scrolling frees itself the instant the loader is
+  // removed. Also heal any stale lock left by an earlier build of this loader.
+  try{ if(PD.documentElement.style.overflow==='hidden') PD.documentElement.style.overflow=''; if(PD.body && PD.body.style.overflow==='hidden') PD.body.style.overflow=''; }catch(_e){}
+
+  // ── build the two curved album panels ──
+  var half=Math.ceil(N/2);
+  var sideImgs=[ all.slice(0,half), all.slice(half) ];
+  // pick a column count that fills each panel with the fewest empty trailing cells
+  function pickCols(cnt){ var best=6,br=1e9; for(var c=5;c<=8;c++){ var rem=(c-(cnt%c))%c; var score=rem*10+Math.abs(c-6.4); if(score<br){br=score;best=c;} } return best; }
+  var cols=pickCols(half), rows=Math.ceil(half/cols);
+  var seamGap=Math.min(vw*0.06,110);
+  // zoomed-out framing: the album occupies ~72% of the height with generous
+  // negative space around it, and cards carry comfortable, consistent spacing
+  var availH=vh*0.72, availW=((vw-seamGap)/2)*0.90;
+  var S=clamp(Math.min(availH/rows, availW/cols),34,120);        // cell pitch
+  var gap=Math.max(7,S*0.17), card=S-gap;
+  var panelW=cols*S, panelH=rows*S, Rc=panelW*1.05;              // curvature radius
+
+  var book=el(''); book.id='pl-book';
+  var sidesEl=[], imgEls=[], cellList=[];
+  for(var si=0; si<2; si++){
+    var side=el('pl-side'); side.setAttribute('data-side',si);
+    var wall=el('pl-wall');
+    var offX=(panelW/2 + seamGap/2);
+    wall.style.transform='translateX('+(si===0?-offX:offX).toFixed(0)+'px)';
+    var imgs=sideImgs[si], cnt=imgs.length;
+    // distribute the images into `rows` balanced, centred rows so there is never a
+    // lonely partial row — every row is full or just one short → a clean album block
+    var base=Math.floor(cnt/rows), extra=cnt-base*rows, idx=0;
+    for(var r=0;r<rows;r++){
+      var rc=base+(r<extra?1:0);
+      for(var c=0;c<rc;c++){
+        var colOff=(c-(rc-1)/2)*S, rowOff=(r-(rows-1)/2)*S;
+        var phi=colOff/Rc, cx=Rc*Math.sin(phi), cz=Rc*(Math.cos(phi)-1);
+        var cell=el('pl-cell');
+        cell.style.width=card.toFixed(0)+'px'; cell.style.height=card.toFixed(0)+'px';
+        cell.style.marginLeft=(-card/2).toFixed(0)+'px'; cell.style.marginTop=(-card/2).toFixed(0)+'px';
+        cell.style.transform='translate3d('+cx.toFixed(1)+'px,'+rowOff.toFixed(1)+'px,'+cz.toFixed(1)+'px) rotateY('+(phi*57.2958).toFixed(2)+'deg)';
+        var distN=Math.hypot(colOff/(panelW/2||1), rowOff/(panelH/2||1));
+        var op=Math.max(0.12, Math.min(1, 1-Math.max(0,distN-0.45)*1.32));   // outer cards fade into the dark
+        if(distN>0.86) cell.style.filter='blur(1.1px)';
+        cell.style.opacity='0';
+        var src=imgs[idx++];
+        var im=PD.createElement('img'); im.src=src; im.alt=''; im.loading='eager'; im.decoding='async';
+        imgEls.push(im); cell.appendChild(im); wall.appendChild(cell);
+        cellList.push({el:cell, op:op, delay:120+distN*260});
+      }
+    }
+    side.appendChild(wall); book.appendChild(side); sidesEl[si]=side;
+  }
+  var seam=el(''); seam.id='pl-seam'; root.appendChild(seam);
+  root.appendChild(book);
+  var floor=el(''); floor.id='pl-floor'; root.appendChild(floor);
+  var prog=el(''); prog.id='pl-prog'; prog.innerHTML='<i></i><i></i><i></i><i></i><i></i>'; root.appendChild(prog);
+  var progI=prog.querySelectorAll('i');
+  PD.body.appendChild(root);
+  // Block scroll ONLY while pointer/touch is over the loader itself. These
+  // listeners live on the loader node, so they vanish automatically when it is
+  // removed — scrolling can never get stuck even if the iframe is torn down.
+  root.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
+  root.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
+
+  // stagger the card fade-in from the seam outward (skipped under reduced-motion)
+  cellList.forEach(function(o){
+    if(REDUCE){ o.el.style.opacity=o.op; return; }
+    o.el.style.transition='opacity .7s ease, filter .7s ease';
+    P.setTimeout(function(){ o.el.style.opacity=o.op; }, o.delay);
+  });
+
+  // ── asset-readiness gate: hold the loader until the avatars have decoded ──
+  var need=imgEls.length||1, got=0, capped=false;
+  function tickReady(){ got++; }
+  imgEls.forEach(function(im){
+    if(im.decode){ im.decode().then(tickReady, tickReady); }
+    else if(im.complete){ tickReady(); }
+    else { im.onload=im.onerror=tickReady; }
+  });
+  P.setTimeout(function(){ capped=true; }, 2800);   // never wait forever
+  function assetsFrac(){ return Math.min(1, got/need); }
+  function assetsReady(){ return got>=need || capped; }
+
+  // ── the album-opening animation (transform-only → GPU-friendly) ──
+  var CLOSED=74, OPENA=28;                 // panel swing: near-closed → open V
+  var rx=0,ry=0,trx=0,tryy=0;
+  root.addEventListener('pointermove',function(e){
+    trx=((e.clientY/(P.innerHeight||vh))-0.5)*-4; tryy=((e.clientX/(P.innerWidth||vw))-0.5)*5;
+  });
+  function applyOpen(t){
+    var ang=CLOSED+(OPENA-CLOSED)*t;
+    sidesEl[0].style.transform='rotateY('+ang.toFixed(2)+'deg)';
+    sidesEl[1].style.transform='rotateY('+(-ang).toFixed(2)+'deg)';
+    var tz=(1-t)*(-170), sc=0.9+0.1*t;
+    book.style.transform='rotateX('+rx.toFixed(2)+'deg) rotateY('+ry.toFixed(2)+'deg) translateZ('+tz.toFixed(0)+'px) scale('+sc.toFixed(3)+')';
+    seam.style.opacity=(1.1-0.4*t).toFixed(3);
+  }
+  applyOpen(REDUCE?1:0);
+
+  var OPEN_DUR=1300, START_DELAY=200, MIN_TOTAL=1650, exiting=false;
+  var t0=(P.performance&&P.performance.now)?P.performance.now():Date.now();
+  function now(){ return (P.performance&&P.performance.now)?P.performance.now():Date.now(); }
+  function beginExit(){
+    exiting=true;
+    P.setTimeout(function(){
+      var l=PD.getElementById('pharos-loader'); if(!l)return; l.classList.add('pl-hide');
+      P.setTimeout(function(){
+        if(l.parentNode)l.parentNode.removeChild(l);
+        var s=PD.getElementById('pharos-loader-style'); if(s&&s.parentNode)s.parentNode.removeChild(s);
+        try{ if(PD.documentElement.style.overflow==='hidden') PD.documentElement.style.overflow=''; }catch(_e){}
+      },640);
+    },520);   // brief hold on the fully-open album
+  }
+  (function frame(){
+    if(!PD.getElementById('pharos-loader'))return;
+    var elapsed=now()-t0;
+    var p=REDUCE?1:clamp((elapsed-START_DELAY)/OPEN_DUR,0,1);
+    rx+=(trx-rx)*0.06; ry+=(tryy-ry)*0.06;
+    applyOpen(easeOutQuint(p));
+    var prog2=Math.min(1, p*0.7+assetsFrac()*0.3);
+    var lit=Math.round(prog2*progI.length);
+    for(var d=0;d<progI.length;d++){ progI[d].classList.toggle('on', d<lit); }
+    if(!exiting && p>=1 && elapsed>=MIN_TOTAL && assetsReady()){ beginExit(); }
+    requestAnimationFrame(frame);
+  })();
+  // GUARANTEED exit on a PARENT timer — survives the iframe being torn down by a
+  // Streamlit rerun (the rAF loop above would die with it and never dismiss the
+  // loader). This makes the loader always clean up, so it can never get stuck.
+  try{ if(P.__plExit) P.clearTimeout(P.__plExit); }catch(_e){}
+  P.__plExit=P.setTimeout(function(){ if(!exiting) beginExit(); }, MIN_TOTAL + OPEN_DUR);
+})();
+function hideLoader(){ try{var l=window.parent.document.getElementById('pharos-loader'); if(l)l.classList.add('pl-hide');}catch(e){} }
 
 var RC={
-  'Admin':              {bg:'rgba(251,191,36,.18)',  bd:'rgba(251,191,36,.45)',  tx:'#fbbf24'},
-  'Sea Keeper':         {bg:'rgba(6,182,212,.14)',   bd:'rgba(6,182,212,.38)',   tx:'#22d3ee'},
-  'Underwater Monster': {bg:'rgba(139,92,246,.14)',  bd:'rgba(139,92,246,.38)',  tx:'#a78bfa'},
-  'Rising Storyteller': {bg:'rgba(236,72,153,.14)',  bd:'rgba(236,72,153,.38)',  tx:'#f472b6'},
-  'Elder Storyteller':  {bg:'rgba(249,115,22,.18)',  bd:'rgba(249,115,22,.38)',  tx:'#fb923c'},
-  'Observer':           {bg:'rgba(100,116,139,.12)', bd:'rgba(100,116,139,.28)', tx:'#94a3b8'},
+  'Admin':{c:'#fbbf24'},'Sea Keeper':{c:'#22d3ee'},'Underwater Monster':{c:'#a78bfa'},
+  'Rising Storyteller':{c:'#f472b6'},'Elder Storyteller':{c:'#fb923c'},'Observer':{c:'#94a3b8'}
 };
-
-var GHOST='<svg viewBox="0 0 24 24" fill="none" style="width:46%;height:46%;color:currentColor;"><circle cx="12" cy="8.5" r="3.5" fill="currentColor"/><path d="M4.5 20c0-4.142 3.358-7.5 7.5-7.5s7.5 3.358 7.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>';
-
-var SECS=[
-  {key:'Admin',              label:'Admin',              color:'#fbbf24',members:[]},
-  {key:'Sea Keeper',         label:'Sea Keeper',         color:'#22d3ee',members:[]},
-  {key:'Elder Storyteller',  label:'Elder Storyteller',  color:'#fb923c',members:[]},
-  {key:'Underwater Monster', label:'Underwater Monster', color:'#a78bfa',members:[]},
-  {key:'Rising Storyteller', label:'Rising Storyteller', color:'#f472b6',members:[]},
-  {key:'Observer',           label:'Observer',           color:'#94a3b8',members:[]},
-];
-
-function primaryKey(m){
-  var r=m.roles;
-  if(r.indexOf('Admin')>=0) return 'Admin';
-  if(r.indexOf('Sea Keeper')>=0) return 'Sea Keeper';
-  if(r.indexOf('Elder Storyteller')>=0) return 'Elder Storyteller';
-  if(r.indexOf('Underwater Monster')>=0) return 'Underwater Monster';
-  if(r.indexOf('Rising Storyteller')>=0) return 'Rising Storyteller';
-  return 'Observer';
-}
-MEMBERS.forEach(function(m){var sec=SECS.find(function(s){return s.key===primaryKey(m);});if(sec)sec.members.push(m);});
-
-function badge(role,cls){var c=RC[role]||RC['Observer'];return '<span class="'+cls+'" style="background:'+c.bg+';border:1px solid '+c.bd+';color:'+c.tx+'">'+role+'</span>';}
+function hexA(hex,a){var n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+function primaryKey(m){var r=m.roles;
+  if(r.indexOf('Admin')>=0)return 'Admin';
+  if(r.indexOf('Sea Keeper')>=0)return 'Sea Keeper';
+  if(r.indexOf('Elder Storyteller')>=0)return 'Elder Storyteller';
+  if(r.indexOf('Underwater Monster')>=0)return 'Underwater Monster';
+  if(r.indexOf('Rising Storyteller')>=0)return 'Rising Storyteller';
+  return 'Observer';}
+function roleColor(m){return (RC[primaryKey(m)]||RC['Observer']).c;}
 function shortName(n){return (n.split('|')[0]||n).trim();}
+var GHOST='<svg viewBox="0 0 24 24" fill="none" style="width:46%;height:46%;color:currentColor"><circle cx="12" cy="8.5" r="3.6" fill="currentColor"/><path d="M4.5 20c0-4.2 3.4-7.5 7.5-7.5s7.5 3.3 7.5 7.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
 
-var nodeMap={}, cardMap={};
-var tp=document.getElementById('tp');
-var mod=document.getElementById('mod');
-var dir=document.getElementById('dir');
-var siEl=document.getElementById('si');
-var noRes=document.getElementById('noRes');
-document.getElementById('sb-sub').textContent=MEMBERS.length+' Members · Builders, Creators & Explorers';
+var SECS=['Admin','Sea Keeper','Elder Storyteller','Underwater Monster','Rising Storyteller','Observer'];
+var counts={}; SECS.forEach(function(k){counts[k]=0;});
+MEMBERS.forEach(function(m){counts[primaryKey(m)]++;});
 
-// ── Theme sync: mirror the parent app's light/dark choice, live ──
-function syncTheme(){
-  var t='light';
-  try{ t=window.parent.document.documentElement.getAttribute('data-theme'); }catch(e){}
-  document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light');
-}
+// ── Theme sync ──
+function syncTheme(){var t='light';try{t=window.parent.document.documentElement.getAttribute('data-theme');}catch(e){}
+  document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');}
 syncTheme();
-try{ new MutationObserver(syncTheme).observe(window.parent.document.documentElement,{attributes:true,attributeFilter:['data-theme']}); }catch(e){}
+try{new MutationObserver(syncTheme).observe(window.parent.document.documentElement,{attributes:true,attributeFilter:['data-theme']});}catch(e){}
 
-// ── Sidebar nav ─────────────────────────────────────────────
+// ── Left panel ──
+document.getElementById('lt-sub').textContent=MEMBERS.length+' Members · Builders, Creators & Explorers';
+document.querySelector('.onl').textContent=MEMBERS.length;
 var catnav=document.getElementById('catnav');
-function mkBtn(key,label,color,count){
-  var btn=document.createElement('button');
-  btn.className='cat'+(key==='All'?' on':''); btn.dataset.r=key;
-  btn.innerHTML='<span class="cat-dot" style="background:'+(color||'var(--c-accent)')+'"></span>'
-    +'<span class="cat-label">'+label+'</span><span class="cat-n">'+count+'</span>';
-  return btn;
-}
-catnav.appendChild(mkBtn('All','All',null,MEMBERS.length));
-SECS.forEach(function(s){if(s.members.length)catnav.appendChild(mkBtn(s.key,s.label,s.color,s.members.length));});
+function mkCat(key,label,color,n){var b=document.createElement('button');b.className='cat'+(key==='All'?' on':'');b.dataset.r=key;
+  b.innerHTML='<span class="cat-dot" style="background:'+(color||'var(--accent)')+';color:'+(color||'var(--accent)')+'"></span><span class="cat-label">'+label+'</span><span class="cat-n">'+n+'</span>';return b;}
+catnav.appendChild(mkCat('All','All Members',null,MEMBERS.length));
+SECS.forEach(function(k){if(counts[k])catnav.appendChild(mkCat(k,k,RC[k].c,counts[k]));});
 
-// ── Directory list ──────────────────────────────────────────
-var allCards=[];
-SECS.forEach(function(sec){
-  if(!sec.members.length) return;
-  var section=document.createElement('div'); section.className='rsec'; section.dataset.key=sec.key;
-  var hdr=document.createElement('div'); hdr.className='sec-hdr';
-  hdr.innerHTML='<span class="rdot" style="background:'+sec.color+'"></span><span class="rlabel">'+sec.label+'</span><span class="rcount">'+sec.members.length+'</span>';
-  section.appendChild(hdr);
-  var grid=document.createElement('div'); grid.className='agrid';
-  sec.members.forEach(function(m,mi){
-    var card=document.createElement('div'); card.className='ac'; card.dataset.id=m.id; card.style.animationDelay=(mi*14)+'ms';
-    var av=document.createElement('div'); av.className='av';
-    if(m.img){var img=document.createElement('img');img.src=m.img;img.alt=m.name;img.loading='lazy';av.appendChild(img);}
-    else av.innerHTML=GHOST;
-    card.appendChild(av);
-    var nm=document.createElement('div'); nm.className='avname'; nm.textContent=shortName(m.name); nm.title=m.name;
-    card.appendChild(nm);
-    card.addEventListener('mouseenter',function(){var sn=nodeMap[m.id];if(sn)sn.classList.add('hl');});
-    card.addEventListener('mouseleave',function(){var sn=nodeMap[m.id];if(sn)sn.classList.remove('hl');});
-    card.addEventListener('click',function(e){e.stopPropagation();openModal(m);});
-    grid.appendChild(card);
-    allCards.push({card:card,m:m,secKey:sec.key});
-    cardMap[m.id]=card;
+// ── State ──
+var activeRole='All', searchQ='', view=[], idx=0, nodeByMember={};
+function computeView(){
+  var q=searchQ.toLowerCase();
+  view=MEMBERS.filter(function(m){
+    var roleOk=activeRole==='All'||primaryKey(m)===activeRole;
+    var textOk=!q||m.name.toLowerCase().indexOf(q)>=0||(m.x&&m.x.toLowerCase().indexOf(q)>=0)||m.roles.some(function(r){return r.toLowerCase().indexOf(q)>=0;});
+    return roleOk&&textOk;
   });
-  section.appendChild(grid);
-  dir.insertBefore(section,noRes);
+  if(idx>=view.length)idx=0;
+}
+
+// ── Detailed, fully-distinct per-member notes (deterministic; no invented facts) ──
+// Each role's lead bank is sized >= that role's member count, so every card note's
+// (prominent) opening sentence is unique. Admin & Sea Keeper get the richest leads.
+var CARD_LEAD={
+ 'Admin':['Holds the whole of Pharos together and makes it look like nothing.','The final word on what ships and what waits another day.','Carries the trust the entire community quietly runs on.','Sets the standard the rest of us end up answering to.','Turns a hundred moving pieces into one clear direction.','The steady center of gravity behind every good call here.','Does the unglamorous work that keeps this place honest.','Where the buck stops, and stops with real grace.','Builds the rails that everyone else gets to run on.','The quiet architect of how Pharos actually feels to be in.','Keeps the lights on in the rooms nobody thinks about.','The one who says yes to the right ideas and no to the loud ones.'],
+ 'Sea Keeper':['Charts the depths of Pharos most people never reach.','Reads the currents of this ecosystem like second nature.','First into the water whenever something new breaks the surface.','Keeps a steady hand on the wheel when the seas turn.','Maps the reefs so the newer crew sail past them clean.','Spots the swell long before it becomes anyone else\\u2019s wave.','Has brought the fleet home more times than the logs record.','Knows where the tide is going before the charts catch up.','Guards the deep end so the rest of us can explore freely.','Fluent in every current, drift, and undertow this place has.','The lookout who calls the storm while the sky is still clear.','Trusted at the helm the moment the water turns unfamiliar.','Turns rough crossings into passages that feel routine.','Keeps the harbor lights burning for whoever is still out there.','At home in the parts of Pharos that make other people nervous.','The one who tests the depth before anybody else jumps.','Steadies the whole crew just by being on deck.','Sails ahead and leaves a clean line for others to follow.'],
+ 'Elder Storyteller':['Turns the tangled parts of Pharos into stories that hold.','Carries the memory of how this whole thing began.','Explains the hard stuff until it finally clicks.','Gives shape to what the community is actually feeling.','Where people go when they need the real context.','Speaks, and somehow the whole room leans in.','Keeps the lore straight when the timeline gets loud.','Makes every milestone feel like a chapter, not a number.'],
+ 'Underwater Monster':['Surfaces at exactly the right moment, and never a beat early.','Moves quiet through the deep channels and lands with weight.','Half legend in this community, half everyday fixture.','The current you feel a moment before you ever see it.','Rare to spot, impossible to ignore once they break the surface.','Keeps the deeper end of Pharos genuinely worth exploring.','A far bigger presence than the feed ever manages to hold.','Silent through the noise, decisive the second it counts.','The name the channels trade in whispers and rarely explain.','Emerges for the big ones and makes them feel bigger.','Depth given a username.','Shows up like a tide nobody put on the calendar.','More myth than member on the quiet days.','The undertow you only notice once it has you.','Lands rarely, but the whole channel feels it land.','Keeps a low profile and an outsized wake.','The kind of presence stories get told about later.','Quiet as still water, and about as easy to move.','Comes from the deep and leaves a mark on the surface.','The legend the newer crew are still trying to verify.'],
+ 'Rising Storyteller':['A newer voice already bending the timeline the right way.','Turning up with sharper takes than their tenure suggests.','Building a name here one thoughtful post at a time.','Bringing an energy the community did not know it missed.','Just getting started and already impossible to scroll past.','Writing their first Pharos chapters and landing them clean.','Earning the room faster than most people ever manage.','The kind of fresh momentum that pulls others along.','One to watch closely before everyone else catches on.','New in name only, not in the way people already listen.','Adding real signal from the moment they showed up.','A spark the community keeps circling back to.','Fresh perspective, with the follow-through to match.','Climbing quietly, and faster than it looks.','Here to leave a mark, and clearly aware of it.','The next chapter, already writing itself.'],
+ 'Observer':['Reads every thread here and remembers what the rest of us lose.','Around long enough to know how this place really works.','Notices the shift in a channel before it becomes obvious.','A quiet fixture whose absence would land immediately.','Watches the long game while everyone else watches the day.','Holds the context that keeps conversations honest.','Present for every chapter, loud in almost none of them.','Sees three moves out and mentions maybe one.','The steady background hum that keeps Pharos feeling real.','Understated, underrated, and somehow always right.','First to catch when the mood of a room turns.','Keeps the receipts nobody else thought to save.','The calm that a busy channel quietly leans on.','Shows up far more than the post count suggests.','Learns fast, speaks rarely, and means every word.','A soft landing for anyone new to the place.','Catches the one detail that reframes the whole thread.','Never chasing the spotlight, always adding to the light.','Had read it before it ever started trending.','Keeps a level head when the feed runs hot.','A small footprint here, and an unmistakable presence.','Around since before this place got busy.','The reliable regular the whole channel respects.','Takes everything in and wastes none of it.','Turns quiet watching into genuinely good calls.','A trusted read on where all of this is heading.','The low, steady signal underneath all the noise.','Rarely posts, and is right almost every time.','Scans the horizon so the rest of us do not have to.','Steady eyes on a room that never sits still.','Knows the history and remembers what was promised.','The first to notice a newcomer at the door.','Quiet, consistent, and quietly essential.','Keeps the temperature of the room in check.','A compass that holds true in a loud space.','Watching patiently while the story writes itself.','The memory the whole channel ends up leaning on.','Fully present without ever needing to be seen.','Listens twice before saying anything once.','Reads this community the way you read a good book.','A steady witness to every milestone that mattered.','Always a half-step ahead of the noise.','Quiet loyalty, and a very long game.','Part of what makes this place feel like somewhere.','Notices exactly what the feed scrolls right past.','The kind of member a community is lucky to keep.','Keeps showing up, which turns out to be everything.','Holds the room together without touching the controls.','The steadiest read in a channel full of hot takes.','Sees the pattern while everyone else sees the post.','Around for the quiet parts, which are most of them.','The one keeping honest track of it all.','A calm hand nobody realizes they are relying on.','Simply, reliably, always there.']
+};
+// CARD_BODY = the SECOND sentence of every card note. Indexed by GLOBAL member
+// index, and the bank is larger than the roster, so every member gets a body no
+// other member has. Paired with the per-member-unique CARD_LEAD above, this makes
+// every full card note share no sentence with any other member's. Themes are
+// varied on purpose (timeline, signal/noise, ocean, newcomers, trust, the long
+// game, craft, memory) so distinct notes also read distinct.
+var CARD_BODY=['The kind of presence you only clock once it is gone.','Steady in a space that almost never slows down.','Reliable in a way that never once asks for credit.','Part of what makes this feel like more than a feed.','A big reason the good days here feel genuinely earned.','Quietly load-bearing for the whole vibe of the place.','The sort of person every community secretly hopes to keep.','Grounded even when the timeline starts to feel weightless.','Here for the substance, and never really for the spotlight.','A small, solid anchor in an otherwise fast-moving room.','The exact energy that makes newcomers decide to stick around.','Genuinely woven into the way this whole place moves.','One of the handful of reasons the signal stays this clear.','Still consistent long after the novelty has worn thin.','A calm that the busiest channels quietly count on.','Living proof that showing up is its own kind of talent.','The whole difference between a crowd and a real community.','Still here, still watching, and still adding to the pile.','A familiar face that has long since earned the familiarity.','The kind of steady you can build an entire place around.','Far more thoughtful than the feed leaves any room to show.','Carrying a longer memory of this place than almost anyone.','More or less exactly who Pharos was built for in the first place.','Low noise and high trust, which is the best combination going.','The quiet gravity that keeps a very good room together.','Someone this community is measurably better off for having.','A single steady note underneath an awful lot of loud ones.','Dependable in the way that quietly holds the whole thing up.','One of the good ones, plainly, and without any fuss about it.','The type you end up noticing most in the moments that matter.','Never in a hurry, and never actually behind either.','A name that keeps turning up wherever things get done.','The sort of steady the rest of us quietly borrow from.','Reads the water here better than most people read a map.','Around for the long tide, not just the passing wave.','The person a thread relaxes a little for having in it.','Keeps a level head while the feed keeps losing its own.','A quiet fixture whose absence would land in about a second.','Somehow always in the frame when something good happens.','The kind of member you would build a second community around.','Treats this place with a care it does not always get.','A steady hand on a room that never quite sits still.','Worth ten of the accounts that only show up to be seen.','The sort of presence that makes a channel feel safe.','Here through the quiet stretches, which are most of them.','A little bit of ballast for a community that moves fast.','Turns up for the parts nobody thinks to clap for.','The calm you did not know a busy room was leaning on.','A trusted regular the whole place is glad it has.','Keeps the tone here kind without ever making a speech about it.','The sort of steady that outlasts three or four hype cycles.','Adds weight to a conversation just by being in it.','A deep-water presence in a place full of surface chop.','Quietly one of the reasons this room still feels human.','The kind of consistency you cannot fake for very long.','Around before it was busy, and still here now that it is.','A soft place to land for anyone new to all of this.','The steady undertow beneath a very loud surface.','Someone the whole channel would notice going missing.','Holds the temperature of a room down without any effort.','A long-game player in a place obsessed with the day.','Keeps the good history of this place from getting lost.','The reliable regular a busy channel quietly respects.','More signal in one quiet week than most manage in a loud month.','The kind of presence that makes staying feel like the right call.','A calm current the rest of the room drifts toward.','Never loud, and yet never actually easy to miss.','One of those people a community is plainly lucky to keep.','The steady hum you only really hear once it stops.','Around for every chapter, and loud in almost none of them.','A quiet standard the newer faces end up measuring against.','Keeps this place honest just by paying close attention.','The sort of member who makes the whole room a little kinder.','Deep, steady, and in absolutely no rush to prove it.','A trusted read on where all of this is actually heading.','The person who remembers what the feed was built to forget.','Solid enough that a whole channel leans on it unthinking.','Here for the tide and the calm and everything between.','A steadying weight in a place that loves to float off.','One of the few the room would genuinely miss on sight.','The quiet backbone a loud community rarely thanks.','Around long enough to know how this place really works.','A patient presence in a room that struggles to sit still.','The kind of steady that makes fast places survivable.','Somehow always adding, and almost never subtracting.','A low, warm signal running under all the noise.','The regular a channel sets its clock by without noticing.','Present in a way that quietly raises the whole room.','A keel for a community that likes to lean over.','The sort of steady this place was always short of.','Here for the substance, and it shows in every reply.','A calm you can navigate by when the feed goes wild.','One of the reasons the room feels like it has a floor.','The kind of member who turns a server into a home.','Around for the whole story, not just the good chapters.','A quiet weight on the right side of every scale here.','The steady the loud parts of this place are built on.','Someone whose presence the whole room quietly trusts.','A long, patient read on a very short-attention place.','The person a room settles down a notch for having.','Still adding to the light instead of chasing it.','A dependable current in an ocean of passing tides.','The kind of steady that makes a place worth staying in.','One of the quiet few the whole community rests on.','Here, consistently, which turns out to be the rare part.','A warm, low signal the busiest channels tune toward.','The steadiest read in a room absolutely full of hot takes.','A presence this place is unmistakably better for having.','Simply, reliably, and without any fanfare, always there.'];
+// ECHO note = a warm, second-person message signed by Echo. Indexed by GLOBAL
+// member index against a bank larger than the roster, so every member's Echo
+// note is a sentence no one else received. Prefixed with the member's name.
+var ECHO=['what you bring here is easy to feel and genuinely hard to replace.','you have a quiet way of making this whole place feel intentional.','the unshowy work you do holds more together than you ever let on.','you read this community more clearly than it manages to read itself.','you show up in the exact way that actually moves things forward.','the room is measurably sharper for having your attention inside it.','you turn ordinary threads into the ones people come back to twice.','your instinct for this place has been right far more than it has been wrong.','you make the newer faces feel like they were always meant to be here.','you keep the signal clean at the precise moments everything gets loud.','you have been part of this current since early, and every bit of it shows.','people quietly trust where you think all of this is really heading.','you notice the small things the feed is practically designed to bury.','you leave nearly every conversation a little better than you found it.','the steadiness you carry is a good deal rarer than the timeline admits.','you hold a kind of trust that only ever gets earned, never handed out.','the whole community moves a little more surely for having you in it.','you have a rare talent for being exactly where you are needed most.','what you add to this place compounds, quietly, week over week.','you are one of the honest reasons this still feels like somewhere real.','your patience with this community says more about you than any post could.','you have a way of making hard stretches feel a little more survivable.','the good here carries your fingerprints on far more of it than you know.','you hold the line on what matters without ever making a sound about it.','you can steady an entire room just by turning up inside it.','the way you show up sets a quiet standard the rest of us reach for.','you see this community with clear eyes, and you choose to stay anyway.','your presence is the sort of thing people only measure once it goes missing.','you make belonging here look a lot simpler than it actually is.','the room keeps its floor in no small part because you are standing on it.','you have a gift for saying the true thing without ever making it heavy.','this place has a longer memory thanks to you keeping track of it.','you are the calm a busy channel keeps drifting back toward.','you make room for people in a place that does not always leave any.','you have kept faith with this community through its quieter stretches.','you catch the detail that quietly reframes the whole conversation.','you are a big part of why the tone here stays as kind as it does.','the current runs a good deal truer for you being in the water.','you turn up for the parts of this place nobody thinks to applaud.','you carry the history here so the rest of us do not lose it.','you are steadier than this fast little place has any right to expect.','you make the whole thing feel a little more human, day after day.','you hold trust the way careful people hold something breakable.','you are one of the reasons the good days here feel earned instead of lucky.','you keep showing up, and it turns out that is nearly the whole game.','you read the water here like someone who has watched it a long time.','you are a soft landing for anyone still finding their feet.','you steady the room without ever seeming to try, which is the trick of it.','you have added more to the quiet good of this place than gets said aloud.','you are the sort of presence a community quietly builds itself around.','you keep the long game in view while everyone else watches the hour.','you make this feel less like a feed and more like a place with people in it.','you have a way of grounding a thread just by joining it.','you are far more thoughtful than the pace here leaves room to show.','you keep the receipts of what actually mattered around here.','you have been a steady hand through more than this room remembers.','you are exactly the kind of regular that turns a server into a home.','you notice the newcomer at the door before anyone else does.','you leave the temperature of a room a little kinder than you found it.','you are a keel for a community that dearly loves to lean over.','you carry a calm that the loudest days here quietly rely on.','you have earned every bit of the trust that follows your name here.','you keep this place honest simply by paying real attention to it.','you are one of the few this whole room would notice going quiet.','you add weight to the right side of nearly every scale here.','you have a long patience that this short-attention place badly needs.','you make the hard weeks feel a fraction lighter for everyone.','you are the steady note the loud ones here are all measured against.','you hold a room together without ever once touching the controls.','you show up for the substance, and everyone can feel the difference.','you have kept this place feeling like a place through every cycle.','you are the quiet gravity a very good room stays gathered around.','you see three moves out and mention, gently, maybe one of them.','you have a way of making trust feel like the default around here.','you are proof that turning up, again and again, is its own real talent.','you keep a level head at the exact moments the feed loses its own.','you are woven into how this community moves more than you realize.','you make space for the better version of every conversation.','you have carried more of the quiet good here than anyone tallies.','you are the calm current the rest of the room keeps drifting toward.','you remember what this place promised, and you help it keep the promise.','you are a deep-water presence in a place full of surface weather.','you set a tone of care that spreads further than you would guess.','you have been steady here long enough that people forget to say thanks.','you are one of the honest reasons this room has a floor to stand on.','you make loyalty look easy in a place that tests it constantly.','you keep adding to the light here instead of ever chasing it.','you are the sort of member a community counts itself lucky to keep.','you hold this place steady through the stretches nobody claps for.','you have a warmth the busiest channels quietly navigate toward.','you notice what the feed is built to scroll everyone right past.','you are the long, patient read this short little place needs more of.','you make the newer faces feel like the door was always open.','you carry the calm that keeps a fast room from tipping over.','you have added a steadiness this place would plainly miss.','you are a trusted horizon in a room that rarely looks up.','you keep the good history of this community from quietly slipping away.','you are the low, warm signal running underneath all the noise here.','you have shown up more than the post count could ever suggest.','you are exactly the presence this place was hoping to hold onto.','you turn quiet watching into calls the whole room comes to trust.','you make this current a little truer every stretch you stay in it.','you are one of the steady few this loud place is quietly built on.','you keep faith with a room that does not always earn it back.','you have a way of leaving people better than the feed found them.','you are the sort of steady stories about this place get told around.','you make staying feel like the obvious call, over and over.','you are, quietly and without any fuss, one of the very best of us.'];
+var noteMap={}, echoMap={};
+(function(){
+  var rc={}, NB=CARD_BODY.length, NE=ECHO.length;
+  MEMBERS.forEach(function(m,gi){
+    var pk=primaryKey(m), lead=CARD_LEAD[pk]||CARD_LEAD['Observer'];
+    rc[pk]=rc[pk]||0; var p=rc[pk]++;                                  // position within role → unique lead
+    noteMap[m.id]=lead[p%lead.length]+' '+CARD_BODY[gi%NB];            // unique lead + globally-unique body
+    echoMap[m.id]=shortName(m.name)+', '+ECHO[gi%NE];                  // globally-unique Echo line
+  });
+})();
+function noteFor(m){return noteMap[m.id]||'';}
+function echoFor(m){return echoMap[m.id]||'';}
+
+// ── 3D member carousel ──
+var carEl=document.getElementById('carousel');
+var elCur=document.querySelector('.cur'), elTot=document.querySelector('.tot'), elDots=document.querySelector('.dots');
+var SLOTS=5, cards=[], pos=0, targetPos=0, dragging=false, dragStartX=0, dragStartPos=0, dragMoved=0,
+    vel=0, lastMoveX=0, lastMoveT=0, stepPx=200, lastIdx=-1, wheelAcc=0,
+    tiltRX=0, tiltRY=0, ctRX=0, ctRY=0;
+
+function makeCard(){
+  var c=document.createElement('div'); c.className='mcard';
+  c.innerHTML='<div class="mc-inner">'
+    +'<div class="mc-role"><span class="rd"></span><span class="rtx"></span></div>'
+    +'<div class="mc-halo"></div>'
+    +'<div class="mc-avatar"><div class="ring"></div><div class="ph"></div><div class="mc-badge"></div></div>'
+    +'<div class="mc-name"></div><div class="mc-user"></div><div class="mc-roles"></div><div class="mc-note"></div>'
+    +'</div>';
+  carEl.appendChild(c);
+  return {el:c, inner:c.querySelector('.mc-inner'), rtx:c.querySelector('.rtx'), rdot:c.querySelector('.mc-role .rd'),
+    ph:c.querySelector('.ph'), badge:c.querySelector('.mc-badge'), name:c.querySelector('.mc-name'),
+    user:c.querySelector('.mc-user'), roles:c.querySelector('.mc-roles'), note:c.querySelector('.mc-note'),
+    boundId:null, raw:0};
+}
+function buildCarousel(){ for(var i=0;i<SLOTS;i++) cards.push(makeCard()); measureStep(); }
+function measureStep(){ var w=cards[0]?cards[0].el.offsetWidth:260; stepPx=Math.max(150,w*0.62); }
+function wrapIdx(i){ var n=view.length; return ((i%n)+n)%n; }
+
+function bindCard(slot,m){
+  if(slot.boundId===m.id) return;
+  slot.boundId=m.id;
+  var col=roleColor(m), pk=primaryKey(m);
+  slot.el.style.setProperty('--pc',hexA(col,0.6));
+  slot.rtx.textContent=pk; slot.rdot.style.background=col; slot.rdot.style.color=col;
+  slot.ph.innerHTML=m.img?('<img src="'+m.img+'" alt="" decoding="async">'):GHOST;
+  slot.badge.style.background=col;
+  slot.badge.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 8h16M4 12h16M4 16h16" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  slot.name.textContent=shortName(m.name);
+  slot.user.textContent=m.x?('@'+m.x.replace('@','')):'';
+  slot.roles.innerHTML=m.roles.map(function(r){var c=(RC[r]||RC['Observer']).c;
+    return '<span class="mc-pill" style="background:'+hexA(c,0.14)+';border:1px solid '+hexA(c,0.4)+';color:'+c+'"><span class="pd" style="background:'+c+'"></span>'+r+'</span>';}).join('');
+  slot.note.textContent=noteFor(m);
+}
+function emptyState(){ elCur.textContent='0'; elTot.textContent='0'; elDots.innerHTML='';
+  cards.forEach(function(s){s.el.style.opacity='0';s.el.style.pointerEvents='none';}); }
+
+function renderCarousel(){
+  var n=view.length; if(!n){emptyState();return;}
+  var base=Math.round(pos);
+  for(var s=0;s<SLOTS;s++){
+    var raw=base+(s-2), m=view[wrapIdx(raw)], slot=cards[s]; slot.raw=raw;
+    bindCard(slot,m);
+    var off=raw-pos, ao=Math.abs(off);
+    var x=off*stepPx, z=-ao*200, ry=Math.max(-46,Math.min(46,-off*26)), sc=Math.max(0.62,1-ao*0.16);
+    var op=ao>2.3?0:Math.max(0,1-ao*0.34);
+    slot.el.style.transform='translate(-50%,-50%) translateX('+x.toFixed(1)+'px) translateZ('+z.toFixed(1)+'px) rotateY('+ry.toFixed(2)+'deg) scale('+sc.toFixed(3)+')';
+    slot.el.style.opacity=op.toFixed(2);
+    slot.el.style.zIndex=200-Math.round(ao*20);
+    var isActive=ao<0.5;
+    slot.el.classList.toggle('active',isActive);
+    slot.el.style.pointerEvents=op>0.05?'auto':'none';
+    slot.inner.style.transform=isActive?('rotateX('+ctRX.toFixed(2)+'deg) rotateY('+ctRY.toFixed(2)+'deg)'):'';
+  }
+  var curIdx=wrapIdx(base);
+  if(curIdx!==lastIdx){ lastIdx=curIdx; idx=curIdx; elCur.textContent=(idx+1); elTot.textContent=n; renderDots(); highlightActiveNode(); }
+}
+function renderDots(){ var n=view.length, maxD=Math.min(n,9), html=''; if(n<=1){elDots.innerHTML='';return;}
+  var half=Math.floor(maxD/2), start=Math.max(0,Math.min(idx-half,n-maxD));
+  for(var i=start;i<start+maxD;i++)html+='<span class="dot'+(i===idx?' on':'')+'"></span>';
+  elDots.innerHTML=html; }
+function refreshCarousel(){ if(!view.length){emptyState();return;} pos=0;targetPos=0;lastIdx=-1;
+  cards.forEach(function(s){s.boundId=null;}); measureStep(); renderCarousel(); }
+
+// navigation
+function go(delta){ targetPos=Math.round(targetPos)+delta; }
+function setActive(vi){ var n=view.length; if(!n)return; var cur=wrapIdx(Math.round(pos));
+  var d=vi-cur; if(d>n/2)d-=n; if(d<-n/2)d+=n; targetPos=Math.round(pos)+d; }
+document.getElementById('next').addEventListener('click',function(){go(1);});
+document.getElementById('prev').addEventListener('click',function(){go(-1);});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowLeft')go(-1);else if(e.key==='ArrowRight')go(1);});
+
+// drag / swipe / trackpad
+var pressedCard=null;
+carEl.addEventListener('pointerdown',function(e){
+  if(e.target.closest('.nav-btn'))return;
+  pressedCard=e.target.closest('.mcard');   // record now: pointer-capture hides the real target on pointerup
+  dragging=true; dragStartX=e.clientX; dragStartPos=pos; dragMoved=0; vel=0;
+  lastMoveX=e.clientX; lastMoveT=performance.now(); carEl.classList.add('dragging');
+  try{carEl.setPointerCapture(e.pointerId);}catch(err){}
+});
+carEl.addEventListener('pointermove',function(e){
+  // tilt target follows cursor (applied to the active card only)
+  var r=carEl.getBoundingClientRect();
+  tiltRY=((e.clientX-r.left)/r.width-0.5)*8; tiltRX=-((e.clientY-r.top)/r.height-0.5)*8;
+  if(!dragging)return;
+  var dx=e.clientX-dragStartX; dragMoved=Math.max(dragMoved,Math.abs(dx));
+  pos=dragStartPos-dx/stepPx;
+  var now=performance.now(), dt=now-lastMoveT;
+  if(dt>0){ vel=0.7*vel+0.3*((e.clientX-lastMoveX)/dt); lastMoveX=e.clientX; lastMoveT=now; }
+});
+function endDrag(e){
+  if(!dragging)return; dragging=false; carEl.classList.remove('dragging');
+  var flick=-vel*180/stepPx; targetPos=Math.round(pos+flick);   // momentum / inertia
+  var card=pressedCard; pressedCard=null;
+  // fallback: if capture stole the target, resolve the card under the pointer
+  if(!card && e){ var el=document.elementFromPoint(e.clientX,e.clientY); card=el&&el.closest?el.closest('.mcard'):null; }
+  if(dragMoved<6 && card){
+    for(var s=0;s<cards.length;s++) if(cards[s].el===card){
+      if(card.classList.contains('active')) openCardModal(view[wrapIdx(cards[s].raw)]);  // expand active card
+      else targetPos=cards[s].raw;                                                        // bring side card forward
+      break; }
+  }
+}
+carEl.addEventListener('pointerup',endDrag);
+carEl.addEventListener('pointercancel',function(){dragging=false;carEl.classList.remove('dragging');});
+carEl.addEventListener('pointerleave',function(){tiltRX=0;tiltRY=0;});
+// horizontal wheel / shift+wheel navigates; vertical wheel is left for page scroll
+carEl.addEventListener('wheel',function(e){
+  var h=Math.abs(e.deltaX)>Math.abs(e.deltaY);
+  if(h||e.shiftKey){ e.preventDefault(); wheelAcc+=(h?e.deltaX:e.deltaY);
+    if(Math.abs(wheelAcc)>55){ go(wheelAcc>0?1:-1); wheelAcc=0; } }
+},{passive:false});
+
+// carousel rAF loop (spring toward target + eased tilt) — idle frames do NO work,
+// so the main thread stays free and card clicks respond instantly at 60fps
+(function carLoop(){
+  var moving=dragging;
+  if(!dragging){ var np=pos+(targetPos-pos)*0.16; if(Math.abs(targetPos-pos)<0.0004)np=targetPos;
+    if(np!==pos){pos=np;moving=true;} }
+  var nrx=ctRX+(tiltRX-ctRX)*0.14, nry=ctRY+(tiltRY-ctRY)*0.14;
+  if(Math.abs(nrx-ctRX)>0.02||Math.abs(nry-ctRY)>0.02){moving=true;} ctRX=nrx; ctRY=nry;
+  if(moving) renderCarousel();
+  requestAnimationFrame(carLoop);
+})();
+
+// ── Expanded member card modal (spring zoom, description, actions) ──
+var cmod=document.getElementById('cmod'), cmodCard=document.getElementById('cmod-card'), cmodCur=null;
+// Clicking a member opens the FULL downloadable card itself as the preview —
+// the exact image they will get on Download — instead of a smaller profile view.
+var CPV=null,cpvImg=null,cpvSkel=null,cpvTok=0;
+function _cpvInit(){
+  if(CPV)return;
+  var DLS='<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var XS='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.2h3.7l-8 9.1 9.4 12.5h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9zm-1.3 19.4h2L6.5 3.3H4.4L17.6 20.6z"/></svg>';
+  var XC='<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  var st=document.createElement('style');
+  st.textContent='#cpv{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:96px 26px 32px;'
+   +'background:radial-gradient(ellipse at 50% 38%,rgba(20,26,60,0.72),rgba(4,6,16,0.92));backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);'
+   +'opacity:0;pointer-events:none;transition:opacity .28s cubic-bezier(0.23,1,0.32,1);}'
+   +'#cpv.open{opacity:1;pointer-events:auto;}'
+   +'#cpv .cpv-box{position:relative;display:flex;flex-direction:column;align-items:center;gap:15px;max-width:min(94vw,1160px);width:100%;'
+   +'transform:scale(0.94) translateY(10px);opacity:0;transition:transform .34s cubic-bezier(0.23,1,0.32,1),opacity .3s ease;}'
+   +'#cpv.open .cpv-box{transform:none;opacity:1;}'
+   +'#cpv .cpv-card{position:relative;width:min(86vw,900px,(100vh - 250px) * 1.5);aspect-ratio:1280/854;border-radius:18px;overflow:hidden;box-shadow:0 44px 120px -30px rgba(0,0,0,0.82),0 0 0 1px rgba(150,170,255,0.12);}'
+   +'#cpv .cpv-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .4s ease;}'
+   +'#cpv .cpv-skel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0a1030,#05060f);}'
+   +'#cpv .cpv-ring{width:46px;height:46px;border-radius:50%;border:3px solid rgba(150,180,255,0.18);border-top-color:rgba(165,195,255,0.9);animation:cpv-spin .8s linear infinite;}'
+   +'@keyframes cpv-spin{to{transform:rotate(360deg);}}'
+   +'#cpv .cpv-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;}'
+   +'#cpv .cpv-btn{display:inline-flex;align-items:center;gap:8px;font:700 14px Inter,system-ui,sans-serif;padding:11px 20px;border-radius:12px;border:1px solid transparent;cursor:pointer;transition:transform .16s ease-out,box-shadow .2s ease,background .2s ease;}'
+   +'#cpv .cpv-btn:active{transform:scale(0.97);}'
+   +'#cpv .cpv-dl{color:#fff;background:linear-gradient(180deg,#6a5bff,#5545e6);box-shadow:0 10px 26px -8px rgba(90,70,255,0.7);}'
+   +'#cpv .cpv-dl:hover{box-shadow:0 12px 30px -8px rgba(90,70,255,0.85);}'
+   +'#cpv .cpv-share{color:#e8ebff;background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.14);}'
+   +'#cpv .cpv-share:hover{background:rgba(255,255,255,0.12);}'
+   +'#cpv .cpv-x{position:absolute;top:-15px;right:-15px;width:38px;height:38px;border-radius:50%;background:rgba(12,16,40,0.92);border:1px solid rgba(160,180,255,0.25);color:#dfe4ff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .16s ease-out,background .2s ease;}'
+   +'#cpv .cpv-x:hover{background:rgba(30,36,80,0.95);}#cpv .cpv-x:active{transform:scale(0.94);}'
+   +'#cpv .cpv-hint{font:500 12px Inter,system-ui,sans-serif;color:rgba(182,192,232,0.6);letter-spacing:0.2px;}'
+   +'@media (prefers-reduced-motion:reduce){#cpv .cpv-box{transform:none;transition:opacity .2s ease;}#cpv .cpv-ring{animation:none;}}';
+  document.head.appendChild(st);
+  CPV=document.createElement('div');CPV.id='cpv';CPV.setAttribute('aria-hidden','true');
+  CPV.innerHTML='<div class="cpv-box" role="dialog" aria-modal="true" aria-label="Community card preview">'
+   +'<button class="cpv-x" aria-label="Close preview">'+XC+'</button>'
+   +'<div class="cpv-card"><div class="cpv-skel"><div class="cpv-ring"></div></div><img alt="Community aura card"></div>'
+   +'<div class="cpv-bar"><button class="cpv-btn cpv-dl">'+DLS+'Download card</button><button class="cpv-btn cpv-share">'+XS+'Share on X</button></div>'
+   +'<div class="cpv-hint">This is exactly what downloads \\u2014 tap Download to save it.</div></div>';
+  document.body.appendChild(CPV);
+  cpvImg=CPV.querySelector('.cpv-card img');cpvSkel=CPV.querySelector('.cpv-skel');
+  cpvImg.addEventListener('load',function(){cpvSkel.style.display='none';cpvImg.style.opacity='1';});
+  CPV.querySelector('.cpv-x').addEventListener('click',closeCardModal);
+  CPV.addEventListener('click',function(e){if(e.target===CPV)closeCardModal();});
+  CPV.querySelector('.cpv-dl').addEventListener('click',function(){downloadCard(cmodCur);});
+  CPV.querySelector('.cpv-share').addEventListener('click',function(){shareCard(cmodCur);});
+}
+function openCardModal(m){
+  if(!m)return; cmodCur=m; _cpvInit();
+  var tok=++cpvTok;                                                  // guard against a newer open superseding this build
+  cpvImg.style.opacity='0'; cpvImg.removeAttribute('src'); cpvSkel.style.display='flex';
+  CPV.classList.add('open'); CPV.setAttribute('aria-hidden','false');
+  buildCardCanvas(m).then(function(cv){ if(tok!==cpvTok)return; try{cpvImg.src=cv.toDataURL('image/png');}catch(e){} }).catch(function(){});
+}
+function closeCardModal(){ cpvTok++; if(CPV){CPV.classList.remove('open');CPV.setAttribute('aria-hidden','true');} }
+cmod.addEventListener('click',function(e){ if(e.target===cmod) closeCardModal(); });
+document.getElementById('cmod-x').addEventListener('click',closeCardModal);
+document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&CPV&&CPV.classList.contains('open')) closeCardModal(); });
+// ── Render the ACTUAL card to a shareable PNG (not just the avatar) ──
+function _rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function _loadImg(src){return new Promise(function(res){if(!src)return res(null);var im=new Image();im.onload=function(){res(im);};im.onerror=function(){res(null);};im.src=src;});}
+function _wrap(ctx,text,x,y,maxW,lh){var words=text.split(' '),line='',yy=y;for(var i=0;i<words.length;i++){var t=line?line+' '+words[i]:words[i];if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,yy);line=words[i];yy+=lh;}else line=t;}ctx.fillText(line,x,yy);return yy;}
+// ── Atlantic × cute-anime decorative artwork for the download poster ──
+function _star(ctx,x,y,r,pts,inr){var a=Math.PI/pts;ctx.beginPath();for(var i=0;i<2*pts;i++){var rr=(i%2)?r*inr:r,an=i*a-Math.PI/2;ctx.lineTo(x+Math.cos(an)*rr,y+Math.sin(an)*rr);}ctx.closePath();}
+function _spark(ctx,x,y,r){ctx.beginPath();ctx.moveTo(x,y-r);ctx.quadraticCurveTo(x+r*0.2,y-r*0.2,x+r,y);ctx.quadraticCurveTo(x+r*0.2,y+r*0.2,x,y+r);ctx.quadraticCurveTo(x-r*0.2,y+r*0.2,x-r,y);ctx.quadraticCurveTo(x-r*0.2,y-r*0.2,x,y-r);ctx.closePath();}
+function _octo(ctx,x,y,s){
+  ctx.save();ctx.translate(x,y);
+  ctx.lineCap='round';ctx.lineWidth=s*0.11;ctx.strokeStyle='#3f6fe0';
+  for(var i=0;i<6;i++){var tx=(-1+i*0.4)*s*0.5;ctx.beginPath();ctx.moveTo(tx*0.6,s*0.28);
+    ctx.quadraticCurveTo(tx,s*0.62,tx*1.1+((i%2)?1:-1)*s*0.13,s*0.9);ctx.stroke();}
+  var g=ctx.createLinearGradient(0,-s*0.5,0,s*0.42);g.addColorStop(0,'#7db4ff');g.addColorStop(1,'#3f6fe0');
+  ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(0,0,s*0.5,s*0.46,0,0,7);ctx.fill();
+  ctx.lineWidth=s*0.045;ctx.strokeStyle='rgba(18,36,100,0.55)';ctx.stroke();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(-s*0.17,-s*0.02,s*0.12,s*0.15,0,0,7);ctx.ellipse(s*0.17,-s*0.02,s*0.12,s*0.15,0,0,7);ctx.fill();
+  ctx.fillStyle='#16244f';ctx.beginPath();ctx.arc(-s*0.14,s*0.02,s*0.06,0,7);ctx.arc(s*0.20,s*0.02,s*0.06,0,7);ctx.fill();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-s*0.16,-s*0.01,s*0.022,0,7);ctx.arc(s*0.18,-s*0.01,s*0.022,0,7);ctx.fill();
+  ctx.fillStyle='rgba(255,140,170,0.45)';ctx.beginPath();ctx.arc(-s*0.28,s*0.12,s*0.055,0,7);ctx.arc(s*0.28,s*0.12,s*0.055,0,7);ctx.fill();
+  ctx.strokeStyle='rgba(18,36,100,0.55)';ctx.lineWidth=s*0.03;ctx.beginPath();ctx.moveTo(-s*0.05,s*0.16);ctx.quadraticCurveTo(0,s*0.22,s*0.05,s*0.16);ctx.stroke();
+  ctx.restore();
+}
+// spray-paint splatter — soft mist core + scattered speckles, in a given colour
+function _splat(ctx,x,y,r,col,a){
+  ctx.save();
+  for(var i=0;i<20;i++){var an=Math.random()*6.283,di=Math.random()*r,rr=0.7+Math.random()*3.0;
+    ctx.globalAlpha=a*(0.35+Math.random()*0.95);ctx.fillStyle=hexA(col,1);
+    ctx.beginPath();ctx.arc(x+Math.cos(an)*di,y+Math.sin(an)*di,rr,0,7);ctx.fill();}
+  var g=ctx.createRadialGradient(x,y,1,x,y,r*0.7);g.addColorStop(0,hexA(col,a*1.2));g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.globalAlpha=1;ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*0.7,0,7);ctx.fill();
+  ctx.restore();
+}
+// a paint drip hanging from the top edge, with a rounded drop tip
+function _drip(ctx,x,y,w,h,color){
+  ctx.save();ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(x-w/2,y);ctx.lineTo(x-w/2,y+h*0.7);
+  ctx.quadraticCurveTo(x-w/2,y+h,x,y+h);ctx.quadraticCurveTo(x+w/2,y+h,x+w/2,y+h*0.7);
+  ctx.lineTo(x+w/2,y);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.arc(x,y+h,w*0.62,0,7);ctx.fill();
+  ctx.restore();
+}
+function _drawOcean(ctx,W,H,col){
+  ctx.save();
+  // ── big soft spray brush sweeping behind the left / avatar region (role colour) ──
+  ctx.save();ctx.globalAlpha=0.17;ctx.strokeStyle=hexA(col,1);ctx.lineWidth=94;ctx.lineCap='round';try{ctx.filter='blur(3px)';}catch(e){}
+  ctx.beginPath();ctx.moveTo(-40,H*0.32);ctx.quadraticCurveTo(W*0.26,H*0.08,W*0.46,H*0.54);ctx.stroke();ctx.restore();
+  // ── halftone dot cluster, top-left corner (fades outward) ──
+  ctx.globalAlpha=0.13;ctx.fillStyle=hexA(col,1);
+  for(var hy=0;hy<6;hy++){for(var hx=0;hx<7;hx++){var hr=2.7-Math.hypot(hx-1,hy-1)*0.19;if(hr>0.4){ctx.beginPath();ctx.arc(40+hx*22,40+hy*22,hr,0,7);ctx.fill();}}}
+  ctx.globalAlpha=1;
+  // ── spray-paint splatters (role colour + ocean teal), richer + stronger ──
+  _splat(ctx,W-92,72,60,col,0.26);            // top-right corner burst
+  _splat(ctx,64,H-64,54,col,0.24);            // bottom-left, by the octopus
+  _splat(ctx,W-150,H-68,52,'#4fd1e6',0.22);   // bottom-right teal splat
+  _splat(ctx,308,124,42,'#7db4ff',0.15);      // mid-left drift
+  _splat(ctx,W-58,H*0.52,46,col,0.13);        // right edge
+  // ── paint drips from the top edge ──
+  _drip(ctx,W*0.30,0,11,78,hexA(col,0.34));
+  _drip(ctx,W-72,0,8,56,'rgba(79,209,230,0.32)');
+  _drip(ctx,W*0.15,0,6,46,hexA(col,0.22));
+  // ── graffiti tag swooshes with an arrow tip, bottom-right corner (stronger) ──
+  ctx.globalAlpha=0.82;ctx.strokeStyle=hexA(col,0.95);ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(W-190,H-56);ctx.quadraticCurveTo(W-114,H-100,W-50,H-54);ctx.stroke();
+  ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(W-160,H-40);ctx.lineTo(W-86,H-40);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W-50,H-54);ctx.lineTo(W-66,H-58);ctx.moveTo(W-50,H-54);ctx.lineTo(W-58,H-40);ctx.stroke();
+  ctx.globalAlpha=1;
+  // ── fine spray mist (role colour) drifting through the top gap ──
+  for(var i=0;i<34;i++){var sx=452+Math.random()*168,sy=28+Math.random()*156;
+    ctx.globalAlpha=0.05+Math.random()*0.13;ctx.fillStyle=hexA(col,1);
+    ctx.beginPath();ctx.arc(sx,sy,0.8+Math.random()*2.4,0,7);ctx.fill();}
+  ctx.globalAlpha=1;
+  // ── Atlantic / ocean motifs ──
+  ctx.globalAlpha=0.18;ctx.strokeStyle='#4fd1e6';ctx.lineWidth=3;
+  for(var w=0;w<3;w++){ctx.beginPath();var yy=H-22-w*15;for(var xx=0;xx<=W;xx+=14){ctx.lineTo(xx,yy+Math.sin(xx*0.03+w)*6);}ctx.stroke();}
+  ctx.globalAlpha=0.26;ctx.fillStyle='#43c7e0';_star(ctx,74,82,22,5,0.45);ctx.fill();
+  ctx.globalAlpha=0.15;ctx.fillStyle='#4fd1e6';_star(ctx,W-72,H-152,15,5,0.45);ctx.fill();
+  ctx.globalAlpha=0.42;ctx.strokeStyle='rgba(150,205,255,0.9)';ctx.lineWidth=2;
+  [[58,556,10],[92,606,7],[44,498,6],[124,560,5],[152,632,9],[30,430,5]].forEach(function(b){ctx.beginPath();ctx.arc(b[0],b[1],b[2],0,7);ctx.stroke();});
+  ctx.globalAlpha=0.95;_octo(ctx,120,H-84,126);
+  ctx.globalAlpha=0.55;ctx.fillStyle='rgba(180,215,255,0.9)';[[214,H-150,7],[52,H-196,5],[252,H-64,6],[300,H-120,5]].forEach(function(p){_spark(ctx,p[0],p[1],p[2]);ctx.fill();});
+  ctx.restore();
+}
+// ── premium identity-card helpers ──────────────────────────────────────────
+// letter-spaced text (canvas letter-spacing is not universally supported)
+function _spaced(ctx,text,x,y,ls){var al=ctx.textAlign,total=0,i;for(i=0;i<text.length;i++){total+=ctx.measureText(text[i]).width+ls;}total-=ls;var sx=x;if(al==='center')sx=x-total/2;else if(al==='right')sx=x-total;ctx.save();ctx.textAlign='left';var cx=sx;for(i=0;i<text.length;i++){ctx.fillText(text[i],cx,y);cx+=ctx.measureText(text[i]).width+ls;}ctx.restore();}
+// dark translucent glass surface: internal gradient, profile-colour edge, inner highlight, depth shadow
+function _glass(ctx,x,y,w,h,r,col,a1,a2,bA){ctx.save();var g=ctx.createLinearGradient(x,y,x,y+h);g.addColorStop(0,'rgba(26,32,72,'+a1+')');g.addColorStop(1,'rgba(8,10,30,'+a2+')');ctx.shadowColor='rgba(0,0,0,0.5)';ctx.shadowBlur=40;ctx.shadowOffsetY=18;_rr(ctx,x,y,w,h,r);ctx.fillStyle=g;ctx.fill();ctx.shadowBlur=0;ctx.shadowOffsetY=0;ctx.lineWidth=1.4;ctx.strokeStyle=hexA(col,bA);_rr(ctx,x,y,w,h,r);ctx.stroke();var hl=ctx.createLinearGradient(0,y,0,y+11);hl.addColorStop(0,'rgba(255,255,255,0.20)');hl.addColorStop(1,'rgba(255,255,255,0)');ctx.strokeStyle=hl;ctx.lineWidth=1.4;_rr(ctx,x+2,y+1,w-4,h-2,r-1);ctx.stroke();ctx.restore();}
+// thin elliptical orbital ring + a glowing particle riding it
+function _orbit(ctx,cx,cy,rx,ry,rot,col,a,lw){ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.strokeStyle=hexA(col,a);ctx.lineWidth=lw||1;ctx.stroke();ctx.restore();}
+function _orbitDot(ctx,cx,cy,rx,ry,rot,t,r,col){ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);ctx.shadowColor=hexA(col,0.9);ctx.shadowBlur=10;ctx.fillStyle=hexA(col,0.95);ctx.beginPath();ctx.arc(Math.cos(t)*rx,Math.sin(t)*ry,r,0,7);ctx.fill();ctx.restore();}
+// real QR generator (qrcode-generator, same CDN the app already uses for GSAP)
+function ensureQR(){return new Promise(function(res){try{if(window.qrcode)return res(window.qrcode);if(window.parent&&window.parent.qrcode)return res(window.parent.qrcode);}catch(e){}var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=function(){res(window.qrcode||null);};s.onerror=function(){res(null);};document.head.appendChild(s);});}
+function _qrMake(qrlib,text){if(!qrlib||!text)return null;for(var t=0;t<=12;t++){try{var q=qrlib(t,'M');q.addData(text);q.make();return q;}catch(e){}}return null;}
+function _qrDraw(ctx,qr,x,y,box){ctx.fillStyle='#ffffff';_rr(ctx,x,y,box,box,9);ctx.fill();var n=qr.getModuleCount(),quiet=Math.max(8,box*0.10),area=box-quiet*2,cell=area/n;ctx.fillStyle='#0a0c1a';for(var r=0;r<n;r++){for(var c=0;c<n;c++){if(qr.isDark(r,c)){ctx.fillRect(x+quiet+c*cell,y+quiet+r*cell,cell+0.7,cell+0.7);}}}}
+// wrap that narrows below a Y so text flows to the LEFT of the QR container
+function _wrapQR(ctx,text,x,y,fullW,narrowW,narrowFromY,lh){var words=text.split(' '),line='',yy=y,i;for(i=0;i<words.length;i++){var t=line?line+' '+words[i]:words[i];var maxW=(yy>=narrowFromY)?narrowW:fullW;if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,yy);line=words[i];yy+=lh;}else line=t;}ctx.fillText(line,x,yy);return yy;}
+
+// ── holographic HUD helpers ──
+function _bracket(ctx,x,y,dx,dy,len,col,lw){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+dx*len,y);ctx.lineTo(x,y);ctx.lineTo(x,y+dy*len);ctx.stroke();ctx.restore();}
+function _octPath(ctx,cx,cy,r){var a=Math.PI/8,i,an,xx,yy;ctx.beginPath();for(i=0;i<8;i++){an=a+i*Math.PI/4;xx=cx+Math.cos(an)*r;yy=cy+Math.sin(an)*r;if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);}ctx.closePath();}
+function _seg(ctx,cx,cy,r,a0,a1,col,lw){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.lineCap='round';ctx.beginPath();ctx.arc(cx,cy,r,a0,a1);ctx.stroke();ctx.restore();}
+function _dottedRing(ctx,cx,cy,r,n,col,dr){ctx.save();ctx.fillStyle=col;for(var i=0;i<n;i++){var an=i/n*Math.PI*2;ctx.beginPath();ctx.arc(cx+Math.cos(an)*r,cy+Math.sin(an)*r,dr,0,7);ctx.fill();}ctx.restore();}
+function _xicon(ctx,cx,cy,s,color){ctx.save();ctx.translate(cx,cy);var k=s/24;ctx.scale(k,k);ctx.translate(-12,-12);ctx.fillStyle=color;ctx.fill(new Path2D('M18.9 1.2h3.7l-8 9.1 9.4 12.5h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9zm-1.3 19.4h2L6.5 3.3H4.4L17.6 20.6z'));ctx.restore();}
+function _spW(ctx,text,ls){return ctx.measureText(text).width+ls*Math.max(0,text.length-1);}
+
+// ── Pharos Community · Holographic Identity Card (reference-matched, from scratch) ──
+function buildCardCanvas(m){
+  var W=1280,H=854,dpr=2,cv=document.createElement('canvas');cv.width=W*dpr;cv.height=H*dpr;
+  var ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
+  var col=roleColor(m),pk=primaryKey(m);
+  var user=(m.x||'').replace(/^@+/,'').trim();
+  var xurl=user?('https://x.com/'+user):'';
+  var A2='#7c5cff', A3='#3fd8ff';                            // holographic violet + cyan (constant environment accents)
+  var LX=312,LY=430,R=176;                                   // profile portal centre / radius
+
+  // ══ cosmic background, layered ══
+  ctx.save();_rr(ctx,0,0,W,H,28);ctx.clip();
+  var base=ctx.createLinearGradient(0,0,W,H);base.addColorStop(0,'#080a1c');base.addColorStop(0.5,'#05060f');base.addColorStop(1,'#04040c');ctx.fillStyle=base;ctx.fillRect(0,0,W,H);
+  var neb=ctx.createRadialGradient(W*0.80,H*0.34,30,W*0.80,H*0.34,560);neb.addColorStop(0,'rgba(122,72,214,0.16)');neb.addColorStop(0.5,'rgba(58,58,178,0.05)');neb.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=neb;ctx.fillRect(0,0,W,H);
+  var neb2=ctx.createRadialGradient(LX,LY,20,LX,LY,540);neb2.addColorStop(0,hexA(col,0.20));neb2.addColorStop(0.5,hexA(col,0.05));neb2.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=neb2;ctx.fillRect(0,0,W,H);
+  (function(){var s=7;function rnd(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;}      // fine star field
+    for(var i=0;i<160;i++){var px=rnd()*W,py=rnd()*H,a=0.04+rnd()*0.5,rr=rnd()<0.14?1.3:0.7;ctx.fillStyle='rgba(200,214,255,'+a.toFixed(2)+')';ctx.beginPath();ctx.arc(px,py,rr,0,7);ctx.fill();}})();
+  ctx.strokeStyle='rgba(120,140,255,0.03)';ctx.lineWidth=1;                                        // extremely subtle micro-grid
+  for(var gx=44;gx<W;gx+=46){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=44;gy<H;gy+=46){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+  ctx.save();ctx.globalCompositeOperation='lighter';                                               // thin curved energy trails
+  ctx.strokeStyle=hexA(A2,0.09);ctx.lineWidth=1;ctx.beginPath();for(var cx1=0;cx1<=W;cx1+=14){ctx.lineTo(cx1,H*0.28+Math.sin(cx1*0.004)*44);}ctx.stroke();
+  ctx.strokeStyle=hexA(A3,0.07);ctx.beginPath();for(var cx2=0;cx2<=W;cx2+=14){ctx.lineTo(cx2,H*0.72+Math.sin(cx2*0.005+1)*52);}ctx.stroke();ctx.restore();
+  var vg=ctx.createRadialGradient(W/2,H/2,H*0.5,W/2,H/2,H);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(1,2,8,0.6)');ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  ctx.restore();
+
+  // ══ HUD outer frame: luminous border, secondary border, corner brackets, tech markings, nodes ══
+  ctx.lineWidth=2;ctx.strokeStyle=hexA(A2,0.5);_rr(ctx,14,14,W-28,H-28,22);ctx.stroke();
+  ctx.lineWidth=1;ctx.strokeStyle=hexA(col,0.35);_rr(ctx,22,22,W-44,H-44,18);ctx.stroke();
+  [[28,28,1,1],[W-28,28,-1,1],[28,H-28,1,-1],[W-28,H-28,-1,-1]].forEach(function(c){_bracket(ctx,c[0],c[1],c[2],c[3],34,hexA(col,0.9),2.4);});
+  ctx.save();ctx.strokeStyle=hexA(A3,0.5);ctx.lineWidth=2;for(var tk=0;tk<9;tk++){var tx=W-300+tk*11;ctx.beginPath();ctx.moveTo(tx,30);ctx.lineTo(tx,30+((tk%3)?6:12));ctx.stroke();}ctx.restore();
+  ctx.save();ctx.strokeStyle=hexA(A2,0.4);ctx.lineWidth=2;for(var tk2=0;tk2<9;tk2++){var tx2=110+tk2*11;ctx.beginPath();ctx.moveTo(tx2,H-30);ctx.lineTo(tx2,H-30-((tk2%3)?6:12));ctx.stroke();}ctx.restore();
+  [[W/2,20],[20,H/2],[W-20,H/2]].forEach(function(nd){ctx.save();ctx.shadowColor=hexA(col,0.9);ctx.shadowBlur=8;ctx.fillStyle=hexA(col,0.9);ctx.beginPath();ctx.arc(nd[0],nd[1],2.4,0,7);ctx.fill();ctx.restore();});
+
+  return Promise.all([
+    (document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()),
+    ensureQR(), _loadImg(m.img), _loadImg(LOGO)
+  ]).then(function(res){
+    var qrlib=res[1], im=res[2], logo=res[3];
+
+    // ══ branding — Pharos logo, top-left ══
+    ctx.save();_rr(ctx,40,44,46,46,12);ctx.clip();if(logo){ctx.drawImage(logo,40,44,46,46);}else{ctx.fillStyle='#141a52';ctx.fillRect(40,44,46,46);}ctx.restore();
+    ctx.lineWidth=1;ctx.strokeStyle=hexA(col,0.5);_rr(ctx,40,44,46,46,12);ctx.stroke();
+    ctx.textAlign='left';ctx.fillStyle='#eef1ff';ctx.font='800 24px Inter,system-ui,sans-serif';ctx.fillText('PHAROS COMMUNITY',100,70);
+    ctx.fillStyle=hexA(A2,0.85);ctx.font='500 13px Inter,system-ui,sans-serif';ctx.fillText('community sphere',101,90);
+
+    // ══ top-right radar / scanner ══
+    var rcx=1176,rcy=118;
+    ctx.strokeStyle=hexA(A2,0.32);ctx.lineWidth=1;ctx.beginPath();ctx.arc(rcx,rcy,52,0,7);ctx.stroke();
+    ctx.strokeStyle=hexA(A3,0.28);ctx.beginPath();ctx.arc(rcx,rcy,36,0,7);ctx.stroke();
+    ctx.strokeStyle=hexA(col,0.4);ctx.beginPath();ctx.arc(rcx,rcy,20,0,7);ctx.stroke();
+    _seg(ctx,rcx,rcy,52,-0.4,0.8,hexA(col,0.9),3);_seg(ctx,rcx,rcy,52,2.2,3.1,hexA(A3,0.85),3);
+    _dottedRing(ctx,rcx,rcy,44,22,hexA(A2,0.4),1);
+    ctx.save();ctx.shadowColor='rgba(207,224,255,0.9)';ctx.shadowBlur=14;ctx.fillStyle='#eaf2ff';_star(ctx,rcx,rcy,13,4,0.3);ctx.fill();ctx.restore();
+
+    // ══ LEFT — profile portal + aura system ══
+    var ab=ctx.createRadialGradient(LX,LY,R*0.4,LX,LY,R+120);ab.addColorStop(0,hexA(col,0.22));ab.addColorStop(0.6,hexA(col,0.06));ab.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=ab;ctx.beginPath();ctx.arc(LX,LY,R+120,0,7);ctx.fill();
+    ctx.lineWidth=1;ctx.strokeStyle=hexA(A2,0.16);ctx.beginPath();ctx.arc(LX,LY,R+52,0,7);ctx.stroke();
+    ctx.strokeStyle='rgba(205,214,255,0.10)';ctx.beginPath();ctx.arc(LX,LY,R+34,0,7);ctx.stroke();
+    ctx.save();ctx.shadowColor=hexA(col,0.8);ctx.shadowBlur=16;                                     // segmented luminous ring
+    _seg(ctx,LX,LY,R+20,-2.5,-0.9,hexA(col,0.95),5);_seg(ctx,LX,LY,R+20,0.2,1.4,hexA(A3,0.9),5);_seg(ctx,LX,LY,R+20,1.7,2.4,hexA(A2,0.9),4);ctx.restore();
+    _dottedRing(ctx,LX,LY,R+66,42,hexA(A2,0.35),1.2);                                               // dotted orbital ring
+    _orbit(ctx,LX,LY,R+96,R+30,-0.5,col,0.34,1.4);_orbit(ctx,LX,LY,R+120,R+54,0.35,A3,0.22,1.2);    // tilted orbital ellipses
+    _orbitDot(ctx,LX,LY,R+96,R+30,-0.5,-0.6,4,col);_orbitDot(ctx,LX,LY,R+96,R+30,-0.5,2.1,3,A3);_orbitDot(ctx,LX,LY,R+120,R+54,0.35,1.2,3.5,A2);
+    [[-2.4,col],[0.3,A3],[1.9,A2],[3.4,col]].forEach(function(nd){var an=nd[0],nx=LX+Math.cos(an)*(R+20),ny2=LY+Math.sin(an)*(R+20);ctx.save();ctx.shadowColor=hexA(nd[1],0.9);ctx.shadowBlur=10;ctx.fillStyle='#0a0e26';ctx.beginPath();ctx.arc(nx,ny2,7,0,7);ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=hexA(nd[1],0.9);ctx.stroke();ctx.restore();}); // glowing nodes
+    ctx.save();ctx.globalCompositeOperation='lighter';                                              // vertical energy beam down to the pedestal
+    var beam=ctx.createLinearGradient(0,LY,0,LY+R+130);beam.addColorStop(0,hexA(col,0));beam.addColorStop(0.5,hexA(A3,0.16));beam.addColorStop(1,hexA(col,0.02));ctx.fillStyle=beam;ctx.beginPath();ctx.moveTo(LX-42,LY+R+130);ctx.lineTo(LX-14,LY);ctx.lineTo(LX+14,LY);ctx.lineTo(LX+42,LY+R+130);ctx.closePath();ctx.fill();ctx.restore();
+    ctx.save();ctx.shadowColor=hexA(col,0.9);ctx.shadowBlur=24;ctx.beginPath();ctx.arc(LX,LY,R+3,0,7);ctx.lineWidth=3;ctx.strokeStyle=hexA(col,0.9);ctx.stroke();ctx.restore(); // luminous portal ring
+    ctx.beginPath();ctx.arc(LX,LY,R+9,0,7);ctx.lineWidth=1.2;ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.stroke();
+    ctx.save();ctx.beginPath();ctx.arc(LX,LY,R,0,7);ctx.clip();                                     // sharp circular avatar (unobstructed)
+    if(im){var sc=Math.max((R*2)/im.width,(R*2)/im.height),iw=im.width*sc,ih=im.height*sc;ctx.drawImage(im,LX-iw/2,LY-ih/2,iw,ih);}
+    else{ctx.fillStyle='#0b1030';ctx.fillRect(LX-R,LY-R,R*2,R*2);ctx.textAlign='center';ctx.fillStyle=hexA(col,0.6);ctx.font='800 92px Inter,system-ui,sans-serif';ctx.fillText((shortName(m.name)[0]||'P').toUpperCase(),LX,LY+30);}
+    var rim=ctx.createRadialGradient(LX,LY,R-26,LX,LY,R);rim.addColorStop(0,'rgba(0,0,0,0)');rim.addColorStop(1,hexA(col,0.24));ctx.fillStyle=rim;ctx.fillRect(LX-R,LY-R,R*2,R*2);ctx.restore();
+    var pcy=LY+R+66;ctx.save();ctx.globalCompositeOperation='lighter';                              // holographic pedestal
+    for(var pr=0;pr<4;pr++){var prad=140-pr*30;ctx.save();ctx.translate(LX,pcy+pr*7);ctx.scale(1,0.24);ctx.strokeStyle=hexA(pr%2?A3:col,0.5-pr*0.08);ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,prad,0,7);ctx.stroke();ctx.restore();}
+    var core=ctx.createRadialGradient(LX,pcy,2,LX,pcy,64);core.addColorStop(0,'rgba(223,240,255,0.7)');core.addColorStop(0.4,hexA(A3,0.3));core.addColorStop(1,'rgba(0,0,0,0)');ctx.save();ctx.translate(LX,pcy);ctx.scale(1,0.3);ctx.fillStyle=core;ctx.beginPath();ctx.arc(0,0,64,0,7);ctx.fill();ctx.restore();ctx.restore();
+    var plx=120,ply=566,pgl=ctx.createRadialGradient(plx-6,ply-6,2,plx,ply,22);pgl.addColorStop(0,'#5b7cff');pgl.addColorStop(1,'#111a4a');ctx.fillStyle=pgl;ctx.beginPath();ctx.arc(plx,ply,22,0,7);ctx.fill();ctx.strokeStyle=hexA(A3,0.4);ctx.lineWidth=1;ctx.beginPath();ctx.arc(plx,ply,22,0,7);ctx.stroke(); // small planet
+    ctx.save();ctx.translate(30,LY+30);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillStyle=hexA(A2,0.6);ctx.font='600 12px Inter,system-ui,sans-serif';_spaced(ctx,'CONNECT \\u00B7 BUILD \\u00B7 INSPIRE',0,0,3);ctx.restore(); // left vertical text
+    var cbx=58,cby=712;_octPath(ctx,cbx+26,cby+26,26);ctx.fillStyle=hexA(col,0.12);ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=hexA(col,0.6);_octPath(ctx,cbx+26,cby+26,26);ctx.stroke(); // community sign-off block
+    ctx.save();ctx.translate(cbx+14,cby+14);ctx.strokeStyle=hexA(col,0.95);ctx.lineWidth=1.8;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(new Path2D('M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 20v-2a4 4 0 0 0-3-3.87M16 4.13a4 4 0 0 1 0 7.75'));ctx.restore();
+    ctx.textAlign='left';ctx.fillStyle='#eaeeff';ctx.font='800 17px Inter,system-ui,sans-serif';ctx.fillText('ONE COMMUNITY.',cbx+66,cby+18);
+    ctx.fillStyle='rgba(200,208,240,0.8)';ctx.font='600 15px Inter,system-ui,sans-serif';ctx.fillText('MANY AURAS.',cbx+66,cby+40);
+    ctx.fillStyle=hexA(A3,0.9);ctx.font='700 15px Inter,system-ui,sans-serif';ctx.fillText('ENDLESS IMPACT.',cbx+66,cby+62);
+
+    // ══ RIGHT — social identity ══
+    var X0=650, RXE=1240;
+    ctx.textAlign='left';
+    var rtxt=pk.toUpperCase();ctx.font='800 20px Inter,system-ui,sans-serif';ctx.fillStyle=hexA(col,0.95);_spaced(ctx,rtxt,X0,152,4); // role
+    ctx.save();ctx.shadowColor=hexA(col,0.8);ctx.shadowBlur=8;ctx.fillStyle=hexA(col,0.95);_star(ctx,X0+_spW(ctx,rtxt,4)+20,146,8,4,0.32);ctx.fill();ctx.restore();
+    ctx.font='800 46px Inter,system-ui,sans-serif';var nm=shortName(m.name);while(ctx.measureText(nm).width>(RXE-X0)&&nm.length>3)nm=nm.slice(0,-2); // name
+    var ng=ctx.createLinearGradient(X0,0,X0+ctx.measureText(nm).width,0);ng.addColorStop(0,'#ffffff');ng.addColorStop(1,'#cdd8ff');
+    ctx.save();ctx.shadowColor=hexA(col,0.4);ctx.shadowBlur=18;ctx.fillStyle=ng;ctx.fillText(nm===shortName(m.name)?nm:nm+'\\u2026',X0,206);ctx.restore();
+    if(user){ctx.fillStyle='rgba(182,194,236,0.72)';ctx.font='500 21px Inter,system-ui,sans-serif';ctx.fillText('@'+user,X0,240);} // username
+    var bY=262,bH=34;ctx.font='700 14px Inter,system-ui,sans-serif';var blw=ctx.measureText(pk).width+52;                        // role badge
+    _glass(ctx,X0,bY,blw,bH,bH/2,col,0.34,0.4,0.6);
+    ctx.save();ctx.shadowColor=hexA(col,0.7);ctx.shadowBlur=6;ctx.fillStyle=hexA(col,0.95);_star(ctx,X0+18,bY+bH/2,6,4,0.3);ctx.fill();ctx.restore();
+    ctx.fillStyle=hexA(col,0.95);ctx.font='700 14px Inter,system-ui,sans-serif';ctx.textAlign='left';ctx.fillText(pk,X0+34,bY+22);
+
+    var qpx=X0,qpy=314,qpw=RXE-X0,qph=182;                                                          // quote panel
+    _glass(ctx,qpx,qpy,qpw,qph,20,col,0.32,0.42,0.28);
+    ctx.save();_rr(ctx,qpx,qpy,qpw,qph,20);ctx.clip();var qa=ctx.createRadialGradient(qpx+90,qpy+46,4,qpx+90,qpy+46,240);qa.addColorStop(0,hexA(col,0.10));qa.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=qa;ctx.fillRect(qpx,qpy,qpw,qph);ctx.restore();
+    ctx.fillStyle=hexA(col,0.32);ctx.font='800 72px Georgia,serif';ctx.textAlign='left';ctx.fillText('\\u201C',qpx+22,qpy+60);
+    ctx.textAlign='right';ctx.fillText('\\u201D',qpx+qpw-20,qpy+qph-16);ctx.textAlign='left';
+    ctx.fillStyle='rgba(228,232,255,0.95)';ctx.font='italic 22px Georgia,serif';_wrap(ctx,noteFor(m),qpx+58,qpy+60,qpw-96,32);
+
+    var emx=X0,emy=514,emw=330,emh=166;                                                             // personal-note module
+    _glass(ctx,emx,emy,emw,emh,16,col,0.3,0.4,0.26);
+    _octPath(ctx,emx+42,emy+46,23);ctx.fillStyle=hexA(col,0.14);ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=hexA(col,0.6);_octPath(ctx,emx+42,emy+46,23);ctx.stroke();
+    ctx.save();ctx.shadowColor=hexA(col,0.8);ctx.shadowBlur=8;ctx.fillStyle='#eaf2ff';_star(ctx,emx+42,emy+46,10,4,0.3);ctx.fill();ctx.restore();
+    ctx.fillStyle=hexA(col,0.9);ctx.font='800 12px Inter,system-ui,sans-serif';ctx.textAlign='left';_spaced(ctx,'A SPECIAL NOTE FROM ECHO',emx+76,emy+34,1.3);
+    ctx.fillStyle='rgba(198,206,238,0.82)';ctx.font='400 15px Inter,system-ui,sans-serif';var ey=_wrap(ctx,echoFor(m),emx+76,emy+60,emw-100,22);
+    ctx.fillStyle=hexA(col,0.8);ctx.font='italic 13px Georgia,serif';ctx.fillText('\\u2014 Echo',emx+76,Math.min(emy+emh-14,ey+24));
+
+    var asx=X0,asy=694,asw=330,ash=64;                                                              // attribute strip (real data only)
+    _glass(ctx,asx,asy,asw,ash,14,col,0.28,0.36,0.3);
+    // ROLE gets the widest cell (role names are long); the value font auto-shrinks
+    // to fit so the FULL role is always shown for every member — never truncated.
+    var cells=[['ROLE',pk,0.46],['AURA','',0.22],['SPHERE','PHAROS',0.32]],cxr=asx;
+    cells.forEach(function(cl,ci){
+      var ccw=asw*cl[2], cx0=cxr, padL=16; cxr+=ccw;
+      if(ci>0){ctx.strokeStyle=hexA(col,0.18);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx0,asy+14);ctx.lineTo(cx0,asy+ash-14);ctx.stroke();}
+      ctx.save();ctx.shadowColor=hexA(col,0.7);ctx.shadowBlur=5;ctx.fillStyle=hexA(col,0.9);_star(ctx,cx0+padL+3,asy+22,5,4,0.3);ctx.fill();ctx.restore();
+      ctx.fillStyle=hexA(col,0.7);ctx.font='700 9px Inter,system-ui,sans-serif';ctx.textAlign='left';_spaced(ctx,cl[0],cx0+padL+14,asy+25,1);
+      if(cl[1]){
+        var maxW=ccw-padL*2, fs=13; ctx.font='700 '+fs+'px Inter,system-ui,sans-serif';
+        while(ctx.measureText(cl[1]).width>maxW && fs>7.5){ fs-=0.5; ctx.font='700 '+fs+'px Inter,system-ui,sans-serif'; }
+        ctx.fillStyle='#e6ebff';ctx.textAlign='left';ctx.fillText(cl[1],cx0+padL,asy+47);
+      } else { ctx.save();ctx.shadowColor=hexA(col,0.9);ctx.shadowBlur=10;ctx.fillStyle=hexA(col,0.95);ctx.beginPath();ctx.arc(cx0+padL+7,asy+43,7,0,7);ctx.fill();ctx.restore(); }
+    });
+
+    // ══ QR / social connection module ══
+    var qmx=1000,qmy=514,qmw=240,qmh=230;
+    _glass(ctx,qmx,qmy,qmw,qmh,18,col,0.34,0.44,0.6);
+    ctx.fillStyle=hexA(col,0.9);ctx.font='800 12px Inter,system-ui,sans-serif';ctx.textAlign='center';_spaced(ctx,'SCAN TO CONNECT',qmx+qmw/2,qmy+30,1.5);
+    if(qrlib && user){
+      var qr=_qrMake(qrlib,xurl);
+      if(qr){var qsz=134,qxp=qmx+(qmw-qsz)/2,qyp=qmy+46;
+        _glass(ctx,qxp-9,qyp-9,qsz+18,qsz+18,12,col,0.18,0.28,0.75);
+        _qrDraw(ctx,qr,qxp,qyp,qsz);
+        var fm='Find me on';ctx.font='600 14px Inter,system-ui,sans-serif';var fmw=ctx.measureText(fm).width,startx=qmx+qmw/2-(fmw+28)/2,fy=qyp+qsz+38;
+        ctx.fillStyle='rgba(210,216,245,0.9)';ctx.textAlign='left';ctx.fillText(fm,startx,fy);
+        _rr(ctx,startx+fmw+8,fy-15,20,20,5);ctx.fillStyle='rgba(255,255,255,0.92)';ctx.fill();_xicon(ctx,startx+fmw+18,fy-5,12,'#0a0c1a');
+      }
+    }
+
+    // ══ bottom anchor: ticker + Pharos ID ══
+    var bby=H-52;
+    ctx.strokeStyle=hexA(col,0.2);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(40,bby-16);ctx.lineTo(W-40,bby-16);ctx.stroke();
+    ctx.save();ctx.translate(72,bby-2);ctx.strokeStyle=hexA(col,0.7);ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(0,0,9,0,7);ctx.moveTo(-9,0);ctx.lineTo(9,0);ctx.moveTo(0,-9);ctx.lineTo(0,9);ctx.ellipse(0,0,4.4,9,0,0,7);ctx.stroke();ctx.restore(); // globe
+    ctx.textAlign='center';ctx.fillStyle=hexA(A2,0.82);ctx.font='700 13px Inter,system-ui,sans-serif';_spaced(ctx,'ONE COMMUNITY \\u00B7 MANY AURAS \\u00B7 ENDLESS IMPACT',W/2,bby+2,3);
+    if(m.id){ctx.textAlign='right';ctx.fillStyle=hexA(col,0.6);ctx.font='700 10px Inter,system-ui,sans-serif';_spaced(ctx,'PHAROS ID',W-150,bby-4,2);ctx.fillStyle='#cdd6ff';ctx.font='700 12px Inter,system-ui,sans-serif';ctx.textAlign='right';ctx.fillText((''+m.id).toUpperCase().slice(0,16),W-56,bby+11);}
+    return cv;
+  });
+}
+function _saveBlob(blob,fname){var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1500);}
+function _cardFname(m){return (shortName(m.name).replace(/[^a-z0-9]+/gi,'_')||'member')+'_pharos_card.png';}
+function downloadCard(m){ if(!m)return; buildCardCanvas(m).then(function(cv){cv.toBlob(function(b){if(b)_saveBlob(b,_cardFname(m));},'image/png');}); }
+function shareCard(m){ if(!m)return;
+  var text='Meet '+shortName(m.name)+(m.x?(' @'+m.x.replace('@','')):'')+' in the Pharos Community.';
+  var tw='https://twitter.com/intent/tweet?text='+encodeURIComponent(text);
+  buildCardCanvas(m).then(function(cv){cv.toBlob(function(b){
+    if(!b){try{window.open(tw,'_blank','noopener');}catch(e){}return;}
+    var file=new File([b],_cardFname(m),{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ navigator.share({files:[file],text:text}).catch(function(){}); }
+    else { _saveBlob(b,_cardFname(m)); try{window.open(tw,'_blank','noopener');}catch(e){} }   // fallback: save card + open X compose
+  },'image/png');});
+}
+cmod.querySelector('.cmod-dl').addEventListener('click',function(){downloadCard(cmodCur);});
+cmod.querySelector('.cmod-share').addEventListener('click',function(){shareCard(cmodCur);});
+
+// ── Filters + search ──
+document.querySelectorAll('.cat').forEach(function(b){b.addEventListener('click',function(){
+  document.querySelectorAll('.cat').forEach(function(x){x.classList.remove('on');});b.classList.add('on');
+  activeRole=b.dataset.r; idx=0; computeView(); refreshCarousel(); applyNodeFilter();
+});});
+document.getElementById('si').addEventListener('input',function(e){
+  searchQ=e.target.value.trim(); idx=0; computeView(); refreshCarousel(); applyNodeFilter();
 });
 
-// ── 3D Sphere ──────────────────────────────────────────────
-var sph=document.getElementById('sph');
-var sceneWrap=document.getElementById('scene-wrap');
-var R=0, nodeSize=0, sphereNodes=[];
-var rotX=18, rotY=0, velX=0, velY=0, dragging=false, lastMX=0, lastMY=0, hovering=false;
+// forward vertical wheel to the parent app's scroll container so mouse-wheel
+// scrolling works everywhere except over the sphere (which owns wheel for zoom)
+var _pScroll=null;
+function parentScroller(){
+  if(_pScroll&&_pScroll.isConnected)return _pScroll;
+  try{var pd=window.parent.document;
+    _pScroll=pd.querySelector('section.main')||pd.querySelector('[data-testid="stMain"]')
+      ||pd.querySelector('[data-testid="stAppViewContainer"]')||pd.scrollingElement||pd.documentElement;
+  }catch(e){_pScroll=null;}
+  return _pScroll;
+}
+document.addEventListener('wheel',function(e){
+  if(e.target.closest&&e.target.closest('#scene'))return;
+  if(e.target.closest&&e.target.closest('#carousel')&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)||e.shiftKey))return;
+  if(Math.abs(e.deltaY)>=Math.abs(e.deltaX)){
+    var sc=parentScroller();
+    try{ if(sc) sc.scrollTop+=e.deltaY; else window.parent.scrollBy(0,e.deltaY); }catch(err){}
+  }
+},{passive:true});
 
-function buildSphere(){
-  sph.innerHTML=''; nodeMap={}; sphereNodes=[];
-  var goldenAngle=Math.PI*(3-Math.sqrt(5));
-  var N=MEMBERS.length;
+// ══ ORBITAL VISUALIZATION ══
+var scene=document.getElementById('scene'), stack=document.getElementById('stack'),
+    orbits=document.getElementById('orbits'), core=document.getElementById('core');
+core.innerHTML = LOGO ? ('<img src="'+LOGO+'" alt="Pharos">') : '<div class="clogo-fb">P</div>';
+
+var R=0, nodeSize=0, nodes=[], scale=1;
+var rotX=-14, rotY=0, velX=0, velY=0, dragging=false, hovering=false, lastX=0, lastY=0;
+var targX=null, targY=null;   // focus target
+
+// decorative orbital rings
+function buildOrbits(){
+  orbits.innerHTML='';
+  var defs=[[0.72,64,4],[0.9,60,-16],[1.06,72,10],[1.24,55,-8],[1.42,68,20],[1.6,58,-14]];
+  defs.forEach(function(d){
+    var dia=R*2*d[0], o=document.createElement('div'); o.className='orbit';
+    o.style.width=dia+'px'; o.style.height=dia+'px';
+    o.style.marginLeft=(-dia/2)+'px'; o.style.marginTop=(-dia/2)+'px';
+    o.style.transform='rotateX('+d[1]+'deg) rotateZ('+d[2]+'deg)';
+    o.style.opacity=(0.5-d[0]*0.12).toFixed(2);
+    orbits.appendChild(o);
+  });
+}
+
+function buildNodes(){
+  nodes.forEach(function(n){n.el.remove();}); nodes=[]; nodeByMember={};
+  var ga=Math.PI*(3-Math.sqrt(5)), N=MEMBERS.length;
   MEMBERS.forEach(function(m,i){
-    var yU=1-(i/(N-1))*2;
-    var rU=Math.sqrt(Math.max(0,1-yU*yU));
-    var theta=goldenAngle*i;
-    var xU=Math.cos(theta)*rU, zU=Math.sin(theta)*rU;
-    var lon=theta*180/Math.PI;
-    var lat=Math.asin(Math.max(-1,Math.min(1,yU)))*180/Math.PI;
-    var pkey=primaryKey(m); var rc=RC[pkey]||RC['Observer'];
-    var snode=document.createElement('div'); snode.className='snode'; snode.dataset.mid=m.id;
+    var yU=1-(i/(N-1))*2, rU=Math.sqrt(Math.max(0,1-yU*yU)), th=ga*i;
+    var xU=Math.cos(th)*rU, zU=Math.sin(th)*rU;
+    var lon=th*180/Math.PI, lat=Math.asin(Math.max(-1,Math.min(1,yU)))*180/Math.PI;
+    var col=roleColor(m);
+    var el=document.createElement('div'); el.className='node'; el.dataset.i=i;
     var hs=nodeSize/2;
-    snode.style.transform='rotateY('+lon+'deg) rotateX('+(-lat)+'deg) translateZ('+R+'px) translateX(-'+hs+'px) translateY(-'+hs+'px)';
-    snode.style.width=nodeSize+'px'; snode.style.height=nodeSize+'px';
-    var sni=document.createElement('div'); sni.className='sni';
-    sni.style.width=nodeSize+'px'; sni.style.height=nodeSize+'px';
-    sni.style.borderColor=rc.bd;
-    if(m.img){var img=document.createElement('img');img.src=m.img;img.alt=m.name;img.loading='lazy';sni.appendChild(img);}
-    else sni.innerHTML='<svg viewBox="0 0 24 24" fill="none" style="width:52%;height:52%;color:currentColor;"><circle cx="12" cy="8.5" r="3.5" fill="currentColor"/><path d="M4.5 20c0-4.142 3.358-7.5 7.5-7.5s7.5 3.358 7.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>';
-    snode.appendChild(sni);
-    snode.addEventListener('mouseenter',function(){focusMember(m,snode);});
-    snode.addEventListener('mouseleave',function(){blurMember(m,snode);});
-    snode.addEventListener('click',function(e){e.stopPropagation();openModal(m);});
-    sph.appendChild(snode);
-    nodeMap[m.id]=snode;
-    sphereNodes.push({snode:snode,sni:sni,m:m,x3:xU,y3:yU,z3:zU});
-  });
-  var buf=nodeSize*2.2;
-  sceneWrap.style.width=(R*2+buf)+'px'; sceneWrap.style.height=(R*2+buf)+'px';
-  sceneWrap.style.perspective=(R*5.5)+'px';
-}
-
-function applyRot(){
-  sph.style.transform='rotateX('+rotX+'deg) rotateY('+rotY+'deg)';
-  var rxR=rotX*Math.PI/180, ryR=rotY*Math.PI/180;
-  var cosX=Math.cos(rxR),sinX=Math.sin(rxR),cosY=Math.cos(ryR),sinY=Math.sin(ryR);
-  sphereNodes.forEach(function(n){
-    var x0=n.x3,y0=n.y3,z0=n.z3;
-    var y1=y0*cosX-z0*sinX, z1=y0*sinX+z0*cosX;
-    var z2=-x0*sinY+z1*cosY;
-    var depth=(z2+1)/2;
-    var focused=n.snode.classList.contains('hl');
-    // Focused node eases up to a larger scale (CSS transition handles the easing);
-    // the depth cue keeps depth ordering for everything else.
-    n.sni.style.opacity=focused?1:(0.22+depth*0.78).toFixed(3);
-    n.sni.style.transform=focused?'scale(1.55)':'scale('+(0.62+depth*0.38).toFixed(3)+')';
+    el.style.transform='translate(-50%,-50%) rotateY('+lon+'deg) rotateX('+(-lat)+'deg) translateZ('+R+'px)';
+    var nv=document.createElement('div'); nv.className='nv';
+    nv.style.width=nodeSize+'px'; nv.style.height=nodeSize+'px'; nv.style.setProperty('--nc',hexA(col,0.7));
+    el.style.setProperty('--nc',hexA(col,0.7));
+    nv.innerHTML=m.img?('<img src="'+m.img+'" alt="">'):GHOST;
+    el.appendChild(nv);
+    el.addEventListener('mouseenter',function(){hovering=true;el.classList.add('hl');selectMember(m,false,false);});
+    el.addEventListener('mouseleave',function(){hovering=false;el.classList.remove('hl');});
+    el.addEventListener('click',function(ev){ev.stopPropagation();selectMember(m,true,true);});
+    stack.appendChild(el);
+    nodes.push({el:el,nv:nv,m:m,x:xU,y:yU,z:zU,lon:th*180/Math.PI,lat:lat,i:i});
+    nodeByMember[m.id]={el:el,nv:nv,idx:i};
   });
 }
 
-sceneWrap.addEventListener('mousedown',function(e){dragging=true;lastMX=e.clientX;lastMY=e.clientY;velX=velY=0;sceneWrap.classList.add('dg');e.preventDefault();});
-document.addEventListener('mousemove',function(e){if(!dragging)return;var dx=e.clientX-lastMX,dy=e.clientY-lastMY;rotY+=dx*0.38;rotX-=dy*0.38;rotX=Math.max(-85,Math.min(85,rotX));velY=dx*0.38;velX=-dy*0.38;lastMX=e.clientX;lastMY=e.clientY;});
-document.addEventListener('mouseup',function(){dragging=false;sceneWrap.classList.remove('dg');});
-sceneWrap.addEventListener('touchstart',function(e){var t=e.touches[0];lastMX=t.clientX;lastMY=t.clientY;velX=velY=0;},{passive:true});
-sceneWrap.addEventListener('touchmove',function(e){var t=e.touches[0];var dx=t.clientX-lastMX,dy=t.clientY-lastMY;rotY+=dx*0.32;rotX-=dy*0.32;rotX=Math.max(-85,Math.min(85,rotX));velY=dx*0.32;velX=-dy*0.32;lastMX=t.clientX;lastMY=t.clientY;e.preventDefault();},{passive:false});
+function selectMember(m,doFace,animate){
+  var vi=view.indexOf(m);
+  if(vi<0){ // not in current filter -> switch to All so it can show
+    activeRole='All'; document.querySelectorAll('.cat').forEach(function(x){x.classList.toggle('on',x.dataset.r==='All');});
+    computeView(); applyNodeFilter(); refreshCarousel(); vi=view.indexOf(m);
+  }
+  if(vi>=0) setActive(vi);
+}
 
+function highlightActiveNode(){
+  nodes.forEach(function(n){n.el.classList.remove('active');});
+  if(view.length){var m=view[idx],ref=nodeByMember[m.id];if(ref)ref.el.classList.add('active');}
+}
+function faceCurrent(){ /* sphere spins continuously; selection only highlights */ }
+function applyNodeFilter(){
+  var q=searchQ.toLowerCase();
+  nodes.forEach(function(n){
+    var roleOk=activeRole==='All'||primaryKey(n.m)===activeRole;
+    var textOk=!q||n.m.name.toLowerCase().indexOf(q)>=0||(n.m.x&&n.m.x.toLowerCase().indexOf(q)>=0)||n.m.roles.some(function(r){return r.toLowerCase().indexOf(q)>=0;});
+    var on=roleOk&&textOk;
+    n.el.style.pointerEvents=on?'auto':'none';
+    n.nv.style.filter=on?'':'grayscale(0.8) brightness(0.4)';
+    n.dim=!on;
+  });
+  highlightActiveNode();
+}
+
+// depth shading (only when rotation changes)
+var lastRX=null,lastRY=null,lastScale=null;
+var _nodeTick=0;
+function applyRot(force){
+  if(!force&&rotX===lastRX&&rotY===lastRY&&scale===lastScale)return;
+  lastRX=rotX;lastRY=rotY;lastScale=scale;
+  // stack rotation + core counter-rotation update EVERY frame (keeps the spin
+  // perfectly smooth). The Pharos logo stays fixed/upright while still depth-
+  // sorting with the nodes via preserve-3d.
+  stack.style.transform='scale('+scale.toFixed(3)+') rotateX('+rotX+'deg) rotateY('+rotY+'deg)';
+  core.style.transform='translate(-50%,-50%) rotateY('+(-rotY)+'deg) rotateX('+(-rotX)+'deg)';
+  // The per-node depth cue is subtle and slow — updating it every other frame,
+  // and skipping nodes whose depth barely moved, halves the per-frame DOM writes
+  // across all 100+ nodes and removes the micro-stutter, with no visible change.
+  if(!force && (++_nodeTick & 1)) return;
+  var rx=rotX*Math.PI/180, ry=rotY*Math.PI/180;
+  var cX=Math.cos(rx),sX=Math.sin(rx),cY=Math.cos(ry),sY=Math.sin(ry);
+  for(var i=0,L=nodes.length;i<L;i++){
+    var n=nodes[i];
+    var z2=-n.x*sY+(n.y*sX+n.z*cX)*cY;   // rotated world-Z (depth cue only)
+    var depth=(z2+1)*0.5;
+    var cl=n.el.classList, big=(cl.contains('hl')||cl.contains('active'));
+    if(!force && !big && Math.abs(depth-(n.ld==null?-9:n.ld))<0.006) continue;   // skip tiny changes
+    n.ld=depth;
+    var st=n.nv.style;
+    st.opacity=n.dim?'0.12':(0.35+depth*0.65).toFixed(2);
+    st.transform=big?('scale('+(1.12+depth*0.12).toFixed(2)+')'):('scale('+(0.66+depth*0.34).toFixed(2)+')');
+  }
+}
+
+// drag
+scene.addEventListener('mousedown',function(e){dragging=true;targX=targY=null;lastX=e.clientX;lastY=e.clientY;velX=velY=0;scene.classList.add('dg');e.preventDefault();});
+window.addEventListener('mousemove',function(e){if(!dragging)return;var dx=e.clientX-lastX,dy=e.clientY-lastY;
+  rotY+=dx*0.34;rotX-=dy*0.34;rotX=Math.max(-82,Math.min(82,rotX));velY=dx*0.34;velX=-dy*0.34;lastX=e.clientX;lastY=e.clientY;});
+window.addEventListener('mouseup',function(){dragging=false;scene.classList.remove('dg');});
+scene.addEventListener('touchstart',function(e){var t=e.touches[0];targX=targY=null;lastX=t.clientX;lastY=t.clientY;velX=velY=0;},{passive:true});
+scene.addEventListener('touchmove',function(e){var t=e.touches[0];var dx=t.clientX-lastX,dy=t.clientY-lastY;
+  rotY+=dx*0.3;rotX-=dy*0.3;rotX=Math.max(-82,Math.min(82,rotX));velY=dx*0.3;velX=-dy*0.3;lastX=t.clientX;lastY=t.clientY;e.preventDefault();},{passive:false});
+scene.addEventListener('wheel',function(e){e.preventDefault();scale=Math.max(0.6,Math.min(1.7,scale-e.deltaY*0.0012));},{passive:false});
+
+var reduce=false; try{reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){}
+var SPIN=0.16, REST_X=-14;
 (function loop(){
-  // Hovering pauses all drift so the focused member stays perfectly still.
-  if(!dragging&&!hovering){velX*=0.88;velY*=0.88;rotX+=velX;rotY+=velY;rotX=Math.max(-85,Math.min(85,rotX));if(Math.abs(velX)<0.05&&Math.abs(velY)<0.05)rotY+=0.06;}
+  if(!dragging){
+    // drag momentum decays smoothly, then blends into a gentle continuous spin
+    velX*=0.92; velY*=0.92;
+    rotX+=velX; rotY+=velY;
+    rotX+=(REST_X-rotX)*0.03;              // ease tilt back to a natural rest angle
+    rotX=Math.max(-82,Math.min(82,rotX));
+    // continuous, always-on rotation; gentler (not stopped) under reduced-motion,
+    // and eased down — never fully halted — while the user is hovering to explore
+    rotY+=(reduce?SPIN*0.4:SPIN)*(hovering?0.32:1);
+  }
   applyRot();requestAnimationFrame(loop);
 })();
 
-// ── Filtering ───────────────────────────────────────────────
-var activeRole='All', searchQ='';
-function applyFilter(){
-  var anyVis=false;
-  allCards.forEach(function(c){
-    var roleOk=activeRole==='All'||c.secKey===activeRole;
-    var q=searchQ.toLowerCase();
-    var textOk=!q||c.m.name.toLowerCase().includes(q)||(c.m.x&&c.m.x.toLowerCase().includes(q))||c.m.roles.some(function(r){return r.toLowerCase().includes(q);});
-    var vis=roleOk&&textOk; c.card.classList[vis?'remove':'add']('hid'); if(vis)anyVis=true;
-  });
-  document.querySelectorAll('.rsec').forEach(function(sec){sec.classList[sec.querySelectorAll('.ac:not(.hid)').length?'remove':'add']('hid');});
-  noRes.style.display=anyVis?'none':'block';
-  sphereNodes.forEach(function(n){
-    var roleOk=activeRole==='All'||primaryKey(n.m)===activeRole;
-    var q=searchQ.toLowerCase();
-    var textOk=!q||n.m.name.toLowerCase().includes(q)||(n.m.x&&n.m.x.toLowerCase().includes(q))||n.m.roles.some(function(r){return r.toLowerCase().includes(q);});
-    n.snode.style.pointerEvents=(roleOk&&textOk)?'auto':'none';
-    n.sni.style.filter=(roleOk&&textOk)?'':'brightness(0.15) saturate(0.1)';
-  });
-}
-document.querySelectorAll('.cat').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.cat').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');activeRole=btn.dataset.r;applyFilter();dir.scrollTop=0;});});
-siEl.addEventListener('input',function(){searchQ=siEl.value.trim();applyFilter();});
+// (the spotlight card's 3D tilt is now handled inside the carousel loop)
 
-// ── Smooth focus: pause the sphere, highlight, glide the profile card in ──
-function focusMember(m,snode){
-  hovering=true;
-  snode.classList.add('hl');
-  var card=cardMap[m.id];
-  if(card){card.classList.add('hl');card.scrollIntoView({block:'nearest',behavior:'smooth'});}
-  showTip(m,snode);
-}
-function blurMember(m,snode){
-  hovering=false;
-  snode.classList.remove('hl');
-  var card=cardMap[m.id];
-  if(card)card.classList.remove('hl');
-  tp.classList.remove('sh');
-}
-function showTip(m,snode){
-  document.getElementById('tpn').textContent=m.name;
-  document.getElementById('tpx').textContent=m.x||'';
-  document.getElementById('tpr').innerHTML=m.roles.map(function(r){return badge(r,'tr');}).join('');
-  // Anchor the card beside the focused node (origin-aware), then ease it in.
-  tp.classList.remove('sh');
-  var tw=tp.offsetWidth||230, th=tp.offsetHeight||100, gap=20;
-  var r=snode.getBoundingClientRect();
-  var left=r.right+gap, right=false;
-  if(left+tw>window.innerWidth-10){left=r.left-gap-tw;right=true;}
-  if(left<10){left=Math.min(window.innerWidth-tw-10,r.right+gap);right=false;}
-  var top=Math.max(10,Math.min(window.innerHeight-th-10, r.top+r.height/2-th/2));
-  tp.classList.toggle('right-anchor',right);
-  tp.style.left=Math.round(left)+'px'; tp.style.top=Math.round(top)+'px';
-  void tp.offsetWidth;            // commit the start transform, then ease in
-  tp.classList.add('sh');
-}
+// ── Fit iframe to viewport, full-bleed to the window edges ──
+function fitFrame(){try{
+  var frame=null,fr=window.parent.document.querySelectorAll('iframe');
+  fr.forEach(function(f){if(f.contentWindow===window)frame=f;});
+  if(!frame)return;
+  frame.style.cssText='border:0!important;display:block!important;background:transparent!important;';
+  frame.setAttribute('scrolling','no');
+  var p=frame.parentElement,h=0;while(p&&h<4){p.style.height='auto';p.style.background='transparent';p.style.overflow='visible';p=p.parentElement;h++;}
+  // reset then measure natural offset so this stays idempotent across resizes
+  frame.style.marginLeft='0px'; frame.style.marginTop='0px'; frame.style.width='100%';
+  var rect=frame.getBoundingClientRect();
+  var vw=(window.parent.document.documentElement.clientWidth)||window.parent.innerWidth;
+  // measure the floating nav so we can tuck the frame just under it — this closes
+  // the strip/gap that otherwise showed the global background below the navbar
+  var navBottom=0; try{var nv=window.parent.document.querySelector('.pnav-fixed')||window.parent.document.querySelector('.pnav');
+    if(nv)navBottom=nv.getBoundingClientRect().bottom;}catch(e){}
+  var desiredTop=navBottom>0?Math.max(0,navBottom-22):rect.top;   // 22px overlap → seamless under the nav
+  frame.style.marginLeft=(-Math.round(rect.left))+'px';   // pull to the true left edge
+  frame.style.marginTop=(-Math.round(rect.top-desiredTop))+'px';  // pull up under the nav
+  frame.style.width=vw+'px';                               // span the full window width
+  var avail=Math.max(600,Math.round(window.parent.innerHeight-desiredTop-4));
+  frame.style.height=avail+'px';frame.setAttribute('height',avail);
+}catch(e){}}
 
-// ── Modal ────────────────────────────────────────────────────
-function openModal(m){
-  var mm=document.getElementById('mm'); mm.innerHTML='';
-  if(m.img){var img=document.createElement('img');img.id='mi';img.src=m.img;img.alt=m.name;mm.appendChild(img);}
-  else{var fd=document.createElement('div');fd.id='mf';fd.innerHTML=GHOST;mm.appendChild(fd);}
-  document.getElementById('mn2').textContent=m.name;
-  var mxl=document.getElementById('mxl');
-  if(m.x){mxl.textContent=m.x;mxl.href='https://x.com/'+m.x.replace('@','');mxl.style.display='block';}
-  else mxl.style.display='none';
-  document.getElementById('mr').innerHTML=m.roles.map(function(r){return badge(r,'mr');}).join('');
-  mod.classList.add('op');
-}
-mod.addEventListener('click',function(e){if(e.target===mod)mod.classList.remove('op');});
-document.getElementById('mx').addEventListener('click',function(){mod.classList.remove('op');});
-document.addEventListener('keydown',function(e){if(e.key==='Escape')mod.classList.remove('op');});
-
-// ── Stretch the host iframe to fill the viewport (kills the fixed card) ──
-function fitFrame(){
-  try{
-    var frame=null, frames=window.parent.document.querySelectorAll('iframe');
-    frames.forEach(function(f){if(f.contentWindow===window)frame=f;});
-    if(!frame) return;
-    frame.style.cssText='border:0!important;display:block!important;background:transparent!important;width:100%!important;';
-    frame.setAttribute('scrolling','no');
-    // Clear any fixed height Streamlit set on the iframe's wrappers so they don't clip us
-    var p=frame.parentElement, hops=0;
-    while(p && hops<4){ p.style.height='auto'; p.style.background='transparent'; p=p.parentElement; hops++; }
-    var top=frame.getBoundingClientRect().top;
-    var avail=Math.max(560,Math.round(window.parent.innerHeight-top-6));
-    frame.style.height=avail+'px'; frame.setAttribute('height',avail);
-  }catch(e){}
-}
-
-// ── Init: fit frame, measure globe, build sphere responsively ──
-function init(){
+function measure(){
   fitFrame();
-  var gw=document.getElementById('globe-wrap');
-  var W=gw.clientWidth||420, H=gw.clientHeight||700;
-  // Scale sphere to the available area, leaving comfortable margin so it never
-  // collides with the member list; nodes scale up a little for recognisability.
-  R=Math.round(Math.min(W*0.42,H*0.44));
-  R=Math.max(155,Math.min(R,452));
-  nodeSize=Math.round(Math.max(32,Math.min(54,R*0.135)));
-  buildSphere(); applyRot();
+  var r=document.getElementById('right').getBoundingClientRect();
+  // larger sphere — stronger focal point
+  R=Math.round(Math.min(r.width,r.height)*0.40);
+  R=Math.max(140,Math.min(R,360));
+  nodeSize=Math.round(Math.max(40,Math.min(62,R*0.185)));
+  scene.style.perspective=(R*6)+'px';
+  buildOrbits(); buildNodes(); applyNodeFilter(); applyRot(true); highlightActiveNode();
 }
 
-var _rz;
-window.addEventListener('resize',function(){clearTimeout(_rz);_rz=setTimeout(init,120);});
-requestAnimationFrame(function(){requestAnimationFrame(function(){fitFrame();requestAnimationFrame(init);});});
+// init
+computeView(); buildCarousel(); refreshCarousel();
+requestAnimationFrame(function(){requestAnimationFrame(function(){measure(); measureStep(); renderCarousel();});});
+var rz; window.addEventListener('resize',function(){clearTimeout(rz);rz=setTimeout(function(){measure();measureStep();renderCarousel();},140);});
 
 })();
 </script>
 </body>
 </html>"""
 
-    _wall_html = _WALL_HTML.replace('__MEMBERS__', _members_json)
+    _wall_html = (_WALL_HTML
+                  .replace('__MEMBERS__', _members_json)
+                  .replace('__LOGO__', _logo_b64))
     # Initial height ≈ one viewport; JS (fitFrame) stretches the iframe to fill
     # the real available space so there is no fixed-size card.
     components.html(_wall_html, height=900, scrolling=False)
