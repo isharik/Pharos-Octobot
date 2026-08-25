@@ -8585,6 +8585,7 @@ components.html(
       }
       navBusy = true;
       var m = mainEl();
+      var IS_COMMUNITY = (key === 'community');
 
       /* Fade main content slightly while overlay is visible */
       if(m){
@@ -8595,6 +8596,7 @@ components.html(
       navOverlayFlash(function(){
         /* Fire the actual Streamlit button click → triggers page rerun */
         btn.click();
+        var navStart = Date.now();
 
         /* Content-driven dismissal (same MutationObserver + settle-timer
            + hard-cap pattern as the startup overlay above): watch the
@@ -8605,6 +8607,14 @@ components.html(
         var navDone = false, navSettleTimer = null, navObs = null;
         function finishNav(){
           if(navDone) return;
+          /* Community renders its OWN full-screen album loader in the parent
+             (#pharos-loader), built by its iframe script a beat AFTER the iframe
+             element is added. Keep the nav veil up until that loader has taken
+             over — otherwise the previous (home) page flashes through the gap
+             between the iframe appearing and its loader actually building. */
+          if(IS_COMMUNITY && !doc.getElementById('pharos-loader') && (Date.now()-navStart) < NAV_HARD_MAX_MS){
+            navSettleTimer = setTimeout(finishNav, 60); return;
+          }
           navDone = true;
           if(navSettleTimer){ clearTimeout(navSettleTimer); }
           try{ if(navObs) navObs.disconnect(); }catch(e){}
