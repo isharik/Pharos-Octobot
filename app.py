@@ -119,57 +119,43 @@ CEX_LINKS = [
 ]
 
 CAMPAIGNS = [
-     {
-        "title": "Pharos X AnvitaFlow 🌊",
-        "tag":   "Ended · Ist Anniversary ",
-        "desc":  "Community Co-Creation Campaign.",
-        "link":  "https://port.pharos.xyz/agent-carnival/",
-        "cta":   "Join",
+    {
+        "title": "Prosper Scholar Badge 🎓",
+        "tag":   "LIVE · Galxe · 500 USDC Pool",
+        "desc":  "The Prosper Scholar Badge campaign is live on Galxe with a 500 USDC reward pool. Complete the education series to learn how Prosper turns elite onchain strategies into transparent, investable markets, and earn your exclusive Scholar Badge — unlocking extra rewards and perks in Prosper's next stage. Deadline: September 15.",
+        "link":  "https://app.galxe.com/quest/JEThHuaAtrn2QVbyQGkBHx/GCBPDtZ4NY",
+        "cta":   "Earn the Badge",
         "color": "#1A1AFF",
-        "logo":  "https://pbs.twimg.com/profile_images/2035669028132503552/q2Dd5GoS_400x400.png",
-        "icon":  "🏆",
+        "logo":  "https://www.google.com/s2/favicons?domain=galxe.com&sz=64",
+        "icon":  "🎓",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-
+    {
+        "title": "Prosper Ambassador Program 📣",
+        "tag":   "LIVE · Up to 20,000 PROS",
+        "desc":  "A three-month program for community leaders driving real, measurable impact across the Prosper ecosystem, built on Pharos. The early round is open to existing Pharos Storytellers. Earn from a pool of up to 20,000 PROS by creating educational content, bringing qualified users, supporting launches and regional growth, and sharing ecosystem feedback — rewards are based on verified impact, and top Ambassadors can join Prosper as interns.",
+        "link":  "https://forms.gle/g3ePdWXLj3DbJto67",
+        "cta":   "Apply now",
+        "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=pros-per.xyz&sz=64",
+        "icon":  "📣",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+    },
     {
         "title": "$PROS X Faroo ⚡",
-        "tag":   "LIVE ·Pre Mint ",
-        "desc":  "Earn before stPROS native yield goes live.",
+        "tag":   "LIVE · Pre Mint",
+        "desc":  "Faroo's pre-mint window for stPROS — deposit early and start earning before native staking yield for PROS goes live, then keep your position as rewards turn on.",
         "link":  "https://app.faroo.xyz/pre-mint",
         "cta":   "Join",
         "color": "#1A1AFF",
         "logo":  "https://app.faroo.xyz/img/tokens/stPROS-dark.svg",
-        "icon":  "🏆",
+        "icon":  "⚡",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-   {
-        "title": "Create Like a PRO Phase 2",
-        "tag":   "Ended · Agent Carnival",
-        "desc":  "Join the Alpha Summer. Build Skills. Launch Agents. Earn PROS",
-        "link":  "https://port.pharos.xyz/agent-carnival/",
-        "cta":   "Join",
-        "color": "#1A1AFF",
-        "logo":  "https://pbs.twimg.com/profile_images/2035669028132503552/q2Dd5GoS.png",
-        "icon":  "🏆",
-        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
-    },
-   
-   {
-        "title": "Pharos Inner Circle",
-        "tag":   "# Make a Million, Become a PRO",
-        "desc":  "Merit-based initiative designed to recognize and reward the most committed Pharos supporters",
-        "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
-        "cta":   "Grow with Us",
-        "color": "#1A1AFF",
-        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
-        "icon":  "👑",
-        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
-    },
-  
     {
         "title": "Pharos Expedition Season 2",
         "tag":   "LIVE · Post Mainnet Voyage",
-        "desc":  "Showcase your skills and support on X and Discord to participate.",
+        "desc":  "The post-mainnet voyage continues — showcase your skills and rally support on X and Discord to climb the ranks and earn rewards throughout Season 2.",
         "link":  "https://www.notion.so/Pharos-Expedition-Season-2-3578ec314f7580488f69ca722cc31cf9",
         "cta":   "Join here",
         "color": "#1A1AFF",
@@ -180,7 +166,7 @@ CAMPAIGNS = [
     {
         "title": "Storyteller Program 2.0",
         "tag":   "LIVE · Content Creators",
-        "desc":  "Create impactful educational content about Pharos and earn perks. Open to writers, educators, meme creators.",
+        "desc":  "Create impactful educational content about Pharos — threads, articles, videos, or memes — and earn perks and recognition. Open to writers, educators, and meme creators alike.",
         "link":  "https://silken-muskox-24e.notion.site/pharos-storyteller-program-2-0",
         "cta":   "Apply now",
         "color": "#1A1AFF",
@@ -188,18 +174,28 @@ CAMPAIGNS = [
         "icon":  "✍️",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-  {
-        "title": "TopNod Million Cup",
-        "tag":   "Ended · Prediction",
-        "desc":  "Predict the football winners and Earn $PROS",
-        "link":  "https://topnod.com/",
-        "cta":   "Join",
+    {
+        "title": "Pharos Inner Circle",
+        "tag":   "Make a Million, Become a PRO",
+        "desc":  "A merit-based initiative — “Make a Million, Become a PRO” — that recognizes and rewards Pharos' most committed supporters with status, access, and long-term upside.",
+        "link":  "https://app.notion.com/p/Pharos-Inner-Circle-Make-a-Million-Become-a-PRO-3808ec314f75806e960bcb15e147c10d",
+        "cta":   "Grow with Us",
         "color": "#1A1AFF",
-        "logo":  "https://pbs.twimg.com/profile_images/1953370784698937344/b7j3JHqn_400x400.jpg",
-        "icon":  "🏆",
+        "logo":  "https://www.google.com/s2/favicons?domain=pharos.xyz&sz=64",
+        "icon":  "👑",
         "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
     },
-      
+    {
+        "title": "Prosper Founding Curator 🧭",
+        "tag":   "Founding Curator · Powered by Pharos",
+        "desc":  "Become a Founding Curator on Prosper (powered by Pharos): set custom risk parameters, thesis and fees; earn internal bonding-curve plus post-graduation DEX trading fees; take vault performance fees and a 1% p{VAULT} allocation; and access $50K+ platform seed funding with ecosystem co-marketing. Limited spots — applications close August 21.",
+        "link":  "https://forms.gle/cdCwCSdnNrCaAa35A",
+        "cta":   "Apply as Curator",
+        "color": "#1A1AFF",
+        "logo":  "https://www.google.com/s2/favicons?domain=pros-per.xyz&sz=64",
+        "icon":  "🧭",
+        "bg":    "linear-gradient(135deg,#FFF8E8,#FFF0CC)",
+    },
 ]
 
 
@@ -1152,6 +1148,8 @@ def get_net_stats():
                "block_number": None, "block_time_s": None, "tx_count": None,
                "gas_price_gwei": None, "chain_id": None, "peer_count": None}
     return live_fetch("net_stats", _fetch_net_stats_raw, NET_STATS_TTL, default)
+
+
 
 def render_price_chart(df, chart_key="chart", days="1"):
     if df is None or df.empty:
@@ -2347,6 +2345,7 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
 
     result["error"] = last_error
     return result
+
 
 
 def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 4):
@@ -7738,7 +7737,6 @@ NAV_PAGES = [
     ("🧾", "Request",   "request"),
     ("🌐", "Network",   "network"),
     ("⚡", "SPNs",      "spns"),
-    ("⏳", "Chronos",   "chronos"),
     ("👥", "Community", "community"),
 ]
 # ── Hidden functional nav buttons ────────────────────────────
@@ -7778,7 +7776,6 @@ _pnav_dd_products = [
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
-    ("⏳", "Chronos", "chronos"),
 ]
 _pnav_dd_explore = [
     ("🧩", "Ecosystem",     "ecosystem"),
@@ -14204,80 +14201,232 @@ elif st.session_state.page == "defi":
 
 elif st.session_state.page == "campaigns":
 
-    st.markdown(
-        '<div class="section-dark">'
-        '<div style="position:relative;z-index:1;">'
-        '<div class="section-eyebrow"><span class="drop">◆</span> LIVE</div>'
-        '<h2 class="section-h">Active Campaigns</h2>'
-        '<p class="section-sub">Real-time opportunities in the Pharos ecosystem. Join, build, and earn.</p>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    # Full-bleed, near-full-viewport immersive slider — the only content on the
+    # page. Widen the main column to the viewport (nav keeps its own centering).
+    st.markdown('<div class="camp-fullbleed" style="height:0;margin:0;padding:0;overflow:hidden;"></div>', unsafe_allow_html=True)
+    st.markdown("""
+<style>
+.stApp:has(.camp-fullbleed) [data-testid="stMainBlockContainer"]{ max-width:100% !important; padding-left:0 !important; padding-right:0 !important; padding-bottom:0 !important; padding-top:0 !important; gap:0 !important; }
+.stApp:has(.camp-fullbleed) [data-testid="stMainBlockContainer"] > div{ gap:0 !important; }
+.stApp:has(.camp-fullbleed) [data-testid="stVerticalBlock"]{ gap:0 !important; }
+.stApp:has(.camp-fullbleed) section[data-testid="stMain"] > div{ padding-left:0 !important; padding-right:0 !important; }
+.stApp:has(.camp-fullbleed) [data-testid="stElementContainer"]:has(iframe){ width:100% !important; }
+</style>
+""", unsafe_allow_html=True)
 
-    # Campaign cards — large news-feed rows: cover art on the left,
-    # tag/title/summary/CTA on the right. Same component language as the
-    # Updates feed, so both sections read consistently and scan easily.
-    all_camp_html = '<div class="nf-list">'
-    for c in CAMPAIGNS:
-        _clogo = c.get("logo", "")
-        _cover = (
-            f'<img src="{esc_url(_clogo)}" loading="lazy" decoding="async" alt="" '
-            f'class="nf-logo" onerror="this.style.display=\'none\';'
-            f'this.parentNode.querySelector(\'.nf-emoji\').style.display=\'flex\';"/>'
-            if _clogo else ''
-        )
-        all_camp_html += (
-            f'<a class="nf-item" href="{esc_url(c["link"])}" target="_blank" rel="noopener">'
-            f'<div class="nf-thumb nf-thumb-camp" style="background:{c["bg"]};">'
-            f'{_cover}'
-            f'<span class="nf-emoji"' + (' style="display:none;"' if _clogo else '') + f'>{c["icon"]}</span>'
-            f'</div>'
-            f'<div class="nf-body">'
-            f'<div class="nf-meta">'
-            f'<span class="nf-cat">{esc(c["tag"].strip())}</span>'
-            f'<span class="nf-src">Pharos ecosystem</span>'
-            f'</div>'
-            f'<div class="nf-title">{esc(c["title"])}</div>'
-            f'<div class="nf-summ">{esc(c["desc"])}</div>'
-            f'<div class="nf-cta">{esc(c["cta"])} ↗</div>'
-            f'</div></a>'
-        )
-    all_camp_html += '</div>'
-    st.markdown(all_camp_html, unsafe_allow_html=True)
+    # ── Interactive campaign slider (Lumina-style) ──────────────────────────
+    # Each real campaign becomes a full-bleed slide: click a title in the bottom
+    # rail (or let it auto-advance) and it transitions with a WebGL liquid-glass
+    # reveal (Three.js) while the serif title animates in (GSAP). Falls back to a
+    # clean CSS crossfade + fade-up when the libraries aren't reachable, so it
+    # always works. Real data only — title / tag / description / logo / CTA link
+    # come straight from CAMPAIGNS; per-slide gradient is decorative theming.
+    _camp_payload = json.dumps([
+        {"title": c["title"], "tag": c["tag"].strip(), "desc": c["desc"],
+         "link": c["link"], "cta": c["cta"], "logo": c.get("logo", ""), "icon": c.get("icon", "")}
+        for c in CAMPAIGNS
+    ], separators=(",", ":")).replace("<", "\\u003c").replace("\u2028", "").replace("\u2029", "")
 
-    # Hackathon timeline
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div style="background:#FFFFFF;border:1px solid #E3E5EA;border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;">'
-        '<div style="font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#14141F;margin-bottom:0.8rem;">AI Agent Carnival — Phase Timeline</div>'
-        '<div style="display:flex;flex-direction:column;gap:8px;">'
-        '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:700;padding-top:1px;">Pre-Season ✓</div>'
-        '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
-        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">May 25 – Jun 8</div>'
-        '<div style="font-size:11px;color:#5B5F6E;">Discord Skill building warm-up · 5,000 PROS for 10 winners</div></div>'
-        '</div>'
-        '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:700;padding-top:1px;">Phase 1 ✓</div>'
-        '<div style="width:2px;background:#1A1AFF;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
-        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">Jun 8 – 22</div>'
-        '<div style="font-size:11px;color:#5B5F6E;">Skill Hackathon · 20,000 PROS · Submit by Jun 15 · Judging Jun 16–22</div></div>'
-        '</div>'
-        '<div style="display:flex;align-items:flex-start;gap:10px;">'
-        '<div style="width:60px;flex-shrink:0;font-size:10px;color:#1A1AFF;font-weight:600;padding-top:1px;">Phase 2 ✓</div>'
-        '<div style="width:2px;background:#E3E5EA;flex-shrink:0;margin-top:4px;min-height:100%;"></div>'
-        '<div><div style="font-size:12px;font-weight:600;color:#14141F;">Jun 22 – Jul 24</div>'
-        '<div style="font-size:11px;color:#5B5F6E;">Agent Arena · 25,000 PROS · Phase 1 winners only · Submit by Jul 6</div></div>'
-        '</div>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    _camp_html = r"""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap');
+  html,body{margin:0;padding:0;background:transparent;height:100%;}
+  #camp,#camp *{box-sizing:border-box;}
+  #camp{position:relative;width:100%;height:100%;min-height:560px;overflow:hidden;background:#0a0b12;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#fff;
+    -webkit-font-smoothing:antialiased;user-select:none;}
+  #camp .camp-bg{position:absolute;inset:0;transition:opacity .9s cubic-bezier(0.23,1,0.32,1);}
+  #camp .camp-gl{position:absolute;inset:0;width:100%;height:100%;display:none;}
+  #camp .camp-veil{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 30%,transparent,rgba(0,0,0,0.35) 78%),linear-gradient(180deg,rgba(0,0,0,0.28),transparent 30%,transparent 55%,rgba(0,0,0,0.55));pointer-events:none;}
+  #camp .camp-grain{position:absolute;inset:0;opacity:.5;pointer-events:none;background-image:radial-gradient(rgba(255,255,255,0.035) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:radial-gradient(120% 90% at 50% 20%,#000,transparent 75%);mask-image:radial-gradient(120% 90% at 50% 20%,#000,transparent 75%);}
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.link_button("Submit Agents here ↗", "https://dorahacks.io/hackathon/pharos-phase1", use_container_width=True)
-    with col2:
-        st.link_button("Join Pharos Discord ↗", PHAROS_DISCORD_URL, use_container_width=True)
+  #camp .camp-idx{position:absolute;top:50%;transform:translateY(-50%);font-family:var(--mono,"JetBrains Mono",monospace);font-size:13px;letter-spacing:0.2em;color:rgba(255,255,255,0.6);}
+  #camp .camp-idx.l{left:34px;} #camp .camp-idx.r{right:34px;}
+  #camp .camp-top{position:absolute;top:92px;left:34px;display:flex;align-items:center;gap:10px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.18em;color:rgba(255,255,255,0.72);text-transform:uppercase;}
+  #camp .camp-disc{position:absolute;left:0;right:0;bottom:104px;text-align:center;z-index:5;}
+  #camp .camp-disc a{display:inline-flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.62);text-decoration:none;border:1px solid rgba(255,255,255,0.16);border-radius:9999px;padding:8px 16px;transition:color .2s,border-color .2s,background .2s;background:rgba(255,255,255,0.04);}
+  #camp .camp-disc a:hover{color:#fff;border-color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.09);}
+  #camp .camp-disc svg{width:14px;height:14px;}
+  #camp .camp-top .dt{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;}
+
+  #camp .camp-center{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 40px;z-index:3;}
+  #camp .camp-logo{width:64px;height:64px;border-radius:16px;object-fit:contain;background:rgba(255,255,255,0.9);padding:9px;margin-bottom:22px;box-shadow:0 12px 34px -12px rgba(0,0,0,0.6);opacity:0;}
+  #camp .camp-logo.none{display:none;}
+  #camp .camp-tag{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.82);background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);border-radius:9999px;padding:6px 14px;margin-bottom:20px;opacity:0;}
+  #camp .camp-title{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(40px,6.4vw,84px);line-height:0.98;letter-spacing:-0.01em;margin:0;text-shadow:0 4px 40px rgba(0,0,0,0.4);}
+  #camp .camp-title span{display:inline-block;opacity:0;will-change:transform,opacity;}
+  #camp .camp-desc{font-size:clamp(14px,1.5vw,17px);color:rgba(255,255,255,0.82);max-width:56ch;line-height:1.5;margin:18px 0 0;opacity:0;}
+  #camp .camp-cta{display:inline-flex;align-items:center;gap:8px;margin-top:26px;background:#fff;color:#0a0b12;font:600 13.5px Inter,sans-serif;padding:12px 22px;border-radius:9999px;text-decoration:none;opacity:0;transition:transform .16s cubic-bezier(0.23,1,0.32,1),box-shadow .2s;box-shadow:0 10px 30px -12px rgba(0,0,0,0.5);}
+  #camp .camp-cta:hover{transform:translateY(-2px);box-shadow:0 16px 40px -14px rgba(0,0,0,0.6);}
+  #camp .camp-cta svg{width:14px;height:14px;}
+
+  /* prev / next controls with auto-advance ring */
+  #camp .camp-ctrls{position:absolute;left:0;right:0;bottom:34px;display:flex;align-items:center;justify-content:center;gap:20px;z-index:5;}
+  #camp .camp-ctrl{position:relative;width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.07);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:transform .18s cubic-bezier(0.23,1,0.32,1),background .2s,border-color .2s;}
+  #camp .camp-ctrl:hover{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.4);}
+  #camp .camp-ctrl:active{transform:scale(0.92);}
+  #camp .camp-ctrl svg.arr{width:20px;height:20px;position:relative;z-index:2;}
+  #camp .camp-ctrl .ring{position:absolute;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);transform:rotate(-90deg);pointer-events:none;}
+  #camp .camp-ctrl .ring-bg{fill:none;stroke:rgba(255,255,255,0.12);stroke-width:2;}
+  #camp .camp-ctrl .ring-fg{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;transition:stroke-dashoffset .1s linear;}
+  #camp .camp-count{position:absolute;bottom:44px;left:0;right:0;text-align:center;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.2em;color:rgba(255,255,255,0.5);z-index:5;pointer-events:none;}
+  @media(max-width:720px){ #camp .camp-idx{display:none;} }
+  @media(prefers-reduced-motion:reduce){ #camp *{transition-duration:.1s!important;animation-duration:.1s!important;} }
+</style>
+
+<div id="camp">
+  <div class="camp-bg" id="campBgA"></div>
+  <div class="camp-bg" id="campBgB" style="opacity:0;"></div>
+  <canvas class="camp-gl"></canvas>
+  <div class="camp-veil"></div>
+  <div class="camp-grain"></div>
+  <span class="camp-idx l" id="campNum">01</span>
+  <span class="camp-idx r" id="campTot">06</span>
+  <div class="camp-center">
+    <img class="camp-logo" id="campLogo" alt="" />
+    <div class="camp-tag" id="campTag"></div>
+    <h1 class="camp-title" id="campTitle"></h1>
+    <p class="camp-desc" id="campDesc"></p>
+    <a class="camp-cta" id="campCta" target="_blank" rel="noopener"></a>
+  </div>
+  <div class="camp-disc"><a href="__DISCORD__" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A18 18 0 0 0 15.9 3l-.2.4a15 15 0 0 1 3.9 1.3 14 14 0 0 0-11.2 0A15 15 0 0 1 12.3 3.4L12 3a18 18 0 0 0-4.4 1.4C4 9 3.3 13.6 3.7 18a18 18 0 0 0 5.5 2.8l.6-1a12 12 0 0 1-1.9-.9l.5-.4a13 13 0 0 0 11.2 0l.5.4a12 12 0 0 1-1.9.9l.6 1A18 18 0 0 0 24 18c.4-5-.7-9.6-3.7-13.6ZM9.5 15.3c-.9 0-1.6-.8-1.6-1.9s.7-1.9 1.6-1.9 1.6.9 1.6 1.9-.7 1.9-1.6 1.9Zm5 0c-.9 0-1.6-.8-1.6-1.9s.7-1.9 1.6-1.9 1.6.9 1.6 1.9-.7 1.9-1.6 1.9Z"/></svg> More campaign announcements on Discord</a></div>
+  <div class="camp-ctrls">
+    <button class="camp-ctrl" id="campPrev" aria-label="Previous campaign"><svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="camp-ctrl camp-next" id="campNext" aria-label="Next campaign">
+      <svg class="ring" viewBox="0 0 52 52"><circle class="ring-bg" cx="26" cy="26" r="24"/><circle class="ring-fg" id="campRing" cx="26" cy="26" r="24"/></svg>
+      <svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var C=[]; try{ C=__CAMP_DATA__; }catch(e){ C=[]; }
+  if(!C.length) return;
+  var REDUCE=false; try{REDUCE=matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){}
+  var N=C.length, cur=0, busy=false, timer=null, prog=null, DUR=5200, TDUR=2.4;
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function clean(s){ try{ return String(s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u2190-\u21FF\uFE0F\u200D]/gu,'').replace(/\s+/g,' ').trim(); }catch(e){ return String(s||'').trim(); } }
+  function hue(i){ return (216 + i*27) % 360; }
+  function bgCss(i){ var h=hue(i); return 'radial-gradient(90% 70% at 50% 32%, hsla('+h+',85%,55%,0.30), transparent 60%),'
+      +'radial-gradient(70% 60% at 82% 108%, hsla('+((h+40)%360)+',80%,50%,0.18), transparent 60%),'
+      +'linear-gradient(150deg, hsl('+h+',48%,11%), hsl('+((h+22)%360)+',60%,5%))'; }
+
+  // DOM refs
+  var elNum=document.getElementById('campNum'), elTot=document.getElementById('campTot');
+  var elLogo=document.getElementById('campLogo'), elTag=document.getElementById('campTag'),
+      elTitle=document.getElementById('campTitle'), elDesc=document.getElementById('campDesc'), elCta=document.getElementById('campCta');
+  var bgA=document.getElementById('campBgA'), bgB=document.getElementById('campBgB'), bgTop=true;
+  elTot.textContent=String(N).padStart(2,'0');
+
+  function splitTitle(t){ return t.split('').map(function(ch){ return '<span>'+(ch===' '?'&nbsp;':esc(ch))+'</span>'; }).join(''); }
+
+  var GS=null; // gsap when ready
+  function overlayEls(){ return [elLogo,elTag,elDesc,elCta]; }
+  function fadeOut(){ [elLogo,elTag,elTitle,elDesc,elCta].forEach(function(el){ el.style.transition='opacity .3s ease, transform .3s ease'; el.style.opacity='0'; el.style.transform='translateY(-12px)'; }); }
+  function animIn(){
+    overlayEls().forEach(function(el){ el.style.transition='opacity .55s ease, transform .55s ease'; el.style.transform='none'; el.style.opacity='1'; });
+    if(elLogo.classList.contains('none')) elLogo.style.opacity='0';
+    elTitle.style.transition='opacity .3s ease'; elTitle.style.transform='none'; elTitle.style.opacity='1';
+    var kids=elTitle.children;
+    if(GS){ try{ GS.killTweensOf(kids); }catch(e){} GS.set(kids,{y:24,opacity:0}); GS.to(kids,{y:0,opacity:1,duration:.8,stagger:.03,ease:'power3.out'}); }
+    else { Array.prototype.forEach.call(kids,function(s,i){ s.style.transition='opacity .5s ease, transform .5s ease'; s.style.transitionDelay=(i*0.03)+'s'; s.style.opacity='1'; s.style.transform='none'; }); }
+  }
+
+  function paint(i){
+    var c=C[i];
+    if(c.logo){ elLogo.classList.remove('none'); elLogo.src=c.logo; elLogo.onerror=function(){ elLogo.classList.add('none'); }; } else { elLogo.classList.add('none'); }
+    elTag.textContent=(c.tag||'').toUpperCase();
+    elTitle.innerHTML=splitTitle(clean(c.title)||c.title);
+    elDesc.textContent=c.desc||'';
+    elCta.href=c.link||'#'; elCta.innerHTML=esc(c.cta||'Open')+' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>';
+    elNum.textContent=String(i+1).padStart(2,'0');
+  }
+
+  // prev / next controls + auto-advance ring
+  var RC=2*Math.PI*24; // ring circumference (r=24)
+  var ring=document.getElementById('campRing');
+  if(ring){ ring.style.strokeDasharray=RC; ring.style.strokeDashoffset=RC; }
+  function setActive(i){}
+  function fill(i,p){ if(ring){ ring.style.strokeDashoffset = RC*(1-Math.max(0,Math.min(100,p))/100); } }
+  function resetFill(i){ if(ring){ ring.style.transition='none'; ring.style.strokeDashoffset=RC; setTimeout(function(){ ring.style.transition='stroke-dashoffset .1s linear'; },30); } }
+  var bp=document.getElementById('campPrev'), bn=document.getElementById('campNext');
+  if(bp) bp.addEventListener('click',function(){ if(!busy){ stopTimer(); go((cur-1+N)%N); } });
+  if(bn) bn.addEventListener('click',function(){ if(!busy){ stopTimer(); go((cur+1)%N); } });
+
+  // WebGL glass (progressive enhancement)
+  var GL=null;
+  function initGL(THREE){
+    try{
+      var cv=document.querySelector('#camp .camp-gl'); if(!cv) return;
+      var host=document.getElementById('camp'); var W=host.clientWidth, H=host.clientHeight;
+      var scene=new THREE.Scene(), camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+      var renderer=new THREE.WebGLRenderer({canvas:cv,antialias:false,alpha:false});
+      renderer.setSize(W,H); renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+      function tex(i){ var cn=document.createElement('canvas'); cn.width=1280; cn.height=800; var x=cn.getContext('2d'); var h=hue(i);
+        var g=x.createLinearGradient(0,0,1280,800); g.addColorStop(0,'hsl('+h+',48%,11%)'); g.addColorStop(1,'hsl('+((h+22)%360)+',60%,5%)'); x.fillStyle=g; x.fillRect(0,0,1280,800);
+        var rg=x.createRadialGradient(640,260,0,640,260,760); rg.addColorStop(0,'hsla('+h+',85%,55%,0.34)'); rg.addColorStop(1,'hsla('+h+',85%,55%,0)'); x.fillStyle=rg; x.fillRect(0,0,1280,800);
+        var rg2=x.createRadialGradient(1050,860,0,1050,860,620); rg2.addColorStop(0,'hsla('+((h+40)%360)+',80%,50%,0.2)'); rg2.addColorStop(1,'hsla('+((h+40)%360)+',80%,50%,0)'); x.fillStyle=rg2; x.fillRect(0,0,1280,800);
+        x.fillStyle='rgba(255,255,255,0.05)'; for(var yy=0;yy<800;yy+=26)for(var xx=0;xx<1280;xx+=26){ x.fillRect(xx,yy,1,1); }
+        var t=new THREE.CanvasTexture(cn); t.minFilter=t.magFilter=THREE.LinearFilter; t.userData={size:new THREE.Vector2(1280,800)}; return t; }
+      var TX=C.map(function(_,i){ return tex(i); });
+      var vsh='varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }';
+      var fsh='uniform sampler2D uTexture1,uTexture2; uniform float uProgress; uniform vec2 uResolution,uTexture1Size,uTexture2Size; varying vec2 vUv;'
+        +'vec2 cover(vec2 uv,vec2 ts){ vec2 s=uResolution/ts; float sc=max(s.x,s.y); vec2 ss=ts*sc; vec2 off=(uResolution-ss)*0.5; return (uv*uResolution-off)/ss; }'
+        +'void main(){ vec2 uv1=cover(vUv,uTexture1Size),uv2=cover(vUv,uTexture2Size); float maxR=length(uResolution)*0.85; float br=uProgress*maxR; vec2 p=vUv*uResolution; vec2 c=uResolution*0.5; float d=length(p-c); float nd=d/max(br,0.001); float param=smoothstep(br+3.0,br-3.0,d); vec4 img; if(param>0.0){ float ro=0.08*pow(smoothstep(0.3,1.0,nd),1.5); vec2 dir=(d>0.0)?(p-c)/d:vec2(0.0); vec2 du=uv2-dir*ro; float ca=0.02*pow(smoothstep(0.3,1.0,nd),1.2); img=vec4(texture2D(uTexture2,du+dir*ca*1.2).r,texture2D(uTexture2,du+dir*ca*0.2).g,texture2D(uTexture2,du-dir*ca*0.8).b,1.0); float rim=smoothstep(0.95,1.0,nd)*(1.0-smoothstep(1.0,1.01,nd)); img.rgb+=rim*0.1; } else { img=texture2D(uTexture2,uv2); } vec4 oldi=texture2D(uTexture1,uv1); if(uProgress>0.95) img=mix(img,texture2D(uTexture2,uv2),(uProgress-0.95)/0.05); gl_FragColor=mix(oldi,img,param); }';
+      var mat=new THREE.ShaderMaterial({uniforms:{uTexture1:{value:TX[0]},uTexture2:{value:TX[0]},uProgress:{value:0},uResolution:{value:new THREE.Vector2(W,H)},uTexture1Size:{value:TX[0].userData.size},uTexture2Size:{value:TX[0].userData.size}},vertexShader:vsh,fragmentShader:fsh});
+      scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat));
+      cv.style.display='block'; bgA.style.display='none'; bgB.style.display='none';
+      (function loop(){ requestAnimationFrame(loop); renderer.render(scene,camera); })();
+      window.addEventListener('resize',function(){ var w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); mat.uniforms.uResolution.value.set(w,h); });
+      GL={mat:mat,TX:TX,THREE:THREE};
+    }catch(e){ GL=null; }
+  }
+
+  function crossBg(i){ var show=bgTop?bgB:bgA, hide=bgTop?bgA:bgB; show.style.background=bgCss(i); show.style.opacity='1'; hide.style.opacity='0'; bgTop=!bgTop; }
+
+  function go(target){
+    if(busy||target===cur) return; busy=true; resetFill(cur);
+    setActive(target);
+    fadeOut();
+    var transMs = REDUCE?260:(GL?TDUR*1000:900);
+    if(GL){ GL.mat.uniforms.uTexture1.value=GL.TX[cur]; GL.mat.uniforms.uTexture2.value=GL.TX[target];
+      GL.mat.uniforms.uTexture1Size.value=GL.TX[cur].userData.size; GL.mat.uniforms.uTexture2Size.value=GL.TX[target].userData.size;
+      var t0=performance.now();
+      (function tw(now){ var p=Math.min(1,(now-t0)/transMs); var e=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2; GL.mat.uniforms.uProgress.value=e;
+        if(p<1){ requestAnimationFrame(tw); } else { GL.mat.uniforms.uProgress.value=0; GL.mat.uniforms.uTexture1.value=GL.TX[target]; GL.mat.uniforms.uTexture1Size.value=GL.TX[target].userData.size; } })(t0);
+    } else { crossBg(target); }
+    // content swap is timer-based (independent of the GL/gsap tweens) so it always fires
+    setTimeout(function(){ paint(target); animIn(); }, REDUCE?120:Math.min(520, transMs*0.4));
+    setTimeout(function(){ cur=target; busy=false; startTimer(); }, transMs+140);
+  }
+
+  function startTimer(){ if(REDUCE) return; stopTimer(); var p=0, inc=(100/DUR)*60;
+    prog=setInterval(function(){ p+=inc; fill(cur,p); if(p>=100){ clearInterval(prog); prog=null; resetFill(cur); if(!busy) go((cur+1)%N); } },60); }
+  function stopTimer(){ if(prog){ clearInterval(prog); prog=null; } if(timer){ clearTimeout(timer); timer=null; } }
+
+  // boot
+  bgA.style.background=bgCss(0); bgA.style.opacity='1';
+  paint(0); setTimeout(animIn, 120); startTimer();
+
+  // size the host iframe to (almost) the full viewport so it covers the page
+  function fitViewport(){ try{ var fe=window.frameElement; if(!fe)return; var vh=(window.parent&&window.parent.innerHeight)||window.innerHeight; var h=Math.max(560, vh);
+    if(Math.abs((parseInt(fe.style.height,10)||0)-h)>2){ fe.style.height=h+'px'; if(fe.parentElement) fe.parentElement.style.height=h+'px'; } }catch(e){} }
+  [30,200,600,1200].forEach(function(t){ setTimeout(fitViewport,t); });
+  try{ window.parent.addEventListener('resize',fitViewport); }catch(e){} window.addEventListener('resize',fitViewport);
+  document.addEventListener('visibilitychange',function(){ document.hidden?stopTimer():(!busy&&startTimer()); });
+
+  // load gsap + three (progressive; page works without them)
+  function load(src,name,cb){ if(window[name]){ cb(window[name]); return; } var s=document.createElement('script'); s.src=src; s.onload=function(){ cb(window[name]); }; s.onerror=function(){ cb(null); }; document.head.appendChild(s); }
+  load('https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js','gsap',function(g){ if(g){ GS=g; } });
+  load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js','THREE',function(T){ if(T){ initGL(T); } });
+})();
+</script>
+"""
+    _camp_html = _camp_html.replace("__CAMP_DATA__", _camp_payload).replace("__DISCORD__", esc_url(PHAROS_DISCORD_URL))
+    components.html(_camp_html, height=820, scrolling=False)
 
 
 # ═════════════════════════════════════════════
@@ -16393,197 +16542,6 @@ html[data-theme="dark"] .req-preview-card{
             )
 
 
-
-
-# ═════════════════════════════════════════════
-# PAGE: CHRONOS  (coming soon — premium placeholder)
-# ═════════════════════════════════════════════
-elif st.session_state.page == "chronos":
-
-    _chronos_logo_bands = get_loading_logo_bands()
-    _chronos_logo_uri   = _chronos_logo_bands[0] if _chronos_logo_bands else ""
-
-    # CSS block — plain string, no f-string needed (no Python values to inject)
-    st.markdown("""
-<style>
-.chronos-wrap{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    min-height:72vh;padding:3rem 1.5rem;text-align:center;position:relative;overflow:hidden;
-}
-.chronos-wrap::before{
-    content:"";position:absolute;top:-20%;left:50%;transform:translateX(-50%);
-    width:600px;height:600px;border-radius:50%;pointer-events:none;
-    background:radial-gradient(circle,rgba(26,26,255,0.07) 0%,transparent 65%);
-    animation:chronos-pulse 6s ease-in-out infinite;
-}
-.chronos-wrap::after{
-    content:"";position:absolute;bottom:-10%;left:50%;transform:translateX(-50%);
-    width:400px;height:400px;border-radius:50%;pointer-events:none;
-    background:radial-gradient(circle,rgba(99,102,241,0.05) 0%,transparent 65%);
-    animation:chronos-pulse 8s ease-in-out infinite reverse;
-}
-@keyframes chronos-pulse{
-    0%,100%{opacity:0.6;transform:translateX(-50%) scale(1);}
-    50%{opacity:1;transform:translateX(-50%) scale(1.12);}
-}
-.chronos-rig{
-    position:relative;width:160px;height:160px;
-    perspective:700px;margin:0 auto 2.6rem auto;z-index:1;
-}
-.chronos-scene{
-    width:100%;height:100%;
-    transform-style:preserve-3d;
-    animation:chronos-spin 8s linear infinite;
-}
-@keyframes chronos-spin{
-    0%  {transform:rotateY(0deg) rotateX(12deg);}
-    100%{transform:rotateY(360deg) rotateX(12deg);}
-}
-.chronos-face{
-    position:absolute;inset:0;
-    display:flex;align-items:center;justify-content:center;
-    border-radius:28px;
-    border:1.5px solid rgba(99,102,241,0.3);
-    background:linear-gradient(135deg,#0C0C1E 0%,rgba(26,26,255,0.03) 100%);
-    backface-visibility:hidden;
-    box-shadow:0 0 40px rgba(26,26,255,0.12),inset 0 0 20px rgba(99,102,241,0.04);
-}
-.chronos-logo-img{
-    width:90px;height:90px;object-fit:contain;border-radius:18px;
-    filter:drop-shadow(0 0 12px rgba(99,102,241,0.35));
-}
-.chronos-logo-fallback{
-    font-size:52px;
-    filter:drop-shadow(0 0 12px rgba(99,102,241,0.4));
-}
-.chronos-aura{
-    position:absolute;inset:-20px;border-radius:50%;
-    border:1.5px solid rgba(99,102,241,0.15);
-    animation:chronos-ring 3s ease-in-out infinite;
-}
-.chronos-aura2{
-    position:absolute;inset:-44px;border-radius:50%;
-    border:1px solid rgba(99,102,241,0.08);
-    animation:chronos-ring 3s ease-in-out infinite 1.2s;
-}
-.chronos-aura3{
-    position:absolute;inset:-70px;border-radius:50%;
-    border:1px solid rgba(99,102,241,0.05);
-    animation:chronos-ring 3s ease-in-out infinite 2.1s;
-}
-@keyframes chronos-ring{
-    0%,100%{opacity:0.4;transform:scale(1);}
-    50%{opacity:1;transform:scale(1.04);}
-}
-.chronos-dots{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
-.chronos-dot{
-    position:absolute;width:3px;height:3px;border-radius:50%;
-    background:rgba(99,102,241,0.4);
-    animation:chronos-float var(--dur,8s) ease-in-out infinite var(--delay,0s);
-}
-@keyframes chronos-float{
-    0%{transform:translate(0,0) scale(1);opacity:0;}
-    20%{opacity:1;}
-    80%{opacity:0.6;}
-    100%{transform:translate(var(--tx,20px),var(--ty,-80px)) scale(0.3);opacity:0;}
-}
-.chronos-eyebrow{
-    font-size:9px;font-weight:800;letter-spacing:0.22em;text-transform:uppercase;
-    color:rgba(99,102,241,0.7);margin-bottom:0.8rem;
-    display:inline-flex;align-items:center;gap:8px;
-}
-.chronos-title{
-    font-family:Syne,sans-serif;font-size:3rem;font-weight:800;
-    color:var(--t1);letter-spacing:-0.03em;margin:0 0 0.6rem 0;line-height:1.08;
-}
-.chronos-sub{
-    font-size:1.05rem;color:var(--t2);line-height:1.65;
-    max-width:480px;margin:0 auto 1.8rem auto;
-}
-.chronos-badge-row{
-    display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:2rem;
-}
-.chronos-badge{
-    display:inline-flex;align-items:center;gap:6px;
-    background:var(--bg1);border:1px solid var(--border);
-    border-radius:20px;padding:6px 14px;
-    font-size:11.5px;font-weight:600;color:var(--t2);
-    transition:border-color 200ms ease,box-shadow 200ms ease;
-}
-.chronos-badge:hover{
-    border-color:rgba(99,102,241,0.4);
-    box-shadow:0 2px 12px rgba(99,102,241,0.1);
-}
-@keyframes chronos-bar{
-    0%{width:28%;opacity:0.8;}
-    50%{width:35%;opacity:1;}
-    100%{width:28%;opacity:0.8;}
-}
-html[data-theme="dark"] .chronos-face{
-    background:linear-gradient(135deg,#0C0C22 0%,rgba(26,26,255,0.06) 100%);
-    border-color:rgba(99,102,241,0.22);
-}
-</style>
-""", unsafe_allow_html=True)
-
-    # HTML body — f-string only for the logo img tag, no CSS braces here
-    _chronos_logo_tag = (
-        f'<img src="{_chronos_logo_uri}" class="chronos-logo-img" alt="Pharos"/>'
-        if _chronos_logo_uri
-        else '<span class="chronos-logo-fallback">⏳</span>'
-    )
-    st.markdown(
-        '<div class="chronos-wrap">'
-        '<div class="chronos-dots">'
-        '<div class="chronos-dot" style="left:12%;top:60%;--dur:9s;--delay:0s;--tx:18px;--ty:-90px;"></div>'
-        '<div class="chronos-dot" style="left:25%;top:75%;--dur:11s;--delay:1.4s;--tx:-14px;--ty:-70px;"></div>'
-        '<div class="chronos-dot" style="left:70%;top:65%;--dur:8s;--delay:0.7s;--tx:22px;--ty:-100px;"></div>'
-        '<div class="chronos-dot" style="left:85%;top:55%;--dur:13s;--delay:2.1s;--tx:-18px;--ty:-80px;"></div>'
-        '<div class="chronos-dot" style="left:50%;top:80%;--dur:10s;--delay:3s;--tx:10px;--ty:-110px;"></div>'
-        '<div class="chronos-dot" style="left:38%;top:50%;--dur:7s;--delay:1.8s;--tx:-20px;--ty:-60px;"></div>'
-        '<div class="chronos-dot" style="left:60%;top:40%;--dur:12s;--delay:0.4s;--tx:16px;--ty:-75px;"></div>'
-        '</div>'
-        '<div class="chronos-rig">'
-        '<div class="chronos-aura"></div>'
-        '<div class="chronos-aura2"></div>'
-        '<div class="chronos-aura3"></div>'
-        '<div class="chronos-scene">'
-        '<div class="chronos-face">' + _chronos_logo_tag + '</div>'
-        '</div>'
-        '</div>'
-        '<div class="chronos-eyebrow">⏳ Pharos Network · Upcoming Feature</div>'
-        '<h1 class="chronos-title">Chronos</h1>'
-        '<p class="chronos-sub">A new dimension of DeFi time-intelligence is on its way — scheduled executions, time-locked vaults, recurring payments, and automated strategy triggers. All on Pharos.</p>'
-        '<div class="chronos-badge-row">'
-        '<span class="chronos-badge">🔒 Time-Locked Vaults</span>'
-        '<span class="chronos-badge">🔁 Recurring Payments</span>'
-        '<span class="chronos-badge">⚙️ Automated Triggers</span>'
-        '<span class="chronos-badge">📅 Scheduled Execution</span>'
-        '<span class="chronos-badge">🧠 Strategy Automation</span>'
-        '</div>'
-        '<div style="background:var(--bg1);border:1.5px solid var(--border);border-radius:20px;'
-        'padding:1.4rem 2rem;max-width:400px;margin:0 auto 1.6rem auto;">'
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;'
-        'color:var(--t3);margin-bottom:0.5rem;">Development Status</div>'
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.9rem;">'
-        '<div style="flex:1;height:6px;border-radius:3px;background:var(--bg2);overflow:hidden;">'
-        '<div style="width:30%;height:100%;border-radius:3px;'
-        'background:linear-gradient(90deg,#1A1AFF,#6366F1);'
-        'animation:chronos-bar 3s ease-in-out infinite;"></div>'
-        '</div>'
-        '<span style="font-size:11px;font-weight:700;color:#6366F1;white-space:nowrap;">In Design</span>'
-        '</div>'
-        '<div style="font-size:12px;color:var(--t3);line-height:1.6;">'
-        'Join the Pharos community for early access and feature previews.'
-        '</div>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    if st.button("← Back to Home", key="chronos_back_home"):
-        st.session_state.page = "home"
-        st.rerun()
 
 
 # ═════════════════════════════════════════════
