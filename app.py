@@ -7767,6 +7767,68 @@ components.html(
     ");}catch(e){}</script>",
     height=0,
 )
+
+# ── Phantom-gap trim ─────────────────────────────────────────
+# Every CSS-injection markdown and every height=0 helper iframe renders as a
+# zero-height container that STILL claims a flex `gap` slot (~14px each). Several
+# of them thread through each page, stacking dead space that pushes real content
+# below the fold. Fix: cancel each INTERIOR zero-height container's gap with a
+# negative margin. Fully REVERSIBLE and non-destructive — it never changes
+# width/position (so it can't break a banner) and AUTO-RESTORES the moment a
+# late-loading component gains height. Leading empties are left alone so the
+# first heading/hero stays safely below the fixed nav. Also scrubs stale inline
+# geometry leaked onto a reused container (Streamlit reuses element-container
+# DOM nodes across pages). Installed once; re-scanned each rerun + on mutation.
+components.html("""
+<script>
+(function(){ try{
+  var P=window.parent, D=P.document;
+  if(!P.__octoTrim){
+    P.__octoTrim=true;
+    P.__octoTrimScan=function(){
+      try{
+        var root=D.querySelector('[data-testid="stMainBlockContainer"]');
+        if(!root) return;
+        var cs=root.querySelectorAll('[data-testid="stElementContainer"]');
+        var seenReal=false;
+        for(var i=0;i<cs.length;i++){
+          var c=cs[i];
+          if(!c.querySelector('iframe')){
+            var st=c.style;
+            if(st.height||st.minHeight||st.position||st.top||st.bottom){
+              st.height='';st.minHeight='';st.position='';st.top='';st.bottom='';st.left='';st.right='';st.zIndex='';
+            }
+          }
+          var empty=(c.offsetHeight===0);
+          if(!empty){ seenReal=true;
+            if(c.getAttribute('data-otr')==='1'){ c.style.marginBottom=''; c.removeAttribute('data-otr'); }
+            continue;
+          }
+          if(seenReal){
+            if(c.getAttribute('data-otr')!=='1'){
+              var g=parseFloat(getComputedStyle(c.parentElement).rowGap)||0;
+              if(g>0){ c.style.marginBottom=(-g)+'px'; c.setAttribute('data-otr','1'); }
+            }
+          }else if(c.getAttribute('data-otr')==='1'){
+            c.style.marginBottom=''; c.removeAttribute('data-otr');
+          }
+        }
+      }catch(e){}
+    };
+    try{
+      var mo=new P.MutationObserver(function(){
+        if(P.__otRaf) return;
+        P.__otRaf=P.requestAnimationFrame(function(){ P.__otRaf=0; P.__octoTrimScan(); });
+      });
+      mo.observe(D.body,{childList:true,subtree:true});
+    }catch(e){}
+  }
+  var ts=[0,80,200,450,900,1600];
+  for(var k=0;k<ts.length;k++){ P.setTimeout(P.__octoTrimScan,ts[k]); }
+}catch(e){} })();
+</script>
+""", height=0, width=0)
+
 _PNAV_GITHUB_URL = "https://github.com/isharik/Pharos-Octobot"
 
 _pnav_dd_products = [
@@ -10203,6 +10265,17 @@ components.html(
 # ═════════════════════════════════════════════
 if st.session_state.page == "home":
 
+    # Home-only: bring the hero section up close to the nav (scoped marker so it
+    # never affects any other page).
+    st.markdown(
+        '<div class="home-top"></div>'
+        '<style>'
+        '.stApp [data-testid="stMainBlockContainer"]:has(.home-top){padding-top:86px!important;}'
+        '.stApp:has(section[data-testid="stSidebar"]) [data-testid="stMainBlockContainer"]:has(.home-top){padding-top:86px!important;}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
     # ── Hero ──────────────────────────────────
     # ── Interactive logo (feature 3) ────────────
     render_interactive_logo(logo_b64)
@@ -10486,7 +10559,7 @@ if st.session_state.page == "home":
 
     # ── Docs badge banner ─────────────────────
     st.markdown(
-        '<div class="docs-banner" style="margin-top:-18px;">'
+        '<div class="docs-banner" style="margin-top:14px;">'
         '<div class="docs-banner-left">'
         '<span class="docs-banner-icon">📄</span>'
         '<span class="docs-banner-text"><strong>Pharos Documentation</strong> — Full technical docs, API reference, guides, and tutorials</span>'
@@ -11383,7 +11456,7 @@ html[data-theme="dark"]{
                 f'<div class="ml-tags">{tags_html}</div></div></div>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="height:1.35rem;"></div>', unsafe_allow_html=True)
             if st.button("💬 Ask OctoBot about this wallet", key="mlcta_detail_ask",
                          use_container_width=True, type="primary"):
                 bal_v = str(mdict.get("Balance", "unknown"))
@@ -11603,7 +11676,7 @@ html[data-theme="dark"]{
         _kpi(k4, "🕐", "Last updated",
              mem_relative_time(last_ts) if last_ts else "—", "Latest intelligence update")
 
-        st.markdown('<div style="height:0.9rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:1.7rem;"></div>', unsafe_allow_html=True)
 
         # ── Primary segmented navigation ──────────────────────────
         _opts = ["Wallet Profiles", "Transaction Intelligence"]
@@ -11808,7 +11881,7 @@ html[data-theme="dark"]{
                         )
                         # Row 3 — ruled action bar
                         st.markdown(
-                            '<div style="border-top:1px solid var(--ml-border);margin:0.95rem 0 0.25rem 0;"></div>',
+                            '<div style="border-top:1px solid var(--ml-border);margin:1.2rem 0 0.85rem 0;"></div>',
                             unsafe_allow_html=True,
                         )
                         b1, b2, b3, _sp = st.columns([1.6, 1.5, 1.3, 3.1])
@@ -12221,7 +12294,7 @@ html.gocto-webgl-on .gs-fallback{opacity:0!important;}
 @keyframes gs-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
 
 /* ── Top pills (inline, near the wordmark) ── */
-.gs-pillrow{display:flex;gap:var(--gs-s3);margin:0 0 var(--gs-s6);animation:gs-rise 0.35s var(--gs-ease) both;}
+.gs-pillrow{display:flex;gap:var(--gs-s3);margin:0 0 var(--gs-s7);animation:gs-rise 0.35s var(--gs-ease) both;}
 .gs-pill{display:inline-flex;align-items:center;gap:var(--gs-s2);padding:9px 18px;border-radius:999px;
   background:var(--gs-pill);border:1px solid var(--gs-pill-border);backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);font-family:'Inter',system-ui;font-size:12.5px;font-weight:600;
@@ -12232,14 +12305,15 @@ html.gocto-webgl-on .gs-fallback{opacity:0!important;}
 
 /* ── Wordmark + copy ── */
 .gs-wm{font-family:'Plus Jakarta Sans',system-ui;font-weight:800;letter-spacing:-0.035em;
-  font-size:clamp(2.9rem,6vw,4.9rem);line-height:0.98;color:var(--gs-text)!important;margin:0 0 var(--gs-s5);
+  font-size:clamp(2.5rem,5vw,4.1rem);line-height:0.98;color:var(--gs-text)!important;margin:0 0 var(--gs-s4);
+  margin-left:-0.16em!important;
   animation:gs-rise 0.35s var(--gs-ease) 0.03s both;}
 .gs-wm span{margin-left:0.16em;background:linear-gradient(105deg,var(--gs-g1),var(--gs-g2));-webkit-background-clip:text;
   background-clip:text;-webkit-text-fill-color:transparent;}
 .gs-tag{font-family:'Plus Jakarta Sans',system-ui;font-weight:700;font-size:clamp(1.05rem,2vw,1.5rem);
-  letter-spacing:-0.01em;color:var(--gs-text);margin:0 0 var(--gs-s3);animation:gs-rise 0.35s var(--gs-ease) 0.05s both;}
+  letter-spacing:-0.01em;color:var(--gs-text);margin:0 0 var(--gs-s4);animation:gs-rise 0.35s var(--gs-ease) 0.05s both;}
 .gs-sub{font-family:'Inter',system-ui;font-weight:400;font-size:clamp(0.95rem,1.35vw,1.06rem);
-  line-height:1.6;color:var(--gs-text-2);max-width:34ch;margin:0 0 var(--gs-s7);
+  line-height:1.6;color:var(--gs-text-2);max-width:40ch;margin:0 0 var(--gs-s8);
   animation:gs-rise 0.35s var(--gs-ease) 0.07s both;}
 .gs-sub b{color:var(--gs-accent);font-weight:600;}
 @keyframes gs-rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
@@ -12302,10 +12376,10 @@ html.gocto-webgl-on .gs-fallback{opacity:0!important;}
    chrome; badges are smaller and undecorated (no shadow/hover-lift) so
    they stay visually secondary, per hierarchy: identity > input+CTA >
    mascot > features > environment. ── */
-.gs-feats{display:flex;flex-wrap:wrap;max-width:1160px;margin:64px auto 0;width:100%;
-  padding-top:var(--gs-s6);border-top:1px solid var(--gs-border);
+.gs-feats{display:flex;flex-wrap:wrap;max-width:1040px;margin:var(--gs-s8) auto 0;width:100%;
+  padding-top:var(--gs-s7);border-top:1px solid var(--gs-border);
   animation:gs-rise 0.35s var(--gs-ease) 0.12s both;}
-.gs-feat{display:flex;align-items:flex-start;gap:var(--gs-s3);flex:1 1 240px;padding:0 var(--gs-s6);}
+.gs-feat{display:flex;align-items:flex-start;gap:var(--gs-s3);flex:1 1 210px;padding:0 var(--gs-s6);}
 .gs-feat:first-child{padding-left:0;}
 .gs-feat:not(:first-child){border-left:1px solid var(--gs-border);}
 .gs-badge{flex:none;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
@@ -12356,12 +12430,8 @@ html.gocto-webgl-on .gs-fallback{opacity:0!important;}
         # CSS environment (background colour + soft glows), always painted
         st.markdown('<div class="gs-env" aria-hidden="true"></div>', unsafe_allow_html=True)
 
-        # CSS fallback mascot (hidden once WebGL signals it is on)
-        _fb_inner = (
-            f'<img src="{_chat_logo_b64}" alt="GoctoSailor mascot">'
-            if _chat_logo_b64 else '<div class="gs-fallback-fallback">🐙</div>'
-        )
-        st.markdown(f'<div class="gs-fallback" aria-hidden="true">{_fb_inner}</div>', unsafe_allow_html=True)
+        # Logo intentionally removed — the welcome gate is now a clean, centred
+        # text-led composition (no mascot). The ambient gs-env wash above stays.
 
         # ── Genuine WebGL scene (Three.js) inside a self-contained iframe.
         #    It styles its own host iframe to fixed/fullscreen, reads the
@@ -12545,13 +12615,27 @@ canvas{display:block;}
 })();
 </script></body></html>'''
         _gocto_scene_html = _GOCTO_SCENE_TPL.replace("__MASCOT__", _chat_logo_b64 or "")
-        components.html(_gocto_scene_html, height=0, width=0)
+        # Logo removed: the 3D scene template above is no longer rendered.
+        # We still need the gate's `data-gs-ready` fade-in to fire, so render a
+        # tiny reveal-only script (fonts.ready + a paint tick + a safety timeout).
+        components.html("""
+<script>(function(){ try{
+  var P=window.parent, D=P.document, R=D.documentElement, done=false;
+  function go(){ if(done) return; done=true; try{ R.setAttribute('data-gs-ready','1'); }catch(e){} }
+  if(D.fonts && D.fonts.ready){ D.fonts.ready.then(go).catch(go); }
+  P.requestAnimationFrame(function(){ P.requestAnimationFrame(go); });
+  P.setTimeout(go, 1000);
+}catch(e){} })();</script>
+""", height=0, width=0)
 
         # ── Content (right-weighted; the left space shows the 3D scene) ──
         # Spacer column widened (was 0.9/1.1) to match the mascot's further-
         # left position — keeps clear separation between mascot and text
         # instead of the two sitting close together.
-        _sp, _content = st.columns([1.2, 1.0], gap="large", vertical_alignment="center")
+        # Centred, left-aligned welcome column — no logo. Side spacers keep the
+        # content block horizontally centred on the page while the text inside
+        # stays left-aligned for easy scanning (Apple-style hero balance).
+        _lsp, _content, _rsp = st.columns([1, 1.6, 1], gap="large", vertical_alignment="center")
         with _content:
             st.markdown(
                 '<div class="gs-content">'
@@ -14413,7 +14497,7 @@ elif st.session_state.page == "campaigns":
 
   // size the host iframe to (almost) the full viewport so it covers the page
   function fitViewport(){ try{ var fe=window.frameElement; if(!fe)return; var vh=(window.parent&&window.parent.innerHeight)||window.innerHeight; var h=Math.max(560, vh);
-    if(Math.abs((parseInt(fe.style.height,10)||0)-h)>2){ fe.style.height=h+'px'; if(fe.parentElement) fe.parentElement.style.height=h+'px'; } }catch(e){} }
+    if(Math.abs((parseInt(fe.style.height,10)||0)-h)>2){ fe.style.height=h+'px'; } }catch(e){} }
   [30,200,600,1200].forEach(function(t){ setTimeout(fitViewport,t); });
   try{ window.parent.addEventListener('resize',fitViewport); }catch(e){} window.addEventListener('resize',fitViewport);
   document.addEventListener('visibilitychange',function(){ document.hidden?stopTimer():(!busy&&startTimer()); });
@@ -14627,9 +14711,19 @@ elif st.session_state.page == "updates":
 # PAGE: TRADE
 # ═════════════════════════════════════════════
 elif st.session_state.page == "trade":
+    # Trade-only: centre the whole page — narrow the content column and centre
+    # the heading (scoped marker so no other page is affected).
     st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#14141F;margin-bottom:0.3rem;">📊 Trade $PROS</div>'
-        '<div style="font-size:13px;color:#5B5F6E;margin-bottom:1.2rem;">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
+        '<div class="trade-top"></div>'
+        '<style>'
+        '.stApp [data-testid="stMainBlockContainer"]:has(.trade-top) > [data-testid="stVerticalBlock"]'
+        '{max-width:920px;margin-left:auto;margin-right:auto;}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#14141F;margin-bottom:0.3rem;text-align:center;">📊 Trade $PROS</div>'
+        '<div style="font-size:13px;color:#5B5F6E;margin-bottom:1.2rem;text-align:center;">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
         unsafe_allow_html=True,
         )
 
@@ -15409,10 +15503,6 @@ html[data-theme="dark"] .pay-history-item{
                 st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="pay-section-gap"></div>', unsafe_allow_html=True)
-        if st.button("🧠 Memory Ledger", key="pay_go_memory", use_container_width=True):
-            st.session_state.page = "memory"; st.rerun()
 
     # Re-assign wallet_addr after potential update
     wallet_addr = st.session_state.get("wallet_address", "")
@@ -16323,18 +16413,13 @@ html[data-theme="dark"] .req-preview-card{
             if not wallet_addr:
                 _cwi = st.text_input("Your wallet", placeholder="0x… your receiving address",
                                      key="req_create_wallet_input", label_visibility="collapsed")
-                cw1, cw2 = st.columns([2, 1])
-                with cw1:
-                    if st.button("Set My Address →", key="req_create_wallet_btn",
-                                 use_container_width=True, type="primary"):
-                        if valid_addr(_cwi):
-                            st.session_state.wallet_address = _cwi.strip()
-                            st.rerun()
-                        else:
-                            st.error("Enter a valid 0x… address (42 chars).")
-                with cw2:
-                    if st.button("🧠 Memory", key="req_go_memory", use_container_width=True):
-                        st.session_state.page = "memory"; st.rerun()
+                if st.button("Set My Address →", key="req_create_wallet_btn",
+                             use_container_width=True, type="primary"):
+                    if valid_addr(_cwi):
+                        st.session_state.wallet_address = _cwi.strip()
+                        st.rerun()
+                    else:
+                        st.error("Enter a valid 0x… address (42 chars).")
             else:
                 _wa  = wallet_addr
                 _ws  = _wa[:6] + "…" + _wa[-4:]
