@@ -314,6 +314,187 @@ PHAROS_DAPPS = [
         "bg":    "#F8F0E8",
     },
 ]
+
+# ─────────────────────────────────────────────
+# ECOSYSTEM — 3D coverflow card carousel (self-contained iframe component).
+# Spring-physics drag / wheel / arrows / dots; 2–3 cards in view; a brand aura
+# glows behind the centred card; theme-aware; reduced-motion aware. Data is
+# injected at the __ECO_DATA__ placeholder as JSON.
+# ─────────────────────────────────────────────
+_ECO_CAROUSEL_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--e:cubic-bezier(0.23,1,0.32,1);
+ --title:#12142a;--card:linear-gradient(168deg,#ffffff,#f3f4fb);--cardbd:rgba(20,20,60,0.09);
+ --name:#141830;--desc:#5a6076;--tag:#3a4058;--tagbg:rgba(20,20,60,0.05);--tagbd:rgba(20,20,60,0.10);
+ --cta:#5B49E0;--ctabg:rgba(91,73,224,0.09);--ctabd:rgba(91,73,224,0.22);--ctabgh:rgba(91,73,224,0.16);
+ --dot:rgba(20,20,60,0.18);--doton:#5B49E0;--hint:#9096ad;
+ --navbg:rgba(255,255,255,0.82);--navbgh:#ffffff;--navbd:rgba(20,20,60,0.10);--navfg:#2A3050;
+ --shadow:0 26px 54px -24px rgba(20,20,60,0.34);}
+html[data-theme="dark"]{--title:#F4F6FC;--card:linear-gradient(168deg,rgba(32,37,64,0.88),rgba(17,20,40,0.92));--cardbd:rgba(150,160,255,0.16);
+ --name:#EEF0FA;--desc:#AAB2CB;--tag:#C4CBE0;--tagbg:rgba(255,255,255,0.06);--tagbd:rgba(255,255,255,0.12);
+ --cta:#9DACFF;--ctabg:rgba(157,172,255,0.10);--ctabd:rgba(157,172,255,0.26);--ctabgh:rgba(157,172,255,0.18);
+ --dot:rgba(255,255,255,0.2);--doton:#9DACFF;--hint:#7f88a3;
+ --navbg:rgba(26,30,52,0.72);--navbgh:rgba(38,44,72,0.92);--navbd:rgba(255,255,255,0.14);--navfg:#DfE3F2;
+ --shadow:0 30px 66px -24px rgba(0,0,0,0.66);}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;background:transparent;font-family:'Inter',system-ui,sans-serif;}
+.eco-wrap{height:588px;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;padding-top:0;}
+.eco-title{font-family:'Space Grotesk','Inter',sans-serif;font-size:2rem;font-weight:700;letter-spacing:-0.015em;color:var(--title);
+ margin:0 0 18px;position:relative;align-self:center;text-align:center;text-shadow:0 1px 14px rgba(255,255,255,0.55);}
+html[data-theme="dark"] .eco-title{text-shadow:0 2px 18px rgba(4,6,16,0.75);}
+.eco-title::after{content:'';position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);
+ width:60px;height:3px;border-radius:3px;background:linear-gradient(90deg,#5B49E0,#8B3AE0);}
+.eco-stage{position:relative;flex:1;width:100%;min-height:0;}
+/* aura glows behind the centred (front) card */
+.eco-aura{position:absolute;top:50%;left:50%;width:600px;height:430px;transform:translate(-50%,-50%);
+ pointer-events:none;filter:blur(36px);opacity:0.88;transition:background 0.55s ease;
+ background:radial-gradient(ellipse at center,var(--aura,rgba(91,73,224,0.5)),transparent 66%);}
+.eco-track{position:absolute;inset:0;perspective:1750px;cursor:grab;outline:none;}
+.eco-track.dragging{cursor:grabbing;}
+/* centre-anchored, infinite loop: the front card sits at the centre, others fan both ways */
+.eco-card{position:absolute;top:50%;left:50%;width:322px;margin-left:-161px;margin-top:-198px;
+ will-change:transform,opacity;transform-style:preserve-3d;text-decoration:none;color:inherit;}
+.ec-inner{height:396px;border-radius:22px;padding:30px 24px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;
+ background:var(--card);border:1px solid var(--cardbd);box-shadow:var(--shadow);
+ -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+ transition:border-color 0.35s var(--e),box-shadow 0.35s var(--e);}
+.eco-card.active .ec-inner{border-color:var(--cta);box-shadow:var(--shadow),0 0 50px -10px var(--aura,rgba(91,73,224,0.5));}
+.ec-logo{width:68px;height:68px;border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden;
+ margin-bottom:16px;box-shadow:0 12px 24px -10px rgba(20,20,60,0.4);}
+.ec-logo img{width:100%;height:100%;object-fit:cover;}
+.ec-name{font-family:'Space Grotesk','Inter',sans-serif;font-size:1.28rem;font-weight:700;color:var(--name);margin-bottom:9px;letter-spacing:-0.01em;}
+.ec-desc{font-size:13px;line-height:1.55;color:var(--desc);margin:0 0 15px;
+ display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;}
+.ec-tags{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:auto;margin-bottom:15px;}
+.ec-tag{font-size:11px;font-weight:600;color:var(--tag);background:var(--tagbg);border:1px solid var(--tagbd);border-radius:8px;padding:4px 10px;}
+.ec-cta{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--cta);text-decoration:none;
+ padding:8px 16px;border-radius:11px;border:1px solid var(--ctabd);background:var(--ctabg);
+ transition:transform 0.16s var(--e),background 0.2s var(--e),border-color 0.2s var(--e);}
+@media (hover:hover){.ec-cta:hover{background:var(--ctabgh);border-color:var(--cta);}}
+.ec-cta:active{transform:scale(0.96);}
+/* bottom control row — arrows flank the dots (they can't sit on the sides of a
+   left-anchored carousel without covering the front card) */
+.eco-controls{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px 0 2px;}
+.eco-nav{flex:none;width:44px;height:44px;border-radius:50%;
+ display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--navbd);color:var(--navfg);
+ background:var(--navbg);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+ box-shadow:0 12px 30px -12px rgba(20,20,60,0.42);
+ transition:transform 0.18s var(--e),background 0.2s var(--e),opacity 0.22s var(--e),border-color 0.2s var(--e),box-shadow 0.2s var(--e);}
+.eco-nav svg{width:20px;height:20px;}
+@media (hover:hover){.eco-nav:hover{background:var(--navbgh);border-color:var(--cta);transform:scale(1.09);box-shadow:0 16px 36px -12px var(--aura,rgba(91,73,224,0.5));}}
+.eco-nav:active{transform:scale(0.9);}
+.eco-nav[disabled]{opacity:0.28;cursor:default;pointer-events:none;box-shadow:none;}
+.eco-dots{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;max-width:56%;}
+.eco-dot{width:7px;height:7px;border-radius:50%;background:var(--dot);border:none;padding:0;cursor:pointer;
+ transition:transform 0.25s var(--e),background 0.25s var(--e),width 0.25s var(--e);}
+.eco-dot.on{background:var(--doton);width:20px;border-radius:4px;}
+.eco-hint{font-size:11px;color:var(--hint);font-weight:500;padding-bottom:4px;}
+@media (hover:hover){.eco-dot:hover{transform:scale(1.35);}}
+@media (prefers-reduced-motion:reduce){.eco-card,.eco-aura,.ec-inner,.eco-nav{transition:none!important;}}
+</style></head><body>
+<div class="eco-wrap">
+ <h2 class="eco-title">DApps on Pharos</h2>
+ <div class="eco-stage">
+  <div class="eco-aura"></div>
+  <div class="eco-track" id="track" tabindex="0" aria-label="DApps carousel"></div>
+ </div>
+ <div class="eco-controls">
+  <button class="eco-nav prev" id="prev" aria-label="Previous dApp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+  <div class="eco-dots" id="dots"></div>
+  <button class="eco-nav next" id="next" aria-label="Next dApp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+ </div>
+ <div class="eco-hint">Use the arrows or ← → · click a card to open it</div>
+</div>
+<script>
+(function(){
+  var DATA=__ECO_DATA__;
+  var AURAS=['rgba(91,73,224,0.5)','rgba(139,58,224,0.5)','rgba(37,99,235,0.46)','rgba(6,182,212,0.42)','rgba(16,185,129,0.42)','rgba(236,72,153,0.42)','rgba(245,158,11,0.42)'];
+  var N=DATA.length, SP=234;
+  var track=document.getElementById('track'), dotsEl=document.getElementById('dots'), aura=document.querySelector('.eco-aura');
+  var prevBtn=document.getElementById('prev'), nextBtn=document.getElementById('next');
+  /* --- circular helpers --- */
+  function activeIndex(){ return ((Math.round(current)%N)+N)%N; }
+  /* free-running target value that brings card i to the centre by the SHORTEST
+     way around the ring, so the loop wraps in both directions */
+  function posFor(i){ var cur=Math.round(current); var d=i-(((cur%N)+N)%N); d=((d%N)+N)%N; if(d>N/2)d-=N; return cur+d; }
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':String(s));return d.innerHTML;}
+  function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+  /* reliable new-tab open from a sandboxed iframe: a real anchor click, not window.open (popup-blocked) */
+  function openUrl(u){ if(!u)return; var a=document.createElement('a'); a.href=u; a.target='_blank'; a.rel='noopener noreferrer';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+  var current=0,target=0,dragging=false,justDragged=false,startX=0,startCur=0,moved=0,vx=0,lastX=0,lastT=0;
+  var cards=[],dots=[];
+  DATA.forEach(function(d,i){
+    /* the whole card is a real anchor — a genuine user click navigates natively,
+       which is the only reliable way to open a new tab from a sandboxed iframe */
+    var el=document.createElement('a'); el.className='eco-card';
+    el.href=d.url; el.target='_blank'; el.rel='noopener noreferrer';
+    var tags=(d.cat||[]).slice(0,3).map(function(t){return '<span class="ec-tag">'+esc(t)+'</span>';}).join('');
+    el.innerHTML='<div class="ec-inner"><div class="ec-logo" style="background:'+esc(d.bg||'#EEF0FF')+'">'
+      +(d.logo?'<img alt="" src="'+esc(d.logo)+'">':'')+'</div>'
+      +'<div class="ec-name">'+esc(d.name)+'</div>'
+      +'<div class="ec-desc">'+esc(d.desc)+'</div>'
+      +'<div class="ec-tags">'+tags+'</div>'
+      +'<span class="ec-cta">Open ↗</span></div>';
+    var im=el.querySelector('img'); if(im){im.addEventListener('error',function(){this.style.display='none';});}
+    el.addEventListener('click',function(e){
+      if(justDragged){e.preventDefault();return;}                 /* a drag-release is not a click */
+      if(activeIndex()!==i){e.preventDefault(); target=posFor(i);}  /* a side card → bring it to centre */
+      /* the centred card falls through: the native <a target=_blank> opens the link */ });
+    track.appendChild(el); cards.push(el);
+    var b=document.createElement('button'); b.className='eco-dot'; b.setAttribute('aria-label',d.name);
+    b.addEventListener('click',function(){target=posFor(i);}); dotsEl.appendChild(b); dots.push(b);
+  });
+  function render(){
+    for(var i=0;i<N;i++){
+      /* shortest signed offset on the ring → cards fan out both sides of centre */
+      var o=i-current; o=((o%N)+N)%N; if(o>N/2)o-=N;
+      var ao=Math.abs(o);
+      var x=o*SP, z=-ao*160, ry=clamp(-o*30,-42,42), sc=Math.max(0.7,1-ao*0.16), op=ao>2.7?0:Math.max(0.12,1-ao*0.34);
+      var c=cards[i];
+      c.style.transform='translate3d('+x+'px,0,'+z+'px) rotateY('+ry+'deg) scale('+sc+')';
+      c.style.opacity=op; c.style.zIndex=String(1000-Math.round(ao*10));
+      c.style.pointerEvents=op<0.12?'none':'auto';
+      var act=ao<0.5; if(act!==c._a){c._a=act;c.classList.toggle('active',act);}
+    }
+    var ni=activeIndex();
+    aura.style.setProperty('--aura',AURAS[ni%AURAS.length]);
+    for(var j=0;j<dots.length;j++){var on=(j===ni); if(on!==dots[j]._o){dots[j]._o=on;dots[j].classList.toggle('on',on);}}
+    /* circular: the arrows never dead-end, so they're never disabled */
+  }
+  function frame(){ if(!dragging){var dd=target-current; if(Math.abs(dd)<0.0008){current=target;} else {current+=dd*(reduce?1:0.16);}} render(); requestAnimationFrame(frame); }
+  function go(dir){ target=Math.round(target)+dir; }  /* free-running → wraps via the ring math */
+  prevBtn.addEventListener('click',function(){go(-1);});
+  nextBtn.addEventListener('click',function(){go(1);});
+  var captured=false;
+  track.addEventListener('pointerdown',function(e){dragging=true;justDragged=false;captured=false;track.classList.add('dragging');
+    startX=e.clientX;startCur=current;moved=0;vx=0;lastX=e.clientX;lastT=e.timeStamp;});
+  track.addEventListener('pointermove',function(e){ if(!dragging)return;
+    var dx=e.clientX-startX; moved=Math.max(moved,Math.abs(dx));
+    /* only capture the pointer once it's really a drag — otherwise a plain click
+       would retarget to the track and the card's native <a> would never fire */
+    if(moved>6){ justDragged=true; if(!captured){try{track.setPointerCapture(e.pointerId);}catch(_){}captured=true;} }
+    current=startCur-dx/SP;
+    var dt=e.timeStamp-lastT; if(dt>0){vx=(e.clientX-lastX)/dt;} lastX=e.clientX;lastT=e.timeStamp; });
+  function endDrag(){ if(!dragging)return; dragging=false; track.classList.remove('dragging');
+    if(moved>6){ var mo=clamp(-vx*0.42,-2.5,2.5); target=Math.round(current+mo); } else { target=Math.round(current); } }
+  track.addEventListener('pointerup',endDrag); track.addEventListener('pointercancel',endDrag);
+  track.addEventListener('wheel',function(e){ if(Math.abs(e.deltaX)>Math.abs(e.deltaY)||e.shiftKey){ e.preventDefault();
+    if(track._wl)return; track._wl=true; setTimeout(function(){track._wl=false;},110);
+    go(e.deltaX>0?1:-1);} },{passive:false});
+  track.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'){go(1);e.preventDefault();}
+    else if(e.key==='ArrowLeft'){go(-1);e.preventDefault();}
+    else if(e.key==='Enter'){cards[activeIndex()].click();} });
+  function syncTheme(){var t='dark';try{t=window.parent.document.documentElement.getAttribute('data-theme')||'dark';}catch(e){}document.documentElement.setAttribute('data-theme',t);}
+  syncTheme(); try{new MutationObserver(syncTheme).observe(window.parent.document.documentElement,{attributes:true,attributeFilter:['data-theme']});}catch(e){}
+  frame();
+})();
+</script></body></html>"""
+
 # ─────────────────────────────────────────────
 # SESSION STATE INIT
 # ─────────────────────────────────────────────
@@ -483,6 +664,93 @@ def get_chat_logo_b64() -> str:
             with open(path,"rb") as f:
                 return "data:"+mime+";base64,"+base64.b64encode(f.read()).decode()
     return ""
+
+@st.cache_resource(show_spinner=False)
+def get_welcome_bg_b64() -> str:
+    """Welcome-gate background mural (welcome_background.png in the app root),
+    resized + JPEG-compressed for a light inline embed instead of a 3+MB PNG."""
+    for path in ("welcome_background.png", "welcome_background.jpg"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                maxw = 1600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=82, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                mime = "image/png" if path.endswith(".png") else "image/jpeg"
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_news_bg_b64() -> str:
+    """Updates-page background (news_bg.jpg in the app root), resized +
+    JPEG-recompressed for a light inline embed instead of the raw file."""
+    for path in ("news_bg.jpg", "news_bg.jpeg", "news_bg.png"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                maxw = 1600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=82, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                mime = "image/png" if path.endswith(".png") else "image/jpeg"
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_trade_bg_b64() -> str:
+    """Trade-page background (trade_bg.png in the app root), resized +
+    JPEG-recompressed for a light inline embed instead of the raw 3MB file."""
+    for path in ("trade_bg.png", "trade_bg.jpg", "trade_bg.jpeg"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                maxw = 1600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=82, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                mime = "image/png" if path.endswith(".png") else "image/jpeg"
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_eco_bg_b64() -> str:
+    """Ecosystem-page background — embed the ORIGINAL file bytes (no resize, no
+    re-encode). Re-compressing the already-compressed source at q82 was softening
+    it and adding JPEG noise; the raw embed keeps it as crisp as the source. If a
+    larger/cleaner source is ever dropped in, it is used verbatim."""
+    for path in ("eco_bg.png", "eco_bg.jpg", "eco_bg.jpeg", "eco_bg.webp"):
+        if os.path.exists(path):
+            ext = path.rsplit(".", 1)[-1].lower()
+            mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+            with open(path, "rb") as f:
+                return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
 
 @st.cache_resource(show_spinner=False)
 def get_loading_logo_bands() -> list:
@@ -7829,6 +8097,22 @@ components.html("""
 </script>
 """, height=0, width=0)
 
+# ── Global interactive cursor — a hand pointer on every clickable/interactive
+#    element across the whole app (buttons, links, tabs, selects, toggles, nav
+#    items, cards). Text inputs keep the I-beam. Purely a cursor hint, no layout. ──
+st.markdown("""
+<style>
+button, a, summary, [role="button"], [role="option"], [role="tab"],
+[data-baseweb="select"], [data-baseweb="select"] *, [data-testid="stSelectbox"] *,
+.stButton, .stButton *, .stDownloadButton, .stDownloadButton *,
+[data-testid="stToggle"], [data-testid="stToggle"] label, [data-testid="stToggle"] *,
+[data-baseweb="tab"], [data-pnav-go], .pnav-item, .pnav-logo, .pnav-icirc, .pnav-ver,
+.dc-card, .eco-card, .cex-card, .hover-lift, [data-testid="stLinkButton"] a{
+  cursor:pointer !important;
+}
+input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]{cursor:text !important;}
+</style>
+""", unsafe_allow_html=True)
 _PNAV_GITHUB_URL = "https://github.com/isharik/Pharos-Octobot"
 
 _pnav_dd_products = [
@@ -8772,8 +9056,10 @@ components.html(
     }
     try{ window.__octoSwitchTheme = switchTheme; }catch(e){}
     (function(){
-      var saved = 'light';
-      try{ saved = localStorage.getItem('octobot-theme') || 'light'; }catch(e){}
+      /* Dark is the default on first open; a returning user's saved choice
+         (including 'light') is respected via localStorage. */
+      var saved = 'dark';
+      try{ saved = localStorage.getItem('octobot-theme') || 'dark'; }catch(e){}
       applyTheme(saved);
     })();
     doc.addEventListener('click', function(e){
@@ -12108,6 +12394,7 @@ elif st.session_state.page == "chat":
     for(var i=0;i<old.length;i++){ try{ old[i].remove(); }catch(e){} }
     var fb = pd.querySelector('.gs-fallback'); if(fb) fb.remove();
     var env = pd.querySelector('.gs-env'); if(env) env.remove();
+    var mur = pd.querySelector('.gs-mural'); if(mur) mur.remove();
     root.classList.remove('gocto-webgl-on');
     root.removeAttribute('data-gs-ready');
   }catch(e){}
@@ -12144,7 +12431,7 @@ elif st.session_state.page == "chat":
         # ══════════════════════════════════════════════════════════════
         st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=Bungee&display=swap');
 
 /* ── Spacing scale (shared both themes) — used for relationships between
    elements; component sizing (radii, shadows) is intentionally NOT on
@@ -12427,11 +12714,104 @@ html.gocto-webgl-on .gs-fallback{opacity:0!important;}
 </defs></svg>
 """, unsafe_allow_html=True)
 
-        # CSS environment (background colour + soft glows), always painted
-        st.markdown('<div class="gs-env" aria-hidden="true"></div>', unsafe_allow_html=True)
+        # Full-bleed interactive mural background (welcome_background.png).
+        # A slow ambient drift + cursor parallax make it feel alive; a layered
+        # scrim keeps the centred text fully legible over the busy artwork.
+        _welcome_bg = get_welcome_bg_b64()
+        if _welcome_bg:
+            st.markdown("""
+<style>
+/* ── Interactive mural background (welcome gate only) ─────────────── */
+.gs-mural{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none;}
+.gs-mural-img{position:absolute;inset:-3%;background-size:cover;background-position:center;
+  transform:scale(1.0);will-change:transform;transition:transform 0.5s cubic-bezier(0.23,1,0.32,1);
+  animation:gs-mural-drift 40s ease-in-out infinite alternate;}
+@keyframes gs-mural-drift{0%{transform:scale(1.0) translate(0,0);}100%{transform:scale(1.045) translate(-1%,-0.8%);}}
+.gs-mural-scrim{position:absolute;inset:0;background:
+  radial-gradient(115% 85% at 50% 40%, rgba(6,8,22,0.28) 0%, rgba(6,8,22,0.60) 72%, rgba(6,8,22,0.78) 100%),
+  linear-gradient(180deg, rgba(6,8,22,0.62) 0%, rgba(6,8,22,0.24) 32%, rgba(6,8,22,0.40) 62%, rgba(6,8,22,0.82) 100%);}
+/* mural is the sole backdrop on the gate — hide the app's global aura and make
+   the html/body/app layers transparent so the fixed mural shows through (the
+   root <html> otherwise paints a solid colour over any negative-z layer) */
+html:has(.gs-mural), body:has(.gs-mural),
+html[data-theme="dark"]:has(.gs-mural), html[data-theme="dark"] body:has(.gs-mural){
+  background:transparent!important;background-color:transparent!important;}
+/* dark theme paints a dark background on the app shell too — clear it on the
+   gate so the fixed mural (z-index below) shows in BOTH themes */
+body:has(.gs-mural) [data-testid="stApp"],
+body:has(.gs-mural) [data-testid="stAppViewContainer"],
+body:has(.gs-mural) section[data-testid="stMain"],
+html[data-theme="dark"] body:has(.gs-mural) [data-testid="stApp"],
+html[data-theme="dark"] body:has(.gs-mural) [data-testid="stAppViewContainer"],
+html[data-theme="dark"] body:has(.gs-mural) section[data-testid="stMain"]{
+  background:transparent!important;background-color:transparent!important;}
+body:has(.gs-mural) #aura-3d-canvas{display:none!important;}
+body:has(.gs-mural) .gs-env{display:none!important;}
+/* ── Text legibility over the mural — force the light-on-image treatment
+   regardless of app theme (the artwork is dark/vibrant either way) ── */
+body:has(.gs-mural) .gs-wm{font-family:'Bungee','Plus Jakarta Sans',sans-serif!important;
+  font-weight:400!important;font-size:clamp(1.8rem,3.7vw,3rem)!important;letter-spacing:0.004em!important;
+  line-height:1.08!important;margin:0 0 var(--gs-s3)!important;margin-left:-0.33em!important;
+  background:none!important;-webkit-text-fill-color:#FFFFFF!important;
+  color:#FFFFFF!important;text-shadow:0 3px 30px rgba(8,10,30,0.68),0 2px 5px rgba(0,0,0,0.5);}
+body:has(.gs-mural) .gs-wm span{margin-left:0.32em!important;
+  background:linear-gradient(105deg,#B6C2FF,#E0CBFF)!important;
+  -webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
+body:has(.gs-mural) .gs-tag{color:#FFFFFF!important;text-shadow:0 1px 14px rgba(8,10,30,0.55);}
+body:has(.gs-mural) .gs-sub{color:rgba(255,255,255,0.88)!important;text-shadow:0 1px 12px rgba(8,10,30,0.55);}
+body:has(.gs-mural) .gs-sub b{color:#D3BEFF!important;}
+body:has(.gs-mural) .gs-field-label{color:rgba(255,255,255,0.82)!important;text-shadow:0 1px 8px rgba(8,10,30,0.5);}
+body:has(.gs-mural) .gs-pill{background:rgba(12,16,36,0.52)!important;border-color:rgba(255,255,255,0.18)!important;
+  color:#EDEFF7!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 8px 22px -12px rgba(0,0,0,0.5);
+  transition:transform 220ms cubic-bezier(0.23,1,0.32,1),background 220ms ease,box-shadow 220ms ease!important;
+  animation:gs-pill-in 0.5s cubic-bezier(0.23,1,0.32,1) both;}
+body:has(.gs-mural) .gs-pillrow .gs-pill:nth-child(1){animation-delay:0.04s;}
+body:has(.gs-mural) .gs-pillrow .gs-pill:nth-child(2){animation-delay:0.12s;}
+@keyframes gs-pill-in{from{opacity:0;transform:translateY(9px) scale(0.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+@media (hover:hover) and (pointer:fine){
+  body:has(.gs-mural) .gs-pill:hover{transform:translateY(-2px)!important;background:rgba(18,24,52,0.62)!important;
+    box-shadow:0 14px 30px -14px rgba(0,0,0,0.6)!important;}}
+/* the live "Online" dot breathes */
+body:has(.gs-mural) .gs-pill-dot{animation:gs-dot-pulse 2.2s ease-in-out infinite;}
+@keyframes gs-dot-pulse{0%,100%{box-shadow:0 0 0 0 rgba(18,185,129,0.55);}55%{box-shadow:0 0 0 7px rgba(18,185,129,0);}}
+@media (prefers-reduced-motion:reduce){
+  body:has(.gs-mural) .gs-pill{animation:none!important;}
+  body:has(.gs-mural) .gs-pill-dot{animation:none!important;}}
+body:has(.gs-mural) .gs-feats{border-top-color:rgba(255,255,255,0.16)!important;}
+body:has(.gs-mural) .gs-feat-t{color:#FFFFFF!important;text-shadow:0 1px 10px rgba(8,10,30,0.5);}
+body:has(.gs-mural) .gs-feat-d{color:rgba(255,255,255,0.72)!important;}
+body:has(.gs-mural) .gs-badge{background:rgba(255,255,255,0.12)!important;}
+/* name field: a light frosted input with DARK text — always legible on the
+   dark mural, in BOTH light and dark app themes (the previous dark-on-dark
+   treatment made the typed name invisible in light mode). */
+body:has(.gs-mural) [data-testid="stForm"] [data-testid="stTextInputRootElement"],
+body:has(.gs-mural) [data-testid="stForm"] [data-baseweb="base-input"],
+body:has(.gs-mural) [data-testid="stForm"] [data-baseweb="input"]{
+  background:rgba(255,255,255,0.95)!important;background-color:rgba(255,255,255,0.95)!important;
+  border:1.5px solid rgba(255,255,255,0.75)!important;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:0 12px 34px -14px rgba(0,0,0,0.5)!important;}
+body:has(.gs-mural) [data-testid="stForm"] [data-testid="stTextInput"] input{
+  background:transparent!important;background-color:transparent!important;
+  color:#14141F!important;-webkit-text-fill-color:#14141F!important;caret-color:#2531D6!important;}
+body:has(.gs-mural) [data-testid="stForm"] [data-testid="stTextInput"] input::placeholder{
+  color:rgba(20,20,45,0.5)!important;-webkit-text-fill-color:rgba(20,20,45,0.5)!important;}
+@media (prefers-reduced-motion:reduce){.gs-mural-img{animation:none!important;}}
+</style>
+""", unsafe_allow_html=True)
+            st.markdown(
+                '<div class="gs-mural" aria-hidden="true">'
+                f'<div class="gs-mural-img" style="background-image:url(\'{_welcome_bg}\');"></div>'
+                '<div class="gs-mural-scrim"></div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown('<div class="gs-env" aria-hidden="true"></div>', unsafe_allow_html=True)
 
         # Logo intentionally removed — the welcome gate is now a clean, centred
-        # text-led composition (no mascot). The ambient gs-env wash above stays.
+        # text-led composition (no mascot) sitting over the mural background.
 
         # ── Genuine WebGL scene (Three.js) inside a self-contained iframe.
         #    It styles its own host iframe to fixed/fullscreen, reads the
@@ -12625,6 +13005,22 @@ canvas{display:block;}
   if(D.fonts && D.fonts.ready){ D.fonts.ready.then(go).catch(go); }
   P.requestAnimationFrame(function(){ P.requestAnimationFrame(go); });
   P.setTimeout(go, 1000);
+  // Cursor parallax on the mural — the CSS transition smooths it into a
+  // spring-like drift. Skipped under reduced-motion. Cleaned up on unload.
+  var reduce=false; try{ reduce=P.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
+  if(!reduce){
+    var raf=0, tx=0, ty=0;
+    var onMove=function(e){
+      var img=D.querySelector('.gs-mural-img'); if(!img) return;
+      var nx=(e.clientX/(P.innerWidth||1)-0.5), ny=(e.clientY/(P.innerHeight||1)-0.5);
+      if(raf) return;
+      raf=P.requestAnimationFrame(function(){ raf=0;
+        img.style.transform='scale(1.03) translate('+(-nx*1.4).toFixed(2)+'%,'+(-ny*1.1).toFixed(2)+'%)';
+      });
+    };
+    P.addEventListener('mousemove',onMove,{passive:true});
+    P.addEventListener('pagehide',function(){ try{ P.removeEventListener('mousemove',onMove); }catch(e){} });
+  }
 }catch(e){} })();</script>
 """, height=0, width=0)
 
@@ -12635,7 +13031,7 @@ canvas{display:block;}
         # Centred, left-aligned welcome column — no logo. Side spacers keep the
         # content block horizontally centred on the page while the text inside
         # stays left-aligned for easy scanning (Apple-style hero balance).
-        _lsp, _content, _rsp = st.columns([1, 1.6, 1], gap="large", vertical_alignment="center")
+        _lsp, _content, _rsp = st.columns([0.55, 1.6, 1.2], gap="large", vertical_alignment="center")
         with _content:
             st.markdown(
                 '<div class="gs-content">'
@@ -12789,74 +13185,216 @@ canvas{display:block;}
 
     # ── Sidebar (only shown in actual chat, not on gate) ──────────────
     with st.sidebar:
+        p = price_data  # kept for downstream use
 
-        # Live $PROS price card
-        p = price_data
-        # OctoBot branding — text only, no image dependency
+        # ── Chat sidebar redesign ─────────────────────────────────────────
+        # Transparent, blended with the global background; theme-aware; clean
+        # chat-app menu. STRICTLY scoped to the chat page via
+        # html[data-octo-page="chat"] so no other page's chrome is affected.
+        st.markdown("""
+<style>
+/* Transparent, blended sidebar — CHAT PAGE ONLY */
+html[data-octo-page="chat"] section[data-testid="stSidebar"],
+html[data-octo-page="chat"] [data-testid="stSidebar"]{
+  background:transparent!important;background-color:transparent!important;
+  border-right:1px solid var(--csb-line)!important;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stSidebarContent"],
+html[data-octo-page="chat"] [data-testid="stSidebar"] > div:first-child{
+  background:transparent!important;padding:30px 15px 22px!important;}
+/* Vertical rhythm — comfortable, even spacing between every row */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:0.55rem!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] .stButton>button{padding:8px 11px!important;}
+/* section header: real air above each group (a clear break of breathing room) */
+html[data-octo-page="chat"] [data-testid="stSidebar"] .csb-sec{margin:20px 5px 9px!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] .csb-brand{padding-bottom:14px!important;margin-bottom:8px!important;}
+/* toggles: each on its own comfortably-spaced row; switch + label aligned; the
+   whole row padded to match the menu buttons' left edge above/below */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stElementContainer"]:has([data-testid="stToggle"]){margin:2px 0!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stToggle"] label{
+  gap:11px!important;align-items:center!important;padding:6px 11px!important;min-height:34px!important;
+  border-radius:9px!important;transition:background 150ms ease!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stToggle"] label:hover{background:var(--csb-hover)!important;}
+/* link-button (Community) sits flush with the menu rows above it */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stElementContainer"]:has([data-testid="stLinkButton"]){margin-top:0!important;}
+/* Clear the fixed 260px sidebar — the chat content block only had a ~47px left
+   margin and underlapped the sidebar (the old opaque grey masked it). Offset the
+   content past the sidebar with a comfortable gutter and cap the column so it
+   reads as a proper chat surface. Chat page only. */
+html[data-octo-page="chat"] [data-testid="stMainBlockContainer"]{
+  margin-left:260px!important;margin-right:0!important;
+  padding-left:2rem!important;padding-right:4.75rem!important;max-width:none!important;}
+/* Centre the content column within the space to the RIGHT of the sidebar so the
+   control bar, welcome card and input read as a centred chat surface. */
+html[data-octo-page="chat"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+  max-width:900px!important;margin-left:auto!important;margin-right:auto!important;}
+/* The chat input lives in a FIXED bottom bar that centres in the FULL width
+   (ignoring the sidebar), so it drifted left of the content column. Mirror the
+   exact same offset + centred 760px column here so the input lines up with the
+   welcome card / control bar above it. */
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{
+  margin-left:260px!important;margin-right:0!important;max-width:none!important;
+  padding-left:2rem!important;padding-right:4.75rem!important;}
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] > [data-testid="stVerticalBlock"]{
+  max-width:900px!important;margin-left:auto!important;margin-right:auto!important;}
+/* ── Chat welcome strip (empty state) — a full-width header banner across the
+   TOP of the chat surface: brand mark + greeting laid out horizontally. It sits
+   at the top (not floating/centred), the options menu renders directly BELOW it,
+   and functional suggestion cards below that. Simply isn't rendered once a
+   conversation starts. High-contrast in BOTH themes. ── */
+@keyframes chero-rise{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+html[data-octo-page="chat"] .chero{width:100%;max-width:none;margin:-10px 0 0!important;}
+html[data-octo-page="chat"] .chero-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:24px;text-align:left;
+  padding:26px 34px;border-radius:22px;
+  background:linear-gradient(115deg,rgba(37,49,214,0.11),rgba(139,58,224,0.09) 52%,rgba(255,255,255,0.55));
+  border:1px solid rgba(20,20,60,0.08);
+  box-shadow:0 22px 50px -32px rgba(28,30,84,0.34),inset 0 1px 0 rgba(255,255,255,0.65);
+  backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);
+  animation:chero-rise 0.5s cubic-bezier(0.23,1,0.32,1) both;}
+html[data-octo-page="chat"] .chero-card::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(520px 220px at 10% -40%,rgba(84,72,240,0.18),transparent 66%);}
+html[data-octo-page="chat"] .chero-mark{position:relative;flex:none;width:64px;height:64px;margin:0;border-radius:19px;
+  display:flex;align-items:center;justify-content:center;font-size:32px;
+  background:linear-gradient(150deg,#2A31E0,#6D28D9 68%,#8B3AE0);
+  box-shadow:0 16px 34px -12px rgba(96,60,240,0.6),inset 0 1px 0 rgba(255,255,255,0.35);}
+html[data-octo-page="chat"] .chero-text{position:relative;min-width:0;}
+html[data-octo-page="chat"] .chero-eyebrow{font-family:'Inter',system-ui;font-size:10.5px;font-weight:700;
+  letter-spacing:0.16em;text-transform:uppercase;color:#3E45C7;margin:0 0 5px;}
+html[data-octo-page="chat"] .chero-title{font-family:'Syne',sans-serif!important;font-size:1.72rem!important;font-weight:800!important;
+  letter-spacing:-0.02em!important;line-height:1.05!important;margin:0 0 7px!important;color:#0D1020!important;}
+html[data-octo-page="chat"] .chero-sub{font-family:'Inter',system-ui!important;font-size:0.92rem!important;
+  line-height:1.55!important;color:#4B5168!important;margin:0!important;max-width:66ch!important;}
+@media (max-width:640px){html[data-octo-page="chat"] .chero-card{flex-direction:column;text-align:center;gap:14px;padding:24px 22px;}
+  html[data-octo-page="chat"] .chero-sub{max-width:none!important;}}
+/* suggestion label + functional cards (a 4-up row on the wider surface) */
+html[data-octo-page="chat"] .chero-lead{width:100%;max-width:none;margin:22px 0 10px;font-family:'Inter',system-ui;
+  font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#8A90A6;text-align:left;padding-left:3px;
+  animation:chero-rise 0.5s cubic-bezier(0.23,1,0.32,1) 0.05s both;}
+html[data-octo-page="chat"] [data-testid="stHorizontalBlock"]:has([class*="st-key-sug_"]){
+  width:100%;max-width:none;margin:0 auto!important;gap:11px!important;
+  animation:chero-rise 0.5s cubic-bezier(0.23,1,0.32,1) 0.1s both;}
+html[data-octo-page="chat"] [data-testid="stHorizontalBlock"]:has([class*="st-key-sug_"]) [data-testid="stColumn"]{gap:11px!important;}
+html[data-octo-page="chat"] [class*="st-key-sug_"] button{
+  width:100%!important;text-align:left!important;justify-content:flex-start!important;
+  border-radius:14px!important;padding:14px 15px!important;min-height:0!important;white-space:normal!important;
+  font-family:'Inter',system-ui!important;font-size:13px!important;font-weight:600!important;color:#161A2C!important;
+  background:rgba(255,255,255,0.9)!important;border:1px solid #E5E8F2!important;
+  box-shadow:0 8px 20px -14px rgba(20,20,60,0.28)!important;
+  transition:transform 180ms cubic-bezier(0.23,1,0.32,1),box-shadow 180ms ease,border-color 180ms ease,background 180ms ease!important;}
+@media (hover:hover) and (pointer:fine){html[data-octo-page="chat"] [class*="st-key-sug_"] button:hover{
+  transform:translateY(-2px)!important;border-color:#B7BEEA!important;background:#fff!important;
+  box-shadow:0 14px 28px -16px rgba(37,49,214,0.34)!important;}}
+html[data-octo-page="chat"] [class*="st-key-sug_"] button:active{transform:scale(0.98)!important;}
+/* chat-page warning notice — readable in both themes */
+html[data-octo-page="chat"] .chero-note{width:100%;max-width:none;margin:18px auto 0!important;text-align:center;
+  font-family:'Inter',system-ui;font-size:11.5px;font-weight:600;line-height:1.5;color:#9A6207;}
+/* dark */
+html[data-theme="dark"][data-octo-page="chat"] .chero-card{
+  background:linear-gradient(115deg,rgba(126,139,255,0.16),rgba(139,58,224,0.13) 52%,rgba(28,32,50,0.5));border-color:rgba(255,255,255,0.09);
+  box-shadow:0 24px 54px -32px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.06);}
+html[data-theme="dark"][data-octo-page="chat"] .chero-card::before{background:radial-gradient(520px 220px at 10% -40%,rgba(122,112,255,0.24),transparent 66%);}
+html[data-theme="dark"][data-octo-page="chat"] .chero-eyebrow{color:#9DACFF;}
+html[data-theme="dark"][data-octo-page="chat"] .chero-title{color:#F4F6FC!important;}
+html[data-theme="dark"][data-octo-page="chat"] .chero-sub{color:#B4BBD2!important;}
+html[data-theme="dark"][data-octo-page="chat"] .chero-lead{color:#868EA6;}
+html[data-theme="dark"][data-octo-page="chat"] [class*="st-key-sug_"] button{
+  color:#E7EAF4!important;background:rgba(255,255,255,0.05)!important;border-color:rgba(255,255,255,0.10)!important;
+  box-shadow:0 8px 22px -16px rgba(0,0,0,0.6)!important;}
+@media (hover:hover) and (pointer:fine){html[data-theme="dark"][data-octo-page="chat"] [class*="st-key-sug_"] button:hover{
+  background:rgba(255,255,255,0.08)!important;border-color:rgba(126,139,255,0.42)!important;
+  box-shadow:0 14px 30px -16px rgba(0,0,0,0.7)!important;}}
+html[data-theme="dark"][data-octo-page="chat"] .chero-note{color:#F1B36B;}
+/* theme tokens (scoped to chat) */
+html[data-octo-page="chat"]{--csb-tx:#151A2E;--csb-mut:#71778C;--csb-line:rgba(20,20,60,0.08);
+  --csb-hover:rgba(20,20,60,0.05);--csb-active:rgba(37,49,214,0.10);}
+html[data-theme="dark"][data-octo-page="chat"]{--csb-tx:#EDEFF7;--csb-mut:#868EA6;--csb-line:rgba(255,255,255,0.08);
+  --csb-hover:rgba(255,255,255,0.06);--csb-active:rgba(126,139,255,0.16);}
+/* brand */
+.csb-brand{display:flex;align-items:center;gap:11px;padding:2px 4px 15px;margin-bottom:4px;
+  border-bottom:1px solid var(--csb-line);}
+.csb-brand .ic{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;background:var(--csb-hover);flex:none;}
+.csb-brand .nm{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--csb-tx);line-height:1;}
+.csb-brand .sb{font-size:10px;color:var(--csb-mut);letter-spacing:0.06em;margin-top:4px;}
+/* section label */
+.csb-sec{font-size:9.5px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
+  color:var(--csb-mut);margin:17px 5px 7px;}
+/* every sidebar button → a clean, left-aligned menu row */
+html[data-octo-page="chat"] [data-testid="stSidebar"] .stButton>button,
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]{
+  width:100%;text-align:left!important;justify-content:flex-start!important;
+  background:transparent!important;border:1px solid transparent!important;color:var(--csb-tx)!important;
+  font-family:'Inter',system-ui!important;font-size:13px!important;font-weight:500!important;
+  padding:9px 11px!important;min-height:0!important;border-radius:9px!important;box-shadow:none!important;
+  transition:background 150ms ease,border-color 150ms ease,transform 110ms ease!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] .stButton>button *{text-align:left!important;color:var(--csb-tx)!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] .stButton>button:hover{
+  background:var(--csb-hover)!important;border-color:var(--csb-line)!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] .stButton>button:active{transform:scale(0.98)!important;}
+/* New chat = the one primary action */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [class*="st-key-reset_chat"] button{
+  background:linear-gradient(100deg,var(--gs-g1,#2531D6),var(--gs-g2,#6D28D9))!important;
+  color:#fff!important;font-weight:700!important;border:none!important;justify-content:center!important;
+  text-align:center!important;box-shadow:0 10px 22px -12px rgba(96,80,240,0.65)!important;padding:11px!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [class*="st-key-reset_chat"] button *{color:#fff!important;text-align:center!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [class*="st-key-reset_chat"] button:hover{
+  filter:brightness(1.07);border:none!important;
+  background:linear-gradient(100deg,var(--gs-g1,#2531D6),var(--gs-g2,#6D28D9))!important;}
+/* toggles theme-aware */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stToggle"] p,
+html[data-octo-page="chat"] [data-testid="stSidebar"] label p,
+html[data-octo-page="chat"] [data-testid="stSidebar"] label{color:var(--csb-tx)!important;font-size:13px!important;}
+/* link-button (Community) matches the menu rows */
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stLinkButton"] a{
+  width:100%;justify-content:flex-start!important;background:transparent!important;border:1px solid transparent!important;
+  color:var(--csb-tx)!important;font-size:13px!important;font-weight:500!important;padding:9px 11px!important;
+  border-radius:9px!important;box-shadow:none!important;}
+html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stLinkButton"] a:hover{
+  background:var(--csb-hover)!important;border-color:var(--csb-line)!important;}
+</style>
+""", unsafe_allow_html=True)
+
+        # Brand
         st.markdown(
-            '<div style="display:flex;align-items:center;gap:8px;padding:0.3rem 0 0.8rem 0;'
-            'border-bottom:1px solid #D0D3E0;margin-bottom:0.8rem;">'
-            '<span style="font-size:20px;">🐙</span>'
-            '<div>'
-            '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;">OctoBot</div>'
-            '<div style="font-size:10px;color:#7A7F96;letter-spacing:0.05em;">Pharos AI Hub</div>'
-            '</div></div>',
+            '<div class="csb-brand"><div class="ic">🐙</div>'
+            '<div><div class="nm">OctoBot</div><div class="sb">Pharos AI Hub</div></div></div>',
             unsafe_allow_html=True,
         )
 
-           
-        # New conversation
-        st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Conversation</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div class="reset-btn">', unsafe_allow_html=True)
-        if st.button("↺  New Conversation", use_container_width=True, key="reset_chat"):
+        # New chat — the one primary action
+        if st.button("＋   New chat", use_container_width=True, key="reset_chat"):
             st.session_state.messages        = []
             st.session_state.sources_history = []
             bot.reset_memory(st.session_state.octobot_chat_history)
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+        # Explore — starter prompts
+        st.markdown('<div class="csb-sec">Explore</div>', unsafe_allow_html=True)
+        for q in ["What is Pharos?", "What is the PROS token?", "How do I build on Pharos?", "What is RWA?"]:
+            if st.button(q, key="sb_" + q, use_container_width=True):
+                st.session_state["pending_q"] = q
+                st.rerun()
 
-        # Settings toggles
-        st.markdown(
-            '<div style="font-size:10px;font-weight:700;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Settings</div>',
-            unsafe_allow_html=True,
-        )
-        st.session_state.show_sources = st.toggle("🔍 Show sources", value=st.session_state.show_sources)
-        st.session_state.voice_reply  = st.toggle("🗣 Read aloud",   value=st.session_state.voice_reply)
-
-        st.markdown('<hr style="border:none;border-top:2px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
-
-        # Build Path Generator entry
-        st.markdown(
-            '<div style="font-size:12px;font-weight:800;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">🛠 Build Path (General Mode Exclusive)</div>',
-            unsafe_allow_html=True,
-        )
+        # Build path
+        st.markdown('<div class="csb-sec">Build path</div>', unsafe_allow_html=True)
         for goal, icon in [("Agent","🤖"),("dApp","🏗"),("Learning","📚"),("Infrastructure","⚙️")]:
-            if st.button(icon + " " + goal, key="bp_sb_" + goal, use_container_width=True):
+            if st.button(icon + "   " + goal, key="bp_sb_" + goal, use_container_width=True):
                 st.session_state.build_path_goal = goal
                 st.session_state.build_path_data = None
                 st.session_state["pending_q"]    = f"How do I start building a {goal} on Pharos?"
                 st.rerun()
 
-        st.markdown('<hr style="border:none;border-top:1px solid #D0D3E0;margin:0.7rem 0;">', unsafe_allow_html=True)
+        # Settings
+        st.markdown('<div class="csb-sec">Settings</div>', unsafe_allow_html=True)
+        st.session_state.show_sources = st.toggle("🔍 Show sources", value=st.session_state.show_sources)
+        st.session_state.voice_reply  = st.toggle("🗣 Read aloud",   value=st.session_state.voice_reply)
 
-        # Example prompts
-        st.markdown(
-            '<div style="font-size:12px;font-weight:800;color:#0C0C1A;'
-            'letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Example Prompts</div>',
-            unsafe_allow_html=True,
-        )
-        for q in ["What is Pharos?","What is the PROS token?", "How do I build on Pharos?", "What is RWA?"]:
-            if st.button(q, key="sb_" + q, use_container_width=True):
-                st.session_state["pending_q"] = q
-                st.rerun()
+        # Menu — proper chat-page options
+        st.markdown('<div class="csb-sec">Menu</div>', unsafe_allow_html=True)
+        if st.button("⌂   Back to home", key="csb_home", use_container_width=True):
+            st.session_state.page = "home"
+            st.rerun()
+        st.link_button("💬   Community", PHAROS_DISCORD_URL, use_container_width=True)
 
     # ── Top spacer: guarantees the first row clears the fixed nav on the
     #    chat page regardless of sidebar layout timing / CSS cascade ──
@@ -13096,94 +13634,112 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
     cur_flag = LANG_OPTIONS.get(cur_lang, "🌐")
     current_mode = st.session_state.chat_mode
     is_general   = current_mode == "general"
-    _x402_on     = bool(st.session_state.get("x402_enabled"))
+    # read the toggle's own widget key first — Streamlit updates it *before* the
+    # rerun, so the trigger label reflects a just-flipped premium state at once
+    # (the assigned `x402_enabled` mirror only refreshes further down the script).
+    _x402_on     = bool(st.session_state.get("x402_enabled_toggle_main",
+                                             st.session_state.get("x402_enabled")))
 
-    st.markdown(
-        '<div class="cdeck">'
-        '<div class="cdeck-hd">'
-        '<span class="dot"></span>'
-        '<span class="ttl">OctoBot Console</span>'
-        '<span class="sub">' + cur_flag + ' ' + esc(cur_lang)
-        + ' \u00b7 ' + ('Docs + General' if is_general else 'Docs Only') + '</span>'
-        '</div>'
-        '<div class="cdeck-sec">\U0001F310 Response language</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    LANG_CODE = {"English":"EN","Hindi":"HI","Spanish":"ES","Arabic":"AR","Chinese":"ZH","Japanese":"JA"}
-    lang_cols = st.columns(len(LANG_OPTIONS))
-    for li, (lang, flag) in enumerate(LANG_OPTIONS.items()):
-        with lang_cols[li]:
-            _code = LANG_CODE.get(lang, lang[:2].upper())
-            _lbl = flag + " " + _code + ("  \u2713" if lang == cur_lang else "")
-            if st.button(_lbl, key="lang_" + lang, use_container_width=True, help=lang):
-                st.session_state.octobot_lang = lang
-                st.rerun()
-
-    st.markdown('<div class="cdeck-sec">\u2699\ufe0f Answer mode</div>', unsafe_allow_html=True)
-    mc1, mc2 = st.columns(2)
-    with mc1:
-        _dl = "\U0001F4DA Docs Only" + ("  \u2713" if not is_general else "")
-        if st.button(_dl, key="mode_docs", use_container_width=True):
-            st.session_state.chat_mode = "docs"; st.rerun()
-    with mc2:
-        _gl = "\U0001F310 Docs + General" + ("  \u2713" if is_general else "")
-        if st.button(_gl, key="mode_general", use_container_width=True):
-            st.session_state.chat_mode = "general"; st.rerun()
-
-    st.markdown('<div class="cdeck-sec">\U0001F4A0 Premium answers \u00b7 x402</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.7rem;'
-        'background:' + ("linear-gradient(135deg,#0A0A28,#1A1AFF)" if _x402_on else "#F5F6FB") + ';'
-        'border:1px solid ' + ("#1A1AFF" if _x402_on else "#E1E4EE") + ';border-radius:12px;'
-        'padding:0.7rem 0.95rem;box-shadow:' + ("0 6px 16px rgba(26,26,255,0.22)" if _x402_on else "none") + ';">'
-        '<span style="font-size:19px;line-height:1;">\U0001F4A0</span>'
-        '<div style="min-width:0;flex:1;">'
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-        '<span style="font-family:Syne,sans-serif;font-size:12.5px;font-weight:800;'
-        'color:' + ("#FFFFFF" if _x402_on else "#0C0C1A") + ';">Premium \u00b7 x402</span>'
-        '<span style="font-size:8.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'
-        'border-radius:999px;padding:2px 8px;'
-        + ("background:rgba(255,255,255,0.18);color:#FFFFFF;" if _x402_on
-           else "background:#FFFFFF;color:#9AA0AE;border:1px solid #E1E4EE;")
-        + '">' + ("ON \u00b7 pay-per-call" if _x402_on else "OFF \u00b7 free mode") + '</span>'
-        '</div>'
-        '<div style="font-size:10.5px;line-height:1.5;margin-top:2px;'
-        'color:' + ("rgba(255,255,255,0.75)" if _x402_on else "#8A90A6") + ';">'
-        + (("Next question ~" + ("%.2f" % X402_PRICE_PROS) + " PROS \u2014 settle on-chain for a deeper answer.")
-           if _x402_on else
-           "Answers are free. Enable to settle a tiny PROS micro-payment for an expert, in-depth reply.")
-        + '</div></div></div>',
-        unsafe_allow_html=True,
-    )
-
-    _xc1, _xc2 = st.columns([1, 2], gap="small")
-    with _xc1:
-        st.session_state.x402_enabled = st.toggle(
-            "Pay-per-call",
-            value=st.session_state.x402_enabled,
-            key="x402_enabled_toggle_main",
-            help=("When ON, your next question is a premium (x402) call: OctoBot returns an "
-                  "HTTP 402 payment challenge, you settle a tiny PROS micro-payment on-chain, "
-                  "and the verified payment unlocks a deeper answer. Free answering stays on when OFF."),
-        )
-    with _xc2:
-        # The payment destination is fixed to the team's configured
-        # address (x402_get_payto() falls back to X402_PAYTO_ADDRESS
-        # below) and is intentionally NOT user-editable — an address
-        # is not something that should sit in an editable text field
-        # that could be altered (accidentally or otherwise). No input
-        # is rendered here at all; this is a plain, static display.
+    # ── Welcome strip — a full-width header banner across the TOP of the chat
+    #    surface (empty state only). Rendered BEFORE the options menu so the menu
+    #    sits directly beneath it; vanishes the moment a conversation starts. ──
+    if not st.session_state.messages:
+        _sname = st.session_state.sailor_name
         st.markdown(
-            '<div style="padding:0.85rem 1.1rem;border-radius:12px;'
-            'background:rgba(21,128,61,0.08);border:1px solid rgba(21,128,61,0.22);'
-            'font-size:12.5px;font-weight:600;color:#15803D;line-height:1.4;'
-            'display:flex;align-items:center;height:100%;box-sizing:border-box;">'
-            '\u2713 Payments go to the team.'
-            '</div>',
+            '<div class="chero"><div class="chero-card">'
+            '<div class="chero-mark">🐙</div>'
+            '<div class="chero-text">'
+            '<div class="chero-eyebrow">Pharos AI Guide</div>'
+            '<h1 class="chero-title">Welcome aboard, ' + esc(_sname) + '</h1>'
+            '<p class="chero-sub">Ask me anything about Pharos — SPNs, Native Restaking, RWA, '
+            'consensus, or the $PROS token. I answer in your language.</p>'
+            '</div></div></div>',
             unsafe_allow_html=True,
         )
+
+    # ── Chat options — consolidated into ONE clean popover menu so the chat
+    #    surface stays uncluttered. Language · Answer mode · Premium all live in
+    #    a tidy dropdown; the trigger pill shows the current settings at a glance.
+    st.markdown("""
+<style>
+/* trigger — a clean, centred settings pill */
+/* trigger — a clearly-clickable "options" chip, parked top-right of the surface.
+   The popover shrinks to content width, so right-align via its parent container. */
+html[data-octo-page="chat"] [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has([data-testid="stPopover"]),
+html[data-octo-page="chat"] [data-testid="stLayoutWrapper"]:has(> [data-testid="stPopover"]),
+html[data-octo-page="chat"] [data-testid="stElementContainer"]:has([data-testid="stPopover"]){
+  align-self:flex-end!important;margin:14px 0 6px 0!important;}
+[data-testid="stPopover"] button{
+  border-radius:11px!important;border:1px solid rgba(37,49,214,0.20)!important;
+  background:linear-gradient(135deg,rgba(37,49,214,0.07),rgba(255,255,255,0.85))!important;
+  backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;
+  font-family:'Inter',system-ui!important;font-size:12.5px!important;font-weight:600!important;color:#2A3050!important;
+  padding:0.5rem 0.95rem!important;box-shadow:0 6px 18px -10px rgba(37,49,214,0.28)!important;transition:all 180ms cubic-bezier(0.23,1,0.32,1)!important;}
+[data-testid="stPopover"] button:hover{background:linear-gradient(135deg,rgba(37,49,214,0.13),rgba(255,255,255,0.95))!important;
+  border-color:rgba(37,49,214,0.34)!important;transform:translateY(-1px)!important;box-shadow:0 10px 22px -10px rgba(37,49,214,0.36)!important;}
+[data-testid="stPopover"] button:active{transform:scale(0.98)!important;}
+html[data-theme="dark"] [data-testid="stPopover"] button{
+  background:linear-gradient(135deg,rgba(126,139,255,0.16),rgba(22,26,42,0.8))!important;color:#DfE3F2!important;
+  border-color:rgba(126,139,255,0.28)!important;}
+/* section labels inside the menu */
+.copt-sec{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#71778C;margin:14px 2px 8px;}
+.copt-sec:first-of-type{margin-top:2px;}
+html[data-theme="dark"] .copt-sec{color:#868EA6;}
+/* Premium — graphic card inside the menu. OFF state uses a visible lavender
+   tint + defined border so it stands out on the light menu panel (previously a
+   near-white card vanished against the light popover in light mode). */
+[class*="st-key-x402_enabled_toggle_main"]{
+  display:block!important;width:100%!important;box-sizing:border-box!important;margin:0!important;position:relative;overflow:hidden;
+  border:1.5px solid #C7CDF2!important;border-radius:13px;padding:11px 15px!important;
+  background:linear-gradient(135deg,#EBEDFF,#DFE4FB)!important;box-shadow:0 6px 16px -9px rgba(37,49,214,0.22)!important;
+  transition:background 240ms ease,border-color 240ms ease,box-shadow 240ms ease!important;}
+[class*="st-key-x402_enabled_toggle_main"]::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(140px 64px at 90% 50%, rgba(37,49,214,0.10), transparent 72%);}
+[class*="st-key-x402_enabled_toggle_main"] label{flex-direction:row-reverse!important;justify-content:space-between!important;align-items:center!important;gap:12px!important;width:100%!important;}
+[class*="st-key-x402_enabled_toggle_main"] label > div:last-child{flex:1 1 auto!important;}
+[class*="st-key-x402_enabled_toggle_main"] label p{font-family:'Syne',sans-serif!important;font-weight:800!important;font-size:13px!important;color:#14141F!important;letter-spacing:-0.01em!important;margin:0!important;}
+[class*="st-key-x402_enabled_toggle_main"] label p::after{content:"x402";margin-left:8px;font-family:'Inter',system-ui;font-size:8px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:rgba(37,49,214,0.12);color:#2531D6;vertical-align:middle;}
+[class*="st-key-x402_enabled_toggle_main"]:has(input:checked){background:linear-gradient(120deg,#1A1AE8,#4B2ED6 55%,#8B3AE0)!important;border-color:transparent!important;box-shadow:0 14px 30px -12px rgba(96,60,240,0.6)!important;}
+[class*="st-key-x402_enabled_toggle_main"]:has(input:checked)::before{background:radial-gradient(170px 84px at 90% 50%, rgba(255,255,255,0.22), transparent 72%)!important;}
+[class*="st-key-x402_enabled_toggle_main"]:has(input:checked) label p{color:#fff!important;}
+[class*="st-key-x402_enabled_toggle_main"]:has(input:checked) label p::after{background:rgba(255,255,255,0.22)!important;color:#fff!important;}
+html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"]{background:linear-gradient(135deg,#171B2C,#141829)!important;border-color:rgba(255,255,255,0.1)!important;}
+html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color:#EDEFF7!important;}
+</style>
+""", unsafe_allow_html=True)
+    _mode_lbl = "Docs + General" if is_general else "Docs only"
+    _prem_tag = "   ·   💠 x402" if _x402_on else ""
+    with st.popover(f"⚙    {cur_flag} {cur_lang}    ·    {_mode_lbl}{_prem_tag}", use_container_width=False):
+        st.markdown('<div class="copt-sec">Response language</div>', unsafe_allow_html=True)
+        _lang_disp = {f"{flag}  {lang}": lang for lang, flag in LANG_OPTIONS.items()}
+        _keys = list(_lang_disp.keys())
+        _cur_key = next((k for k, v in _lang_disp.items() if v == cur_lang), _keys[0])
+        _pick = st.selectbox("Language", _keys, index=_keys.index(_cur_key),
+                             label_visibility="collapsed", key="lang_select")
+        if _lang_disp[_pick] != cur_lang:
+            st.session_state.octobot_lang = _lang_disp[_pick]; st.rerun()
+        st.markdown('<div class="copt-sec">Answer mode</div>', unsafe_allow_html=True)
+        _mm1, _mm2 = st.columns(2)
+        with _mm1:
+            if st.button("📚 Docs" + ("  ✓" if not is_general else ""), key="mode_docs",
+                         use_container_width=True):
+                st.session_state.chat_mode = "docs"; st.rerun()
+        with _mm2:
+            if st.button("🌐 Docs + General" + ("  ✓" if is_general else ""), key="mode_general",
+                         use_container_width=True):
+                st.session_state.chat_mode = "general"; st.rerun()
+        st.markdown('<div class="copt-sec">Premium answers</div>', unsafe_allow_html=True)
+        st.session_state.x402_enabled = st.toggle(
+            "💠 Premium answers",
+            value=st.session_state.x402_enabled,
+            key="x402_enabled_toggle_main",
+            help=("When ON, your next question is a premium (x402) call: OctoBot returns an HTTP 402 "
+                  "challenge, you settle a tiny PROS micro-payment on-chain, and it unlocks a deeper "
+                  "answer. Payments go to the team."),
+        )
+        if st.session_state.get("x402_enabled"):
+            st.caption("💠 Premium on — next answer settles ~%.2f PROS on-chain · payments go to the team."
+                       % X402_PRICE_PROS)
     if st.session_state.x402_receipts:
         with st.expander("\U0001F9FE x402 receipts \u00b7 " + str(len(st.session_state.x402_receipts)), expanded=False):
             for _r in reversed(st.session_state.x402_receipts[-8:]):
@@ -13203,25 +13759,26 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
     # Enter and the "Start Chat →" button both submit the same form and
     # run through the exact same code path.
 
-    # ── Welcome card with name ──────────────────
+    # ── Suggestion cards — sit BELOW the strip + options menu. Clicking one
+    #    drops the question into the same pending_q path the chat input uses,
+    #    then reruns. A single 4-up row on the wider surface. ──
     if not st.session_state.messages:
-        name      = st.session_state.sailor_name
-        mode_note = ("Docs + General mode: OctoBot answers from docs first, then uses Gemini for anything not in documentation."
-                     if st.session_state.chat_mode == "general"
-                     else "Docs only mode: OctoBot answers strictly from verified Pharos documentation.")
+        st.markdown('<div class="chero-lead">Try one of these</div>', unsafe_allow_html=True)
+        _starters = [
+            ("🌐  What is Pharos?",        "What is Pharos and what makes its L1 different?"),
+            ("🔗  Native Restaking",       "Explain Native Restaking and how SPNs share security on Pharos."),
+            ("🏦  RWA on Pharos",          "How does Pharos support Real-World Assets (RWA) on-chain?"),
+            ("💠  The $PROS token",        "What is the $PROS token used for — utility, supply and staking?"),
+        ]
+        _sug_cols = st.columns(4, gap="small")
+        for _i, (_lbl, _q) in enumerate(_starters):
+            with _sug_cols[_i]:
+                if st.button(_lbl, key=f"sug_{_i}", use_container_width=True):
+                    st.session_state.pending_q = _q
+                    st.rerun()
         st.markdown(
-            '<div class="welcome-card" style="animation:page-fadein 0.2s cubic-bezier(0.4,0,0.2,1) both;">'
-            '<h3>Hi ' + esc(name) + '! 👋 Welcome aboard</h3>'
-            '<p>Ask me anything about Pharos Network — SPNs, Native Restaking, RWA, consensus, '
-            'building on Pharos, or the $PROS token. <em>' + mode_note + '</em></p>'
-            '<div class="tag-row">'
-            '<span class="tag">SPNs</span><span class="tag">L1 Architecture</span>'
-            '<span class="tag">Native Restaking</span><span class="tag">RWA</span>'
-            '<span class="tag">DeFi</span><span class="tag">Build on Pharos</span>'
-            '<span class="tag">$PROS Token</span><span class="tag">🌐 Multilingual</span>'
-            '</div></div>'
-            '<p class="notice" style="color:#000000;font-weight:700;">⚠️ If chat is not responding or not loading, API usage may be exhausted. '
-            'Run OctoBot locally with your own API key to continue.</p>',
+            '<p class="chero-note">⚠️ If chat is not responding or slow to load, API usage may be '
+            'exhausted — run OctoBot locally with your own API key to continue.</p>',
             unsafe_allow_html=True,
         )
 
@@ -14518,14 +15075,88 @@ elif st.session_state.page == "campaigns":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "updates":
 
+    # ── Full-bleed newspaper backdrop (news_bg.jpg) — Updates page ONLY. Painted
+    #    on the full-viewport stApp element (a fixed decorative div gets clipped
+    #    by a transformed ancestor, leaving gaps at the sides) with a theme-aware
+    #    scrim layered on top: a soft white veil in light mode, a deep dark veil
+    #    in dark mode. Inner shells are cleared so the image reads edge-to-edge.
+    #    Also pulls the whole page up closer to the nav. Scoped to
+    #    data-octo-page="updates" so no other page is touched. ──
+    _news_bg = get_news_bg_b64()
+    if _news_bg:
+        st.markdown(
+            "<style>"
+            # image + light scrim on the full-bleed app shell (covers the whole viewport)
+            "html[data-octo-page=\"updates\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(240,242,250,0.68) 0%,rgba(234,237,248,0.60) 46%,rgba(226,230,244,0.82) 100%),"
+            "url('" + _news_bg + "') center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"][data-octo-page=\"updates\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(9,11,24,0.85) 0%,rgba(8,10,22,0.80) 46%,rgba(6,8,18,0.95) 100%),"
+            "url('" + _news_bg + "') center center / cover no-repeat fixed!important;}"
+            # clear the inner shells so the stApp backdrop shows through
+            "html[data-octo-page=\"updates\"] [data-testid=\"stAppViewContainer\"],"
+            "html[data-octo-page=\"updates\"] section[data-testid=\"stMain\"],"
+            "html[data-octo-page=\"updates\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "html[data-octo-page=\"updates\"] #aura-3d-canvas,"
+            "html[data-octo-page=\"updates\"] .gs-env{display:none!important;}"
+            # bring the content up closer to the nav + keep it centred
+            "html[data-octo-page=\"updates\"] [data-testid=\"stMainBlockContainer\"]{padding-top:92px!important;max-width:1160px!important;margin:0 auto!important;}"
+            "</style>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Live headline ticker (replaces the old banner) — a slim strip that loops
+    #    the latest @pharos_network headlines like a newsroom crawl. Constant
+    #    motion → linear timing; pauses on hover; honours reduced-motion. Built
+    #    from the real fetched posts so it is genuinely live. ──
+    _tk_posts = get_pharos_x_posts()[:10]
+    def _tk_clip(_t: str) -> str:
+        _t = " ".join((_t or "").split())
+        return (_t[:94] + "…") if len(_t) > 94 else _t
+    _tk_items = [_tk_clip(_p.get("text", "")) for _p in _tk_posts if _p.get("text")]
+    if not _tk_items:
+        _tk_items = [
+            "Follow @pharos_network for announcements, ecosystem launches and protocol updates",
+            "Native Restaking is live on Pharos — SPNs share the L1's security",
+            "RWA and DeFi are building on Pharos", "pALPHA and Expedition seasons are ongoing",
+        ]
+    _tk_seq = "".join(
+        '<span class="nt-item">' + esc(_it) + '</span><span class="nt-sep">◆</span>'
+        for _it in _tk_items
+    )
     st.markdown(
-        '<div class="section-dark">'
-        '<div style="position:relative;z-index:1;">'
-        '<div class="section-eyebrow"><span style="font-size:12px;">📋</span>&nbsp;PHAROS NEWS</div>'
-        '<h2 class="section-h">Active Updates</h2>'
-        '<p class="section-sub">Direct from <a href="' + PHAROS_X_URL + '" target="_blank">@pharos_network</a>. '
-        'Live feed of the latest official posts — announcements, ecosystem launches, partnerships, campaigns and protocol updates. Refreshes automatically.</p>'
-        '</div></div>',
+        "<style>"
+        "html[data-octo-page=\"updates\"] .nt-strip{display:flex;align-items:stretch;width:100%;height:48px;margin:0 0 22px;"
+        "border-radius:14px;overflow:hidden;background:rgba(255,255,255,0.72);border:1px solid rgba(20,20,60,0.08);"
+        "box-shadow:0 12px 30px -18px rgba(20,20,60,0.28),inset 0 1px 0 rgba(255,255,255,0.6);"
+        "backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3);"
+        "animation:nt-in 0.5s cubic-bezier(0.23,1,0.32,1) both;}"
+        "@keyframes nt-in{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}"
+        "html[data-octo-page=\"updates\"] .nt-badge{flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;"
+        "font-family:'Inter',system-ui;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#fff;"
+        "background:linear-gradient(135deg,#1A1AE8,#4B2ED6 60%,#6D28D9);}"
+        "html[data-octo-page=\"updates\"] .nt-dot{width:7px;height:7px;border-radius:50%;background:#fff;"
+        "box-shadow:0 0 0 3px rgba(255,255,255,0.32);animation:nt-pulse 1.8s ease-in-out infinite;}"
+        "@keyframes nt-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.55;transform:scale(0.72);}}"
+        "html[data-octo-page=\"updates\"] .nt-view{flex:1;overflow:hidden;position:relative;display:flex;align-items:center;"
+        "-webkit-mask-image:linear-gradient(90deg,transparent,#000 3.5%,#000 96.5%,transparent);"
+        "mask-image:linear-gradient(90deg,transparent,#000 3.5%,#000 96.5%,transparent);}"
+        "html[data-octo-page=\"updates\"] .nt-track{display:inline-flex;align-items:center;white-space:nowrap;"
+        "animation:nt-scroll 52s linear infinite;will-change:transform;}"
+        "@keyframes nt-scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}"
+        "html[data-octo-page=\"updates\"] .nt-strip:hover .nt-track{animation-play-state:paused;}"
+        "html[data-octo-page=\"updates\"] .nt-item{font-family:'Inter',system-ui;font-size:13px;font-weight:600;color:#232838;padding:0 4px;}"
+        "html[data-octo-page=\"updates\"] .nt-sep{color:#5B49E0;padding:0 15px;font-size:8px;position:relative;top:-1px;}"
+        "html[data-theme=\"dark\"][data-octo-page=\"updates\"] .nt-strip{background:rgba(20,24,40,0.66);border-color:rgba(255,255,255,0.10);"
+        "box-shadow:0 14px 34px -18px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.05);}"
+        "html[data-theme=\"dark\"][data-octo-page=\"updates\"] .nt-item{color:#DfE3F2;}"
+        "html[data-theme=\"dark\"][data-octo-page=\"updates\"] .nt-sep{color:#9DACFF;}"
+        # a headline crawl is functional motion — under reduced-motion keep it
+        # looping but much slower/gentler rather than freezing the content
+        "@media (prefers-reduced-motion:reduce){html[data-octo-page=\"updates\"] .nt-track{animation-duration:120s;}}"
+        "</style>"
+        "<div class=\"nt-strip\"><div class=\"nt-badge\"><span class=\"nt-dot\"></span>Live · Pharos News</div>"
+        "<div class=\"nt-view\"><div class=\"nt-track\">" + _tk_seq + _tk_seq + "</div></div></div>",
         unsafe_allow_html=True,
     )
 
@@ -14711,6 +15342,30 @@ elif st.session_state.page == "updates":
 # PAGE: TRADE
 # ═════════════════════════════════════════════
 elif st.session_state.page == "trade":
+    # ── Full-bleed trading backdrop (trade_bg.png) — Trade page ONLY, painted on
+    #    the full-viewport stApp shell (a fixed child gets clipped by transformed
+    #    ancestors). The art is DARK, so the scrim inverts vs the pale newspaper:
+    #    a HEAVY white veil in light mode (image becomes a faint watermark under
+    #    light content) and a LIGHT dark veil in dark mode (the bull/bear shines).
+    #    Scoped to data-octo-page="trade" so no other page is touched. ──
+    _trade_bg = get_trade_bg_b64()
+    if _trade_bg:
+        st.markdown(
+            "<style>"
+            "html[data-octo-page=\"trade\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(240,242,250,0.50) 0%,rgba(234,238,248,0.46) 45%,rgba(228,232,246,0.60) 100%),"
+            "url('" + _trade_bg + "') center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"][data-octo-page=\"trade\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(6,8,18,0.66) 0%,rgba(6,8,16,0.62) 45%,rgba(4,6,14,0.82) 100%),"
+            "url('" + _trade_bg + "') center center / cover no-repeat fixed!important;}"
+            "html[data-octo-page=\"trade\"] [data-testid=\"stAppViewContainer\"],"
+            "html[data-octo-page=\"trade\"] section[data-testid=\"stMain\"],"
+            "html[data-octo-page=\"trade\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "html[data-octo-page=\"trade\"] #aura-3d-canvas,"
+            "html[data-octo-page=\"trade\"] .gs-env{display:none!important;}"
+            "</style>",
+            unsafe_allow_html=True,
+        )
     # Trade-only: centre the whole page — narrow the content column and centre
     # the heading (scoped marker so no other page is affected).
     st.markdown(
@@ -14718,12 +15373,33 @@ elif st.session_state.page == "trade":
         '<style>'
         '.stApp [data-testid="stMainBlockContainer"]:has(.trade-top) > [data-testid="stVerticalBlock"]'
         '{max-width:920px;margin-left:auto;margin-right:auto;}'
+        # theme-aware, image-legible page title + subtitle (was hardcoded near-black,
+        # which vanished in dark mode and over the dark trade art)
+        '.trade-title{font-family:Syne,sans-serif;font-size:1.55rem;font-weight:800;letter-spacing:-0.01em;'
+        'color:#14141F;margin-bottom:0.3rem;text-align:center;text-shadow:0 1px 10px rgba(255,255,255,0.5);}'
+        '.trade-subtitle{font-size:13px;color:#4B5168;margin-bottom:1.2rem;text-align:center;'
+        'text-shadow:0 1px 8px rgba(255,255,255,0.45);}'
+        '.trade-cex-h{font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#14141F;margin:1rem 0 0.6rem 0;'
+        'text-shadow:0 1px 8px rgba(255,255,255,0.5);}'
+        'html[data-theme="dark"] .trade-title{color:#F4F6FC;text-shadow:0 2px 16px rgba(4,6,16,0.7);}'
+        'html[data-theme="dark"] .trade-subtitle{color:#AEB6CE;text-shadow:0 2px 12px rgba(4,6,16,0.7);}'
+        'html[data-theme="dark"] .trade-cex-h{color:#F4F6FC;text-shadow:0 2px 12px rgba(4,6,16,0.7);}'
+        # the page now shows a dark image, so the ticker + chart card (which used
+        # semi-transparent theme vars) let it bleed through and looked dimmed —
+        # give them an opaque frosted backing so their contents read cleanly.
+        'html[data-octo-page="trade"] .price-ticker,'
+        'html[data-octo-page="trade"] [data-testid="stLayoutWrapper"]>[data-testid="stVerticalBlock"]:has([class*="st-key-tr_rng_"])'
+        '{background:rgba(255,255,255,0.92)!important;border:1px solid rgba(20,20,60,0.10)!important;border-radius:16px!important;'
+        'backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);}'
+        'html[data-theme="dark"][data-octo-page="trade"] .price-ticker,'
+        'html[data-theme="dark"][data-octo-page="trade"] [data-testid="stLayoutWrapper"]>[data-testid="stVerticalBlock"]:has([class*="st-key-tr_rng_"])'
+        '{background:rgba(15,19,33,0.85)!important;border-color:rgba(255,255,255,0.10)!important;}'
         '</style>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:1.4rem;font-weight:800;color:#14141F;margin-bottom:0.3rem;text-align:center;">📊 Trade $PROS</div>'
-        '<div style="font-size:13px;color:#5B5F6E;margin-bottom:1.2rem;text-align:center;">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
+        '<div class="trade-title">📊 Trade $PROS</div>'
+        '<div class="trade-subtitle">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
         unsafe_allow_html=True,
         )
 
@@ -14777,7 +15453,7 @@ elif st.session_state.page == "trade":
 
     # CEX grid
     st.markdown(
-        '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#14141F;margin:1rem 0 0.6rem 0;">Trade on CEX</div>',
+        '<div class="trade-cex-h">Trade on CEX</div>',
         unsafe_allow_html=True,
     )
     cex_cols = st.columns(len(CEX_LINKS))
@@ -14816,72 +15492,83 @@ elif st.session_state.page == "trade":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "ecosystem":
 
+    # ── Full-bleed backdrop (eco_bg.jpg) — Ecosystem page ONLY, painted on the
+    #    full-viewport stApp shell with a theme-aware scrim: the art is dark, so a
+    #    lighter white veil in light mode (image stays visible) and a light dark
+    #    veil in dark mode (it shines). Scoped to data-octo-page="ecosystem". ──
+    _eco_bg = get_eco_bg_b64()
+    if _eco_bg:
+        st.markdown(
+            "<style>"
+            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(240,242,250,0.52) 0%,rgba(234,238,248,0.48) 45%,rgba(228,232,246,0.62) 100%),"
+            "url('" + _eco_bg + "') center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"][data-octo-page=\"ecosystem\"] [data-testid=\"stApp\"]{background:"
+            "linear-gradient(180deg,rgba(8,10,22,0.62) 0%,rgba(7,9,20,0.56) 45%,rgba(5,7,16,0.80) 100%),"
+            "url('" + _eco_bg + "') center center / cover no-repeat fixed!important;}"
+            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stAppViewContainer\"],"
+            "html[data-octo-page=\"ecosystem\"] section[data-testid=\"stMain\"],"
+            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "html[data-octo-page=\"ecosystem\"] #aura-3d-canvas,"
+            "html[data-octo-page=\"ecosystem\"] .gs-env{display:none!important;}"
+            # pull the carousel up closer to the nav
+            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stMainBlockContainer\"]{padding-top:86px!important;}"
+            "</style>",
+            unsafe_allow_html=True,
+        )
+
+    # ── DApps on Pharos — 3D coverflow card carousel (self-contained iframe:
+    #    isolated, so it can never leak into another page). Spring-physics arrows /
+    #    wheel / drag / dots, 2–3 cards in view, a brand aura glowing behind the
+    #    centred card, theme-aware, reduced-motion aware. ──
+    _eco_items = [
+        {"name": d["name"], "desc": d["desc"], "logo": d.get("logo", ""),
+         "cat": d.get("cat", []), "url": d["url"], "bg": d.get("bg", "#EEF0FF")}
+        for d in PHAROS_DAPPS
+    ]
+    _eco_carousel = _ECO_CAROUSEL_HTML.replace("__ECO_DATA__", json.dumps(_eco_items))
+    components.html(_eco_carousel, height=588, scrolling=False)
+
+    # ── Bottom actions — two links, centred together, each its own gradient ──
     st.markdown(
-        '<div class="dapp-section-hdr">'
-        '<div style="position:relative;z-index:1;">'
-        '<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:700;'
-        'letter-spacing:0.15em;text-transform:uppercase;color:#64BFFF;margin-bottom:0.6rem;">'
-        '🧩 PHAROS ECOSYSTEM</div>'
-        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
-        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">DApps on Pharos</h2>'
-        '<p style="font-size:0.9rem;color:rgba(255,255,255,0.55);line-height:1.5;max-width:520px;margin:0 auto;">'
-        'Explore the full suite of decentralised applications building on Pharos — '
-        'DeFi, RWA, bridges, NFTs, prediction markets and more.</p>'
-        '</div></div>',
+        '<style>'
+        'html[data-octo-page="ecosystem"] [data-testid="stHorizontalBlock"]:has([data-testid="stLinkButton"])'
+        '{max-width:720px;margin:0.4rem auto 0.4rem!important;gap:16px!important;justify-content:center!important;}'
+        # shared: pill, white text, lift on hover, press feedback
+        'html[data-octo-page="ecosystem"] [data-testid="stLinkButton"] a{'
+        'border:none!important;border-radius:13px!important;padding:0.72rem 1.2rem!important;'
+        'font-family:Inter,system-ui!important;font-weight:700!important;font-size:13px!important;'
+        'color:#fff!important;letter-spacing:0.01em!important;position:relative;overflow:hidden;'
+        'transition:transform 0.18s cubic-bezier(0.23,1,0.32,1),box-shadow 0.22s ease,filter 0.2s ease!important;}'
+        'html[data-octo-page="ecosystem"] [data-testid="stLinkButton"] a p{color:#fff!important;font-weight:700!important;}'
+        'html[data-octo-page="ecosystem"] [data-testid="stLinkButton"] a:hover{transform:translateY(-3px)!important;filter:brightness(1.06);}'
+        'html[data-octo-page="ecosystem"] [data-testid="stLinkButton"] a:active{transform:translateY(-1px) scale(0.98)!important;}'
+        # testnet → brand blue→violet
+        'html[data-octo-page="ecosystem"] a[href*="testnet.pharosnetwork"]{'
+        'background:linear-gradient(135deg,#2A31E0 0%,#6D28D9 100%)!important;'
+        'box-shadow:0 12px 26px -12px rgba(72,60,214,0.7)!important;}'
+        'html[data-octo-page="ecosystem"] a[href*="testnet.pharosnetwork"]:hover{box-shadow:0 18px 34px -12px rgba(72,60,214,0.85)!important;}'
+        # port → teal→cyan (distinct)
+        'html[data-octo-page="ecosystem"] a[href*="port.pharos"]{'
+        'background:linear-gradient(135deg,#0EA5E9 0%,#06B6D4 55%,#14B8A6 100%)!important;'
+        'box-shadow:0 12px 26px -12px rgba(6,150,190,0.7)!important;}'
+        'html[data-octo-page="ecosystem"] a[href*="port.pharos"]:hover{box-shadow:0 18px 34px -12px rgba(6,150,190,0.85)!important;}'
+        '</style>',
         unsafe_allow_html=True,
     )
-
-    # Category filter pills
-    all_cats = sorted(set(t for d in PHAROS_DAPPS for t in d["cat"]))
-    if "dapp_filter" not in st.session_state:
-        st.session_state["dapp_filter"] = "All"
-
-    filter_cols = st.columns(min(len(all_cats) + 1, 9))
-    with filter_cols[0]:
-        if st.button("All", key="df_all", use_container_width=True):
-            st.session_state["dapp_filter"] = "All"; st.rerun()
-    for fi, cat in enumerate(all_cats[:8]):
-        with filter_cols[fi + 1]:
-            if st.button(cat, key="df_" + cat, use_container_width=True):
-                st.session_state["dapp_filter"] = cat; st.rerun()
-
-    active_filter = st.session_state["dapp_filter"]
-    filtered_dapps = (
-        PHAROS_DAPPS if active_filter == "All"
-        else [d for d in PHAROS_DAPPS if active_filter in d["cat"]]
-    )
-
-    # DApp grid — all cards in ONE st.markdown call so CSS grid works
-    cards_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:1.4rem;">'
-    for dapp in filtered_dapps:
-        tags_html = "".join(
-            f'<span class="eco-tag">{t}</span>'
-            for t in dapp["cat"]
+    _eco_b = st.columns([1, 2, 2, 1])
+    with _eco_b[1]:
+        st.link_button(
+            "View all dApps on Pharos Testnet ↗",
+            "https://testnet.pharosnetwork.xyz",
+            use_container_width=True,
         )
-        logo_html = (
-            f'<img src="{dapp["logo"]}" width="48" height="48" '
-            f'style="border-radius:50%;object-fit:cover;background:{dapp.get("bg","#EEF0FF")};'
-            f'border:1px solid #ECEEF4;" '
-            f'onerror="this.outerHTML=\'<div style=&quot;width:48px;height:48px;border-radius:50%;'
-            f'background:{dapp.get("bg","#EEF0FF")};display:flex;align-items:center;'
-            f'justify-content:center;font-size:22px;&quot;></div>\'"/>'
+    with _eco_b[2]:
+        st.link_button(
+            "Explore Pharos Port ↗",
+            "https://port.pharos.xyz/",
+            use_container_width=True,
         )
-        cards_html += (
-            f'<a href="{dapp["url"]}" target="_blank" class="eco-card hover-lift">'
-            f'<div style="margin-bottom:0.75rem;">{logo_html}</div>'
-            f'<div class="eco-name">{dapp["name"]}</div>'
-            f'<div class="eco-desc">{dapp["desc"]}</div>'
-            f'<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">{tags_html}</div>'
-            f'</a>'
-        )
-    cards_html += '</div>'
-    st.markdown(cards_html, unsafe_allow_html=True)
-
-    st.link_button(
-        "View all dApps on Pharos Testnet ↗",
-        "https://testnet.pharosnetwork.xyz",
-        use_container_width=False,
-    )
 
 
 
