@@ -340,7 +340,7 @@ html[data-theme="dark"]{--title:#F4F6FC;--card:linear-gradient(168deg,rgba(32,37
  --shadow:0 30px 66px -24px rgba(0,0,0,0.66);}
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;background:transparent;font-family:'Inter',system-ui,sans-serif;}
-.eco-wrap{height:588px;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;padding-top:0;}
+.eco-wrap{height:556px;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;padding-top:0;}
 .eco-title{font-family:'Space Grotesk','Inter',sans-serif;font-size:2rem;font-weight:700;letter-spacing:-0.015em;color:var(--title);
  margin:0 0 18px;position:relative;align-self:center;text-align:center;text-shadow:0 1px 14px rgba(255,255,255,0.55);}
 html[data-theme="dark"] .eco-title{text-shadow:0 2px 18px rgba(4,6,16,0.75);}
@@ -359,8 +359,16 @@ html[data-theme="dark"] .eco-title{text-shadow:0 2px 18px rgba(4,6,16,0.75);}
 .ec-inner{height:396px;border-radius:22px;padding:30px 24px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;
  background:var(--card);border:1px solid var(--cardbd);box-shadow:var(--shadow);
  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
- transition:border-color 0.35s var(--e),box-shadow 0.35s var(--e);}
-.eco-card.active .ec-inner{border-color:var(--cta);box-shadow:var(--shadow),0 0 50px -10px var(--aura,rgba(91,73,224,0.5));}
+ transition:border-color 0.35s var(--e),box-shadow 0.35s var(--e),background 0.3s var(--e);}
+/* the centred (selected) card reads as fully solid, not see-through */
+.eco-card.active .ec-inner{border-color:var(--cta);box-shadow:var(--shadow),0 0 50px -10px var(--aura,rgba(91,73,224,0.5));background:linear-gradient(168deg,#ffffff,#f1f3fb);}
+html[data-theme="dark"] .eco-card.active .ec-inner{background:linear-gradient(168deg,#242a46,#141834);}
+/* hovering any card brings it fully opaque + solid */
+@media (hover:hover){
+ .eco-card:hover{opacity:1!important;}
+ .eco-card:hover .ec-inner{border-color:var(--cta);background:linear-gradient(168deg,#ffffff,#f1f3fb);}
+ html[data-theme="dark"] .eco-card:hover .ec-inner{background:linear-gradient(168deg,#242a46,#141834);}
+}
 .ec-logo{width:68px;height:68px;border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden;
  margin-bottom:16px;box-shadow:0 12px 24px -10px rgba(20,20,60,0.4);}
 .ec-logo img{width:100%;height:100%;object-fit:cover;}
@@ -739,16 +747,53 @@ def get_trade_bg_b64() -> str:
 
 @st.cache_resource(show_spinner=False)
 def get_eco_bg_b64() -> str:
-    """Ecosystem-page background — embed the ORIGINAL file bytes (no resize, no
-    re-encode). Re-compressing the already-compressed source at q82 was softening
-    it and adding JPEG noise; the raw embed keeps it as crisp as the source. If a
-    larger/cleaner source is ever dropped in, it is used verbatim."""
+    """Ecosystem-page background (eco_bg). Downscaled to 1600px and JPEG-encoded so
+    the inline data URI stays light — a multi-MB raw embed made the page heavy and
+    sluggish. It only sits behind a scrim as a soft backdrop, so q84 is plenty."""
     for path in ("eco_bg.png", "eco_bg.jpg", "eco_bg.jpeg", "eco_bg.webp"):
         if os.path.exists(path):
-            ext = path.rsplit(".", 1)[-1].lower()
-            mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
-            with open(path, "rb") as f:
-                return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                maxw = 1600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=84, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                ext = path.rsplit(".", 1)[-1].lower()
+                mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_pay_bg_b64() -> str:
+    """Pay-page background (pay_bg.png in the app root), downscaled to 1600px
+    and JPEG-recompressed so the inline data URI stays light. It sits behind a
+    theme-aware scrim as a soft backdrop, so q84 is plenty."""
+    for path in ("pay_bg.png", "pay_bg.jpg", "pay_bg.jpeg", "pay_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                maxw = 1600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=84, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                ext = path.rsplit(".", 1)[-1].lower()
+                mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
     return ""
 
 
@@ -1054,6 +1099,97 @@ def _fetch_x_api_v2(token) -> list:
         })
     return items
 
+def _fetch_x_syndication() -> list:
+    """Key-free LIVE source — Twitter/X's public syndication timeline, the
+    same endpoint embedded profile timelines use. No bearer token needed.
+    Parses the __NEXT_DATA__ JSON blob and pulls recent tweets. This is the
+    primary live path now that the public Nitter mirrors are effectively
+    dead. Returns [] on any failure so the caller falls through."""
+    from email.utils import parsedate_to_datetime
+    url = ("https://syndication.twitter.com/srv/timeline-profile/screen-name/"
+           + PHAROS_X_HANDLE + "?showReplies=false")
+    try:
+        r = _get_http_session().get(
+            url, timeout=6,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/122.0.0.0 Safari/537.36"),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://platform.twitter.com/",
+            },
+        )
+        if r.status_code != 200:
+            return []
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                      r.text, re.DOTALL)
+        if not m:
+            return []
+        data = json.loads(m.group(1))
+    except Exception:
+        return []
+
+    # Tweets are dicts carrying both full_text and created_at — walk the tree
+    # defensively rather than depending on the exact (and changeable) shape.
+    found = []
+    def _walk(o):
+        if isinstance(o, dict):
+            if o.get("full_text") and o.get("created_at"):
+                found.append(o)
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                _walk(v)
+    try:
+        _walk(data)
+    except Exception:
+        return []
+
+    seen, items = set(), []
+    for tw in found:
+        txt = (tw.get("full_text") or "").strip()
+        tid = str(tw.get("id_str") or tw.get("id") or "")
+        if not txt or (tid and tid in seen):
+            continue
+        if tid:
+            seen.add(tid)
+        # Drop the trailing t.co media/self link that X appends.
+        txt = re.sub(r'\s*https://t\.co/\S+\s*$', '', txt).strip()
+        media = ""
+        try:
+            md = tw.get("mediaDetails") or []
+            if isinstance(md, list) and md:
+                media = md[0].get("media_url_https", "") or ""
+        except Exception:
+            pass
+        sn = PHAROS_X_HANDLE
+        try:
+            sn = (tw.get("user") or {}).get("screen_name") or PHAROS_X_HANDLE
+        except Exception:
+            pass
+        link = f"https://x.com/{sn}/status/{tid}" if tid else PHAROS_X_URL
+        dt = None
+        try:
+            dt = parsedate_to_datetime(tw.get("created_at"))
+        except Exception:
+            dt = None
+        items.append({
+            "text": txt, "url": link, "media": media,
+            "dt": dt, "rel": _x_rel_time(dt) if dt else "",
+        })
+    # Newest first.
+    try:
+        items.sort(
+            key=lambda x: x["dt"] or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+    except Exception:
+        pass
+    return items[:12]
+
+
 def _fetch_nitter_rss() -> list:
     """Key-free fallback: parse the public Nitter RSS mirror of the account.
     Tries all mirrors with retry logic and exponential backoff on transient failures."""
@@ -1272,6 +1408,8 @@ def _fetch_pharos_x_raw():
             items = _fetch_x_api_v2(token)
         except Exception:
             items = []
+    if not items:
+        items = _fetch_x_syndication()
     if not items:
         items = _fetch_nitter_rss()
     if not items:
@@ -4642,6 +4780,16 @@ html[data-theme="dark"] [style*="color:#2C3247"],
 html[data-theme="dark"] [style*="color:#262B3E"],
 html[data-theme="dark"] [style*="color:#0B0E1A"],
 html[data-theme="dark"] [style*="color:#1C1C28"],
+html[data-theme="dark"] [style*="color:#0D1020"],
+html[data-theme="dark"] [style*="color:#0E1220"],
+html[data-theme="dark"] [style*="color:#12142A"],
+html[data-theme="dark"] [style*="color:#12142a"],
+html[data-theme="dark"] [style*="color:#141830"],
+html[data-theme="dark"] [style*="color:#14172A"],
+html[data-theme="dark"] [style*="color:#161A2C"],
+html[data-theme="dark"] [style*="color:#101828"],
+html[data-theme="dark"] [style*="color:#1B1F30"],
+html[data-theme="dark"] [style*="color:#232838"],
 html[data-theme="dark"] [style*="color:#111"]{
     color:#EDEFF7 !important;-webkit-text-fill-color:#EDEFF7 !important;
 }
@@ -6224,14 +6372,21 @@ html[data-theme="dark"] [data-testid="stBottomBlockContainer"]{
    • Max animation duration: 600ms for interactions, 4s for ambients
 ════════════════════════════════════════════════════════════ */
 
-/* ── 1. PAGE LOAD — staged fade-up reveal ── */
+/* ── 1. PAGE LOAD — staged fade-up reveal ──
+   Strong ease-out (fast start, gentle settle) so a page reveal feels both
+   immediate AND smooth; GPU-promoted so the rise never jitters. */
 @keyframes page-fadein{
-    from{opacity:0;transform:translateY(12px);}
-    to{opacity:1;transform:translateY(0);}
+    from{opacity:0;transform:translate3d(0,10px,0);}
+    to{opacity:1;transform:translate3d(0,0,0);}
 }
 [data-testid="stMainBlockContainer"]{
-    animation:page-fadein 0.22s cubic-bezier(0.4,0,0.2,1) both;
+    animation:page-fadein 0.40s cubic-bezier(0.16,1,0.3,1) both;
     contain:layout style;
+    backface-visibility:hidden;
+}
+@media (prefers-reduced-motion:reduce){
+    @keyframes page-fadein{from{opacity:0;}to{opacity:1;}}
+    [data-testid="stMainBlockContainer"]{animation-duration:0.2s;}
 }
 
 
@@ -6239,16 +6394,16 @@ html[data-theme="dark"] [data-testid="stBottomBlockContainer"]{
 /* ── 2. HERO — handled by Neural Pulse canvas component ── */
 /* Hero title smooth fade */
 .hero-title{
-    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.1s both;
+    animation:page-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.08s both;
 }
 .hero-sub{
-    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.18s both;
+    animation:page-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.15s both;
 }
 .hero-eyebrow{
-    animation:page-fadein 0.5s cubic-bezier(0.4,0,0.2,1) 0.06s both;
+    animation:page-fadein 0.55s cubic-bezier(0.16,1,0.3,1) 0.04s both;
 }
 .hero-actions{
-    animation:page-fadein 0.55s cubic-bezier(0.4,0,0.2,1) 0.24s both;
+    animation:page-fadein 0.6s cubic-bezier(0.16,1,0.3,1) 0.2s both;
 }
 
 
@@ -14111,18 +14266,42 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 elif st.session_state.page == "defi":
 
     DEFI_INTEGRATIONS = [
-        ("FaroSwap",  "faroswap.xyz",      "DEX · AMM & PMM",       FAROSWAP_URL,                 "🔄"),
-        ("LI.FI",     "li.fi",             "Bridge Aggregation",    "https://jumper.exchange",    "🌉"),
-        ("CCIP",      "chain.link",        "Cross-chain Messaging", "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip", "🔗"),
-        ("CCTP v2",   "circle.com",        "Native USDC Transfers", "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp", "💵"),
-        ("LayerZero", "layerzero.network", "Omnichain Protocol",    "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero", "🕸️"),
-        ("Faroo",     "faroo.xyz",         "Pharos Incubator",      "https://x.com/Farooxyz",     "⚓"),
-        ("R2",        "r2.money",          "Yield-bearing Stables", PHAROS_ECOSYSTEM_URL,         "🏛️"),
-        ("AquaFlux",  "aquaflux.pro",      "RWA Structuring",       "https://aquaflux.pro",       "💧"),
-        ("Zona",      "zona.finance",      "RealFi Markets",        PHAROS_ECOSYSTEM_URL,         "🏘️"),
-        ("Morpho",    "morpho.org",        "Lending",               "https://morpho.org",         "🦋"),
-        ("Bitverse",  "bitverse.zone",     "Onchain CLOB",          PHAROS_ECOSYSTEM_URL,         "📈"),
-        ("Ember",     "ember.ag",          "AI DeFi Agent",         PHAROS_ECOSYSTEM_URL,         "🔥"),
+        {"name": "FaroSwap", "domain": "faroswap.xyz", "cat": "DEX · AMM & PMM", "url": FAROSWAP_URL, "emoji": "🔄",
+         "grad": "linear-gradient(150deg,#0EA5E9,#2563EB)",
+         "desc": "Pharos' native decentralised exchange. Swap registry tokens through DODO-powered AMM and proactive-market-maker pools, with on-chain slippage protection and in-app execution."},
+        {"name": "LI.FI", "domain": "li.fi", "cat": "Bridge Aggregation", "url": "https://jumper.exchange", "emoji": "🌉",
+         "grad": "linear-gradient(150deg,#F97316,#DB2777)",
+         "desc": "Cross-chain bridge and DEX aggregator. Routes assets into and out of Pharos across dozens of EVM chains, choosing the cheapest and fastest path for you automatically."},
+        {"name": "CCIP", "domain": "chain.link", "cat": "Cross-chain Messaging", "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/chainlink-ccip", "emoji": "🔗",
+         "grad": "linear-gradient(150deg,#3B82F6,#1E3A8A)",
+         "desc": "Chainlink's Cross-Chain Interoperability Protocol — the security-first messaging layer for moving data and tokens between Pharos and other networks."},
+        {"name": "CCTP v2", "domain": "circle.com", "cat": "Native USDC Transfers", "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/circle-cctp", "emoji": "💵",
+         "grad": "linear-gradient(150deg,#22C55E,#15803D)",
+         "desc": "Circle's Cross-Chain Transfer Protocol. Burns and mints native USDC across chains — no wrapped assets, no liquidity pools, always 1:1."},
+        {"name": "LayerZero", "domain": "layerzero.network", "cat": "Omnichain Protocol", "url": "https://docs.pharos.xyz/tooling-and-infrastructure/cross-chain/layerzero", "emoji": "🕸️",
+         "grad": "linear-gradient(150deg,#64748B,#0F172A)",
+         "desc": "Omnichain interoperability powering OApps and OFTs on Pharos, so tokens and applications can operate seamlessly across many chains at once."},
+        {"name": "Faroo", "domain": "faroo.xyz", "cat": "Pharos Incubator", "url": "https://x.com/Farooxyz", "emoji": "⚓",
+         "grad": "linear-gradient(150deg,#0891B2,#0E7490)",
+         "desc": "The first project of the Pharos Incubator — building and launching the next wave of protocols native to the Pharos ecosystem."},
+        {"name": "R2", "domain": "r2.money", "cat": "Yield-bearing Stables", "url": PHAROS_ECOSYSTEM_URL, "emoji": "🏛️",
+         "grad": "linear-gradient(150deg,#8B5CF6,#6D28D9)",
+         "desc": "Yield-bearing stablecoin infrastructure, bringing productive, dollar-denominated savings on-chain within the Pharos ecosystem."},
+        {"name": "AquaFlux", "domain": "aquaflux.pro", "cat": "RWA Structuring", "url": "https://aquaflux.pro", "emoji": "💧",
+         "grad": "linear-gradient(150deg,#06B6D4,#0284C7)",
+         "desc": "Real-world-asset structuring — packaging off-chain yield and credit into transparent, tradeable, composable on-chain instruments."},
+        {"name": "Zona", "domain": "zona.finance", "cat": "RealFi Markets", "url": PHAROS_ECOSYSTEM_URL, "emoji": "🏘️",
+         "grad": "linear-gradient(150deg,#F59E0B,#B45309)",
+         "desc": "RealFi markets bringing real-estate and real-world price exposure on-chain as tradeable, composable positions."},
+        {"name": "Morpho", "domain": "morpho.org", "cat": "Lending", "url": "https://morpho.org", "emoji": "🦋",
+         "grad": "linear-gradient(150deg,#3B82F6,#1D4ED8)",
+         "desc": "Trustless, efficient lending — peer-to-peer matched money markets that improve rates for both lenders and borrowers."},
+        {"name": "Bitverse", "domain": "bitverse.zone", "cat": "Onchain CLOB", "url": PHAROS_ECOSYSTEM_URL, "emoji": "📈",
+         "grad": "linear-gradient(150deg,#EC4899,#BE185D)",
+         "desc": "A fully on-chain central limit order book — professional-grade trading with the transparency and self-custody of DeFi."},
+        {"name": "Ember", "domain": "ember.ag", "cat": "AI DeFi Agent", "url": PHAROS_ECOSYSTEM_URL, "emoji": "🔥",
+         "grad": "linear-gradient(150deg,#EF4444,#B91C1C)",
+         "desc": "An AI-driven DeFi agent that researches, routes and executes on-chain strategies across the Pharos ecosystem on your behalf."},
     ]
 
     st.session_state.setdefault("defi_tab", "Portfolio")
@@ -14192,26 +14371,96 @@ elif st.session_state.page == "defi":
         st.link_button(cta, url, use_container_width=False)
 
     # ── Header ───────────────────────────────────────────────
+    _tab = st.session_state["defi_tab"]
+
+    # ── Full-bleed pay_bg backdrop + glass design system, scoped to .defi-top.
+    #    Same shell language as the Pay/Request pages so the DeFi hub reads as
+    #    part of the same product; teal accent gives it its own identity. ──
+    _defi_bg = get_pay_bg_b64()
+    _defi_bg_css = ""
+    if _defi_bg:
+        _defi_bg_css = (
+            "body:has(.defi-top) [data-testid=\"stApp\"]{--ocbg:url('" + _defi_bg + "');"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.82) 0%,rgba(232,236,247,0.76) 45%,rgba(226,230,244,0.90) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.defi-top) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(8,10,22,0.88) 0%,rgba(7,9,20,0.82) 45%,rgba(5,7,16,0.95) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.defi-top) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.defi-top) section[data-testid=\"stMain\"],"
+            "body:has(.defi-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.defi-top) #aura-3d-canvas,body:has(.defi-top) .gs-env{display:none!important;}"
+        )
     st.markdown(
-        '<div class="section-dark">'
-        '<div style="position:relative;z-index:1;">'
-        '<div class="section-eyebrow"><span style="font-size:12px;">🏦</span>&nbsp;PHAROS DEFI HUB</div>'
-        '<h2 class="section-h">Your Pharos Portfolio</h2>'
-        '<p class="section-sub">Live balances, wallet intelligence and RWA markets — read directly '
-        'from Pharos Pacific Mainnet. Connect any EVM wallet to begin.</p>'
+        "<style>"
+        + _defi_bg_css +
+        "body:has(.defi-top) [data-testid=\"stMainBlockContainer\"] > [data-testid=\"stVerticalBlock\"]{max-width:1360px!important;margin-left:auto!important;margin-right:auto!important;}"
+        "body:has(.defi-top) [data-testid=\"stMainBlockContainer\"]{padding-top:0.6rem!important;}"
+        "body:has(.defi-top){--di:#14162B;--di2:#4C5268;--di3:#7C8299;--dacc:#0F766E;"
+        "--dcard:rgba(255,255,255,0.66);--dcardbd:rgba(255,255,255,0.72);--dglass:blur(18px) saturate(1.2);"
+        "--dfield:rgba(20,22,55,0.045);--dfl:rgba(20,22,55,0.10);--dshadow:0 10px 34px rgba(12,14,35,0.10);}"
+        "html[data-theme=\"dark\"] body:has(.defi-top){--di:#EEF0F8;--di2:#AAB0C6;--di3:#8A90A8;--dacc:#5EEAD4;"
+        "--dcard:rgba(18,21,36,0.56);--dcardbd:rgba(255,255,255,0.09);"
+        "--dfield:rgba(255,255,255,0.05);--dfl:rgba(255,255,255,0.11);--dshadow:0 10px 34px rgba(0,0,0,0.34);}"
+        ".defi-strip{display:flex;align-items:center;justify-content:space-between;gap:1.2rem 3rem;flex-wrap:wrap;"
+        "background:var(--dcard);border:1px solid var(--dcardbd);border-radius:18px;padding:1.1rem 1.7rem;margin:0 0 1rem;"
+        "-webkit-backdrop-filter:var(--dglass);backdrop-filter:var(--dglass);box-shadow:var(--dshadow);}"
+        ".defi-strip-l{display:flex;flex-direction:column;gap:0.35rem;min-width:0;flex:1 1 320px;}"
+        ".defi-strip-eyebrow{font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--dacc);display:inline-flex;align-items:center;gap:7px;}"
+        "body:has(.defi-top) .defi-strip-title{font-family:Syne,sans-serif;font-size:1.75rem;font-weight:800;color:var(--di)!important;letter-spacing:-0.03em;margin:0!important;line-height:1.03;}"
+        ".defi-strip-sub{font-size:0.88rem;color:var(--di2);line-height:1.5;margin:0.1rem 0 0;max-width:64ch;}"
+        ".defi-strip-r{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-content:center;max-width:320px;}"
+        ".defi-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(127,131,165,0.09);border:1px solid var(--dcardbd);border-radius:999px;padding:6px 12px;white-space:nowrap;font-size:11px;font-weight:600;color:var(--di2);}"
+        "body:has(.defi-top) .defi-panel,body:has(.defi-top) .defi-panel-solid{background:var(--dcard)!important;border:1px solid var(--dcardbd)!important;border-radius:16px!important;"
+        "-webkit-backdrop-filter:var(--dglass);backdrop-filter:var(--dglass);box-shadow:var(--dshadow)!important;padding:1.2rem 1.4rem!important;}"
+        "body:has(.defi-top) .defi-panel-t{color:var(--di)!important;}body:has(.defi-top) .defi-panel-s{color:var(--di2)!important;}"
+        "body:has(.defi-top) .defi-card{background:var(--dfield)!important;border:1px solid var(--dfl)!important;border-radius:14px!important;box-shadow:none!important;padding:1rem 1.15rem!important;}"
+        "body:has(.defi-top) .defi-card-l{color:var(--di3)!important;}body:has(.defi-top) .defi-card-v{color:var(--di)!important;}"
+        "body:has(.defi-top) .defi-gate{background:var(--dcard)!important;border:1px dashed var(--dcardbd)!important;border-radius:16px!important;-webkit-backdrop-filter:var(--dglass);backdrop-filter:var(--dglass);box-shadow:var(--dshadow)!important;}"
+        "body:has(.defi-top) .defi-gate-t{color:var(--di)!important;}body:has(.defi-top) .defi-gate-s{color:var(--di2)!important;}"
+        "body:has(.defi-top) .defi-note{background:var(--dfield)!important;border:1px solid var(--dfl)!important;border-radius:14px!important;}"
+        "body:has(.defi-top) .defi-note-t{color:var(--di)!important;}body:has(.defi-top) .defi-note-s{color:var(--di2)!important;}"
+        "body:has(.defi-top) .defi-eyebrow{color:var(--dacc)!important;}"
+        "body:has(.defi-top) [data-testid=\"stButton\"] button{border-radius:12px!important;}"
+        "</style>"
+        "<div class=\"defi-top\" style=\"display:none\"></div>",
+        unsafe_allow_html=True,
+    )
+
+    # Per-tab identity — every option reads as its own page with its own title.
+    _DEFI_META = {
+        "Portfolio":    ("💼", "Portfolio",     "Native PROS and registry tokens, read live from Pharos mainnet via MultiCall3."),
+        "Swap":         ("🔄", "Swap",          "Trade registry tokens through FaroSwap's DODO-powered pools — executed in-app, no redirect."),
+        "Bridge":       ("🌉", "Bridge",        "Move assets across chains, into and out of Pharos Pacific Mainnet."),
+        "Staking":      ("🔒", "Staking",       "Stake PROS and track rewards — with an honest state until the official contract is live."),
+        "Wallet Score": ("🎯", "Wallet Score",  "On-chain reputation and activity intelligence for any Pharos wallet."),
+        "History":      ("📜", "History",       "Your recent on-chain activity on Pharos, read straight from the explorer."),
+        "RWA Market":   ("🏛️", "RWA Market",    "A live snapshot of the real-world-asset market, key-free from public data."),
+        "Explorer":     ("🧭", "Explorer",      "Look up any wallet, transaction or contract on Pharos."),
+        "Ecosystem":    ("🧩", "Ecosystem",     "Every protocol integrated with Pharos — hover a card to open it and read what it does."),
+    }
+    _dm_emoji, _dm_title, _dm_sub = _DEFI_META.get(_tab, _DEFI_META["Portfolio"])
+    st.markdown(
+        '<div class="defi-strip"><div class="defi-strip-l">'
+        '<div class="defi-strip-eyebrow">🏦 Pharos DeFi Hub</div>'
+        f'<h2 class="defi-strip-title">{_dm_emoji} {esc(_dm_title)}</h2>'
+        f'<p class="defi-strip-sub">{esc(_dm_sub)}</p>'
+        '</div>'
+        '<div class="defi-strip-r">'
+        '<span class="defi-chip">🔗 Non-custodial</span>'
+        '<span class="defi-chip">⛓️ Live on-chain</span>'
+        '<span class="defi-chip">🧩 12 integrations</span>'
         '</div></div>',
         unsafe_allow_html=True,
     )
 
     DEFI_TABS = ["Portfolio", "Swap", "Bridge", "Staking", "Wallet Score",
-                 "History", "RWA Market", "Explorer"]
+                 "History", "RWA Market", "Explorer", "Ecosystem"]
     _tab_cols = st.columns(len(DEFI_TABS))
     for _ti, _tn in enumerate(DEFI_TABS):
         with _tab_cols[_ti]:
-            if st.button(_tn, key="defi_tab_" + _tn.replace(" ", "_"), use_container_width=True):
+            if st.button(_tn, key="defi_tab_" + _tn.replace(" ", "_"), use_container_width=True,
+                         type="primary" if _tab == _tn else "secondary"):
                 st.session_state["defi_tab"] = _tn
                 st.rerun()
-    _tab = st.session_state["defi_tab"]
     st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
 
     # ══ PORTFOLIO — real balances ═══════════════════════════
@@ -14818,26 +15067,81 @@ elif st.session_state.page == "defi":
                 st.link_button("Open in PharosScan ↗",
                                PHAROS_EXPLORER_URL + "/address/" + (_q or "").strip())
 
-    # ── Ecosystem Integrations ───────────────────────────────
-    st.markdown(
-        '<div style="height:0.8rem;"></div>'
-        '<div class="defi-eyebrow">Ecosystem Integrations</div>',
-        unsafe_allow_html=True,
-    )
-    _integ_html = '<div class="defi-integ">'
-    for _nm, _dom, _tagl, _url, _emo in DEFI_INTEGRATIONS:
-        _fav = f"https://www.google.com/s2/favicons?domain={_dom}&sz=64"
-        _integ_html += (
-            f'<a href="{esc_url(_url)}" target="_blank" rel="noopener" class="defi-integ-c hover-lift">'
-            f'<img src="{_fav}" width="28" height="28" loading="lazy" decoding="async" '
-            f'style="border-radius:8px;" '
-            f'onerror="this.outerHTML=\'<span style=&quot;font-size:22px;&quot;>{_emo}</span>\'"/>'
-            f'<span class="defi-integ-n">{esc(_nm)}</span>'
-            f'<span class="defi-integ-t">{esc(_tagl)}</span>'
-            f'</a>'
-        )
-    _integ_html += '</div>'
-    st.markdown(_integ_html, unsafe_allow_html=True)
+    # ══ ECOSYSTEM — expanding integration cards (its own page) ══
+    elif _tab == "Ecosystem":
+        st.markdown(_panel("🧩 Ecosystem Integrations",
+                    "Every protocol wired into Pharos. Hover a card to expand it and read what it "
+                    "does; click to open the app in a new tab."),
+                    unsafe_allow_html=True)
+
+        _DEFI_ECO_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+ *{margin:0;padding:0;box-sizing:border-box;}
+ html,body{background:transparent;}
+ body{font-family:'DM Sans',Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+ #row{display:flex;gap:8px;width:100%;height:352px;align-items:stretch;overflow-x:auto;overflow-y:hidden;padding:6px 2px 12px;scrollbar-width:none;}
+ #row::-webkit-scrollbar{display:none;}
+ .eco-c{position:relative;flex:0 0 66px;height:100%;border-radius:22px;overflow:hidden;cursor:pointer;
+   text-decoration:none;color:#fff;transition:flex-basis .55s cubic-bezier(0.16,1,0.3,1);
+   box-shadow:0 12px 32px rgba(8,10,25,0.30);}
+ .eco-c.active{flex:1 1 0;min-width:300px;}
+ .eco-c .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,8,18,0.02) 0%,rgba(6,8,18,0.30) 52%,rgba(6,8,18,0.86) 100%);}
+ .eco-c .noise{position:absolute;inset:0;opacity:0.20;mix-blend-mode:overlay;pointer-events:none;}
+ .eco-min{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:16px 0;transition:opacity .3s ease;}
+ .eco-min .ic{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:20px;border:1px solid rgba(255,255,255,0.24);}
+ .eco-min .vname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:12px;font-weight:800;letter-spacing:0.05em;color:rgba(255,255,255,0.94);text-shadow:0 1px 6px rgba(0,0,0,0.55);white-space:nowrap;}
+ .eco-c.active .eco-min{opacity:0;pointer-events:none;}
+ .eco-full{position:absolute;inset:0;padding:22px 26px;opacity:0;transition:opacity .4s ease .14s;pointer-events:none;}
+ .eco-c.active .eco-full{opacity:1;}
+ .eco-full .top{position:absolute;top:22px;left:26px;right:26px;display:flex;align-items:center;gap:12px;}
+ .eco-full .ic2{width:48px;height:48px;flex-shrink:0;border-radius:14px;background:rgba(255,255,255,0.20);display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid rgba(255,255,255,0.28);}
+ .eco-full .nm{font-size:22px;font-weight:800;letter-spacing:-0.02em;text-shadow:0 2px 10px rgba(0,0,0,0.55);line-height:1.1;}
+ .eco-full .cat{font-size:10.5px;font-weight:700;letter-spacing:0.11em;text-transform:uppercase;color:rgba(255,255,255,0.82);margin-top:3px;}
+ .eco-full .btm{position:absolute;left:26px;right:26px;bottom:22px;}
+ .eco-full .desc{font-size:13.5px;line-height:1.62;color:rgba(255,255,255,0.94);max-width:560px;text-shadow:0 1px 8px rgba(0,0,0,0.6);margin-bottom:14px;}
+ .eco-full .meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);}
+ .eco-full .dom{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:999px;padding:6px 12px;}
+ .eco-full .visit{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.92);color:#111;border-radius:999px;padding:7px 15px;font-weight:800;}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><filter id="econoise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" stitchTiles="stitch"/></filter></svg>
+<div id="row"></div>
+<script>
+(function(){
+  var ITEMS = __ITEMS__;
+  var row = document.getElementById('row');
+  var cards = [];
+  function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+  function setActive(i){ cards.forEach(function(c,j){ c.classList.toggle('active', j===i); }); }
+  ITEMS.forEach(function(it,i){
+    var a=document.createElement('a');
+    a.className='eco-c';
+    a.href=it.url; a.target='_blank'; a.rel='noopener noreferrer';
+    a.style.background=it.grad;
+    a.innerHTML =
+      '<div class="scrim"></div>'+
+      '<svg class="noise" width="100%" height="100%"><rect width="100%" height="100%" filter="url(#econoise)"/></svg>'+
+      '<div class="eco-min"><div class="ic">'+esc(it.emoji)+'</div><div class="vname">'+esc(it.name)+'</div></div>'+
+      '<div class="eco-full">'+
+        '<div class="top"><div class="ic2">'+esc(it.emoji)+'</div><div><div class="nm">'+esc(it.name)+'</div><div class="cat">'+esc(it.cat)+'</div></div></div>'+
+        '<div class="btm"><div class="desc">'+esc(it.desc)+'</div>'+
+        '<div class="meta"><span class="dom">🔗 '+esc(it.domain)+'</span><span class="visit">Visit ↗</span></div></div>'+
+      '</div>';
+    a.addEventListener('mouseenter', function(){ setActive(i); });
+    cards.push(a); row.appendChild(a);
+  });
+  setActive(0);
+})();
+</script></body></html>"""
+
+        _eco_items = json.dumps([
+            {"name": it["name"], "cat": it["cat"], "desc": it["desc"],
+             "domain": it["domain"], "url": it["url"], "emoji": it["emoji"],
+             "grad": it["grad"]}
+            for it in DEFI_INTEGRATIONS
+        ], separators=(",", ":")).replace("<", "\\u003c").replace("\u2028", "").replace("\u2029", "")
+        components.html(_DEFI_ECO_HTML.replace("__ITEMS__", _eco_items),
+                        height=392, scrolling=False)
+        st.caption("Hover any card to expand it and read the integration's details · click to open the app.")
 
 
 elif st.session_state.page == "campaigns":
@@ -15086,22 +15390,23 @@ elif st.session_state.page == "updates":
     if _news_bg:
         st.markdown(
             "<style>"
-            # image + light scrim on the full-bleed app shell (covers the whole viewport)
-            "html[data-octo-page=\"updates\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(240,242,250,0.68) 0%,rgba(234,237,248,0.60) 46%,rgba(226,230,244,0.82) 100%),"
-            "url('" + _news_bg + "') center center / cover no-repeat fixed!important;}"
-            "html[data-theme=\"dark\"][data-octo-page=\"updates\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(9,11,24,0.85) 0%,rgba(8,10,22,0.80) 46%,rgba(6,8,18,0.95) 100%),"
-            "url('" + _news_bg + "') center center / cover no-repeat fixed!important;}"
-            # clear the inner shells so the stApp backdrop shows through
-            "html[data-octo-page=\"updates\"] [data-testid=\"stAppViewContainer\"],"
-            "html[data-octo-page=\"updates\"] section[data-testid=\"stMain\"],"
-            "html[data-octo-page=\"updates\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
-            "html[data-octo-page=\"updates\"] #aura-3d-canvas,"
-            "html[data-octo-page=\"updates\"] .gs-env{display:none!important;}"
-            # bring the content up closer to the nav + keep it centred
-            "html[data-octo-page=\"updates\"] [data-testid=\"stMainBlockContainer\"]{padding-top:92px!important;max-width:1160px!important;margin:0 auto!important;}"
-            "</style>",
+            # SCOPING: a synchronous marker (rendered with the page) instead of the
+            # data-octo-page attribute (set by a delayed iframe) — otherwise these
+            # generic stApp / block rules leak onto the next page during the gap.
+            # A fixed backdrop LAYER (::before) instead of background-attachment:fixed
+            # so scrolling composites smoothly instead of repainting the image.
+            "body:has(.octo-bg-updates) [data-testid=\"stApp\"]{--ocbg:url('" + _news_bg + "');"
+            "background:linear-gradient(180deg,rgba(240,242,250,0.68) 0%,rgba(234,237,248,0.60) 46%,rgba(226,230,244,0.82) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.octo-bg-updates) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(9,11,24,0.85) 0%,rgba(8,10,22,0.80) 46%,rgba(6,8,18,0.95) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.octo-bg-updates) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.octo-bg-updates) section[data-testid=\"stMain\"],"
+            "body:has(.octo-bg-updates) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.octo-bg-updates) #aura-3d-canvas,"
+            "body:has(.octo-bg-updates) .gs-env{display:none!important;}"
+            "body:has(.octo-bg-updates) [data-testid=\"stMainBlockContainer\"]{padding-top:92px!important;max-width:1160px!important;margin:0 auto!important;}"
+            "</style>"
+            "<div class=\"octo-bg-updates\" style=\"display:none\"></div>",
             unsafe_allow_html=True,
         )
 
@@ -15352,18 +15657,18 @@ elif st.session_state.page == "trade":
     if _trade_bg:
         st.markdown(
             "<style>"
-            "html[data-octo-page=\"trade\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(240,242,250,0.50) 0%,rgba(234,238,248,0.46) 45%,rgba(228,232,246,0.60) 100%),"
-            "url('" + _trade_bg + "') center center / cover no-repeat fixed!important;}"
-            "html[data-theme=\"dark\"][data-octo-page=\"trade\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(6,8,18,0.66) 0%,rgba(6,8,16,0.62) 45%,rgba(4,6,14,0.82) 100%),"
-            "url('" + _trade_bg + "') center center / cover no-repeat fixed!important;}"
-            "html[data-octo-page=\"trade\"] [data-testid=\"stAppViewContainer\"],"
-            "html[data-octo-page=\"trade\"] section[data-testid=\"stMain\"],"
-            "html[data-octo-page=\"trade\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
-            "html[data-octo-page=\"trade\"] #aura-3d-canvas,"
-            "html[data-octo-page=\"trade\"] .gs-env{display:none!important;}"
-            "</style>",
+            # synchronous marker scope + fixed backdrop layer (see updates notes)
+            "body:has(.octo-bg-trade) [data-testid=\"stApp\"]{--ocbg:url('" + _trade_bg + "');"
+            "background:linear-gradient(180deg,rgba(240,242,250,0.50) 0%,rgba(234,238,248,0.46) 45%,rgba(228,232,246,0.60) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.octo-bg-trade) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(6,8,18,0.66) 0%,rgba(6,8,16,0.62) 45%,rgba(4,6,14,0.82) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.octo-bg-trade) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.octo-bg-trade) section[data-testid=\"stMain\"],"
+            "body:has(.octo-bg-trade) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.octo-bg-trade) #aura-3d-canvas,"
+            "body:has(.octo-bg-trade) .gs-env{display:none!important;}"
+            "</style>"
+            "<div class=\"octo-bg-trade\" style=\"display:none\"></div>",
             unsafe_allow_html=True,
         )
     # Trade-only: centre the whole page — narrow the content column and centre
@@ -15500,20 +15805,19 @@ elif st.session_state.page == "ecosystem":
     if _eco_bg:
         st.markdown(
             "<style>"
-            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(240,242,250,0.52) 0%,rgba(234,238,248,0.48) 45%,rgba(228,232,246,0.62) 100%),"
-            "url('" + _eco_bg + "') center center / cover no-repeat fixed!important;}"
-            "html[data-theme=\"dark\"][data-octo-page=\"ecosystem\"] [data-testid=\"stApp\"]{background:"
-            "linear-gradient(180deg,rgba(8,10,22,0.62) 0%,rgba(7,9,20,0.56) 45%,rgba(5,7,16,0.80) 100%),"
-            "url('" + _eco_bg + "') center center / cover no-repeat fixed!important;}"
-            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stAppViewContainer\"],"
-            "html[data-octo-page=\"ecosystem\"] section[data-testid=\"stMain\"],"
-            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
-            "html[data-octo-page=\"ecosystem\"] #aura-3d-canvas,"
-            "html[data-octo-page=\"ecosystem\"] .gs-env{display:none!important;}"
-            # pull the carousel up closer to the nav
-            "html[data-octo-page=\"ecosystem\"] [data-testid=\"stMainBlockContainer\"]{padding-top:86px!important;}"
-            "</style>",
+            # synchronous marker scope + fixed backdrop layer (see updates notes)
+            "body:has(.octo-bg-ecosystem) [data-testid=\"stApp\"]{--ocbg:url('" + _eco_bg + "');"
+            "background:linear-gradient(180deg,rgba(240,242,250,0.52) 0%,rgba(234,238,248,0.48) 45%,rgba(228,232,246,0.62) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.octo-bg-ecosystem) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(8,10,22,0.62) 0%,rgba(7,9,20,0.56) 45%,rgba(5,7,16,0.80) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.octo-bg-ecosystem) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.octo-bg-ecosystem) section[data-testid=\"stMain\"],"
+            "body:has(.octo-bg-ecosystem) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.octo-bg-ecosystem) #aura-3d-canvas,"
+            "body:has(.octo-bg-ecosystem) .gs-env{display:none!important;}"
+            "body:has(.octo-bg-ecosystem) [data-testid=\"stMainBlockContainer\"]{padding-top:46px!important;}"
+            "</style>"
+            "<div class=\"octo-bg-ecosystem\" style=\"display:none\"></div>",
             unsafe_allow_html=True,
         )
 
@@ -15527,7 +15831,7 @@ elif st.session_state.page == "ecosystem":
         for d in PHAROS_DAPPS
     ]
     _eco_carousel = _ECO_CAROUSEL_HTML.replace("__ECO_DATA__", json.dumps(_eco_items))
-    components.html(_eco_carousel, height=588, scrolling=False)
+    components.html(_eco_carousel, height=556, scrolling=False)
 
     # ── Bottom actions — two links, centred together, each its own gradient ──
     st.markdown(
@@ -15580,203 +15884,176 @@ elif st.session_state.page == "pay":
 
     inject_redesign_css("pay rd-hero-compact")
 
-    # ── Premium Pay page header ───────────────────────────────────────────
+    # ── Full-bleed backdrop (pay_bg.png) — Pay page ONLY, painted on the
+    #    full-viewport stApp shell with a theme-aware scrim. Scoped to the
+    #    synchronous .pay-top marker so it never leaks to another page. ──
+    _pay_bg = get_pay_bg_b64()
+    if _pay_bg:
+        st.markdown(
+            "<style>"
+            "body:has(.pay-top) [data-testid=\"stApp\"]{--ocbg:url('" + _pay_bg + "');"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.80) 0%,rgba(232,236,247,0.74) 45%,rgba(226,230,244,0.88) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.pay-top) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(8,10,22,0.86) 0%,rgba(7,9,20,0.80) 45%,rgba(5,7,16,0.94) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.pay-top) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.pay-top) section[data-testid=\"stMain\"],"
+            "body:has(.pay-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.pay-top) #aura-3d-canvas,"
+            "body:has(.pay-top) .gs-env{display:none!important;}"
+            "</style>"
+            "<div class=\"pay-top\" style=\"display:none\"></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Pay page — rebuilt design system ─────────────────────────────────
+    #    Calm, focused, one centred column. 8pt vertical rhythm, generous card
+    #    padding, clear primary/secondary/tertiary hierarchy. Class names are
+    #    kept as styling hooks but every treatment + composition is new. Scoped
+    #    under body:has(.pay-top) so nothing leaks to other pages.
     st.markdown("""
 <style>
-/* ╔══════════════════════════════════════════════════════╗
-   ║   PAY PAGE — Premium spacing & design system         ║
-   ╚══════════════════════════════════════════════════════╝ */
+/* Wide, full-bleed canvas — content spans the page and aligns with the rest
+   of the app, not a narrow centred column. Glass cards float over pay_bg. */
+body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+    max-width:1300px!important;margin-left:auto!important;margin-right:auto!important;}
+body:has(.pay-top) [data-testid="stMainBlockContainer"]{ padding-top:0.7rem!important; }
 
-/* Hero */
-.pay-hero{
-    background:linear-gradient(135deg,#06071A 0%,#0C0E38 45%,#1A1AFF 100%);
-    border-radius:20px;padding:1.6rem 2.2rem 1.5rem;margin-bottom:1.4rem;
-    position:relative;overflow:hidden;
-    box-shadow:0 10px 40px rgba(26,26,255,0.22),0 3px 10px rgba(0,0,0,0.18);
-}
-.pay-hero::before{
-    content:"";position:absolute;inset:0;
-    background-image:radial-gradient(circle,rgba(255,255,255,0.055) 1px,transparent 1px);
-    background-size:18px 18px;pointer-events:none;
-}
-.pay-hero::after{
-    content:"";position:absolute;top:-60px;right:-60px;
-    width:220px;height:220px;border-radius:50%;
-    background:radial-gradient(circle,rgba(99,102,241,0.22),transparent 68%);
-    pointer-events:none;
-}
-.pay-hero-eyebrow{
-    font-size:9px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;
-    color:rgba(163,174,255,0.75);margin-bottom:0.5rem;
-    display:inline-flex;align-items:center;gap:8px;
-}
-.pay-hero-title{
-    font-family:Syne,sans-serif;font-size:1.8rem;font-weight:800;
-    color:#FFFFFF;letter-spacing:-0.025em;margin:0 0 0.4rem 0;line-height:1.08;
-}
-.pay-hero-sub{
-    font-size:0.875rem;color:rgba(255,255,255,0.52);line-height:1.6;
-    max-width:560px;margin:0;
-}
-.pay-feature-pills{
-    display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem;
-}
+body:has(.pay-top){
+    --pi:#14162B; --pi2:#4C5268; --pi3:#7C8299;
+    --pacc:#3A34DE; --pwarn:#92400E; --pok:#15803D;
+    --pcard:rgba(255,255,255,0.66); --pcardbd:rgba(255,255,255,0.72);
+    --pglass:blur(18px) saturate(1.2);
+    --pfield:rgba(20,22,55,0.045); --pfl:rgba(20,22,55,0.10);
+    --pshadow:0 10px 34px rgba(12,14,35,0.10);}
+html[data-theme="dark"] body:has(.pay-top){
+    --pi:#EEF0F8; --pi2:#AAB0C6; --pi3:#8A90A8;
+    --pacc:#9AA6FF; --pwarn:#FBCB77; --pok:#54D98A;
+    --pcard:rgba(18,21,36,0.56); --pcardbd:rgba(255,255,255,0.09);
+    --pfield:rgba(255,255,255,0.05); --pfl:rgba(255,255,255,0.11);
+    --pshadow:0 10px 34px rgba(0,0,0,0.34);}
+
+/* ── Title strip — full-width, sleek, glassy ─────────────────────────── */
+.pay-strip{
+    display:flex;align-items:center;justify-content:space-between;gap:1.4rem 3rem;flex-wrap:wrap;
+    background:var(--pcard);border:1px solid var(--pcardbd);border-radius:20px;
+    padding:1.35rem 1.9rem;margin:0 0 1.2rem;
+    -webkit-backdrop-filter:var(--pglass);backdrop-filter:var(--pglass);box-shadow:var(--pshadow);}
+/* Left: the reading block — identity, title, one crisp line */
+.pay-strip-l{ display:flex;flex-direction:column;gap:0.5rem;min-width:0;flex:1 1 340px; }
+.pay-strip-eyebrow{
+    font-size:10.5px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--pacc);
+    display:inline-flex;align-items:center;gap:7px;}
+body:has(.pay-top) .pay-strip-title{
+    font-family:Syne,sans-serif;font-size:2.05rem;font-weight:800;color:var(--pi)!important;
+    letter-spacing:-0.03em;margin:0!important;line-height:1.02;}
+.pay-strip-sub{ font-size:0.9rem;color:var(--pi2);line-height:1.55;margin:0.1rem 0 0;max-width:56ch;text-align:left; }
+/* Right: feature chips, grouped tidily so nothing orphans onto its own line */
+.pay-strip-r{ display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-content:center;
+    max-width:340px;flex:0 1 auto; }
 .pay-feature-pill{
-    display:inline-flex;align-items:center;gap:6px;
-    background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.16);
-    border-radius:20px;padding:5px 12px;
-    font-size:11px;font-weight:600;color:rgba(255,255,255,0.82);
-    backdrop-filter:blur(6px);
-    transition:background 180ms ease,border-color 180ms ease;
-}
-.pay-feature-pill:hover{
-    background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.28);
-}
+    display:inline-flex;align-items:center;gap:6px;background:rgba(127,131,165,0.09);
+    border:1px solid var(--pcardbd);border-radius:999px;padding:6px 12px;white-space:nowrap;
+    font-size:11px;font-weight:600;color:var(--pi2);}
 
-/* Section divider */
-.pay-section-gap{ height:1.4rem; }
+/* ── Cards: style each TOP-LEVEL column's vertical block as a real glass card.
+      This wraps the ACTUAL widgets (buttons/inputs), so nothing floats loose
+      outside a box. Nested (button) columns sit deeper and are unaffected. ── */
+body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]{
+    background:var(--pcard);border:1px solid var(--pcardbd);border-radius:20px;
+    padding:1.5rem 1.6rem;
+    -webkit-backdrop-filter:var(--pglass);backdrop-filter:var(--pglass);box-shadow:var(--pshadow);}
 
-/* Card base */
-.pay-input-card{
-    background:#FFFFFF;
-    border:1.5px solid #E8EAF4;
-    border-radius:20px;
-    padding:1.8rem 2rem;
-    box-shadow:0 2px 16px rgba(20,20,60,0.05),0 1px 4px rgba(20,20,60,0.04);
-    margin-bottom:1.4rem;
-}
-html[data-theme="dark"] .pay-input-card{
-    background:#141826;border-color:#232840;
-    box-shadow:0 2px 16px rgba(0,0,0,0.25);
-}
-
-/* Card header */
-.pay-card-head{
-    display:flex;align-items:center;gap:10px;
-    margin-bottom:1.2rem;padding-bottom:0.9rem;
-    border-bottom:1px solid #F0F1F8;
-}
-html[data-theme="dark"] .pay-card-head{ border-color:#232840; }
+/* Section header inside a card */
+.pay-card-head,.pay-preview-title{
+    display:flex;align-items:center;gap:11px;margin:0 0 1.05rem 0;padding-bottom:0.85rem;
+    border-bottom:1px solid var(--pfl);}
 .pay-card-icon{
-    width:36px;height:36px;border-radius:10px;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;
-    font-size:16px;
-    background:linear-gradient(135deg,rgba(26,26,255,0.10),rgba(99,102,241,0.08));
-    border:1px solid rgba(26,26,255,0.12);
-}
-.pay-card-label{
-    font-family:Syne,sans-serif;font-size:14px;font-weight:800;
-    color:var(--t1);letter-spacing:-0.01em;
-}
-.pay-card-sub{
-    font-size:11.5px;color:var(--t3);margin-top:1px;line-height:1.4;
-}
+    width:36px;height:36px;border-radius:11px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+    background:rgba(127,131,165,0.12);border:1px solid var(--pcardbd);}
+.pay-card-label{ font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:var(--pi);letter-spacing:-0.01em; }
+.pay-card-sub{ font-size:11.5px;color:var(--pi3);margin-top:2px;line-height:1.45; }
+.pay-preview-title{ font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:var(--pi); }
 
-/* Input hint */
-.pay-input-hint{
-    font-size:12px;color:var(--t3);margin-bottom:1rem;line-height:1.6;
-}
+.pay-input-hint{ font-size:12px;color:var(--pi3);margin:0 0 1rem 0;line-height:1.55; }
 
-/* Network badge strip */
+/* Divider between the Network and Wallet sections inside the right card */
+.pay-section-gap{ height:1px;background:var(--pfl);margin:1.2rem 0; }
+
+/* Network badge — quiet, tertiary; theme-aware per network (legible in both). */
 .pay-net-badge{
-    display:inline-flex;align-items:center;gap:7px;
-    border-radius:12px;padding:8px 14px;margin-top:0.9rem;
-    font-size:12px;font-weight:700;letter-spacing:0.01em;
-}
+    display:inline-flex;align-items:center;gap:7px;border-radius:999px;
+    padding:6px 13px;margin-top:0.9rem;font-size:11.5px;font-weight:600;letter-spacing:0.01em;
+    border:1px solid transparent;}
+.pay-net-badge.is-main{ background:rgba(58,52,222,0.10);border-color:rgba(58,52,222,0.24);color:#3A34DE; }
+.pay-net-badge.is-test{ background:rgba(5,150,105,0.11);border-color:rgba(5,150,105,0.24);color:#059669; }
+html[data-theme="dark"] .pay-net-badge.is-main{ background:rgba(154,166,255,0.15);border-color:rgba(154,166,255,0.34);color:#B7BEFF; }
+html[data-theme="dark"] .pay-net-badge.is-test{ background:rgba(52,211,153,0.14);border-color:rgba(52,211,153,0.34);color:#5FE0A8; }
 
-/* Field boxes inside preview/cards */
+/* Read-only field cell */
 .pay-field{
-    background:#F6F7FC;
-    border:1px solid #ECEEF8;
-    border-radius:14px;padding:0.85rem 1.1rem;
-    margin-bottom:0.75rem;
-}
-html[data-theme="dark"] .pay-field{
-    background:#1B2030;border-color:#262B3E;
-}
+    background:var(--pfield);border:1px solid var(--pfl);border-radius:13px;
+    padding:0.9rem 1.1rem;margin-bottom:0.7rem;}
 .pay-field-lbl{
-    font-size:9.5px;font-weight:800;letter-spacing:0.10em;text-transform:uppercase;
-    color:var(--t3);margin-bottom:5px;
-}
-.pay-field-val{
-    font-size:14px;font-weight:600;color:var(--t1);word-break:break-all;line-height:1.4;
-}
-.pay-field-sub{font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.4;}
+    font-size:10px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;
+    color:var(--pi3);margin-bottom:6px;}
+.pay-field-val{ font-size:14px;font-weight:600;color:var(--pi);word-break:break-all;line-height:1.5; }
+.pay-field-sub{ font-size:11.5px;color:var(--pi3);margin-top:5px;line-height:1.5; }
 .pay-amount-big{
-    font-family:Syne,sans-serif;font-size:2.1rem;font-weight:800;
-    color:var(--t1);letter-spacing:-0.02em;line-height:1;
-}
+    font-family:Syne,sans-serif;font-size:2rem;font-weight:800;
+    color:var(--pi);letter-spacing:-0.025em;line-height:1;}
 
-/* Preview card */
+/* Confirmation / success preview — glass card (rendered full-width below) */
 .pay-preview{
-    background:#FFFFFF;border:1.5px solid #E8EAF4;border-radius:20px;
-    padding:1.8rem 2rem;
-    box-shadow:0 2px 16px rgba(20,20,60,0.05);
-    margin-bottom:1.4rem;
-}
-html[data-theme="dark"] .pay-preview{
-    background:#141826;border-color:#232840;
-}
-.pay-preview-title{
-    font-family:Syne,sans-serif;font-size:15px;font-weight:800;
-    color:var(--t1);margin-bottom:1.2rem;
-    display:flex;align-items:center;gap:9px;padding-bottom:0.9rem;
-    border-bottom:1px solid #F0F1F8;
-}
-html[data-theme="dark"] .pay-preview-title{border-color:#232840;}
+    background:var(--pcard);border:1px solid var(--pcardbd);border-radius:20px;
+    padding:1.6rem 1.7rem;margin-bottom:1.1rem;
+    -webkit-backdrop-filter:var(--pglass);backdrop-filter:var(--pglass);box-shadow:var(--pshadow);}
 
-/* History */
+/* History — quiet tertiary rows, below the fold */
 .pay-history-item{
-    background:#FFFFFF;border:1.5px solid #ECEEF8;border-radius:16px;
-    padding:1rem 1.3rem;margin-bottom:0.75rem;
+    background:var(--pcard);border:1px solid var(--pcardbd);border-radius:15px;
+    padding:1rem 1.3rem;margin-bottom:0.7rem;
+    -webkit-backdrop-filter:var(--pglass);backdrop-filter:var(--pglass);
     display:flex;align-items:center;justify-content:space-between;gap:16px;
-    transition:border-color 180ms ease,box-shadow 180ms ease,transform 180ms ease;
-}
-.pay-history-item:hover{
-    border-color:rgba(26,26,255,0.22);
-    box-shadow:0 6px 20px rgba(26,26,255,0.09);
-    transform:translateY(-1px);
-}
-html[data-theme="dark"] .pay-history-item{
-    background:#141826;border-color:#232840;
-}
+    transition:border-color 180ms cubic-bezier(0.23,1,0.32,1),transform 180ms cubic-bezier(0.23,1,0.32,1);}
+.pay-history-item:hover{ border-color:var(--pacc);transform:translateY(-1px); }
 
-/* Wallet strip */
+/* Signing-from chip */
 .pay-wallet-strip{
-    background:linear-gradient(135deg,#06071A,#1A1AFF);
-    border-radius:14px;padding:0.9rem 1.1rem;
-    display:flex;align-items:center;gap:12px;margin-bottom:1rem;
-}
-.pay-wallet-strip-lbl{
-    font-size:9px;color:rgba(255,255,255,0.45);font-weight:700;
-    letter-spacing:0.1em;text-transform:uppercase;
-}
-.pay-wallet-strip-addr{
-    font-size:13.5px;color:#fff;font-weight:700;font-family:monospace;
-}
+    background:var(--pfield);border:1px solid var(--pfl);border-radius:13px;
+    padding:0.9rem 1.1rem;display:flex;align-items:center;gap:12px;margin-bottom:0.9rem;}
+.pay-wallet-strip-lbl{ font-size:10px;color:var(--pi3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase; }
+.pay-wallet-strip-addr{ font-size:14px;color:var(--pi);font-weight:700;font-family:'DM Mono',monospace; }
 
-/* Section heading */
 .pay-section-title{
-    font-family:Syne,sans-serif;font-size:15px;font-weight:800;
-    color:var(--t1);margin:1.8rem 0 0.9rem 0;
-    display:flex;align-items:center;gap:8px;
-}
+    font-family:Syne,sans-serif;font-size:14px;font-weight:800;
+    color:var(--pi);margin:1.8rem 0 1rem 0;display:flex;align-items:center;gap:8px;}
+
+/* Streamlit widgets on the pay page — calmer look, controlled height */
+body:has(.pay-top) [data-testid="stTextArea"] textarea,
+body:has(.pay-top) [data-testid="stTextInput"] input{
+    border-radius:13px!important;font-size:14px!important;}
+body:has(.pay-top) [data-testid="stTextArea"] textarea{ padding:0.85rem 1rem!important;line-height:1.55!important; }
+/* align the two main columns to the top so the cards read as a deliberate grid */
+body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"]{ align-items:flex-start!important; }
 </style>
+<div class="pay-top" style="display:none"></div>
 """, unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="pay-hero">'
-        '<div style="position:relative;z-index:1;">'
-        '<div class="pay-hero-eyebrow">💸 PAYMENT AGENT · PHAROS NETWORK</div>'
-        '<h2 class="pay-hero-title">Send PROS</h2>'
-        '<p class="pay-hero-sub">Send tokens with plain English. Just describe what you want — OctoBot parses the intent, shows a preview, and your wallet signs it. Nothing leaves without your approval.</p>'
-        '<div class="pay-feature-pills">'
+        '<div class="pay-strip">'
+        '<div class="pay-strip-l">'
+        '<div class="pay-strip-eyebrow">💸 Payment Agent · Pharos</div>'
+        '<h2 class="pay-strip-title">Send PROS</h2>'
+        '<p class="pay-strip-sub">Say what you want to send in plain words. OctoBot drafts the transaction — you review and sign it yourself.</p>'
+        '</div>'
+        '<div class="pay-strip-r">'
         '<span class="pay-feature-pill">🔒 Non-custodial</span>'
         '<span class="pay-feature-pill">⚡ Instant on-chain</span>'
-        '<span class="pay-feature-pill">🌐 Mainnet & Testnet</span>'
-        '<span class="pay-feature-pill">📦 Batch send</span>'
+        '<span class="pay-feature-pill">🌐 Mainnet &amp; Testnet</span>'
+        '<span class="pay-feature-pill">📦 Batch sends</span>'
         '</div>'
-        '</div></div>',
+        '</div>',
         unsafe_allow_html=True,
     )
 
@@ -16064,8 +16341,9 @@ html[data-theme="dark"] .pay-history-item{
 </script></body></html>"""
         components.html(html, height=140, scrolling=False)
 
-    # ── Network selector + wallet — premium two-column layout ────────────
-    _pay_layout_col, _pay_side_col = st.columns([1.6, 1], gap="medium")
+    # ── Deliberate two-column grid — primary command (left) + secondary
+    #    network/wallet (right), sized to sit in one viewport (no scroll). ──
+    _pay_layout_col, _pay_side_col = st.columns([1.5, 1], gap="large")
 
     # Network config (needed for both columns)
     mainnet_active = st.session_state.pay_network == "mainnet"
@@ -16077,9 +16355,8 @@ html[data-theme="dark"] .pay-history-item{
     with _pay_side_col:
         wallet_addr = st.session_state.get("wallet_address", "")
 
-        # ── Network card ──────────────────────────────
+        # ── Network section (inside the right glass card) ─────────────
         st.markdown(
-            '<div class="pay-input-card">'
             '<div class="pay-card-head">'
             '<div class="pay-card-icon">🌐</div>'
             '<div><div class="pay-card-label">Network</div>'
@@ -16114,21 +16391,18 @@ html[data-theme="dark"] .pay-history-item{
                     st.session_state.wallet_data = None
                     st.rerun()
 
-        nb_color = "#1A1AFF" if mainnet_active else "#059669"
-        nb_bg    = "rgba(26,26,255,0.07)" if mainnet_active else "rgba(5,150,105,0.07)"
-        nb_border= "rgba(26,26,255,0.18)" if mainnet_active else "rgba(5,150,105,0.18)"
+        _nb_cls = "is-main" if mainnet_active else "is-test"
         st.markdown(
-            f'<div class="pay-net-badge" style="background:{nb_bg};border:1px solid {nb_border};color:{nb_color};">'
+            f'<div class="pay-net-badge {_nb_cls}">'
             f'{"🌐" if mainnet_active else "🧪"}&nbsp; {_net["label"]} &nbsp;·&nbsp; Chain {_net["chain_id_dec"]} &nbsp;·&nbsp; {_sym_label}'
-            f'</div></div>',
+            f'</div>',
             unsafe_allow_html=True,
         )
 
         st.markdown('<div class="pay-section-gap"></div>', unsafe_allow_html=True)
 
-        # ── Wallet card ───────────────────────────────
+        # ── Wallet section (same right glass card) ────────────────────
         st.markdown(
-            '<div class="pay-input-card">'
             '<div class="pay-card-head">'
             '<div class="pay-card-icon">🔑</div>'
             '<div><div class="pay-card-label">Your Wallet</div>'
@@ -16177,7 +16451,7 @@ html[data-theme="dark"] .pay-history-item{
                     f'<div class="pay-field">'
                     f'<div class="pay-field-lbl">PROS Balance</div>'
                     f'<div style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;'
-                    f'color:#1A1AFF;letter-spacing:-0.02em;">{_bal:,.4f}</div>'
+                    f'color:var(--pacc);letter-spacing:-0.02em;">{_bal:,.4f}</div>'
                     f'<div class="pay-field-sub">PROS on {_net["label"]}</div>'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -16188,8 +16462,6 @@ html[data-theme="dark"] .pay-history-item{
                 st.session_state.pay_parsed     = None
                 st.session_state.pay_result     = None
                 st.rerun()
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # Re-assign wallet_addr after potential update
     wallet_addr = st.session_state.get("wallet_address", "")
@@ -16202,7 +16474,6 @@ html[data-theme="dark"] .pay-history-item{
     ]
     with _pay_layout_col:
         st.markdown(
-            '<div class="pay-input-card">'
             '<div class="pay-card-head">'
             '<div class="pay-card-icon">🤖</div>'
             '<div><div class="pay-card-label">AI Payment Command</div>'
@@ -16230,7 +16501,7 @@ html[data-theme="dark"] .pay-history-item{
             placeholder='e.g. "Send 5 PROS to 0xAbCd…" · "Approve 0xContract to spend 100 PROS"',
             key="pay_text_input",
             label_visibility="collapsed",
-            height=140,
+            height=115,
         )
 
         st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
@@ -16245,7 +16516,6 @@ html[data-theme="dark"] .pay-history-item{
                 st.session_state.pay_confirmed  = False
                 st.session_state.pay_result     = None
                 st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
     if parse_clicked and pay_input.strip():
         st.session_state.pay_intent_raw = pay_input.strip()
@@ -16309,7 +16579,7 @@ html[data-theme="dark"] .pay-history-item{
             insufficient = sender_balance is not None and sender_balance < amount
 
             st.markdown(
-                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--border)"};">'
+                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--pl)"};">'
                 '<div class="pay-preview-title"><span>📋</span> Transaction Preview · Send</div>'
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
                 '<div class="pay-field">'
@@ -16364,14 +16634,14 @@ html[data-theme="dark"] .pay-history-item{
             insufficient = sender_balance is not None and sender_balance < total_amount
 
             st.markdown(
-                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--border)"};">'
+                f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--pl)"};">'
                 '<div class="pay-preview-title"><span>📦</span> Transaction Preview · Batch Send</div>'
                 '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
                 '<div class="pay-field"><div class="pay-field-lbl">Each Address</div>'
                 f'<div class="pay-amount-big" style="font-size:1.4rem;">{amount_each:,.4f}</div>'
                 f'<div class="pay-field-sub">{_sym}' + (f' · ≈ ${usd_each:,.4f}' if usd_each else '') + '</div></div>'
                 '<div class="pay-field"><div class="pay-field-lbl">Recipients</div>'
-                f'<div class="pay-amount-big" style="color:#1A1AFF;">{len(recipients)}</div></div>'
+                f'<div class="pay-amount-big" style="color:var(--pacc);">{len(recipients)}</div></div>'
                 '<div class="pay-field"><div class="pay-field-lbl">Total</div>'
                 f'<div class="pay-amount-big" style="font-size:1.4rem;">{total_amount:,.4f}</div>'
                 f'<div class="pay-field-sub">{_sym}' + (f' · ≈ ${usd_total:,.4f}' if usd_total else '') + '</div></div>'
@@ -16383,7 +16653,7 @@ html[data-theme="dark"] .pay-history-item{
                 '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Recipients</div>'
                 + "".join([
                     f'<div style="font-size:11.5px;font-weight:600;color:var(--t1);word-break:break-all;padding:4px 0;border-bottom:1px solid var(--border);">'
-                    f'<span style="color:#1A1AFF;font-weight:700;">{i+1}.</span> {esc(addr)} '
+                    f'<span style="color:var(--pacc);font-weight:700;">{i+1}.</span> {esc(addr)} '
                     f'<span style="color:var(--t3);">({amount_each:,.4f} {_sym})</span></div>'
                     for i, addr in enumerate(recipients)
                 ]) +
@@ -16431,7 +16701,7 @@ html[data-theme="dark"] .pay-history-item{
                 '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);'
                 'border-radius:12px;padding:0.85rem 1rem;margin-bottom:0.8rem;display:flex;align-items:flex-start;gap:9px;">'
                 '<span style="font-size:15px;flex-shrink:0;">⚠️</span>'
-                '<div style="font-size:12px;color:#92400E;line-height:1.6;">'
+                '<div style="font-size:12px;color:var(--pwarn);line-height:1.6;">'
                 '<strong>Approval grants a contract permission to spend your tokens.</strong> '
                 'Always verify the spender address before confirming.</div></div>'
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
@@ -16446,7 +16716,7 @@ html[data-theme="dark"] .pay-history-item{
                 + (f'<div class="pay-field-sub">Balance: {sender_balance:,.4f} {_sym}</div>' if sender_balance is not None else '') +
                 '</div>'
                 '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Spender Contract</div>'
-                f'<div class="pay-field-val" style="color:#1A1AFF;">{esc(spender) or "—"}</div></div>'
+                f'<div class="pay-field-val" style="color:var(--pacc);">{esc(spender) or "—"}</div></div>'
                 + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
                 '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
                 '<div class="pay-field-val">~62,000 units (ERC-20 approve)</div></div>'
@@ -16521,10 +16791,10 @@ html[data-theme="dark"] .pay-history-item{
         _m   = r.get("mode", "Send")
         st.markdown(
             '<div class="pay-preview" style="border-color:#22C55E;background:rgba(34,197,94,0.04);">'
-            '<div class="pay-preview-title" style="color:#15803D;"><span>🎉</span> ' + esc(_m) + ' Complete!</div>'
+            '<div class="pay-preview-title" style="color:var(--pok);"><span>🎉</span> ' + esc(_m) + ' Complete!</div>'
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
             '<div class="pay-field"><div class="pay-field-lbl">Amount</div>'
-            f'<div class="pay-amount-big" style="color:#15803D;">{r["amount"]:,.4f}</div>'
+            f'<div class="pay-amount-big" style="color:var(--pok);">{r["amount"]:,.4f}</div>'
             f'<div class="pay-field-sub">{_sym}</div></div>'
             '<div class="pay-field"><div class="pay-field-lbl">Network</div>'
             f'<div class="pay-field-val">{esc(r.get("network","Pharos"))}</div></div>'
@@ -16535,7 +16805,7 @@ html[data-theme="dark"] .pay-history-item{
             f'<div class="pay-field-val" style="font-size:11px;">{esc(r["tx_hash"])}</div></div>'
             f'<a href="{esc_url(_exp)}/tx/{esc(r["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
             'style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;'
-            'color:#1A1AFF;text-decoration:none;margin-top:4px;">View on Pharosscan ↗</a>'
+            'color:var(--pacc);text-decoration:none;margin-top:4px;">View on Pharosscan ↗</a>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -16567,7 +16837,7 @@ html[data-theme="dark"] .pay-history-item{
                 f'<div style="font-size:11px;color:var(--t3);margin-top:2px;">'
                 f'{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(tx_short)}</div></div>'
                 f'<a href="{esc_url(_h_exp)}/tx/{esc(h["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
-                'style="font-size:12px;font-weight:700;color:#1A1AFF;white-space:nowrap;text-decoration:none;">View ↗</a>'
+                'style="font-size:12px;font-weight:700;color:var(--pacc);white-space:nowrap;text-decoration:none;">View ↗</a>'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -16580,157 +16850,166 @@ elif st.session_state.page == "request":
 
     inject_redesign_css("request rd-hero-compact rd-wide")
 
-    # ── Premium Request page styles ────────────────────────────────────
+    # ── Full-bleed backdrop (pay_bg.png) — Request page too, same art as
+    #    the Pay page, theme-aware scrim, scoped to the .req-top marker. ──
+    _req_bg = get_pay_bg_b64()
+    if _req_bg:
+        st.markdown(
+            "<style>"
+            "body:has(.req-top) [data-testid=\"stApp\"]{--ocbg:url('" + _req_bg + "');"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.80) 0%,rgba(232,236,247,0.74) 45%,rgba(226,230,244,0.88) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.req-top) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(8,10,22,0.86) 0%,rgba(7,9,20,0.80) 45%,rgba(5,7,16,0.94) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.req-top) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.req-top) section[data-testid=\"stMain\"],"
+            "body:has(.req-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.req-top) #aura-3d-canvas,"
+            "body:has(.req-top) .gs-env{display:none!important;}"
+            "</style>"
+            "<div class=\"req-top\" style=\"display:none\"></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Request page — glass design system (mirrors Pay), over pay_bg. ──
     st.markdown("""
 <style>
-/* ╔══════════════════════════════════════════════════════╗
-   ║   REQUEST PAGE — Premium spacing & design system     ║
-   ╚══════════════════════════════════════════════════════╝ */
+/* Wide glass canvas — content spans to the page edges, zoomed-out density */
+body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+    max-width:1400px!important;margin-left:auto!important;margin-right:auto!important;}
+body:has(.req-top) [data-testid="stMainBlockContainer"]{ padding-top:0.6rem!important; }
+/* slimmer page gutters so cards reach nearer the edges */
+body:has(.req-top) [data-testid="stMainBlockContainer"]{ padding-left:2.2rem!important;padding-right:2.2rem!important; }
+/* zoom the whole page out a notch so more fits comfortably in view */
+body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{ zoom:0.9; }
 
-.req-hero{
-    background:linear-gradient(135deg,#0C0C1A 0%,#1A0A2E 42%,#3B0764 100%);
-    border-radius:24px;padding:2.8rem 3rem 2.4rem;margin-bottom:2rem;
-    position:relative;overflow:hidden;
-    box-shadow:0 16px 56px rgba(59,7,100,0.32),0 4px 16px rgba(0,0,0,0.2);
-}
-.req-hero::before{
-    content:"";position:absolute;inset:0;
-    background-image:radial-gradient(circle,rgba(255,255,255,0.05) 1px,transparent 1px);
-    background-size:18px 18px;pointer-events:none;
-}
-.req-hero::after{
-    content:"";position:absolute;top:-50px;right:-50px;
-    width:260px;height:260px;border-radius:50%;
-    background:radial-gradient(circle,rgba(139,92,246,0.28),transparent 68%);
-    pointer-events:none;
-}
+body:has(.req-top){
+    --ri:#14162B; --ri2:#4C5268; --ri3:#7C8299;
+    --racc:#6D28D9; --rwarn:#92400E; --rok:#15803D;
+    --rcard:rgba(255,255,255,0.66); --rcardbd:rgba(255,255,255,0.72);
+    --rglass:blur(18px) saturate(1.2);
+    --rfield:rgba(20,22,55,0.045); --rfl:rgba(20,22,55,0.10);
+    --rshadow:0 10px 34px rgba(12,14,35,0.10);}
+html[data-theme="dark"] body:has(.req-top){
+    --ri:#EEF0F8; --ri2:#AAB0C6; --ri3:#8A90A8;
+    --racc:#B9A5FF; --rwarn:#FBCB77; --rok:#54D98A;
+    --rcard:rgba(18,21,36,0.56); --rcardbd:rgba(255,255,255,0.09);
+    --rfield:rgba(255,255,255,0.05); --rfl:rgba(255,255,255,0.11);
+    --rshadow:0 10px 34px rgba(0,0,0,0.34);}
 
-/* Shared card base */
-.req-card{
-    background:#FFFFFF;
-    border:1.5px solid #EDE9F8;
-    border-radius:20px;
-    padding:1.8rem 2rem;
-    box-shadow:0 2px 16px rgba(59,7,100,0.05),0 1px 4px rgba(0,0,0,0.04);
-    margin-bottom:1.4rem;
-}
-html[data-theme="dark"] .req-card{
-    background:#13111E;border-color:#2A2440;
-    box-shadow:0 2px 16px rgba(0,0,0,0.3);
-}
+/* ── Title strip — full-width, sleek, glassy ── */
+.req-strip{
+    display:flex;align-items:center;justify-content:space-between;gap:1.2rem 3rem;flex-wrap:wrap;
+    background:var(--rcard);border:1px solid var(--rcardbd);border-radius:18px;
+    padding:1.1rem 1.7rem;margin:0 0 1rem;
+    -webkit-backdrop-filter:var(--rglass);backdrop-filter:var(--rglass);box-shadow:var(--rshadow);}
+.req-strip-l{ display:flex;flex-direction:column;gap:0.4rem;min-width:0;flex:1 1 340px; }
+.req-strip-eyebrow{
+    font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--racc);
+    display:inline-flex;align-items:center;gap:7px;}
+body:has(.req-top) .req-strip-title{
+    font-family:Syne,sans-serif;font-size:1.8rem;font-weight:800;color:var(--ri)!important;
+    letter-spacing:-0.03em;margin:0!important;line-height:1.02;}
+.req-strip-sub{ font-size:0.9rem;color:var(--ri2);line-height:1.55;margin:0.1rem 0 0;max-width:58ch;text-align:left; }
+.req-strip-r{ display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-content:center;max-width:340px;flex:0 1 auto; }
+.req-pill{
+    display:inline-flex;align-items:center;gap:6px;background:rgba(127,131,165,0.09);
+    border:1px solid var(--rcardbd);border-radius:999px;padding:6px 12px;white-space:nowrap;
+    font-size:11px;font-weight:600;color:var(--ri2);}
 
-/* Card header row */
+/* ── Glass cards: only columns carrying a .req-card-anchor become cards
+      (so the network-selector row and the QR row stay uncarded). ── */
+body:has(.req-top) [data-testid="stColumn"] > [data-testid="stVerticalBlock"]:has(.req-card-anchor){
+    background:var(--rcard);border:1px solid var(--rcardbd);border-radius:18px;padding:1.3rem 1.45rem;
+    -webkit-backdrop-filter:var(--rglass);backdrop-filter:var(--rglass);box-shadow:var(--rshadow);}
+.req-card-anchor{ display:none; }
+
+/* Generated-result: one real glass card (details + QR side by side) */
+body:has(.req-top) .st-key-req_result_card{
+    background:var(--rcard);border:1px solid var(--rcardbd);border-radius:18px;padding:1.3rem 1.5rem;margin-top:0.5rem;
+    -webkit-backdrop-filter:var(--rglass);backdrop-filter:var(--rglass);box-shadow:var(--rshadow);}
+.req-result-head{ margin-bottom:0.8rem; }
+.req-result-chip{
+    display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,0.12);
+    border:1px solid rgba(34,197,94,0.30);border-radius:999px;padding:5px 13px;
+    font-size:11px;font-weight:700;color:var(--rok);}
+.req-qr-label{ font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--ri3);margin:0.1rem 0 0.5rem;text-align:center; }
+.req-qr-hint{ font-size:11px;color:var(--ri3);line-height:1.5;text-align:center;margin-top:0.5rem; }
+/* clear separation between the clickable link box and the copyable code block */
+.req-copy-lbl{ font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ri3);margin:1rem 0 0.35rem; }
+body:has(.req-top) [data-testid="stCode"]{ margin-top:0!important; }
+
+/* Section header */
 .req-card-head{
-    display:flex;align-items:center;gap:10px;
-    margin-bottom:1.2rem;padding-bottom:0.9rem;
-    border-bottom:1px solid #F0EDF8;
-}
-html[data-theme="dark"] .req-card-head{border-color:#2A2440;}
+    display:flex;align-items:center;gap:11px;margin:0 0 1.05rem 0;padding-bottom:0.85rem;
+    border-bottom:1px solid var(--rfl);}
 .req-card-icon{
-    width:36px;height:36px;border-radius:10px;flex-shrink:0;
+    width:36px;height:36px;border-radius:11px;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;font-size:16px;
-    background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(139,92,246,0.08));
-    border:1px solid rgba(124,58,237,0.15);
-}
-.req-card-label{
-    font-family:Syne,sans-serif;font-size:14px;font-weight:800;
-    color:var(--t1);letter-spacing:-0.01em;
-}
-.req-card-sub{font-size:11.5px;color:var(--t3);margin-top:1px;line-height:1.4;}
+    background:rgba(127,131,165,0.12);border:1px solid var(--rcardbd);}
+.req-card-label{ font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:var(--ri);letter-spacing:-0.01em; }
+.req-card-sub{ font-size:11.5px;color:var(--ri3);margin-top:2px;line-height:1.45; }
 
-/* Field pill inside cards */
-.req-field{
-    background:#F7F5FD;border:1px solid #EDE9F8;
-    border-radius:14px;padding:0.85rem 1.1rem;margin-bottom:0.75rem;
-}
-html[data-theme="dark"] .req-field{background:#1D1930;border-color:#2A2440;}
-.req-field-lbl{
-    font-size:9.5px;font-weight:800;letter-spacing:0.10em;text-transform:uppercase;
-    color:var(--t3);margin-bottom:5px;
-}
-.req-field-val{
-    font-size:14px;font-weight:600;color:var(--t1);word-break:break-all;line-height:1.4;
-}
-.req-field-sub{font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.4;}
+/* Divider */
+.req-section-gap{ height:1px;background:var(--rfl);margin:1.2rem 0; }
 
-/* Invoice card (pay/success modes) */
-.req-invoice-card{
-    background:#FFFFFF;border:2px solid rgba(124,58,237,0.25);border-radius:22px;
-    padding:2rem 2.2rem;
-    box-shadow:0 8px 40px rgba(124,58,237,0.10),0 2px 8px rgba(0,0,0,0.04);
-    max-width:700px;margin:0 auto 1.6rem auto;
-}
-html[data-theme="dark"] .req-invoice-card{
-    background:#13111E;border-color:rgba(139,92,246,0.22);
-}
+/* Fields */
+.req-field{ background:var(--rfield);border:1px solid var(--rfl);border-radius:13px;padding:0.9rem 1.1rem;margin-bottom:0.7rem; }
+.req-field-lbl{ font-size:10px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--ri3);margin-bottom:6px; }
+.req-field-val{ font-size:14px;font-weight:600;color:var(--ri);word-break:break-all;line-height:1.5; }
+.req-field-sub{ font-size:11.5px;color:var(--ri3);margin-top:5px;line-height:1.5; }
 
-/* Amount display block */
+/* Network badge — theme-aware per network */
+.req-net-badge{
+    display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:6px 13px;margin:0.1rem 0 0;
+    font-size:11.5px;font-weight:600;letter-spacing:0.01em;border:1px solid transparent;}
+.req-net-badge.is-main{ background:rgba(109,40,217,0.10);border-color:rgba(109,40,217,0.24);color:#6D28D9; }
+.req-net-badge.is-test{ background:rgba(5,150,105,0.11);border-color:rgba(5,150,105,0.24);color:#059669; }
+html[data-theme="dark"] .req-net-badge.is-main{ background:rgba(185,165,255,0.15);border-color:rgba(185,165,255,0.34);color:#CDBEFF; }
+html[data-theme="dark"] .req-net-badge.is-test{ background:rgba(52,211,153,0.14);border-color:rgba(52,211,153,0.34);color:#5FE0A8; }
+
+/* Amount display */
 .req-amount-display{
-    background:linear-gradient(135deg,rgba(124,58,237,0.07),rgba(99,102,241,0.04));
-    border:1px solid rgba(124,58,237,0.15);
-    border-radius:18px;padding:1.6rem;margin-bottom:1.2rem;text-align:center;
-}
-html[data-theme="dark"] .req-amount-display{
-    background:rgba(124,58,237,0.08);border-color:rgba(124,58,237,0.18);
-}
-.req-amount-big{
-    font-family:Syne,sans-serif;font-size:2.8rem;font-weight:800;
-    color:var(--t1);letter-spacing:-0.03em;line-height:1;
-}
+    background:var(--rfield);border:1px solid var(--rfl);border-radius:14px;
+    padding:1.05rem 1.2rem;margin-bottom:0.8rem;text-align:center;}
+.req-amount-big{ font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:var(--ri);letter-spacing:-0.03em;line-height:1; }
+.req-preview-amount{ font-family:Syne,sans-serif;font-size:1.8rem;font-weight:800;color:var(--ri);letter-spacing:-0.025em;line-height:1;margin-bottom:3px; }
+
+/* Invoice card (pay / success / generated) — glass, centred */
+.req-invoice-card{
+    background:var(--rcard);border:1px solid var(--rcardbd);border-radius:20px;padding:1.7rem 1.9rem;
+    -webkit-backdrop-filter:var(--rglass);backdrop-filter:var(--rglass);box-shadow:var(--rshadow);
+    max-width:720px;margin:0 auto 1.4rem auto;}
 
 /* Shareable link box */
 .req-link-box{
-    background:#F7F5FD;border:1.5px solid #DDD6FE;border-radius:14px;
-    padding:1rem 1.2rem;
-    display:flex;align-items:flex-start;gap:10px;
-    font-size:12px;color:var(--t2);word-break:break-all;
-    font-family:monospace;line-height:1.6;
-    margin-top:0.6rem;
-}
-html[data-theme="dark"] .req-link-box{background:#1D1930;border-color:#3D2E6A;}
-.req-link-box a{color:#7C3AED;font-weight:700;text-decoration:none;}
-.req-link-box a:hover{text-decoration:underline;}
+    background:var(--rfield);border:1px solid var(--rfl);border-radius:13px;padding:1rem 1.2rem;
+    display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--ri2);word-break:break-all;
+    font-family:monospace;line-height:1.6;margin-top:0.6rem;}
+.req-link-box a{ color:var(--racc)!important;font-weight:700;text-decoration:none; }
+.req-link-box a:hover{ text-decoration:underline; }
 
-/* Wallet strip */
+/* Receiving-wallet strip */
 .req-wallet-strip{
-    background:linear-gradient(135deg,#1A0A2E,#7C3AED);
-    border-radius:14px;padding:0.9rem 1.1rem;
-    display:flex;align-items:center;gap:12px;margin-bottom:1rem;
-}
-.req-wallet-strip-lbl{
-    font-size:9px;color:rgba(255,255,255,0.45);font-weight:700;
-    letter-spacing:0.1em;text-transform:uppercase;
-}
-.req-wallet-strip-addr{
-    font-size:13.5px;color:#fff;font-weight:700;font-family:monospace;
-}
+    background:var(--rfield);border:1px solid var(--rfl);border-radius:13px;padding:0.9rem 1.1rem;
+    display:flex;align-items:center;gap:12px;margin-bottom:0.9rem;}
+.req-wallet-strip-lbl{ font-size:10px;color:var(--ri3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase; }
+.req-wallet-strip-addr{ font-size:14px;color:var(--ri);font-weight:700;font-family:'DM Mono',monospace; }
 
-/* Network badge */
-.req-net-badge{
-    display:inline-flex;align-items:center;gap:7px;
-    border-radius:12px;padding:8px 14px;margin-bottom:1.2rem;
-    font-size:12px;font-weight:700;letter-spacing:0.01em;
-}
+/* Live preview wrapper — transparent (sits inside its glass card) */
+.req-preview-card{ background:transparent;border:0;padding:0; }
 
-/* Section spacing */
-.req-section-gap{height:1.4rem;}
+/* Invoice history rows (markup reuses .pay-history-item) */
+body:has(.req-top) .pay-history-item{
+    background:var(--rcard);border:1px solid var(--rcardbd);border-radius:15px;padding:1rem 1.3rem;margin-bottom:0.7rem;
+    -webkit-backdrop-filter:var(--rglass);backdrop-filter:var(--rglass);
+    display:flex;align-items:center;justify-content:space-between;gap:16px;}
 
-/* Live preview card */
-.req-preview-card{
-    background:#FFFFFF;border:1.5px solid #EDE9F8;border-radius:20px;
-    padding:1.6rem 1.8rem;
-    box-shadow:0 2px 16px rgba(59,7,100,0.05);
-    position:sticky;top:80px;
-}
-html[data-theme="dark"] .req-preview-card{
-    background:#13111E;border-color:#2A2440;
-}
-.req-preview-amount{
-    font-family:Syne,sans-serif;font-size:2rem;font-weight:800;
-    color:var(--t1);letter-spacing:-0.025em;line-height:1;
-    margin-bottom:3px;
-}
+/* widgets + top-column alignment */
+body:has(.req-top) [data-testid="stTextArea"] textarea,
+body:has(.req-top) [data-testid="stTextInput"] input{ border-radius:13px!important;font-size:14px!important; }
+body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"]{ align-items:flex-start!important; }
 </style>
+<div class="req-top" style="display:none"></div>
 """, unsafe_allow_html=True)
 
     def _req_net_config(network: str) -> dict:
@@ -16882,23 +17161,30 @@ html[data-theme="dark"] .req-preview-card{
     _mode  = _draft.get("mode", "create")
     wallet_addr = st.session_state.get("wallet_address", "")
 
-    # ── Premium hero header ───────────────────────
+    # ── Title strip — mode-aware, sleek glass (mirrors the Pay strip) ──
     _hdr_map = {
-        "pay_invoice":  ("🧾", "Payment Request", "Review the invoice and pay with one click — your wallet handles the rest."),
-        "paid_success": ("🎉", "Payment Sent!",   "The invoice has been paid on-chain."),
-        "create":       ("🧾", "Request PROS",    "Generate a shareable invoice link. Anyone can open it and pay with one click."),
+        "pay_invoice":  ("🧾", "Payment Request", "Check the details below and pay in one click. Your wallet handles the rest."),
+        "paid_success": ("🎉", "Payment Sent",    "This invoice is paid and confirmed on Pharos."),
+        "create":       ("🧾", "Request PROS",    "Set an amount and get a link anyone can open and pay in one click. A QR code comes with it."),
     }
     _hdr_icon, _hdr_title, _hdr_sub = _hdr_map.get(_mode, _hdr_map["create"])
+    _strip_right = (
+        '<div class="req-strip-r">'
+        '<span class="req-pill">🔗 Shareable link</span>'
+        '<span class="req-pill">⚡ One-click pay</span>'
+        '<span class="req-pill">📷 QR code</span>'
+        '<span class="req-pill">🌐 Mainnet &amp; Testnet</span>'
+        '</div>'
+    ) if _mode == "create" else ''
     st.markdown(
-        f'<div class="req-hero"><div style="position:relative;z-index:1;">'
-        f'<div style="font-size:9px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;'
-        f'color:rgba(196,181,253,0.8);margin-bottom:0.7rem;display:inline-flex;align-items:center;gap:7px;">'
-        f'{_hdr_icon} REQUEST PROS · PHAROS NETWORK</div>'
-        f'<h2 style="font-family:Syne,sans-serif;font-size:2.1rem;font-weight:800;color:#FFFFFF;'
-        f'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">{_hdr_title}</h2>'
-        f'<p style="font-size:0.92rem;color:rgba(255,255,255,0.55);line-height:1.6;max-width:560px;margin:0;">'
-        f'{_hdr_sub}</p>'
-        f'</div></div>',
+        '<div class="req-strip">'
+        '<div class="req-strip-l">'
+        f'<div class="req-strip-eyebrow">{_hdr_icon} Payment Request · Pharos</div>'
+        f'<h2 class="req-strip-title">{_hdr_title}</h2>'
+        f'<p class="req-strip-sub">{_hdr_sub}</p>'
+        '</div>'
+        + _strip_right +
+        '</div>',
         unsafe_allow_html=True,
     )
 
@@ -17071,11 +17357,9 @@ html[data-theme="dark"] .req-preview-card{
 
         _rn   = _req_net_config(st.session_state.pay_network)
         _rsym = _rn.get("symbol", "PROS")
-        nb_color = "#7C3AED" if _mn_active else "#059669"
-        nb_bg    = "rgba(124,58,237,0.07)" if _mn_active else "rgba(5,150,105,0.07)"
-        nb_border= "rgba(124,58,237,0.18)" if _mn_active else "rgba(5,150,105,0.18)"
+        _rnb_cls = "is-main" if _mn_active else "is-test"
         st.markdown(
-            f'<div class="req-net-badge" style="background:{nb_bg};border:1px solid {nb_border};color:{nb_color};">'
+            f'<div class="req-net-badge {_rnb_cls}">'
             f'{"🌐" if _mn_active else "🧪"}&nbsp; {_rn["label"]} &nbsp;·&nbsp; {_rsym} &nbsp;·&nbsp; Chain {_rn["chain_id_dec"]}'
             f'</div>',
             unsafe_allow_html=True,
@@ -17087,9 +17371,9 @@ html[data-theme="dark"] .req-preview-card{
         form_col, sum_col = st.columns([1.5, 1], gap="medium")
 
         with form_col:
-            # Wallet card
+            # Receiving-wallet section (inside the left glass card)
             st.markdown(
-                '<div class="req-card">'
+                '<div class="req-card-anchor"></div>'
                 '<div class="req-card-head">'
                 '<div class="req-card-icon">🔑</div>'
                 '<div><div class="req-card-label">Receiving Wallet</div>'
@@ -17121,13 +17405,11 @@ html[data-theme="dark"] .req-preview-card{
                 if st.button("✕ Change address", key="req_disconnect", use_container_width=False):
                     st.session_state.wallet_address = ""
                     st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="req-section-gap"></div>', unsafe_allow_html=True)
 
-            # Request form card
+            # Request-details section (same left glass card)
             st.markdown(
-                '<div class="req-card">'
                 '<div class="req-card-head">'
                 '<div class="req-card-icon">🧾</div>'
                 '<div><div class="req-card-label">Request Details</div>'
@@ -17151,13 +17433,13 @@ html[data-theme="dark"] .req-preview-card{
             st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
             gen_clicked = st.button("⚡ Generate Payment Link", key="req_generate_btn",
                                     use_container_width=True, type="primary")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         with sum_col:
             _amt_prev  = (st.session_state.get("req_amount_input") or "").strip()
             _note_prev = (st.session_state.get("req_note_input") or "").strip()
             _to_prev   = (_wa[:6] + "…" + _wa[-4:]) if wallet_addr else "Not set"
             st.markdown(
+                '<div class="req-card-anchor"></div>'
                 '<div class="req-preview-card">'
                 '<div class="req-card-head">'
                 '<div class="req-card-icon">👁</div>'
@@ -17238,48 +17520,49 @@ html[data-theme="dark"] .req-preview-card{
                 if price_info.get("available") and price_info.get("price_usd") and st.session_state.pay_network == "mainnet":
                     usd_val = _amt_f * price_info["price_usd"]
 
-                # ── Generated request card ──────────────
-                st.markdown(
-                    '<div class="req-invoice-card" style="margin-top:1.2rem;">'
-                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">'
-                    '<span style="display:inline-flex;align-items:center;gap:5px;background:#F0FFF4;'
-                    'border:1px solid #86EFAC;border-radius:20px;padding:4px 12px;font-size:11px;'
-                    'font-weight:700;color:#15803D;">✓ Request created · ready to share</span>'
-                    '</div>'
-                    '<div class="req-amount-display" style="margin-bottom:0.9rem;">'
-                    '<div class="req-field-lbl">Amount Requested</div>'
-                    f'<div class="req-amount-big">{_amt_f:,.4f} {_rsym}</div>'
-                    + (f'<div style="font-size:12px;color:var(--t3);margin-top:4px;">≈ ${usd_val:,.4f} USD</div>' if usd_val else '') +
-                    '</div>'
-                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
-                    '<div class="req-field"><div class="req-field-lbl">Receive to</div>'
-                    f'<div class="req-field-val" style="font-size:11px;font-family:monospace;">{esc(wallet_addr)}</div></div>'
-                    '<div class="req-field"><div class="req-field-lbl">Network</div>'
-                    f'<div class="req-field-val">{_rn["label"]}</div>'
-                    f'<div class="pay-field-sub">Chain {_rn["chain_id_dec"]}</div></div>'
-                    '</div>'
-                    + (f'<div class="req-field" style="margin-bottom:0.8rem;background:rgba(245,158,11,0.07);'
-                       f'border:1px solid rgba(245,158,11,0.2);"><div class="req-field-lbl" style="color:#92400E;">For</div>'
-                       f'<div class="req-field-val">{esc(req_note.strip())}</div></div>' if req_note.strip() else '') +
-                    '<div class="req-field-lbl" style="margin-bottom:6px;">🔗 Shareable Payment Link</div>'
-                    f'<div class="req-link-box">'
-                    f'<a href="{esc_url(_link)}" target="_blank">{esc(_link)}</a>'
-                    f'</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
+                # ── Generated request card — one real glass card holding the
+                #    details + shareable link (left) and the QR (right). ──
+                _note_html = (
+                    f'<div class="req-field" style="margin-bottom:0.7rem;background:rgba(245,158,11,0.07);'
+                    f'border:1px solid rgba(245,158,11,0.22);"><div class="req-field-lbl" style="color:var(--rwarn);">For</div>'
+                    f'<div class="req-field-val">{esc(req_note.strip())}</div></div>' if req_note.strip() else ''
                 )
-
-                res_qr_col, _ = st.columns([1, 2])
-                with res_qr_col:
+                _usd_html = (f'<div style="font-size:12px;color:var(--ri3);margin-top:3px;">≈ ${usd_val:,.4f} USD</div>'
+                             if usd_val else '')
+                with st.container(key="req_result_card"):
                     st.markdown(
-                        '<div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
-                        'text-transform:uppercase;color:var(--t3);margin:0.6rem 0 0.4rem 0;">Scan to pay</div>',
+                        '<div class="req-result-head">'
+                        '<span class="req-result-chip">✓ Request created · ready to share</span>'
+                        '</div>',
                         unsafe_allow_html=True,
                     )
-                    render_qr_code(_link, size=160, key="req_qr")
-
-                st.code(_link, language=None)
-                st.caption("👆 Copy the link above and send it via Telegram, Discord, or email.")
+                    rc_left, rc_right = st.columns([1.5, 1], gap="large")
+                    with rc_left:
+                        st.markdown(
+                            '<div class="req-amount-display" style="text-align:left;margin-bottom:0.7rem;">'
+                            '<div class="req-field-lbl">Amount requested</div>'
+                            f'<div class="req-amount-big">{_amt_f:,.4f} {_rsym}</div>'
+                            + _usd_html +
+                            '</div>'
+                            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:0.7rem;">'
+                            '<div class="req-field"><div class="req-field-lbl">Receive to</div>'
+                            f'<div class="req-field-val" style="font-size:11px;font-family:monospace;">{esc(wallet_addr)}</div></div>'
+                            '<div class="req-field"><div class="req-field-lbl">Network</div>'
+                            f'<div class="req-field-val">{_rn["label"]}</div>'
+                            f'<div class="req-field-sub">Chain {_rn["chain_id_dec"]}</div></div>'
+                            '</div>'
+                            + _note_html +
+                            '<div class="req-field-lbl" style="margin-bottom:5px;">🔗 Shareable payment link</div>'
+                            f'<div class="req-link-box"><a href="{esc_url(_link)}" target="_blank">{esc(_link)}</a></div>'
+                            '<div class="req-copy-lbl">Or copy the raw link</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.code(_link, language=None)
+                    with rc_right:
+                        st.markdown('<div class="req-qr-label">📷 Scan to pay</div>', unsafe_allow_html=True)
+                        render_qr_code(_link, size=168, key="req_qr")
+                        st.markdown('<div class="req-qr-hint">Send the link via Telegram, Discord, or email.</div>',
+                                    unsafe_allow_html=True)
 
     # ── Invoice History ───────────────────────────
     if _mode == "create" and st.session_state.req_invoices:
