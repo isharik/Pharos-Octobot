@@ -340,12 +340,36 @@ html[data-theme="dark"]{--title:#F4F6FC;--card:linear-gradient(168deg,rgba(32,37
  --shadow:0 30px 66px -24px rgba(0,0,0,0.66);}
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;background:transparent;font-family:'Inter',system-ui,sans-serif;}
-.eco-wrap{height:556px;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;padding-top:0;}
-.eco-title{font-family:'Space Grotesk','Inter',sans-serif;font-size:2rem;font-weight:700;letter-spacing:-0.015em;color:var(--title);
- margin:0 0 18px;position:relative;align-self:center;text-align:center;text-shadow:0 1px 14px rgba(255,255,255,0.55);}
-html[data-theme="dark"] .eco-title{text-shadow:0 2px 18px rgba(4,6,16,0.75);}
-.eco-title::after{content:'';position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);
- width:60px;height:3px;border-radius:3px;background:linear-gradient(90deg,#5B49E0,#8B3AE0);}
+.eco-wrap{height:556px;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;padding-top:0;
+ opacity:0;transform:translate3d(0,10px,0);}
+/* one smooth entrance for the whole carousel (strip + stage) once it's built,
+   so it eases in with the page instead of the iframe popping blank→cards */
+.eco-wrap.ready{opacity:1;transform:translate3d(0,0,0);transition:opacity 0.55s cubic-bezier(0.23,1,0.32,1),transform 0.55s cubic-bezier(0.23,1,0.32,1);}
+@media (prefers-reduced-motion:reduce){.eco-wrap{transform:none;}.eco-wrap.ready{transform:none;transition:opacity 0.5s cubic-bezier(0.23,1,0.32,1);}}
+/* ── DApps strip: a self-contained glass bar so the header reads clearly on the
+   raw wallpaper (no page scrim) in both themes, instead of blending in. */
+.eco-strip{align-self:center;display:inline-flex;align-items:center;gap:13px;
+ margin:0 0 20px;padding:11px 20px 11px 14px;position:relative;overflow:hidden;
+ border-radius:16px;border:1px solid var(--stripbd,rgba(20,20,60,0.10));
+ background:var(--stripbg,linear-gradient(120deg,rgba(255,255,255,0.90),rgba(244,244,252,0.82)));
+ box-shadow:var(--stripsh,0 14px 34px -16px rgba(20,20,60,0.34),inset 0 1px 0 rgba(255,255,255,0.7));
+ -webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);}
+html[data-theme="dark"] .eco-strip{--stripbd:rgba(150,160,255,0.20);
+ --stripbg:linear-gradient(120deg,rgba(34,39,68,0.86),rgba(19,22,42,0.80));
+ --stripsh:0 18px 42px -18px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.08);}
+.eco-strip::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ background:linear-gradient(115deg,transparent 30%,rgba(139,58,224,0.10) 50%,transparent 70%);
+ background-size:220% 100%;animation:eco-sheen 6.5s var(--e) infinite;}
+@keyframes eco-sheen{0%{background-position:130% 0;}55%,100%{background-position:-60% 0;}}
+.eco-strip-ic{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+ font-size:19px;color:#fff;position:relative;
+ background:linear-gradient(140deg,#6A4DF0,#9B3AE0 60%,#C13AC0);
+ box-shadow:0 8px 18px -6px rgba(120,58,224,0.6),inset 0 1px 0 rgba(255,255,255,0.35);}
+.eco-strip-tx{display:flex;flex-direction:column;gap:1px;text-align:left;}
+.eco-strip-eyebrow{font-family:'Inter',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:0.13em;
+ text-transform:uppercase;color:var(--cta);opacity:0.92;}
+.eco-title{font-family:'Space Grotesk','Inter',sans-serif;font-size:1.42rem;font-weight:700;
+ letter-spacing:-0.015em;color:var(--title);margin:0;line-height:1.08;}
 .eco-stage{position:relative;flex:1;width:100%;min-height:0;}
 /* aura glows behind the centred (front) card */
 .eco-aura{position:absolute;top:50%;left:50%;width:600px;height:430px;transform:translate(-50%,-50%);
@@ -403,7 +427,7 @@ html[data-theme="dark"] .eco-card.active .ec-inner{background:linear-gradient(16
 @media (prefers-reduced-motion:reduce){.eco-card,.eco-aura,.ec-inner,.eco-nav{transition:none!important;}}
 </style></head><body>
 <div class="eco-wrap">
- <h2 class="eco-title">DApps on Pharos</h2>
+ <div class="eco-strip"><span class="eco-strip-ic">◈</span><span class="eco-strip-tx"><span class="eco-strip-eyebrow">Pharos Ecosystem</span><h2 class="eco-title">DApps on Pharos</h2></span></div>
  <div class="eco-stage">
   <div class="eco-aura"></div>
   <div class="eco-track" id="track" tabindex="0" aria-label="DApps carousel"></div>
@@ -473,10 +497,30 @@ html[data-theme="dark"] .eco-card.active .ec-inner{background:linear-gradient(16
     for(var j=0;j<dots.length;j++){var on=(j===ni); if(on!==dots[j]._o){dots[j]._o=on;dots[j].classList.toggle('on',on);}}
     /* circular: the arrows never dead-end, so they're never disabled */
   }
-  function frame(){ if(!dragging){var dd=target-current; if(Math.abs(dd)<0.0008){current=target;} else {current+=dd*(reduce?1:0.16);}} render(); requestAnimationFrame(frame); }
+  /* time-based exponential glide → the card always EASES to the next slot (never
+     a snap), and feels identical at 60Hz and 120Hz+ because the step is scaled by
+     real elapsed time, not per-frame. k tuned so it matches a ~0.16/frame @60fps
+     feel but reads as a clear, smooth shift. Reduced-motion gets a quicker glide
+     (not an instant jump) so the movement is still legible but gentle. */
+  var _lastT=0;
+  function frame(ts){
+    var now=ts||performance.now(); if(!_lastT)_lastT=now;
+    var dt=Math.min(now-_lastT,64); _lastT=now;
+    if(!dragging){
+      var dd=target-current;
+      if(Math.abs(dd)<0.0006){ current=target; }
+      else { var per=reduce?0.24:0.135; var k=1-Math.pow(1-per,dt/16.667); current+=dd*k; }
+    }
+    render(); requestAnimationFrame(frame);
+  }
   function go(dir){ target=Math.round(target)+dir; }  /* free-running → wraps via the ring math */
   prevBtn.addEventListener('click',function(){go(-1);});
   nextBtn.addEventListener('click',function(){go(1);});
+  /* carousel lives in an iframe, so route its button taps to the parent's UI
+     click sound (fired on pointerdown for zero latency) */
+  function _pClick(){ try{ window.parent.__octoClickSound && window.parent.__octoClickSound(); }catch(e){} }
+  [prevBtn,nextBtn].forEach(function(b){ b.addEventListener('pointerdown',_pClick,true); });
+  dotsEl.addEventListener('pointerdown',function(e){ if(e.target&&e.target.closest&&e.target.closest('.eco-dot')) _pClick(); },true);
   var captured=false;
   track.addEventListener('pointerdown',function(e){dragging=true;justDragged=false;captured=false;track.classList.add('dragging');
     startX=e.clientX;startCur=current;moved=0;vx=0;lastX=e.clientX;lastT=e.timeStamp;});
@@ -500,6 +544,11 @@ html[data-theme="dark"] .eco-card.active .ec-inner{background:linear-gradient(16
   function syncTheme(){var t='dark';try{t=window.parent.document.documentElement.getAttribute('data-theme')||'dark';}catch(e){}document.documentElement.setAttribute('data-theme',t);}
   syncTheme(); try{new MutationObserver(syncTheme).observe(window.parent.document.documentElement,{attributes:true,attributeFilter:['data-theme']});}catch(e){}
   frame();
+  /* fade the whole carousel in AFTER the first render has painted the cards in
+     place — a smooth entrance instead of a blank→cards pop. Two rAFs so the
+     initial transforms are committed before the opacity/transform transition. */
+  try{ var _w=document.querySelector('.eco-wrap');
+    if(_w) requestAnimationFrame(function(){ requestAnimationFrame(function(){ _w.classList.add('ready'); }); }); }catch(e){}
 })();
 </script></body></html>"""
 
@@ -724,19 +773,21 @@ def get_news_bg_b64() -> str:
 @st.cache_resource(show_spinner=False)
 def get_trade_bg_b64() -> str:
     """Trade-page background (trade_bg.png in the app root), resized +
-    JPEG-recompressed for a light inline embed instead of the raw 3MB file."""
+    JPEG-recompressed for a light inline embed instead of the raw 3MB file.
+    Saturation is boosted so the wallpaper reads richer behind the content."""
     for path in ("trade_bg.png", "trade_bg.jpg", "trade_bg.jpeg"):
         if os.path.exists(path):
             try:
-                from PIL import Image
+                from PIL import Image, ImageEnhance
                 import io
                 im = Image.open(path).convert("RGB")
+                im = ImageEnhance.Color(im).enhance(1.4)   # +40% saturation
                 w, h = im.size
-                maxw = 1600
+                maxw = 1920   # keep the 16:9 wallpaper at full 1080p-class res
                 if w > maxw:
                     im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
                 buf = io.BytesIO()
-                im.save(buf, format="JPEG", quality=82, optimize=True)
+                im.save(buf, format="JPEG", quality=88, optimize=True)
                 return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
             except Exception:
                 mime = "image/png" if path.endswith(".png") else "image/jpeg"
@@ -788,6 +839,40 @@ def get_pay_bg_b64() -> str:
                     im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
                 buf = io.BytesIO()
                 im.save(buf, format="JPEG", quality=84, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                ext = path.rsplit(".", 1)[-1].lower()
+                mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_net_bg_b64() -> str:
+    """Network-page background (net_bg.png in the app root), full 1080p-class
+    res + JPEG so the 16:9 wallpaper stays crisp behind the theme-aware scrim.
+    Saturation is boosted so the wallpaper reads richer behind the content."""
+    for path in ("net_bg.png", "net_bg.jpg", "net_bg.jpeg", "net_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image, ImageEnhance, ImageFilter
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                # The source is an 8K JPEG but heavily compressed, so it carries
+                # visible noise. Sample it down to a crisp 2560px (real detail, not
+                # a fake upscale) — LANCZOS downscaling from 8K averages out most of
+                # the JPEG noise on the way — then restore edge crispness with a
+                # thresholded UnsharpMask (threshold skips flat areas so leftover
+                # noise isn't re-amplified). q92 avoids adding fresh artifacts.
+                maxw = 2560
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                im = ImageEnhance.Color(im).enhance(1.4)   # +40% saturation
+                im = im.filter(ImageFilter.UnsharpMask(radius=1.6, percent=95, threshold=3))
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=92, optimize=True)
                 return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
             except Exception:
                 ext = path.rsplit(".", 1)[-1].lower()
@@ -6376,17 +6461,19 @@ html[data-theme="dark"] [data-testid="stBottomBlockContainer"]{
    Strong ease-out (fast start, gentle settle) so a page reveal feels both
    immediate AND smooth; GPU-promoted so the rise never jitters. */
 @keyframes page-fadein{
-    from{opacity:0;transform:translate3d(0,10px,0);}
+    from{opacity:0;transform:translate3d(0,14px,0);}
     to{opacity:1;transform:translate3d(0,0,0);}
 }
 [data-testid="stMainBlockContainer"]{
-    animation:page-fadein 0.40s cubic-bezier(0.16,1,0.3,1) both;
+    animation:page-fadein 0.72s cubic-bezier(0.22,1,0.36,1) both;
     contain:layout style;
     backface-visibility:hidden;
 }
+/* reduced-motion keeps the opacity fade (motion-safe, and the user explicitly
+   wants a visible page-open fade) — only the upward drift is dropped. */
 @media (prefers-reduced-motion:reduce){
     @keyframes page-fadein{from{opacity:0;}to{opacity:1;}}
-    [data-testid="stMainBlockContainer"]{animation-duration:0.2s;}
+    [data-testid="stMainBlockContainer"]{animation-duration:0.6s;}
 }
 
 
@@ -8040,6 +8127,10 @@ div:has(> div > div.st-key-updates_next){
                box-shadow 220ms ease,border-color 180ms ease;
 }
 .updc-card-v2:hover{
+    /* keep the surface fully opaque on hover — the base .updc-card:hover
+       drops it to a translucent tint, which let the page wallpaper show
+       through the card. Re-assert an opaque surface so it never leaks. */
+    background:var(--bg1);
     transform:perspective(1000px) rotateX(3.5deg) translateY(-6px);
     box-shadow:0 20px 48px rgba(26,26,255,0.16),0 5px 16px rgba(26,26,255,0.08);
     border-color:rgba(26,26,255,0.30);
@@ -8085,6 +8176,7 @@ html[data-theme="dark"] .updc-card-v2{
     background:#141826;border-color:#262B3E;
 }
 html[data-theme="dark"] .updc-card-v2:hover{
+    background:#141826;
     border-color:rgba(140,160,255,0.35);
     box-shadow:0 16px 44px rgba(0,0,0,0.4);
 }
@@ -8155,7 +8247,7 @@ NAV_PAGES = [
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🏦", "DeFi",      "defi"),
-    ("🧩", "Ecosystem", "ecosystem"),
+    ("🧩", "DApps",     "ecosystem"),
     ("💸", "Pay",       "pay"),
     ("🧾", "Request",   "request"),
     ("🌐", "Network",   "network"),
@@ -8279,7 +8371,7 @@ _pnav_dd_products = [
     ("⚡", "SPNs",    "spns"),
 ]
 _pnav_dd_explore = [
-    ("🧩", "Ecosystem",     "ecosystem"),
+    ("🧩", "DApps",         "ecosystem"),
     ("🌐", "Network",       "network"),
     ("📡", "Market Pulse",  "pulse"),
     ("🧠", "Memory Ledger", "memory"),
@@ -8481,8 +8573,29 @@ html[data-theme="dark"] .pnav-icirc.pnav-theme:hover{
 .pnav-icirc.pnav-theme svg{width:16px!important;height:16px!important;display:block!important;}
 /* Social icons still hidden */
 .pnav-socials{display:none!important;}
-.pnav-icirc:not(.pnav-theme){display:none!important;}
+.pnav-icirc:not(.pnav-theme):not(.pnav-sound){display:none!important;}
 .pnav-theme{cursor:pointer;padding:0;}
+/* click-sound mute toggle — mirrors the theme button, sits to its right */
+button.pnav-icirc.pnav-sound{
+    width:36px!important;height:36px!important;border-radius:50%!important;
+    background:#F0F1F6!important;border:1px solid #DCDFE8!important;
+    display:flex!important;align-items:center!important;justify-content:center!important;
+    color:#17181C!important;cursor:pointer!important;flex-shrink:0!important;margin-left:8px!important;
+    transition:transform 150ms cubic-bezier(0.34,1.4,0.64,1),background 150ms ease,border-color 150ms ease,box-shadow 150ms ease,color 150ms ease!important;
+    pointer-events:auto!important;padding:0!important;
+}
+button.pnav-icirc.pnav-sound:hover{background:#FFFFFF!important;border-color:#C8CCD8!important;transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(20,20,60,0.12)!important;}
+button.pnav-icirc.pnav-sound:active{transform:scale(0.94)!important;}
+html[data-theme="dark"] button.pnav-icirc.pnav-sound{background:#22263A!important;border-color:#363D58!important;color:#E8EAFF!important;}
+html[data-theme="dark"] button.pnav-icirc.pnav-sound:hover{background:#2C3250!important;border-color:#4A5480!important;box-shadow:0 4px 14px rgba(0,0,0,0.35)!important;}
+button.pnav-icirc.pnav-sound svg{width:16px!important;height:16px!important;display:block!important;}
+/* icon swap driven by a persistent html[data-sound] attr (survives nav rebuilds):
+   speaker ON by default; data-sound="off" → speaker-with-x + dimmed */
+button.pnav-icirc.pnav-sound .pnav-snd-off{display:none!important;}
+html[data-sound="off"] button.pnav-icirc.pnav-sound .pnav-snd-on{display:none!important;}
+html[data-sound="off"] button.pnav-icirc.pnav-sound .pnav-snd-off{display:block!important;}
+html[data-sound="off"] button.pnav-icirc.pnav-sound{color:#9498A6!important;}
+html[data-theme="dark"][data-sound="off"] button.pnav-icirc.pnav-sound{color:#6B7186!important;}
 .pnav-theme svg{position:absolute;width:17px;height:17px;transition:opacity 200ms ease,transform 300ms cubic-bezier(0.34,1.4,0.64,1);}
 .pnav-theme .ic-moon{opacity:0;transform:rotate(-40deg) scale(0.6);}
 .pnav-theme .ic-sun{opacity:1;transform:rotate(0) scale(1);}
@@ -8657,6 +8770,11 @@ _pnav_html = (
     '</div>'
     # Theme toggle sits right after the links row, before the dot separator
     '<button class="pnav-icirc pnav-theme" id="pnav-theme-btn" title="Toggle dark / light mode" aria-label="Toggle dark mode">' + _PNAV_SUN_SVG + _PNAV_MOON_SVG + '</button>'
+    # Click-sound mute toggle — right of the theme button
+    '<button class="pnav-icirc pnav-sound" id="pnav-sound-btn" title="Mute / unmute click sound" aria-label="Mute or unmute click sound">'
+    '<svg class="pnav-snd-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>'
+    '<svg class="pnav-snd-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>'
+    '</button>'
     '<span class="pnav-dot"></span>'
     '<div class="pnav-search" id="pnav-search-pill" title="Search — pages, actions, docs (Ctrl/Cmd + K)">'
     '<svg class="pnav-mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">'
@@ -9116,13 +9234,18 @@ components.html(
           navDone = true;
           if(navSettleTimer){ clearTimeout(navSettleTimer); }
           try{ if(navObs) navObs.disconnect(); }catch(e){}
-          navOverlayDismiss();
-          if(m){
-            m.style.opacity = '1';
-            setTimeout(function(){ m.style.transition=''; navBusy=false; }, 320);
-          } else {
-            navBusy = false;
-          }
+          /* Wait for the destination wallpaper to decode before revealing,
+             so navigating INTO a custom-bg page fades to a finished page. */
+          window.__octoBgReady(function(){
+            navOverlayDismiss();
+            try{ window.__octoPageEnter && window.__octoPageEnter(); }catch(e){}
+            if(m){
+              m.style.opacity = '1';
+              setTimeout(function(){ m.style.transition=''; navBusy=false; }, 320);
+            } else {
+              navBusy = false;
+            }
+          });
         }
         function scheduleNavSettle(){
           clearTimeout(navSettleTimer);
@@ -9149,6 +9272,57 @@ components.html(
       var k = t.getAttribute('data-pnav-go');
       if (k) window.__pnavGo(k);
     }, true);
+
+    /* ── UI click sound ───────────────────────────────────────────────
+       A tiny, soft "tap" (Apple-style) synthesised with WebAudio so it is
+       ZERO-latency (no file to fetch/decode) and costs nothing at rest. Fired
+       on pointerdown — the instant the finger/mouse presses, before click —
+       so it never lags the interaction. A single reused AudioContext, resumed
+       lazily on the first gesture (autoplay policy), and a short throttle so a
+       double-fire can't buzz. Respects a stored mute flag. */
+    var _actx = null, _lastBeep = 0;
+    function _uiClickSound(){
+      try{
+        try{ if(localStorage.getItem('octobot-sound') === 'off') return; }catch(_){}
+        var now = (window.performance && performance.now) ? performance.now() : Date.now();
+        if(now - _lastBeep < 45) return;    /* de-bounce accidental double taps */
+        _lastBeep = now;
+        var AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+        if(!_actx) _actx = new AC();
+        if(_actx.state === 'suspended'){ try{ _actx.resume(); }catch(_){} }
+        var t = _actx.currentTime;
+        /* soft body: a quick sine tick that drops slightly in pitch */
+        var o = _actx.createOscillator(), g = _actx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(680, t);
+        o.frequency.exponentialRampToValueAtTime(440, t + 0.045);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.070);
+        o.connect(g); g.connect(_actx.destination);
+        o.start(t); o.stop(t + 0.085);
+        /* crisp transient: a very short high tick for the "tap" attack */
+        var o2 = _actx.createOscillator(), g2 = _actx.createGain();
+        o2.type = 'triangle';
+        o2.frequency.setValueAtTime(2200, t);
+        g2.gain.setValueAtTime(0.0001, t);
+        g2.gain.exponentialRampToValueAtTime(0.05, t + 0.002);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
+        o2.connect(g2); g2.connect(_actx.destination);
+        o2.start(t); o2.stop(t + 0.035);
+      }catch(e){}
+    }
+    var _CLICKABLE = 'button,[role="button"],[data-pnav-go],.pnav-item,.pnav-dd-item,.pnav-logo,[role="tab"],summary,a[href],[data-baseweb="tab"],.stCheckbox label,label[data-baseweb="radio"]';
+    doc.addEventListener('pointerdown', function(e){
+      try{
+        if(e.button && e.button !== 0) return;         /* left/primary only */
+        var el = e.target && e.target.closest ? e.target.closest(_CLICKABLE) : null;
+        if(!el) return;
+        if(el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+        _uiClickSound();
+      }catch(_){}
+    }, true);
+    try{ window.__octoClickSound = _uiClickSound; }catch(e){}
 
     /* ── THEME TOGGLE (dark mode) ─────────────────────────
        Persisted in localStorage; applied to <html data-theme>. */
@@ -9222,6 +9396,22 @@ components.html(
       if (!tb) return;
       var cur = doc.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
       switchTheme(cur === 'dark' ? 'light' : 'dark');
+    }, true);
+
+    /* ── CLICK-SOUND MUTE TOGGLE ──────────────────────────
+       Persisted in localStorage['octobot-sound'] ('on' default / 'off' muted),
+       mirrored to html[data-sound] so the button icon/colour survive nav rebuilds
+       via CSS alone — no per-render repaint needed (same pattern as the theme). */
+    function _soundMuted(){ try{ return localStorage.getItem('octobot-sound') === 'off'; }catch(e){ return false; } }
+    (function(){ try{ doc.documentElement.setAttribute('data-sound', _soundMuted() ? 'off' : 'on'); }catch(e){} })();
+    doc.addEventListener('click', function(e){
+      var sb = e.target && e.target.closest ? e.target.closest('#pnav-sound-btn') : null;
+      if (!sb) return;
+      var nowMuted = !_soundMuted();
+      try{ localStorage.setItem('octobot-sound', nowMuted ? 'off' : 'on'); }catch(e){}
+      try{ doc.documentElement.setAttribute('data-sound', nowMuted ? 'off' : 'on'); }catch(e){}
+      /* unmuting → play one confirmation tap so the user hears it's back on */
+      if(!nowMuted){ try{ window.__octoClickSound && window.__octoClickSound(); }catch(e){} }
     }, true);
 
     /* ── EIP-1193 WALLET BRIDGE ───────────────────────────
@@ -9655,7 +9845,7 @@ components.html(
       {t:'SPNs',            s:'staking restaking native yield',  k:'spns',     i:'⚡', g:'Page'},
       {t:'Campaigns',       s:'quests rewards events active',    k:'campaigns', i:'🎯', g:'Page'},
       {t:'Updates',         s:'news announcements blog latest',  k:'updates',   i:'📰', g:'Page'},
-      {t:'Ecosystem',       s:'dapps projects apps defi rwa',    k:'ecosystem', i:'🧩', g:'Page'},
+      {t:'DApps',           s:'ecosystem dapps projects apps defi rwa', k:'ecosystem', i:'🧩', g:'Page'},
       {t:'DeFi Hub',        s:'bridge liquidity staking lp positions wallet score rwa realfi explorer', k:'defi', i:'🏦', g:'Page'},
       {t:'Network',         s:'stats validators tps chain',      k:'network',   i:'🌐', g:'Page'},
       {t:'Market Pulse',    s:'sentiment community bullish bearish market', k:'pulse', i:'📡', g:'Page'},
@@ -10393,6 +10583,65 @@ html[data-theme="dark"] #octo-page-loader .ods-step i{ background:#9FB0FF; }
     window.__octoOverlayBoot = true;
     var doc = document;
 
+    /* ── Custom-background readiness gate ──────────────────────────────
+       Pages with a full-bleed wallpaper (Trade / Network / Ecosystem /
+       Pay / Request / DeFi / Updates …) paint it via a data-URI on
+       `--ocbg` of [data-testid=stApp], scoped by a body:has(marker). The
+       DOM "settles" (elements present) a beat BEFORE that large data-URI
+       finishes decoding — so if the cover fades on DOM-settle alone you
+       briefly see the app's base background, then the wallpaper pops in,
+       then it settles. This holds any cover's fade-out until the current
+       page's wallpaper has actually decoded AND had a paint frame, so the
+       loader fades away onto a finished page. Resolves instantly when the
+       page has no custom wallpaper, and is capped so it can never hang. */
+    window.__octoBgReady = function(cb, cap){
+      var called = false;
+      function done(){ if(called) return; called = true; try{ cb && cb(); }catch(e){} }
+      try{
+        var app = doc.querySelector('[data-testid="stApp"]');
+        var url = '';
+        if(app){
+          var cs = getComputedStyle(app);
+          var src = (cs.getPropertyValue('--ocbg') || '') || (cs.backgroundImage || '');
+          var mm = src.match(/data:image[^'")]+/);
+          if(mm) url = mm[0];
+        }
+        if(!url){ done(); return; }          /* no wallpaper → reveal now */
+        var img = new Image();
+        var to = setTimeout(done, cap || 2000);   /* safety cap — never hang */
+        function fin(){ clearTimeout(to); requestAnimationFrame(function(){ requestAnimationFrame(done); }); }
+        if(img.decode){ img.src = url; img.decode().then(fin).catch(fin); }
+        else { img.onload = fin; img.onerror = fin; img.src = url; }
+      }catch(e){ done(); }
+    };
+
+    /* ── Page entrance ─────────────────────────────────────────────────
+       Called the instant a cover (overlay / loader / veil) is dismissed, so
+       the page eases in as the cover lifts instead of snapping into place.
+       GPU-only (opacity + translate3d) via WAAPI → composited, 60fps, off the
+       main thread, and self-cleaning (fill:none → settles to the element's own
+       styles). Guarded for reduced-motion and de-duped so rapid reveals don't
+       stack. Emil: entering elements use a strong ease-out, ~short duration. */
+    var __enterLast = 0;
+    window.__octoPageEnter = function(){
+      try{
+        var now = Date.now();
+        if(now - __enterLast < 300) return;   /* de-dupe overlapping reveals */
+        __enterLast = now;
+        var m = doc.querySelector('section[data-testid="stMain"] [data-testid="stMainBlockContainer"]');
+        if(!m) return;
+        /* Force the CSS `page-fadein` animation to REPLAY the moment the cover
+           lifts, so the whole page content fades/rises in (~0.72s) instead of
+           popping — even when Streamlit reuses the container across a nav (so its
+           own mount-time animation never re-fires). Toggling animation:none +
+           reflow + revert restarts it; one source of truth (the CSS keyframe),
+           GPU-composited, works on every page & reveal path (incl. chat). */
+        m.style.animation = 'none';
+        void m.offsetWidth;          /* reflow → guarantees a fresh run */
+        m.style.animation = '';      /* back to the stylesheet page-fadein */
+      }catch(e){}
+    };
+
     /* ── Build overlay DOM ─────────────────────────────── */
     if(!doc.getElementById('octo-nav-overlay')){
       var ov = doc.createElement('div');
@@ -10431,15 +10680,20 @@ html[data-theme="dark"] #octo-page-loader .ods-step i{ background:#9FB0FF; }
       dismissed = true;
       if(settleTimer){ clearTimeout(settleTimer); }
       if(hardTimer){ clearTimeout(hardTimer); }
-      overlay.classList.add('hiding');
-      setTimeout(function(){
-        overlay.classList.add('hidden');
-        /* Reset inline styles so __pnavGo can re-show it cleanly */
-        overlay.style.display = '';
-        overlay.style.opacity = '';
-        overlay.style.pointerEvents = '';
-        overlay.style.visibility = '';
-      }, 450);
+      /* Hold the fade until this page's wallpaper (if any) has decoded, so
+         boot/refresh reveals a finished page instead of a staged pop-in. */
+      window.__octoBgReady(function(){
+        overlay.classList.add('hiding');
+        try{ window.__octoPageEnter && window.__octoPageEnter(); }catch(e){}
+        setTimeout(function(){
+          overlay.classList.add('hidden');
+          /* Reset inline styles so __pnavGo can re-show it cleanly */
+          overlay.style.display = '';
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
+          overlay.style.visibility = '';
+        }, 450);
+      });
     }
 
     function scheduleSettle(){
@@ -10493,7 +10747,10 @@ html[data-theme="dark"] #octo-page-loader .ods-step i{ background:#9FB0FF; }
         vl.classList.add('on');
         function scheduleVeilSettle(){
           if(veilSettle) clearTimeout(veilSettle);
-          veilSettle = setTimeout(veilDismissNow, 240);
+          /* Same wallpaper-decoded gate as the overlays, so non-top-nav
+             routes (home cards, gate submit) into a custom-bg page also
+             reveal cleanly. Dedicated-loader hand-off above stays instant. */
+          veilSettle = setTimeout(function(){ window.__octoBgReady(function(){ veilDismissNow(); try{ window.__octoPageEnter && window.__octoPageEnter(); }catch(e){} }, 1600); }, 240);
         }
         try{
           if(veilObs){ veilObs.disconnect(); }
@@ -10544,10 +10801,20 @@ html[data-theme="dark"] #octo-page-loader .ods-step i{ background:#9FB0FF; }
       }catch(e){}
     };
     window.__octoHideLoader = function(){
-      try{
-        var s = doc.querySelectorAll('.ods-hidepage');
-        for(var i=0;i<s.length;i++){ try{ s[i].remove(); }catch(e){} }
-      }catch(e){}
+      /* Dedicated-loader pages (Network, Market Pulse) reveal by removing the
+         .ods-hidepage sentinel. Hold that removal until the page's wallpaper has
+         decoded — otherwise the loader hands off to a page whose custom bg hasn't
+         painted yet, so the base colour shows and the wallpaper pops in a beat
+         later (the exact staged flash the gated nav path already avoids). Now
+         these pages reveal onto a finished wallpaper, just like Updates. */
+      var doHide = function(){
+        try{
+          var s = doc.querySelectorAll('.ods-hidepage');
+          for(var i=0;i<s.length;i++){ try{ s[i].remove(); }catch(e){} }
+        }catch(e){}
+        try{ window.__octoPageEnter && window.__octoPageEnter(); }catch(e){}
+      };
+      try{ window.__octoBgReady(doHide, 2000); }catch(e){ doHide(); }
     };
 
     /* Tab shimmer for in-page tab switches ─────────────── */
@@ -11209,6 +11476,10 @@ html[data-theme="dark"]{
 
 .ml-fb{font-family:'Inter','DM Sans',sans-serif;}
 .ml-fm{font-family:'DM Mono',ui-monospace,'SFMono-Regular',monospace;}
+
+/* Compactness only — zoom the whole page out a notch so it fills the viewport
+   cleanly. No layout / UX change; everything keeps its exact proportions. */
+[data-testid="stMainBlockContainer"]:has(.rd-memory) > [data-testid="stVerticalBlock"]{ zoom:0.9; }
 
 /* Header */
 .ml-eyebrow{
@@ -12904,14 +13175,24 @@ body:has(.gs-mural) #aura-3d-canvas{display:none!important;}
 body:has(.gs-mural) .gs-env{display:none!important;}
 /* ── Text legibility over the mural — force the light-on-image treatment
    regardless of app theme (the artwork is dark/vibrant either way) ── */
+/* Solid, opaque, modern-bold wordmark (no glassy transparent fill / soft glow).
+   Crisp layered drop-shadow gives it weight and an interactive, tactile feel. */
 body:has(.gs-mural) .gs-wm{font-family:'Bungee','Plus Jakarta Sans',sans-serif!important;
-  font-weight:400!important;font-size:clamp(1.8rem,3.7vw,3rem)!important;letter-spacing:0.004em!important;
-  line-height:1.08!important;margin:0 0 var(--gs-s3)!important;margin-left:-0.33em!important;
+  font-weight:400!important;font-size:clamp(1.85rem,3.8vw,3.05rem)!important;letter-spacing:0.006em!important;
+  line-height:1.06!important;margin:0 0 0.55rem!important;margin-left:-0.33em!important;
   background:none!important;-webkit-text-fill-color:#FFFFFF!important;
-  color:#FFFFFF!important;text-shadow:0 3px 30px rgba(8,10,30,0.68),0 2px 5px rgba(0,0,0,0.5);}
+  color:#FFFFFF!important;
+  text-shadow:0 1px 0 rgba(0,0,0,0.4),0 2px 2px rgba(4,6,20,0.55),0 5px 16px rgba(4,6,20,0.55);
+  transition:transform 260ms cubic-bezier(0.23,1,0.32,1),text-shadow 260ms ease;}
 body:has(.gs-mural) .gs-wm span{margin-left:0.32em!important;
-  background:linear-gradient(105deg,#B6C2FF,#E0CBFF)!important;
-  -webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
+  background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;
+  -webkit-text-fill-color:#C6B4FF!important;color:#C6B4FF!important;}
+@media (hover:hover) and (pointer:fine){
+  body:has(.gs-mural) .gs-content:hover .gs-wm{transform:translateY(-1px) scale(1.012);
+    text-shadow:0 1px 0 rgba(0,0,0,0.4),0 3px 4px rgba(4,6,20,0.5),0 8px 26px rgba(150,140,255,0.42);}
+  body:has(.gs-mural) .gs-content:hover .gs-wm span{-webkit-text-fill-color:#DAC9FF!important;color:#DAC9FF!important;}}
+/* Group the pills, wordmark and tagline tighter so they read as one block. */
+body:has(.gs-mural) .gs-pillrow{margin:0 0 0.85rem!important;}
 body:has(.gs-mural) .gs-tag{color:#FFFFFF!important;text-shadow:0 1px 14px rgba(8,10,30,0.55);}
 body:has(.gs-mural) .gs-sub{color:rgba(255,255,255,0.88)!important;text-shadow:0 1px 12px rgba(8,10,30,0.55);}
 body:has(.gs-mural) .gs-sub b{color:#D3BEFF!important;}
@@ -14381,7 +14662,7 @@ elif st.session_state.page == "defi":
     if _defi_bg:
         _defi_bg_css = (
             "body:has(.defi-top) [data-testid=\"stApp\"]{--ocbg:url('" + _defi_bg + "');"
-            "background:linear-gradient(180deg,rgba(238,240,249,0.82) 0%,rgba(232,236,247,0.76) 45%,rgba(226,230,244,0.90) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.40) 0%,rgba(232,236,247,0.34) 45%,rgba(226,230,244,0.56) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.defi-top) [data-testid=\"stApp\"]{"
             "background:linear-gradient(180deg,rgba(8,10,22,0.88) 0%,rgba(7,9,20,0.82) 45%,rgba(5,7,16,0.95) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.defi-top) [data-testid=\"stAppViewContainer\"],"
@@ -15396,7 +15677,7 @@ elif st.session_state.page == "updates":
             # A fixed backdrop LAYER (::before) instead of background-attachment:fixed
             # so scrolling composites smoothly instead of repainting the image.
             "body:has(.octo-bg-updates) [data-testid=\"stApp\"]{--ocbg:url('" + _news_bg + "');"
-            "background:linear-gradient(180deg,rgba(240,242,250,0.68) 0%,rgba(234,237,248,0.60) 46%,rgba(226,230,244,0.82) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:linear-gradient(180deg,rgba(240,242,250,0.38) 0%,rgba(234,237,248,0.32) 46%,rgba(226,230,244,0.54) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.octo-bg-updates) [data-testid=\"stApp\"]{"
             "background:linear-gradient(180deg,rgba(9,11,24,0.85) 0%,rgba(8,10,22,0.80) 46%,rgba(6,8,18,0.95) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.octo-bg-updates) [data-testid=\"stAppViewContainer\"],"
@@ -15659,9 +15940,9 @@ elif st.session_state.page == "trade":
             "<style>"
             # synchronous marker scope + fixed backdrop layer (see updates notes)
             "body:has(.octo-bg-trade) [data-testid=\"stApp\"]{--ocbg:url('" + _trade_bg + "');"
-            "background:linear-gradient(180deg,rgba(240,242,250,0.50) 0%,rgba(234,238,248,0.46) 45%,rgba(228,232,246,0.60) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.octo-bg-trade) [data-testid=\"stApp\"]{"
-            "background:linear-gradient(180deg,rgba(6,8,18,0.66) 0%,rgba(6,8,16,0.62) 45%,rgba(4,6,14,0.82) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.octo-bg-trade) [data-testid=\"stAppViewContainer\"],"
             "body:has(.octo-bg-trade) section[data-testid=\"stMain\"],"
             "body:has(.octo-bg-trade) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
@@ -15680,15 +15961,17 @@ elif st.session_state.page == "trade":
         '{max-width:920px;margin-left:auto;margin-right:auto;}'
         # theme-aware, image-legible page title + subtitle (was hardcoded near-black,
         # which vanished in dark mode and over the dark trade art)
+        # The trade_bg wallpaper is always dark (no scrim now), so these header
+        # texts sit on a dark surface in both themes: keep them light + shadowed.
         '.trade-title{font-family:Syne,sans-serif;font-size:1.55rem;font-weight:800;letter-spacing:-0.01em;'
-        'color:#14141F;margin-bottom:0.3rem;text-align:center;text-shadow:0 1px 10px rgba(255,255,255,0.5);}'
-        '.trade-subtitle{font-size:13px;color:#4B5168;margin-bottom:1.2rem;text-align:center;'
-        'text-shadow:0 1px 8px rgba(255,255,255,0.45);}'
-        '.trade-cex-h{font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#14141F;margin:1rem 0 0.6rem 0;'
-        'text-shadow:0 1px 8px rgba(255,255,255,0.5);}'
-        'html[data-theme="dark"] .trade-title{color:#F4F6FC;text-shadow:0 2px 16px rgba(4,6,16,0.7);}'
-        'html[data-theme="dark"] .trade-subtitle{color:#AEB6CE;text-shadow:0 2px 12px rgba(4,6,16,0.7);}'
-        'html[data-theme="dark"] .trade-cex-h{color:#F4F6FC;text-shadow:0 2px 12px rgba(4,6,16,0.7);}'
+        'color:#F4F6FC;margin-bottom:0.3rem;text-align:center;text-shadow:0 2px 18px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
+        '.trade-subtitle{font-size:13px;color:#D2D8EC;margin-bottom:1.2rem;text-align:center;'
+        'text-shadow:0 2px 14px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
+        '.trade-cex-h{font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:#F4F6FC;margin:1rem 0 0.6rem 0;'
+        'text-shadow:0 2px 14px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
+        'html[data-theme="dark"] .trade-title{color:#F4F6FC;text-shadow:0 2px 18px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
+        'html[data-theme="dark"] .trade-subtitle{color:#D2D8EC;text-shadow:0 2px 14px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
+        'html[data-theme="dark"] .trade-cex-h{color:#F4F6FC;text-shadow:0 2px 14px rgba(4,6,16,0.85),0 1px 3px rgba(4,6,16,0.8);}'
         # the page now shows a dark image, so the ticker + chart card (which used
         # semi-transparent theme vars) let it bleed through and looked dimmed —
         # give them an opaque frosted backing so their contents read cleanly.
@@ -15702,10 +15985,75 @@ elif st.session_state.page == "trade":
         '</style>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<div class="trade-title">📊 Trade $PROS</div>'
-        '<div class="trade-subtitle">Available on multiple CEX platforms. Choose your preferred exchange to trade PROS/USDT.</div>',
-        unsafe_allow_html=True,
+    # ── Trade header bar — same rich-panel language as the Network hero, but a
+    #    warm violet→magenta→amber "market" palette and a candlestick motif. ──
+    st.markdown(r"""
+<style>
+/* Bring the Trade content up to the nav: Streamlit stacks ~13 zero-height infra
+   blocks (injected <style> tags + hidden component iframes for theme/sound) as
+   direct children at the TOP of the main block, and each still consumes a 14px
+   flex-gap slot (~180px of dead space before the hero). Pull those phantom blocks
+   OUT of the flow (position:absolute keeps the <style>/iframes working) so the
+   hero sits just under the navbar. Scoped to the trade page + direct children so
+   no real, visible element is affected. */
+body:has(.octo-bg-trade) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(style),
+body:has(.octo-bg-trade) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(> [data-testid="stIFrame"]){position:absolute!important;width:0!important;height:0!important;margin:0!important;padding:0!important;pointer-events:none!important;}
+/* with the phantom gaps collapsed, this padding is the ONLY nav clearance, so it
+   must clear the 64px fixed nav pill (bottom ~78px) plus a little breathing room */
+body:has(.octo-bg-trade) [data-testid="stMainBlockContainer"]{padding-top:9.2rem!important;}
+.st-key-tradex_hero{position:relative;overflow:hidden;border-radius:16px;
+  background:linear-gradient(135deg,#052422 0%,#0a3b3a 44%,#0e5150 100%)!important;
+  border:1px solid rgba(120,240,220,0.24)!important;
+  box-shadow:0 18px 44px -20px rgba(6,44,42,0.7),inset 0 1px 0 rgba(255,255,255,0.09)!important;
+  padding:0.72rem 1.5rem!important;margin:0 0 1rem!important;
+  transition:box-shadow 340ms cubic-bezier(0.23,1,0.32,1),border-color 340ms ease;}
+.st-key-tradex_hero::before{content:"";position:absolute;inset:-28%;pointer-events:none;z-index:0;
+  background:radial-gradient(38% 60% at 16% 26%,rgba(52,224,176,0.5),transparent 60%),radial-gradient(46% 58% at 84% 24%,rgba(72,216,255,0.5),transparent 62%),radial-gradient(55% 75% at 62% 108%,rgba(160,240,120,0.4),transparent 60%);
+  filter:blur(18px);animation:tx-mesh 15s ease-in-out infinite alternate;}
+.st-key-tradex_hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0.45;
+  background-image:linear-gradient(rgba(180,255,240,0.10) 1px,transparent 1px),linear-gradient(90deg,rgba(180,255,240,0.10) 1px,transparent 1px);background-size:36px 36px;
+  -webkit-mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);
+  animation:nx-grid 22s linear infinite;}
+@keyframes tx-mesh{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-5%,-4%) scale(1.1);}}
+@media(hover:hover){.st-key-tradex_hero:hover{border-color:rgba(140,245,225,0.55)!important;box-shadow:0 30px 74px -20px rgba(30,180,160,0.5),0 0 0 1px rgba(140,245,225,0.35),inset 0 1px 0 rgba(255,255,255,0.14)!important;}}
+.st-key-tradex_hero [data-testid="stVerticalBlock"]{position:relative;z-index:2;}
+/* slim strip: one horizontal row — identity on the left, chips on the right */
+.tradex-strip{display:flex;align-items:center;justify-content:space-between;gap:1.2rem 1.8rem;flex-wrap:wrap;position:relative;z-index:2;}
+.tradex-left{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;min-width:0;}
+.tradex-bars{position:absolute;right:20%;top:0;height:100%;width:20%;z-index:1;pointer-events:none;opacity:0.7;}
+.tradex-bars svg{width:100%;height:100%;}
+.tx-bar{transform-origin:center bottom;transform-box:fill-box;animation:tx-grow 2.6s ease-in-out infinite;}
+@keyframes tx-grow{0%,100%{transform:scaleY(0.4);opacity:0.55;}50%{transform:scaleY(1);opacity:1;}}
+.tradex-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:9px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:#8FF0D8;white-space:nowrap;}
+.tx-nd{width:6px;height:6px;border-radius:50%;background:#34E0B0;animation:tx-pulse 2s ease-in-out infinite;}
+@keyframes tx-pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,224,176,0.55);}55%{box-shadow:0 0 0 8px rgba(52,224,176,0);}}
+body:has(.octo-bg-trade) .tradex-title{font-family:Syne,'Space Grotesk',sans-serif!important;font-size:1.38rem!important;font-weight:800!important;letter-spacing:-0.02em!important;line-height:1!important;color:#fff!important;margin:0!important;text-shadow:0 6px 20px rgba(6,44,42,0.6)!important;-webkit-text-fill-color:#fff!important;white-space:nowrap;}
+body:has(.octo-bg-trade) .tradex-title b{font-weight:800!important;background:linear-gradient(100deg,#7DF0D0,#48D8FF 55%,#B7F5A8)!important;-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
+.tradex-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.tradex-chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:#E4F7F1;background:rgba(10,58,56,0.62);border:1px solid rgba(120,240,220,0.34);border-radius:999px;padding:5px 11px;}
+@media(prefers-reduced-motion:reduce){.st-key-tradex_hero::before,.st-key-tradex_hero::after,.tx-bar,.tx-nd{animation:none!important;}}
+</style>
+""", unsafe_allow_html=True)
+    with st.container(key="tradex_hero"):
+        st.markdown(
+            '<div class="tradex-bars"><svg viewBox="0 0 300 150" fill="none" preserveAspectRatio="xMidYMid meet">'
+            '<g>'
+            '<rect class="tx-bar" x="30" y="40" width="18" height="90" rx="4" fill="#34E0B0"/>'
+            '<rect class="tx-bar" x="72" y="30" width="18" height="100" rx="4" fill="#48D8FF" style="animation-delay:-0.5s"/>'
+            '<rect class="tx-bar" x="114" y="55" width="18" height="75" rx="4" fill="#9FEB7C" style="animation-delay:-1s"/>'
+            '<rect class="tx-bar" x="156" y="22" width="18" height="108" rx="4" fill="#5FEAD0" style="animation-delay:-1.5s"/>'
+            '<rect class="tx-bar" x="198" y="46" width="18" height="84" rx="4" fill="#6CC8FF" style="animation-delay:-0.8s"/>'
+            '<rect class="tx-bar" x="240" y="34" width="18" height="96" rx="4" fill="#8AF0C4" style="animation-delay:-2s"/>'
+            '</g></svg></div>'
+            '<div class="tradex-strip">'
+            '<div class="tradex-left">'
+            '<span class="tradex-eyebrow"><span class="tx-nd"></span>Pharos · CEX Trading</span>'
+            '<h2 class="tradex-title">Trade <b>$PROS</b></h2>'
+            '</div>'
+            '<div class="tradex-chips"><span class="tradex-chip">💹 Live prices</span>'
+            '<span class="tradex-chip">🔗 5 exchanges</span><span class="tradex-chip">📊 PROS / USDT</span></div>'
+            '</div>',
+            unsafe_allow_html=True,
         )
 
     # Live price bar
@@ -15724,7 +16072,7 @@ elif st.session_state.page == "trade":
     <div class="ticker-cell"><div class="ticker-label">24h Volume</div>
         <div class="ticker-value">{('$' + f'{p["volume_24h"]:,.0f}') if p.get('volume_24h') else '—'}</div></div>
 </div>
-<div class="ticker-source">CoinGecko · Updated {p.get('last_updated','—')}</div>
+<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(12,16,28,0.55);color:#D7DCEA;border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:5px 13px;margin:0 0 1.3rem 0;font-size:10.5px;font-weight:600;letter-spacing:0.02em;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);text-shadow:0 1px 4px rgba(4,6,16,0.6);">🦎 CoinGecko · Updated {p.get('last_updated','—')}</div>
 ''', unsafe_allow_html=True)
 
     # Chart
@@ -15807,9 +16155,9 @@ elif st.session_state.page == "ecosystem":
             "<style>"
             # synchronous marker scope + fixed backdrop layer (see updates notes)
             "body:has(.octo-bg-ecosystem) [data-testid=\"stApp\"]{--ocbg:url('" + _eco_bg + "');"
-            "background:linear-gradient(180deg,rgba(240,242,250,0.52) 0%,rgba(234,238,248,0.48) 45%,rgba(228,232,246,0.62) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.octo-bg-ecosystem) [data-testid=\"stApp\"]{"
-            "background:linear-gradient(180deg,rgba(8,10,22,0.62) 0%,rgba(7,9,20,0.56) 45%,rgba(5,7,16,0.80) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.octo-bg-ecosystem) [data-testid=\"stAppViewContainer\"],"
             "body:has(.octo-bg-ecosystem) section[data-testid=\"stMain\"],"
             "body:has(.octo-bg-ecosystem) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
@@ -15892,7 +16240,7 @@ elif st.session_state.page == "pay":
         st.markdown(
             "<style>"
             "body:has(.pay-top) [data-testid=\"stApp\"]{--ocbg:url('" + _pay_bg + "');"
-            "background:linear-gradient(180deg,rgba(238,240,249,0.80) 0%,rgba(232,236,247,0.74) 45%,rgba(226,230,244,0.88) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.40) 0%,rgba(232,236,247,0.34) 45%,rgba(226,230,244,0.56) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.pay-top) [data-testid=\"stApp\"]{"
             "background:linear-gradient(180deg,rgba(8,10,22,0.86) 0%,rgba(7,9,20,0.80) 45%,rgba(5,7,16,0.94) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.pay-top) [data-testid=\"stAppViewContainer\"],"
@@ -16857,7 +17205,7 @@ elif st.session_state.page == "request":
         st.markdown(
             "<style>"
             "body:has(.req-top) [data-testid=\"stApp\"]{--ocbg:url('" + _req_bg + "');"
-            "background:linear-gradient(180deg,rgba(238,240,249,0.80) 0%,rgba(232,236,247,0.74) 45%,rgba(226,230,244,0.88) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.40) 0%,rgba(232,236,247,0.34) 45%,rgba(226,230,244,0.56) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "html[data-theme=\"dark\"] body:has(.req-top) [data-testid=\"stApp\"]{"
             "background:linear-gradient(180deg,rgba(8,10,22,0.86) 0%,rgba(7,9,20,0.80) 45%,rgba(5,7,16,0.94) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
             "body:has(.req-top) [data-testid=\"stAppViewContainer\"],"
@@ -17604,6 +17952,24 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
 # ═════════════════════════════════════════════
 elif st.session_state.page == "network":
 
+    # ── Wallpaper pre-registration (BEFORE the loading gate) ──────────
+    # The dedicated loader hides (reveals the page) a beat before the main bg
+    # markdown below renders, so the reveal briefly showed the app's default
+    # background before the wallpaper popped in. Emitting the .net-top marker +
+    # the --ocbg variable up-front means the wallpaper is registered the whole
+    # time, so __octoHideLoader's bg-decoded gate can read it and hold the reveal
+    # until the image has actually decoded. (Only the CSS var is set here; the
+    # real background is painted by the full block below — which streams in the
+    # same run, before the loader finishes hiding.)
+    _net_bg_pre = get_net_bg_b64() or get_pay_bg_b64()
+    if _net_bg_pre:
+        st.markdown(
+            "<style>body:has(.net-top) [data-testid=\"stApp\"]{--ocbg:url('"
+            + _net_bg_pre + "');}</style>"
+            "<div class=\"net-top\" style=\"display:none\"></div>",
+            unsafe_allow_html=True,
+        )
+
     # ── Dedicated loading gate ────────────────────────────────────────
     # Network Dashboard needs live on-chain RPC data before it can show
     # anything meaningful. get_net_stats() is non-blocking (live_fetch), so
@@ -17632,34 +17998,302 @@ elif st.session_state.page == "network":
 
     inject_redesign_css("network rd-hero-compact rd-wide")
 
-    # ── Header ────────────────────────────────
+    # ── Full-bleed pay_bg backdrop + glass design system, scoped to .net-top.
+    #    Same shell language as Pay/Request/DeFi; cyan accent for its identity. ──
+    _net_bg = get_net_bg_b64() or get_pay_bg_b64()
+    _net_bg_css = ""
+    if _net_bg:
+        _net_bg_css = (
+            "body:has(.net-top) [data-testid=\"stApp\"]{--ocbg:url('" + _net_bg + "');"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.net-top) [data-testid=\"stApp\"]{"
+            "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.net-top) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.net-top) section[data-testid=\"stMain\"],"
+            "body:has(.net-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.net-top) #aura-3d-canvas,body:has(.net-top) .gs-env{display:none!important;}"
+        )
     st.markdown(
-        '<div style="background:linear-gradient(135deg,#0C0C1A 0%,#0A1A6E 100%);'
-        'border-radius:20px;padding:2rem 2.4rem 1.6rem 2.4rem;margin-bottom:1.4rem;'
-        'box-shadow:0 8px 32px rgba(10,26,110,0.28);position:relative;overflow:hidden;">'
-        '<div style="position:absolute;inset:0;background-image:radial-gradient(circle,'
-        'rgba(255,255,255,0.05) 1px,transparent 1px);background-size:18px 18px;pointer-events:none;"></div>'
-        '<div style="position:relative;z-index:1;">'
-        '<div style="font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;'
-        'color:rgba(255,255,255,0.5);margin-bottom:0.6rem;">🌐 PHAROS NETWORK · LIVE STATS</div>'
-        '<h2 style="font-family:Syne,sans-serif;font-size:2rem;font-weight:800;color:#FFFFFF;'
-        'letter-spacing:-0.02em;margin:0 0 0.5rem 0;">Network Dashboard</h2>'
-        '<p style="font-size:0.9rem;color:rgba(255,255,255,0.55);line-height:1.55;max-width:560px;margin:0;">'
-        'Live Pharos mainnet stats fetched directly from the RPC — block height, block time, '
-        'gas price and more. Auto-refreshes every 15 seconds.</p>'
-        '</div></div>',
+        "<style>"
+        + _net_bg_css +
+        "body:has(.net-top) [data-testid=\"stMainBlockContainer\"] > [data-testid=\"stVerticalBlock\"]{max-width:1430px!important;margin-left:auto!important;margin-right:auto!important;}"
+        "body:has(.net-top) [data-testid=\"stMainBlockContainer\"]{padding-top:1.35rem!important;}"
+        "body:has(.net-top) [data-testid=\"stMainBlockContainer\"] > [data-testid=\"stVerticalBlock\"]{zoom:0.83;}"
+        "body:has(.net-top){--ni:#14162B;--ni2:#4C5268;--ni3:#7C8299;--nacc:#0E7490;"
+        "--ncard:rgba(255,255,255,0.90);--ncardbd:rgba(255,255,255,0.85);--nglass:blur(20px) saturate(1.25);"
+        "--nfield:rgba(20,22,55,0.05);--nfl:rgba(20,22,55,0.11);--nshadow:0 12px 34px rgba(12,14,35,0.14);}"
+        "html[data-theme=\"dark\"] body:has(.net-top){--ni:#EEF0F8;--ni2:#AAB0C6;--ni3:#8A90A8;--nacc:#67E8F9;"
+        "--ncard:rgba(17,20,33,0.86);--ncardbd:rgba(255,255,255,0.12);"
+        "--nfield:rgba(255,255,255,0.06);--nfl:rgba(255,255,255,0.12);--nshadow:0 12px 34px rgba(0,0,0,0.42);}"
+        # strip
+        ".net-strip{display:flex;align-items:center;justify-content:space-between;gap:1.1rem 2.8rem;flex-wrap:wrap;"
+        "background:var(--ncard);border:1px solid var(--ncardbd);border-radius:18px;padding:1.05rem 1.6rem;margin:0 0 0.9rem;"
+        "-webkit-backdrop-filter:var(--nglass);backdrop-filter:var(--nglass);box-shadow:var(--nshadow);}"
+        ".net-strip-l{display:flex;flex-direction:column;gap:0.3rem;min-width:0;flex:1 1 340px;}"
+        ".net-strip-eyebrow{font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--nacc);display:inline-flex;align-items:center;gap:7px;}"
+        "body:has(.net-top) .net-strip-title{font-family:Syne,sans-serif;font-size:1.7rem;font-weight:800;color:var(--ni)!important;letter-spacing:-0.03em;margin:0!important;line-height:1.03;}"
+        ".net-strip-sub{font-size:0.86rem;color:var(--ni2);line-height:1.5;margin:0.1rem 0 0;max-width:60ch;}"
+        ".net-live{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--ni2);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.28);border-radius:999px;padding:6px 13px;}"
+        ".net-live b{color:var(--nacc);}"
+        ".net-live-wrap{display:flex;justify-content:flex-end;margin-bottom:0.95rem;}"
+        # the whole header container IS the interactive glass strip
+        "body:has(.net-top) .st-key-net_header{background:var(--ncard)!important;border:1px solid var(--ncardbd)!important;border-radius:18px!important;"
+        "padding:1.5rem 2rem!important;margin-bottom:1.1rem!important;"
+        "-webkit-backdrop-filter:var(--nglass);backdrop-filter:var(--nglass);box-shadow:var(--nshadow)!important;"
+        "transition:box-shadow 200ms cubic-bezier(0.23,1,0.32,1),border-color 200ms cubic-bezier(0.23,1,0.32,1);}"
+        "@media (hover:hover){body:has(.net-top) .st-key-net_header:hover{border-color:rgba(103,232,249,0.35)!important;box-shadow:0 14px 40px rgba(12,14,35,0.16)!important;}}"
+        "html[data-theme=\"dark\"] body:has(.net-top) .st-key-net_header:hover{box-shadow:0 14px 40px rgba(0,0,0,0.44)!important;}"
+        "body:has(.net-top) .st-key-net_header [data-testid=\"stHorizontalBlock\"]{align-items:center!important;}"
+        # ── interactive touches: a live gradient accent line across the top of
+        #    the strip, and a breathing status dot, so it reads as a live
+        #    dashboard header rather than a flat headline. ──
+        "body:has(.net-top) .st-key-net_header{position:relative;overflow:hidden;}"
+        "body:has(.net-top) .st-key-net_header::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;"
+        "background:linear-gradient(90deg,transparent 0%,var(--nacc) 22%,#3AB6D6 50%,var(--nacc) 78%,transparent 100%);"
+        "background-size:200% 100%;opacity:0.85;animation:net-sheen 6s linear infinite;}"
+        "@keyframes net-sheen{0%{background-position:0% 0;}100%{background-position:200% 0;}}"
+        "@keyframes net-dot{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.55);}55%{box-shadow:0 0 0 7px rgba(34,197,94,0);}}"
+        "body:has(.net-top) .net-live > span:first-child{animation:net-dot 2.2s ease-in-out infinite;}"
+        "@media (prefers-reduced-motion:reduce){body:has(.net-top) .st-key-net_header::before{animation:none;}body:has(.net-top) .net-live > span:first-child{animation:none;}}"
+        # glass stat tiles
+        "body:has(.net-top) .rd-stat{background:var(--ncard)!important;border:1px solid var(--ncardbd)!important;border-radius:16px!important;"
+        "-webkit-backdrop-filter:var(--nglass);backdrop-filter:var(--nglass);box-shadow:var(--nshadow)!important;padding:1.1rem 1.2rem!important;height:auto!important;}"
+        "body:has(.net-top) .rd-stat .rd-stat-lbl{color:var(--ni3)!important;}"
+        "body:has(.net-top) .rd-stat .rd-stat-val{color:var(--ni)!important;-webkit-text-fill-color:var(--ni)!important;}"
+        "body:has(.net-top) .rd-stat .rd-stat-sub{color:var(--ni3)!important;}"
+        # Featured / Testnet cards — styled directly on the markdown wrapper
+        # (this Streamlit build doesn't emit a stylable border-wrapper), so the
+        # surface is reliably opaque instead of see-through.
+        "body:has(.net-top) .net-info-card{background:var(--ncard);border:1px solid var(--ncardbd);border-radius:18px;"
+        "padding:1.35rem 1.6rem;height:100%;box-sizing:border-box;"
+        "-webkit-backdrop-filter:var(--nglass);backdrop-filter:var(--nglass);box-shadow:var(--nshadow);"
+        "}"
+        # bottom Featured/Testnet cards are static — no hover lift or glow (per request)
+        "body:has(.net-top) [data-testid=\"stVerticalBlockBorderWrapper\"]{background:var(--ncard)!important;border:1px solid var(--ncardbd)!important;border-radius:18px!important;"
+        "padding:0.4rem 0.6rem!important;height:100%!important;"
+        "-webkit-backdrop-filter:var(--nglass);backdrop-filter:var(--nglass);box-shadow:var(--nshadow)!important;}"
+        # equal-height cards: stretch both columns to the same level
+        "body:has(.net-top) [data-testid=\"stHorizontalBlock\"]:has([data-testid=\"stVerticalBlockBorderWrapper\"]) [data-testid=\"stColumn\"]{align-self:stretch!important;}"
+        "body:has(.net-top) .rd-panel-title{color:var(--ni)!important;}"
+        "body:has(.net-top) .rd-panel-sub{color:var(--ni2)!important;}"
+        "body:has(.net-top) .rd-divider{background:var(--nfl)!important;}"
+        "body:has(.net-top) .rd-eyebrow{color:var(--nacc)!important;background:rgba(127,131,165,0.10)!important;border-color:var(--ncardbd)!important;}"
+        # Streamlit's sanitizer re-serialises inline styles (#hex → rgb(), spaces
+        # added), so target the ACTUAL serialised forms. #0B1020→rgb(11,16,32)
+        # (field values), #7A7F96→rgb(122,127,150) (field labels).
+        "body:has(.net-top) [style*=\"rgb(11, 16, 32)\"]{color:var(--ni)!important;-webkit-text-fill-color:var(--ni)!important;}"
+        "body:has(.net-top) [style*=\"rgb(122, 127, 150)\"]{color:var(--ni3)!important;-webkit-text-fill-color:var(--ni3)!important;}"
+        "body:has(.net-top) [data-testid=\"stButton\"] button{border-radius:12px!important;}"
+        "</style>"
+        "<div class=\"net-top\" style=\"display:none\"></div>",
         unsafe_allow_html=True,
     )
 
-    # ── Refresh controls (integrated with hero, right-aligned) ──
-    rc_sp, rc1, rc2 = st.columns([5, 1.5, 1.6])
-    with rc1:
-        if st.button("🔄 Refresh", key="net_refresh", use_container_width=True, type="primary"):
-            live_invalidate("net_stats")
-            st.rerun()
-    with rc2:
-        st.markdown('<div style="font-size:11px;color:#39445D;padding:0.7rem 0;text-align:left;">🟢 Live · auto 15s</div>',
-                    unsafe_allow_html=True)
+    # ── Header bar — a rich self-illuminated tech panel. Glows (does NOT move)
+    #    on hover; the refresh lives INSIDE it as a circular button wrapped in a
+    #    spinning ring. Built as a real st.container so the refresh stays a real
+    #    Streamlit button (clean rerun, keeps the session). ──
+    st.markdown(r"""
+<style>
+.st-key-netx_hero{position:relative;overflow:hidden;border-radius:24px;
+  background:linear-gradient(135deg,#080f2a 0%,#0b1f52 44%,#0a3a58 100%)!important;
+  border:1px solid rgba(130,185,255,0.20)!important;
+  box-shadow:0 26px 60px -22px rgba(6,18,58,0.7),inset 0 1px 0 rgba(255,255,255,0.09)!important;
+  padding:1.7rem 2.2rem!important;margin-bottom:1rem!important;
+  transition:box-shadow 340ms cubic-bezier(0.23,1,0.32,1),border-color 340ms ease;}
+.st-key-netx_hero::before{content:"";position:absolute;inset:-28%;pointer-events:none;z-index:0;
+  background:radial-gradient(38% 60% at 16% 26%,rgba(60,200,225,0.55),transparent 60%),radial-gradient(46% 58% at 84% 24%,rgba(130,96,255,0.5),transparent 62%),radial-gradient(55% 75% at 62% 108%,rgba(20,210,150,0.42),transparent 60%);
+  filter:blur(18px);animation:nx-mesh 15s ease-in-out infinite alternate;}
+.st-key-netx_hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0.5;
+  background-image:linear-gradient(rgba(150,195,255,0.11) 1px,transparent 1px),linear-gradient(90deg,rgba(150,195,255,0.11) 1px,transparent 1px);background-size:36px 36px;
+  -webkit-mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);
+  animation:nx-grid 22s linear infinite;}
+@keyframes nx-mesh{0%{transform:translate(0,0) scale(1);}100%{transform:translate(5%,-4%) scale(1.1);}}
+@keyframes nx-grid{0%{background-position:0 0;}100%{background-position:36px 36px;}}
+@media(hover:hover){.st-key-netx_hero:hover{border-color:rgba(150,225,255,0.55)!important;box-shadow:0 30px 74px -20px rgba(24,130,210,0.55),0 0 0 1px rgba(150,225,255,0.35),inset 0 1px 0 rgba(255,255,255,0.14)!important;}}
+.st-key-netx_hero [data-testid="stHorizontalBlock"]{position:relative;z-index:2;align-items:center!important;}
+.netx-nodes{position:absolute;right:11%;top:0;height:100%;width:42%;z-index:1;pointer-events:none;opacity:0.8;}
+.netx-nodes svg{width:100%;height:100%;}
+.nx-n{animation:nx-node 3.6s ease-in-out infinite;transform-origin:center;transform-box:fill-box;}
+@keyframes nx-node{0%,100%{opacity:0.7;transform:scale(0.85);}55%{opacity:1;transform:scale(1.25);}}
+.nx-l{animation:nx-line 4s ease-in-out infinite;}
+@keyframes nx-line{0%,100%{opacity:0.18;}55%{opacity:0.8;}}
+.netx-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:9.5px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:#93DAFF;margin-bottom:11px;}
+.netx-nd{width:6px;height:6px;border-radius:50%;background:#34D399;animation:nx-pulse 2s ease-in-out infinite;}
+@keyframes nx-pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.6);}55%{box-shadow:0 0 0 8px rgba(52,211,153,0);}}
+body:has(.net-top) .netx-title{font-family:Syne,'Space Grotesk',sans-serif!important;font-size:2.05rem!important;font-weight:800!important;letter-spacing:-0.02em!important;line-height:1.05!important;color:#fff!important;margin:0 0 10px!important;text-shadow:0 8px 26px rgba(6,18,58,0.6);}
+body:has(.net-top) .netx-title b{font-weight:800!important;margin-left:0.28em;background:linear-gradient(100deg,#7FE9FF,#A79BFF 55%,#5FE0A8)!important;-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
+.netx-sub{font-size:12.5px;color:rgba(214,226,250,0.82);max-width:58ch;line-height:1.55;margin:0 0 1rem;}
+.netx-chips{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.netx-live{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:0.04em;color:#DCF3FF;background:rgba(14,34,74,0.6);border:1px solid rgba(125,205,255,0.38);border-radius:999px;padding:6px 13px;}
+.netx-live .p{width:7px;height:7px;border-radius:50%;background:#34D399;animation:nx-pulse 2s ease-in-out infinite;}
+.netx-live b{color:#8FE9FF;}
+.netx-rpc{font-size:10.5px;font-weight:700;letter-spacing:0.03em;color:rgba(200,222,255,0.72);}
+/* refresh cluster: REFRESH label sits to the LEFT of the round button, on one row */
+body:has(.net-top) [data-testid="stVerticalBlock"]:has(> .st-key-net_refresh){flex-direction:row!important;align-items:center!important;justify-content:flex-end!important;gap:13px!important;flex-wrap:nowrap!important;}
+.netx-rlbl{font-size:11px;font-weight:800;letter-spacing:0.13em;text-transform:uppercase;color:rgba(206,228,255,0.82);white-space:nowrap;margin:0;line-height:1;}
+body:has(.net-top) [data-testid="stElementContainer"]:has(.netx-rlbl){width:auto!important;flex:0 0 auto!important;}
+.st-key-net_refresh{display:flex;justify-content:center;flex:0 0 auto!important;width:auto!important;}
+/* prefixed with the page marker + testid so it out-specifies the page's generic
+   `body:has(.net-top) [data-testid="stButton"] button{border-radius:12px}` override */
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button{position:relative;width:54px!important;height:54px!important;min-height:54px!important;border-radius:50%!important;padding:0!important;
+  background:rgba(12,30,66,0.72)!important;border:1px solid rgba(125,205,255,0.26)!important;color:#CFEFFF!important;
+  box-shadow:0 10px 26px -10px rgba(20,120,200,0.6)!important;
+  transition:transform 160ms ease,color 160ms ease,box-shadow 160ms ease!important;}
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button p{font-size:22px!important;line-height:1!important;font-weight:700!important;}
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button::before{content:"";position:absolute;inset:-3px;border-radius:50%;padding:2.5px;
+  background:conic-gradient(from 0deg,transparent 0deg,#7FE9FF 120deg,#5FE0A8 230deg,transparent 340deg);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude;
+  animation:nx-spin 2.4s linear infinite;}
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button:hover{transform:translateY(-2px);color:#fff!important;box-shadow:0 16px 34px -10px rgba(60,180,240,0.78)!important;}
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button:hover::before{animation-duration:0.9s;}
+body:has(.net-top) .st-key-net_refresh [data-testid="stButton"] button:active{transform:scale(0.95);}
+@keyframes nx-spin{to{transform:rotate(360deg);}}
+/* the refresh ring keeps spinning even under reduced-motion — it's a functional
+   activity indicator the user explicitly asked to stay alive; only the decorative
+   background motion is frozen. */
+@media(prefers-reduced-motion:reduce){.st-key-netx_hero::before,.st-key-netx_hero::after,.nx-n,.nx-l,.netx-nd,.netx-live .p{animation:none!important;}}
+</style>
+""", unsafe_allow_html=True)
+
+    with st.container(key="netx_hero"):
+        st.markdown(
+            '<div class="netx-nodes"><svg viewBox="0 0 420 190" fill="none">'
+            '<g stroke="rgba(150,215,255,0.32)" stroke-width="1.2">'
+            '<line class="nx-l" x1="60" y1="145" x2="150" y2="55"/>'
+            '<line class="nx-l" x1="150" y1="55" x2="260" y2="115" style="animation-delay:-1.1s"/>'
+            '<line class="nx-l" x1="260" y1="115" x2="360" y2="50" style="animation-delay:-2.1s"/>'
+            '<line class="nx-l" x1="60" y1="145" x2="260" y2="115" style="animation-delay:-0.6s"/>'
+            '<line class="nx-l" x1="260" y1="115" x2="330" y2="160" style="animation-delay:-1.6s"/>'
+            '</g><g>'
+            '<circle class="nx-n" cx="60" cy="145" r="5" fill="#5FE0A8"/>'
+            '<circle class="nx-n" cx="150" cy="55" r="6" fill="#7FE9FF" style="animation-delay:-0.8s"/>'
+            '<circle class="nx-n" cx="260" cy="115" r="7" fill="#A79BFF" style="animation-delay:-1.5s"/>'
+            '<circle class="nx-n" cx="360" cy="50" r="5" fill="#7FE9FF" style="animation-delay:-0.4s"/>'
+            '<circle class="nx-n" cx="330" cy="160" r="4.5" fill="#5FE0A8" style="animation-delay:-2s"/>'
+            '</g></svg></div>',
+            unsafe_allow_html=True,
+        )
+        _hc1, _hc2 = st.columns([1, 0.34], gap="small")
+        with _hc1:
+            st.markdown(
+                '<div class="netx-eyebrow"><span class="netx-nd"></span>Pharos Network · Live Stats</div>'
+                '<h2 class="netx-title">Network <b>Dashboard</b></h2>'
+                '<p class="netx-sub">Mainnet telemetry read straight from the RPC — block height, timing, '
+                'gas and peers, refreshing on its own every 15 seconds.</p>'
+                '<div class="netx-chips"><span class="netx-live"><span class="p"></span>LIVE · <b>auto 15s</b></span>'
+                '<span class="netx-rpc">◈ RPC connected</span></div>',
+                unsafe_allow_html=True,
+            )
+        with _hc2:
+            st.markdown('<div class="netx-rlbl">Refresh</div>', unsafe_allow_html=True)
+            if st.button("↻", key="net_refresh", help="Refresh network stats now"):
+                live_invalidate("net_stats")
+                st.rerun()
+
+    _UNUSED_NET_HEADER_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+ *{margin:0;padding:0;box-sizing:border-box;}
+ html,body{background:transparent;overflow:hidden;font-family:'DM Sans',Inter,-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+ #wrap{perspective:1300px;padding:5px 2px 14px;}
+ #panel{position:relative;height:158px;border-radius:24px;overflow:hidden;cursor:default;
+   background:linear-gradient(135deg,#080f2a 0%,#0b1f52 44%,#0a3a58 100%);
+   border:1px solid rgba(130,185,255,0.20);
+   box-shadow:0 26px 60px -22px rgba(6,18,58,0.7),inset 0 1px 0 rgba(255,255,255,0.09);
+   transform-style:preserve-3d;transform:rotateX(0) rotateY(0);
+   transition:transform 320ms cubic-bezier(0.23,1,0.32,1);
+   animation:panel-in 0.6s cubic-bezier(0.16,1,0.3,1) both;}
+ @keyframes panel-in{from{opacity:0;transform:translateY(14px) scale(0.985);}to{opacity:1;transform:translateY(0) scale(1);}}
+ .mesh{position:absolute;inset:-25%;pointer-events:none;
+   background:radial-gradient(38% 60% at 16% 26%,rgba(60,200,225,0.60),transparent 60%),
+             radial-gradient(46% 58% at 84% 24%,rgba(130,96,255,0.55),transparent 62%),
+             radial-gradient(55% 75% at 62% 108%,rgba(20,210,150,0.45),transparent 60%);
+   filter:blur(16px);animation:mesh 15s ease-in-out infinite alternate;}
+ @keyframes mesh{0%{transform:translate(0,0) scale(1);}100%{transform:translate(5%,-4%) scale(1.1);}}
+ .grid{position:absolute;inset:0;opacity:0.55;pointer-events:none;transform:translateZ(8px);
+   background-image:linear-gradient(rgba(150,195,255,0.11) 1px,transparent 1px),linear-gradient(90deg,rgba(150,195,255,0.11) 1px,transparent 1px);
+   background-size:36px 36px;
+   -webkit-mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);
+   mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);
+   animation:grid 22s linear infinite;}
+ @keyframes grid{0%{background-position:0 0;}100%{background-position:36px 36px;}}
+ #glow{position:absolute;width:360px;height:360px;border-radius:50%;pointer-events:none;left:0;top:0;
+   transform:translate(-50%,-50%);opacity:0;transition:opacity 320ms ease;mix-blend-mode:screen;
+   background:radial-gradient(circle,rgba(125,205,255,0.30),transparent 66%);}
+ svg.net{position:absolute;right:-2%;top:0;height:100%;width:52%;opacity:0.85;pointer-events:none;transform:translateZ(14px);}
+ #content{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;
+   gap:20px;padding:0 32px;transform-style:preserve-3d;}
+ .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:9.5px;font-weight:800;letter-spacing:0.22em;
+   text-transform:uppercase;color:#93DAFF;transform:translateZ(40px);}
+ .eyebrow .nd{width:6px;height:6px;border-radius:50%;background:#34D399;animation:pulse 2s ease-in-out infinite;}
+ @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.6);}55%{box-shadow:0 0 0 8px rgba(52,211,153,0);}}
+ .title{font-family:'Syne','Space Grotesk',sans-serif;font-size:33px;font-weight:800;letter-spacing:-0.035em;
+   line-height:1.0;color:#fff;margin:7px 0 6px;transform:translateZ(62px);text-shadow:0 8px 26px rgba(6,18,58,0.6);}
+ .title b{font-weight:800;background:linear-gradient(100deg,#7FE9FF 0%,#A79BFF 55%,#5FE0A8 100%);
+   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+ .sub{font-size:12px;color:rgba(214,226,250,0.8);max-width:46ch;line-height:1.5;transform:translateZ(32px);}
+ .right{display:flex;flex-direction:column;align-items:flex-end;gap:11px;transform:translateZ(50px);flex-shrink:0;}
+ .livechip{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:0.04em;color:#DCF3FF;
+   background:rgba(14,34,74,0.6);border:1px solid rgba(125,205,255,0.38);border-radius:999px;padding:7px 14px;
+   -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+ .livechip .p{width:7px;height:7px;border-radius:50%;background:#34D399;animation:pulse 2s ease-in-out infinite;}
+ .livechip b{color:#8FE9FF;font-weight:800;}
+ .rpcchip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:0.03em;
+   color:rgba(200,222,255,0.78);}
+ .rpcchip svg{color:#7FE9FF;}
+ @media (prefers-reduced-motion:reduce){.mesh,.grid,.eyebrow .nd,.livechip .p,#panel{animation:none!important;}}
+</style></head><body>
+<div id="wrap"><div id="panel">
+  <div class="mesh"></div><div class="grid"></div>
+  <svg class="net" viewBox="0 0 420 200" fill="none">
+    <g stroke="rgba(150,215,255,0.35)" stroke-width="1.2">
+      <line x1="60" y1="150" x2="150" y2="60"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="3.4s" repeatCount="indefinite"/></line>
+      <line x1="150" y1="60" x2="260" y2="120"><animate attributeName="opacity" values="0.3;0.9;0.3" dur="4.1s" repeatCount="indefinite"/></line>
+      <line x1="260" y1="120" x2="360" y2="55"><animate attributeName="opacity" values="0.25;0.85;0.25" dur="3.7s" repeatCount="indefinite"/></line>
+      <line x1="150" y1="60" x2="260" y2="120" opacity="0"/>
+      <line x1="60" y1="150" x2="260" y2="120"><animate attributeName="opacity" values="0.15;0.6;0.15" dur="5s" repeatCount="indefinite"/></line>
+      <line x1="260" y1="120" x2="330" y2="165"><animate attributeName="opacity" values="0.2;0.7;0.2" dur="4.4s" repeatCount="indefinite"/></line>
+    </g>
+    <g>
+      <circle cx="60" cy="150" r="5" fill="#5FE0A8"><animate attributeName="r" values="4;6.5;4" dur="3s" repeatCount="indefinite"/></circle>
+      <circle cx="150" cy="60" r="6" fill="#7FE9FF"><animate attributeName="r" values="5;7.5;5" dur="3.6s" repeatCount="indefinite"/></circle>
+      <circle cx="260" cy="120" r="7" fill="#A79BFF"><animate attributeName="r" values="6;8.5;6" dur="4.2s" repeatCount="indefinite"/></circle>
+      <circle cx="360" cy="55" r="5" fill="#7FE9FF"><animate attributeName="r" values="4;6;4" dur="3.3s" repeatCount="indefinite"/></circle>
+      <circle cx="330" cy="165" r="4.5" fill="#5FE0A8"><animate attributeName="r" values="3.5;5.5;3.5" dur="3.9s" repeatCount="indefinite"/></circle>
+      <circle r="3.2" fill="#FFFFFF"><animateMotion dur="3.4s" repeatCount="indefinite" path="M60,150 L150,60"/></circle>
+      <circle r="3.2" fill="#FFFFFF"><animateMotion dur="4.1s" begin="0.6s" repeatCount="indefinite" path="M150,60 L260,120"/></circle>
+      <circle r="3.2" fill="#FFFFFF"><animateMotion dur="3.7s" begin="1.1s" repeatCount="indefinite" path="M260,120 L360,55"/></circle>
+    </g>
+  </svg>
+  <div id="glow"></div>
+  <div id="content">
+    <div style="min-width:0;">
+      <div class="eyebrow"><span class="nd"></span>Pharos Network · Live Stats</div>
+      <div class="title">Network&nbsp;<b>Dashboard</b></div>
+      <div class="sub">Mainnet telemetry read straight from the RPC — block height, timing, gas and peers, refreshing on its own every 15 seconds.</div>
+    </div>
+    <div class="right">
+      <span class="livechip"><span class="p"></span>LIVE&nbsp;·&nbsp;<b>auto 15s</b></span>
+      <span class="rpcchip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12h4l3-7 4 14 3-7h2" stroke-linecap="round" stroke-linejoin="round"/></svg>RPC connected</span>
+    </div>
+  </div>
+</div></div>
+<script>
+(function(){
+  var wrap=document.getElementById('wrap'),panel=document.getElementById('panel'),glow=document.getElementById('glow');
+  var raf=null,tx=0,ty=0;
+  wrap.addEventListener('mousemove',function(e){
+    var r=panel.getBoundingClientRect();
+    var px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+    tx=(0.5-py)*7; ty=(px-0.5)*9;
+    glow.style.left=(e.clientX-r.left)+'px'; glow.style.top=(e.clientY-r.top)+'px'; glow.style.opacity='1';
+    if(!raf) raf=requestAnimationFrame(function apply(){ panel.style.transform='rotateX('+tx+'deg) rotateY('+ty+'deg)'; raf=null; });
+  });
+  wrap.addEventListener('mouseleave',function(){ panel.style.transform='rotateX(0) rotateY(0)'; glow.style.opacity='0'; });
+})();
+</script></body></html>"""
+    _ = _UNUSED_NET_HEADER_HTML   # retained only to avoid an unused-name lint; not rendered
 
     # ── Stats block, isolated in its own auto-refreshing fragment ──
     # st.fragment(run_every=...) re-runs ONLY this function on its own
@@ -17727,13 +18361,13 @@ elif st.session_state.page == "network":
     _render_net_stats()
 
     # ── Featured Mainnet status card + Available Networks (side by side) ──
-    st.markdown('<div style="height:0.8rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
     feat_col, side_col = st.columns([1.45, 1], gap="large")
 
     with feat_col:
-        with st.container(border=True):
+        with st.container():
             st.markdown(
-                '<div style="padding:0.4rem 0.5rem 0.2rem 0.7rem;">'
+                '<div class="net-info-card">'
                 '<span class="rd-eyebrow">⭐ Featured · Mainnet</span>'
                 '<div class="rd-panel-title">Pharos Pacific Mainnet</div>'
                 '<div class="rd-panel-sub">Primary production network · live and online.</div>'
@@ -17752,7 +18386,7 @@ elif st.session_state.page == "network":
                     ]
                 ])
                 + '</div><hr class="rd-divider"/>'
-                '<div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:0.3rem;margin-top:-9px;margin-left:-6px;">'
+                '<div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:0.2rem;">'
                 f'<a href="{PHAROS_EXPLORER_URL}" target="_blank" '
                 f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
                 f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;text-decoration:none;">'
@@ -17766,14 +18400,14 @@ elif st.session_state.page == "network":
             )
 
     with side_col:
-        with st.container(border=True):
+        with st.container():
             st.markdown(
-                '<div style="padding:0.4rem 0.5rem 0.2rem 0.7rem;">'
+                '<div class="net-info-card">'
                 '<span class="rd-eyebrow">🧪 Available · Testnet</span>'
                 '<div class="rd-panel-title">Pharos Atlantic</div>'
                 '<div class="rd-panel-sub">Public testnet for development.</div>'
                 '<hr class="rd-divider"/>'
-                '<div style="display:grid;grid-template-columns:1fr;gap:10px;">'
+                '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px;">'
                 + "".join([
                     f'<div style="min-width:0;"><div style="font-size:10px;font-weight:700;letter-spacing:0.07em;'
                     f'text-transform:uppercase;color:#7A7F96;margin-bottom:3px;">{k}</div>'
@@ -17787,12 +18421,13 @@ elif st.session_state.page == "network":
                     ]
                 ])
                 + '</div><hr class="rd-divider"/>'
+                '<div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:0.2rem;">'
                 f'<a href="{PHAROS_TESTNET_EXPLORER_URL}" target="_blank" '
                 f'style="display:inline-flex;align-items:center;gap:6px;background:#0C0C1A;color:#FFFFFF;'
                 f'border-radius:10px;padding:0.55rem 1.1rem;font-size:12.5px;font-weight:700;'
-                f'text-decoration:none;margin-left:-18px;margin-top:-20px;">'
+                f'text-decoration:none;">'
                 f'🔍 Explorer ↗</a>'
-                '</div>',
+                '</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -18090,6 +18725,19 @@ elif st.session_state.page == "spns":
 # ═════════════════════════════════════════════
 elif st.session_state.page == "pulse":
 
+    # ── Wallpaper pre-registration (BEFORE the loading gate) ──────────
+    # Same fix as Network: register the .pulse-top marker + --ocbg up-front so
+    # the dedicated loader's bg-decoded reveal gate holds until the wallpaper
+    # has decoded, instead of flashing the default background first.
+    _pls_bg_pre = get_pay_bg_b64()
+    if _pls_bg_pre:
+        st.markdown(
+            "<style>body:has(.pulse-top) [data-testid=\"stApp\"]{--ocbg:url('"
+            + _pls_bg_pre + "');}</style>"
+            "<div class=\"pulse-top\" style=\"display:none\"></div>",
+            unsafe_allow_html=True,
+        )
+
     # ── Dedicated loading gate ────────────────────────────────────────
     # Market Pulse needs the live $PROS market snapshot (non-blocking via
     # get_market_pulse) AND an AI-read community sentiment (compute_
@@ -18131,20 +18779,74 @@ elif st.session_state.page == "pulse":
     _pn   = get_pharos_news()
     _cp   = compute_community_pulse(_mp, _pn)
 
-    # ── Hero ──────────────────────────────────
+    # ── Full-bleed pay_bg backdrop + glass design system, scoped to .pulse-top.
+    #    Scoped attribute overrides convert the page's hardcoded white cards and
+    #    dark text to glass + theme-aware tokens without rewriting every inline. ──
+    _pls_bg = get_pay_bg_b64()
+    _pls_bg_css = ""
+    if _pls_bg:
+        _pls_bg_css = (
+            "body:has(.pulse-top) [data-testid=\"stApp\"]{--ocbg:url('" + _pls_bg + "');"
+            "background:linear-gradient(180deg,rgba(238,240,249,0.40) 0%,rgba(232,236,247,0.34) 45%,rgba(226,230,244,0.56) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "html[data-theme=\"dark\"] body:has(.pulse-top) [data-testid=\"stApp\"]{"
+            "background:linear-gradient(180deg,rgba(8,10,22,0.88) 0%,rgba(7,9,20,0.82) 45%,rgba(5,7,16,0.95) 100%),var(--ocbg) center center / cover no-repeat fixed!important;}"
+            "body:has(.pulse-top) [data-testid=\"stAppViewContainer\"],"
+            "body:has(.pulse-top) section[data-testid=\"stMain\"],"
+            "body:has(.pulse-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;background-color:transparent!important;}"
+            "body:has(.pulse-top) #aura-3d-canvas,body:has(.pulse-top) .gs-env{display:none!important;}"
+        )
     st.markdown(
-        '<div class="section-dark">'
-        '<div style="display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;'
-        'letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.85);'
-        'background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);'
-        'border-radius:20px;padding:5px 13px;margin-bottom:0.9rem;">'
-        '<span style="width:6px;height:6px;border-radius:50%;background:#2BE080;'
-        'box-shadow:0 0 6px #2BE080;display:inline-block;"></span>📡 Live · updates every 5 min</div>'
-        '<h2 style="font-family:Syne,sans-serif;font-size:1.9rem;font-weight:800;color:#FFFFFF;'
-        'margin:0 0 0.4rem 0;letter-spacing:-0.01em;">Market &amp; Community Pulse</h2>'
-        '<div style="font-size:13px;color:rgba(255,255,255,0.65);max-width:560px;line-height:1.6;">'
-        'Live $PROS market data, AI-read community sentiment, trending topics and the latest '
-        'official Pharos announcements — in one glance.</div>'
+        "<style>"
+        + _pls_bg_css +
+        "body:has(.pulse-top) [data-testid=\"stMainBlockContainer\"] > [data-testid=\"stVerticalBlock\"]{max-width:1340px!important;margin-left:auto!important;margin-right:auto!important;}"
+        "body:has(.pulse-top) [data-testid=\"stMainBlockContainer\"]{padding-top:0.6rem!important;}"
+        "body:has(.pulse-top) [data-testid=\"stMainBlockContainer\"] > [data-testid=\"stVerticalBlock\"]{zoom:0.85;}"
+        "body:has(.pulse-top){--pi:#14162B;--pi2:#4C5268;--pi3:#7C8299;--pacc:#4F46E5;"
+        "--pcard:rgba(255,255,255,0.66);--pcardbd:rgba(255,255,255,0.72);--pglass:blur(18px) saturate(1.2);"
+        "--pfl:rgba(20,22,55,0.10);--pshadow:0 10px 34px rgba(12,14,35,0.10);}"
+        "html[data-theme=\"dark\"] body:has(.pulse-top){--pi:#EEF0F8;--pi2:#AAB0C6;--pi3:#8A90A8;--pacc:#A5B4FF;"
+        "--pcard:rgba(18,21,36,0.56);--pcardbd:rgba(255,255,255,0.09);"
+        "--pfl:rgba(255,255,255,0.11);--pshadow:0 10px 34px rgba(0,0,0,0.34);}"
+        # strip
+        ".pulse-strip{display:flex;align-items:center;justify-content:space-between;gap:1.1rem 2.8rem;flex-wrap:wrap;"
+        "background:var(--pcard);border:1px solid var(--pcardbd);border-radius:18px;padding:1.05rem 1.6rem;margin:0 0 0.9rem;"
+        "-webkit-backdrop-filter:var(--pglass);backdrop-filter:var(--pglass);box-shadow:var(--pshadow);}"
+        ".pulse-strip-l{display:flex;flex-direction:column;gap:0.3rem;min-width:0;flex:1 1 340px;}"
+        ".pulse-strip-eyebrow{font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--pacc);display:inline-flex;align-items:center;gap:7px;}"
+        "body:has(.pulse-top) .pulse-strip-title{font-family:Syne,sans-serif;font-size:1.7rem;font-weight:800;color:var(--pi)!important;letter-spacing:-0.03em;margin:0!important;line-height:1.03;}"
+        ".pulse-strip-sub{font-size:0.86rem;color:var(--pi2);line-height:1.5;margin:0.1rem 0 0;max-width:60ch;}"
+        ".pulse-live{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--pi2);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.28);border-radius:999px;padding:6px 13px;}"
+        # Streamlit's sanitizer re-serialises inline styles (#hex → rgb(), spaces
+        # added), so match the ACTUAL serialised forms — this is why the earlier
+        # #hex/no-space selectors never applied.
+        #   rgba(255,255,255,0.92) white cards → glass
+        "body:has(.pulse-top) [style*=\"rgba(255, 255, 255, 0.92)\"]{background:var(--pcard)!important;border-color:var(--pcardbd)!important;-webkit-backdrop-filter:var(--pglass)!important;backdrop-filter:var(--pglass)!important;box-shadow:var(--pshadow)!important;}"
+        #   #E7E8EE / #D0D3E0 borders → glass border
+        "body:has(.pulse-top) [style*=\"rgb(231, 232, 238)\"],body:has(.pulse-top) [style*=\"rgb(208, 211, 224)\"]{border-color:var(--pcardbd)!important;}"
+        #   #0C0C1A + #FFFFFF text → primary token (theme-aware)
+        "body:has(.pulse-top) [style*=\"rgb(12, 12, 26)\"],body:has(.pulse-top) [style*=\"rgb(255, 255, 255)\"]{color:var(--pi)!important;-webkit-text-fill-color:var(--pi)!important;}"
+        #   #39445D + #7A7F96 secondary text → secondary token
+        "body:has(.pulse-top) [style*=\"rgb(57, 68, 93)\"],body:has(.pulse-top) [style*=\"rgb(122, 127, 150)\"]{color:var(--pi2)!important;-webkit-text-fill-color:var(--pi2)!important;}"
+        #   #9499A8 tertiary → tertiary token
+        "body:has(.pulse-top) [style*=\"rgb(148, 153, 168)\"]{color:var(--pi3)!important;-webkit-text-fill-color:var(--pi3)!important;}"
+        #   #1414E8 accent (trending chips) → accent token
+        "body:has(.pulse-top) [style*=\"rgb(20, 20, 232)\"]{color:var(--pacc)!important;-webkit-text-fill-color:var(--pacc)!important;}"
+        "body:has(.pulse-top) [data-testid=\"stButton\"] button{border-radius:12px!important;}"
+        "</style>"
+        "<div class=\"pulse-top\" style=\"display:none\"></div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Glass strip header ──────────────────────────────
+    st.markdown(
+        '<div class="pulse-strip"><div class="pulse-strip-l">'
+        '<div class="pulse-strip-eyebrow">📡 Market & Community · Live</div>'
+        '<h2 class="pulse-strip-title">Market &amp; Community Pulse</h2>'
+        '<p class="pulse-strip-sub">Live $PROS market data, AI-read community sentiment, trending topics '
+        'and the latest official Pharos announcements — all in one glance.</p>'
+        '</div>'
+        '<div><span class="pulse-live"><span style="width:7px;height:7px;border-radius:50%;background:#22C55E;'
+        'display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,0.18);"></span>Updates every 5 min</span></div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -18201,7 +18903,7 @@ elif st.session_state.page == "pulse":
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div style="margin-bottom:0.9rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
 
     # ── Chart + sentiment side by side ────────
     _pc_left, _pc_right = st.columns([1.45, 1], gap="medium")
@@ -18253,7 +18955,7 @@ elif st.session_state.page == "pulse":
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div style="margin-bottom:1rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1.6rem;"></div>', unsafe_allow_html=True)
 
     # ── Trending topics ───────────────────────
     _chips = ""
@@ -18266,7 +18968,7 @@ elif st.session_state.page == "pulse":
     st.markdown(
         '<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:#0C0C1A;'
         'margin-bottom:0.6rem;">🔥 Trending topics</div>'
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.3rem;">' + _chips + '</div>',
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.9rem;">' + _chips + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -18308,7 +19010,7 @@ elif st.session_state.page == "pulse":
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div style="margin-bottom:0.6rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1.6rem;"></div>', unsafe_allow_html=True)
     if st.button("↻ Refresh pulse", key="pulse_refresh"):
         # Manual refresh updates IN PLACE — no full loading screen (that is
         # only for opening the page). Keep serving the current market + AI
