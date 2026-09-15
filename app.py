@@ -849,6 +849,175 @@ def get_pay_bg_b64() -> str:
 
 
 @st.cache_resource(show_spinner=False)
+def get_pharos_logo_b64() -> str:
+    """The Pharos logo (root pharos_logo.jpg) as an inline data URI — used as the
+    Reputation Passport's embossed watermark, seals and cover motif."""
+    for path in ("pharos_logo.png", "pharos_logo.jpg", "pharos_logo.jpeg", "pharos_logo.webp"):
+        if os.path.exists(path):
+            try:
+                ext = path.rsplit(".", 1)[-1].lower()
+                mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+            except Exception:
+                return ""
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_gen_bg_b64() -> str:
+    """Generated-passport CARD background (root gen_bg.jpg) — the design surface
+    the passport elements are overlaid on. Downscaled + JPEG for a light inline
+    embed (source is ~3.6MB / 2752px)."""
+    for path in ("gen_bg.png", "gen_bg.jpg", "gen_bg.jpeg", "gen_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                # keep it high-res so the downloaded PNG (card captured at 2× ≈ 2080px
+                # wide) stays crisp instead of upscaled/blurry.
+                maxw = 2600
+                if w > maxw:
+                    im = im.resize((maxw, int(h * maxw / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=92, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                with open(path, "rb") as f:
+                    return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_x_avatar_datauri(handle: str) -> str:
+    """Fetch an X profile photo server-side and return it as a data: URI so the
+    passport card can be rasterised client-side (html2canvas) without a
+    cross-origin canvas taint. Falls back to '' — the card then shows the
+    silhouette and the download still works (minus the photo)."""
+    h = re.sub(r"[^A-Za-z0-9_]", "", (handle or "").lstrip("@"))[:15]
+    if not h:
+        return ""
+    for url in ("https://unavatar.io/x/" + h + "?fallback=false",
+                "https://unavatar.io/twitter/" + h + "?fallback=false"):
+        try:
+            r = requests.get(url, timeout=6, headers={"User-Agent": "Mozilla/5.0"})
+            if r.ok and r.content and r.headers.get("content-type", "").startswith("image"):
+                from PIL import Image
+                import io
+                im = Image.open(io.BytesIO(r.content)).convert("RGB")
+                # square-crop to a passport-photo ratio, then downscale
+                w, hh = im.size
+                s = min(w, hh)
+                im = im.crop(((w - s) // 2, (hh - s) // 2, (w - s) // 2 + s, (hh - s) // 2 + s))
+                if s > 480:
+                    im = im.resize((480, 480), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=90, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            continue
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_passport_bg_b64() -> str:
+    """Passport-page surface — the leather + nautical-stamps art the passport
+    rests on (root passport_bg.png/.jpg). Falls back to pay_bg until that file is
+    added so the page always has a wallpaper."""
+    for path in ("pass_bg.png", "pass_bg.jpg", "pass_bg.jpeg", "pass_bg.webp",
+                 "passport_bg.png", "passport_bg.jpg", "passport_bg.jpeg", "passport_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image, ImageFilter
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                # source is small (~1024w) → upscale 2× with LANCZOS, a light
+                # denoise pass, then a thresholded sharpen so it reads crisp and
+                # clean rather than soft/noisy when shown large.
+                target = 2048
+                if w < target:
+                    im = im.resize((target, int(h * target / w)), Image.LANCZOS)
+                    im = im.filter(ImageFilter.GaussianBlur(0.4))            # knock down noise
+                    im = im.filter(ImageFilter.UnsharpMask(radius=1.4, percent=90, threshold=3))
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=93, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                ext = path.rsplit(".", 1)[-1].lower()
+                mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+    return get_pay_bg_b64()
+
+
+@st.cache_resource(show_spinner=False)
+def get_nomi_bg_b64() -> str:
+    """Sailor-of-the-Week card template (root nomi_bg.jpg) — the nautical canvas
+    the nominee's photo, name, handle and posts are overlaid onto. Returns a
+    data: URI so the card can be rasterised client-side for download."""
+    for path in ("nomi_bg.jpg", "nomi_bg.jpeg", "nomi_bg.png", "nomi_bg.webp"):
+        if os.path.exists(path):
+            ext = path.rsplit(".", 1)[-1].lower()
+            mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+            try:
+                with open(path, "rb") as f:
+                    return "data:" + mime + ";base64," + base64.b64encode(f.read()).decode()
+            except Exception:
+                return ""
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_awards_bg_b64() -> str:
+    """Sailor-of-the-Week page backdrop (root awards_bg.png) — a dark aurora
+    texture. Downscaled + JPEG so the full-bleed wallpaper stays light."""
+    for path in ("awards_bg.png", "awards_bg.jpg", "awards_bg.jpeg", "awards_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                target = 1600
+                if w > target:
+                    im = im.resize((target, int(h * target / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=82, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                with open(path, "rb") as f:
+                    return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
+def get_week_bg_b64() -> str:
+    """Sailor-of-the-Week CARD canvas art (root week_bg.png) — the purple
+    pixel-icon pattern the card is built on. HD (JPEG q88) but light enough to
+    inline as a data-URI so the card captures 1:1 for download."""
+    for path in ("week_bg.png", "week_bg.jpg", "week_bg.jpeg", "week_bg.webp"):
+        if os.path.exists(path):
+            try:
+                from PIL import Image
+                import io
+                im = Image.open(path).convert("RGB")
+                w, h = im.size
+                target = 1800
+                if w > target:
+                    im = im.resize((target, int(h * target / w)), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=88, optimize=True)
+                return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                with open(path, "rb") as f:
+                    return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
+@st.cache_resource(show_spinner=False)
 def get_net_bg_b64() -> str:
     """Network-page background (net_bg.png in the app root), full 1080p-class
     res + JPEG so the 16:9 wallpaper stays crisp behind the theme-aware scrim.
@@ -2837,6 +3006,381 @@ def fetch_pharos_onchain_data(address: str, rpc_override: str = None) -> dict:
     result["error"] = last_error
     return result
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_x_profile(handle: str) -> dict:
+    """Key-free X/Twitter profile lookup via the public syndication timeline
+    (the same endpoint the Updates feed uses). Returns the avatar, display name,
+    handle and follower count — no API key. Returns {"ok": False} on any failure
+    so the passport falls back to a clean default portrait."""
+    h = (handle or "").strip().lstrip("@")
+    if not h or not re.fullmatch(r"[A-Za-z0-9_]{1,15}", h):
+        return {"ok": False}
+    url = ("https://syndication.twitter.com/srv/timeline-profile/screen-name/"
+           + h + "?showReplies=false")
+    try:
+        r = _get_http_session().get(
+            url, timeout=6,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/122.0.0.0 Safari/537.36"),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Referer": "https://platform.twitter.com/",
+            },
+        )
+        if r.status_code != 200:
+            return {"ok": False}
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                      r.text, re.DOTALL)
+        if not m:
+            return {"ok": False}
+        data = json.loads(m.group(1))
+    except Exception:
+        return {"ok": False}
+
+    hl, best = h.lower(), {}
+    def _walk(o):
+        nonlocal best
+        if isinstance(o, dict):
+            sn = o.get("screen_name") or o.get("screenName")
+            if (sn and str(sn).lower() == hl
+                    and (o.get("profile_image_url_https") or o.get("profile_image_url"))):
+                best = o
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                _walk(v)
+    try:
+        _walk(data)
+    except Exception:
+        pass
+    if not best:
+        return {"ok": False}
+    img = (best.get("profile_image_url_https") or best.get("profile_image_url") or "")
+    img = img.replace("_normal", "_400x400")
+    return {
+        "ok": True,
+        "handle": h,
+        "name": (best.get("name") or h)[:40],
+        "avatar": img,
+        "followers": best.get("followers_count"),
+    }
+
+
+def fetch_x_showcase(handle: str) -> dict:
+    """Retry + success-only cache wrapper around the raw showcase fetch. The
+    public syndication endpoint is flaky, so we (a) retry a couple of times and
+    (b) only cache a SUCCESS (in session_state, 10 min) — never a failure, so a
+    transient miss doesn't stick and the next attempt can succeed."""
+    import time as _t
+    h = re.sub(r"[^A-Za-z0-9_]", "", (handle or "").lstrip("@"))[:15]
+    if not h:
+        return {"ok": False}
+    _ck = "nomi_show_" + h.lower()
+    _c = st.session_state.get(_ck)
+    if _c and (_t.time() - _c[0]) < 600 and _c[1].get("ok"):
+        return _c[1]
+    res = {"ok": False}
+    for _att in range(2):
+        res = _fetch_x_showcase_once(h)
+        if res.get("ok") and res.get("posts"):
+            break
+        _t.sleep(0.4)
+    if res.get("ok"):
+        st.session_state[_ck] = (_t.time(), res)
+    return res
+
+
+def _fetch_x_showcase_once(handle: str) -> dict:
+    """Key-free X lookup for the Sailor-of-the-Week card: profile (name, avatar,
+    followers) PLUS recent original posts (text + like/retweet counts), parsed
+    from the same public syndication timeline the Updates feed uses. Returns
+    {"ok": False} on any failure so the card falls back gracefully."""
+    h = (handle or "").strip().lstrip("@")
+    if not h or not re.fullmatch(r"[A-Za-z0-9_]{1,15}", h):
+        return {"ok": False}
+    url = ("https://syndication.twitter.com/srv/timeline-profile/screen-name/"
+           + h + "?showReplies=false")
+    try:
+        r = _get_http_session().get(
+            url, timeout=7,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/122.0.0.0 Safari/537.36"),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Referer": "https://platform.twitter.com/",
+            },
+        )
+        if r.status_code != 200:
+            return {"ok": False}
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                      r.text, re.DOTALL)
+        if not m:
+            return {"ok": False}
+        data = json.loads(m.group(1))
+    except Exception:
+        return {"ok": False}
+
+    hl = h.lower()
+    prof = {}
+    posts = []
+    seen = set()
+
+    def _walk(o):
+        nonlocal prof
+        if isinstance(o, dict):
+            sn = o.get("screen_name") or o.get("screenName")
+            if (sn and str(sn).lower() == hl
+                    and (o.get("profile_image_url_https") or o.get("profile_image_url"))):
+                prof = o
+            # a tweet node carries full_text + engagement counters
+            txt = o.get("full_text") or o.get("text")
+            if txt and ("favorite_count" in o or "retweet_count" in o):
+                key = txt.strip()[:80]
+                if key and key not in seen:
+                    seen.add(key)
+                    _id = str(o.get("id_str") or o.get("id") or "")
+                    _url = ("https://x.com/" + h + "/status/" + _id) if _id.isdigit() else ("https://x.com/" + h)
+                    posts.append({
+                        "text": " ".join(txt.split()),
+                        "likes": int(o.get("favorite_count") or 0),
+                        "rts": int(o.get("retweet_count") or 0),
+                        "url": _url,
+                    })
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                _walk(v)
+    try:
+        _walk(data)
+    except Exception:
+        pass
+    if not prof and not posts:
+        return {"ok": False}
+
+    img = (prof.get("profile_image_url_https") or prof.get("profile_image_url") or "")
+    img = img.replace("_normal", "_400x400")
+    # drop pure-retweets / links-only, keep the most engaging first
+    _clean = [p for p in posts if not p["text"].lower().startswith("rt @")]
+    _clean.sort(key=lambda p: (p["likes"] + p["rts"] * 2), reverse=True)
+    return {
+        "ok": True,
+        "handle": h,
+        "name": (prof.get("name") or h)[:40],
+        "avatar": img,
+        "followers": prof.get("followers_count"),
+        "posts": _clean[:8],
+    }
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def img_to_datauri(url: str, max_px: int = 900) -> str:
+    """Fetch any image server-side → resized JPEG data-URI (taint-safe so the
+    card still rasterises for download). Returns '' on failure."""
+    if not url or not str(url).startswith("http"):
+        return ""
+    try:
+        r = _get_http_session().get(url, timeout=6, headers={"User-Agent": "Mozilla/5.0"})
+        if not (r.ok and r.content):
+            return ""
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(r.content)).convert("RGB")
+        w, h = im.size
+        if max(w, h) > max_px:
+            if w >= h:
+                im = im.resize((max_px, int(h * max_px / w)), Image.LANCZOS)
+            else:
+                im = im.resize((int(w * max_px / h), max_px), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=82, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
+
+
+_TWEET_ID_RE = re.compile(r"(?:status(?:es)?/)(\d+)")
+
+
+def _tweet_id_from_url(u: str) -> str:
+    u = (u or "").strip()
+    m = _TWEET_ID_RE.search(u)
+    if m:
+        return m.group(1)
+    return u if u.isdigit() else ""
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_tweet_by_id(tid: str) -> dict:
+    """Fetch a single tweet by id via the public syndication tweet-result JSON
+    (same source react-tweet uses): text, first photo, like/retweet counts, and
+    the author (name, handle, avatar). Returns {'ok': False} on failure."""
+    tid = re.sub(r"[^0-9]", "", tid or "")
+    if not tid:
+        return {"ok": False}
+    url = "https://cdn.syndication.twimg.com/tweet-result?id=" + tid + "&lang=en&token=a"
+    try:
+        r = _get_http_session().get(
+            url, timeout=7,
+            headers={"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                    "Chrome/122.0.0.0 Safari/537.36"),
+                     "Accept": "application/json"},
+        )
+        if r.status_code != 200:
+            return {"ok": False}
+        j = r.json()
+    except Exception:
+        return {"ok": False}
+    txt = j.get("text") or ""
+    img = ""
+    _ph = j.get("photos")
+    if isinstance(_ph, list) and _ph:
+        img = _ph[0].get("url") or ""
+    if not img:
+        _md = j.get("mediaDetails")
+        if isinstance(_md, list) and _md:
+            img = _md[0].get("media_url_https") or ""
+    u = j.get("user") or {}
+    _sn = u.get("screen_name") or ""
+    return {
+        "ok": True, "id": tid, "text": " ".join(txt.split()), "img": img,
+        "likes": int(j.get("favorite_count") or 0),
+        "rts": int(j.get("retweet_count") or j.get("conversation_count") or 0),
+        "url": "https://x.com/" + (_sn or "i") + "/status/" + tid,
+        "name": u.get("name") or "", "handle": _sn,
+        "avatar": (u.get("profile_image_url_https") or "").replace("_normal", "_400x400"),
+    }
+
+
+# ── Reputation Passport — nautical tier ladder + alias word bank ──
+_PASS_TIERS = [
+    (850, "CAPTAIN",   "You command the tides. The ecosystem knows your wake."),
+    (650, "NAVIGATOR", "You're not just exploring. You're building."),
+    (450, "SAILOR",    "Steady hands, real miles logged on-chain."),
+    (250, "DECKHAND",  "Aboard and earning your stripes."),
+    (0,   "DRIFTWOOD", "Fresh to the current. The voyage begins."),
+]
+_PASS_ALIAS = [
+    "ABYSSAL", "LEVIATHAN", "OBSIDIAN", "TIDEBREAKER", "MARINER", "NAUTILUS",
+    "CORSAIR", "MAELSTROM", "KRAKEN", "UNDERTOW", "SPECTRE", "FATHOM",
+    "RIPTIDE", "HARBINGER", "DREDGE", "SIREN", "BARNACLE", "SQUALL",
+]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def compute_passport(address: str) -> dict:
+    """Build a wallet's Reputation Passport. REAL on-chain signals ($PROS balance
+    and transaction count via read-only RPC) anchor the score; the remaining
+    dimensions (wallet age, unique dApps, holding streak, bridge-ins, gas) are
+    derived DETERMINISTICALLY from the address — stable for a given wallet and
+    nudged by real activity — since Pharos has no public indexer/txlist API yet.
+    Swap those for real indexer data the moment one ships."""
+    import hashlib, math
+    from datetime import datetime, timedelta, timezone
+
+    d = fetch_pharos_onchain_data(address)
+    tx = int(d.get("tx_count") or 0)
+    bal = float(d.get("balance_pros") or 0.0)
+    reachable = bool(d.get("available"))
+
+    hb = hashlib.sha256(address.lower().encode()).digest()
+    def rnd(i, lo, hi):   # stable pseudo-value in [lo,hi] from the address
+        return lo + (hb[i % len(hb)] / 255.0) * (hi - lo)
+
+    # real signals → 0-100 (log-scaled so whales/power-users don't peg instantly)
+    s_tx  = min(100, round(math.log10(tx + 1) / math.log10(1500) * 100)) if tx > 0 else 0
+    s_bal = min(100, round(math.log10(bal + 1) / math.log10(20000) * 100)) if bal > 0 else 0
+    # derived dims, correlated with real activity so the card stays coherent
+    af = min(1.0, (s_tx + s_bal) / 170.0 + 0.4)      # 0.4 – 1.0 activity factor
+    s_age    = max(0, min(100, round(rnd(0, 46, 96) * af)))
+    s_dapps  = max(0, min(100, round(rnd(1, 40, 95) * af)))
+    s_streak = max(0, min(100, round(rnd(2, 44, 95) * af)))
+    s_bridge = max(0, min(100, round(rnd(3, 34, 92) * af)))
+    s_gas    = max(0, min(100, round(s_tx * 0.6 + rnd(4, 18, 44))))
+
+    dims = [
+        ("Wallet Age",              s_age,    0.15),
+        ("Total Transactions",      s_tx,     0.20),
+        ("Unique dApps",            s_dapps,  0.15),
+        ("$PROS Balance",           s_bal,    0.20),
+        ("Holding Streak",          s_streak, 0.12),
+        ("Bridge-ins / Cross-chain", s_bridge, 0.10),
+        ("Gas Spent",               s_gas,    0.08),
+    ]
+    pros = max(0, min(1000, round(sum(v * w for _, v, w in dims) * 10)))
+
+    tier_name, tier_line = _PASS_TIERS[-1][1], _PASS_TIERS[-1][2]
+    for lo, name, line in _PASS_TIERS:
+        if pros >= lo:
+            tier_name, tier_line = name, line
+            break
+
+    alias = "THE " + _PASS_ALIAS[hb[5] % len(_PASS_ALIAS)]
+    age_days = int(30 + s_age * 12)
+    first_dt = datetime.now(timezone.utc) - timedelta(days=age_days)
+
+    # badges — every unlock is derived from the computed signals so they stay
+    # consistent with the score (no independent random rolls).
+    badges = [
+        ("First Voyage",   "Made a first transaction on Pharos", tx > 0),
+        ("Multi-Deck",     "Broad dApp footprint",               s_dapps >= 55),
+        ("RWA Pioneer",    "Deep ecosystem engagement",          s_dapps >= 80),
+        ("Bridge Voyager", "Cross-chain / bridge activity",      s_bridge >= 55),
+        ("Diamond Hands",  "Sustained holding streak",           s_streak >= 55 and bal > 0),
+        ("Whale",          "1,000+ $PROS held",                  bal >= 1000),
+        ("OG",             "Long-lived, seasoned wallet",        age_days >= 180),
+        ("Active",         "Consistent recent activity",         s_streak >= 45 and tx > 0),
+    ]
+
+    def _fmt_amt(b):
+        if b <= 0:
+            return "0"
+        if b >= 1_000_000:
+            return f"{b/1e6:.2f}M"
+        if b >= 1_000:
+            return f"{b/1e3:.2f}K"
+        if b >= 1:
+            return f"{b:,.2f}"
+        return f"{b:.4f}".rstrip("0").rstrip(".")
+
+    # LIVE = read straight from Pharos RPC (real). ESTIMATED = derived from the
+    # address until a public Pharos indexer ships. Displayed split accordingly.
+    real_stats = [
+        ("Total Transactions", f"{tx:,}",        s_tx),
+        ("$PROS Balance",      _fmt_amt(bal),    s_bal),
+    ]
+    est_stats = [
+        ("Wallet Age",               (f"~{age_days//30} mo" if age_days >= 30 else f"{age_days} d"), s_age),
+        ("Unique dApps",             f"~{int(3 + s_dapps/100*24)}", s_dapps),
+        ("Holding Streak",           f"{s_streak}/100",  s_streak),
+        ("Bridge / Cross-chain",     f"{s_bridge}/100",  s_bridge),
+        ("Gas Spent",                f"{s_gas}/100",     s_gas),
+    ]
+
+    return {
+        "address": address,
+        "short": address[:6] + "…" + address[-4:],
+        "serial": "PRP-" + address[2:6].upper() + "…" + address[-4:].upper(),
+        "reachable": reachable,
+        "is_contract": bool(d.get("is_contract")),
+        "tx_count": tx,
+        "balance": bal,
+        "balance_fmt": _fmt_amt(bal),
+        "pros": pros,
+        "tier": tier_name,
+        "tier_line": tier_line,
+        "alias": alias,
+        "first_activity": first_dt.strftime("%Y-%m-%d"),
+        "dims": [(n, v) for n, v, _ in dims],
+        "real_stats": real_stats,
+        "est_stats": est_stats,
+        "badges": badges,
+    }
 
 
 def _rpc(method: str, params: list, rpc_url: str = None, timeout: int = 4):
@@ -7995,6 +8539,29 @@ html[data-theme="dark"] .nf-item:hover{border-color:rgba(140,160,255,0.4);}
 }
 .updc-grid{
     display:grid;grid-template-columns:1fr 1fr;gap:20px;
+    transform-origin:center center;backface-visibility:hidden;will-change:transform,opacity;
+}
+/* 3D gallery-carousel page turn — the grid slips in like a card in a deck.
+   Direction comes from data-dir (next slides in from the right, prev from the left). */
+@keyframes updc-turn-next{
+    from{opacity:0;transform:perspective(1400px) translateX(64px) rotateY(-16deg) scale(0.94);}
+    60%{opacity:1;}
+    to{opacity:1;transform:perspective(1400px) translateX(0) rotateY(0deg) scale(1);}
+}
+@keyframes updc-turn-prev{
+    from{opacity:0;transform:perspective(1400px) translateX(-64px) rotateY(16deg) scale(0.94);}
+    60%{opacity:1;}
+    to{opacity:1;transform:perspective(1400px) translateX(0) rotateY(0deg) scale(1);}
+}
+.updc-grid[data-dir="next"]{animation:updc-turn-next 480ms cubic-bezier(0.23,1,0.32,1) both;}
+.updc-grid[data-dir="prev"]{animation:updc-turn-prev 480ms cubic-bezier(0.23,1,0.32,1) both;}
+/* each card settles a beat after the deck turns — a subtle gallery stagger */
+.updc-grid[data-dir] .updc-card{animation:updc-card-rise 440ms cubic-bezier(0.23,1,0.32,1) both;}
+.updc-grid[data-dir] .updc-card:nth-child(1){animation-delay:70ms;}
+.updc-grid[data-dir] .updc-card:nth-child(2){animation-delay:130ms;}
+@keyframes updc-card-rise{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+@media (prefers-reduced-motion:reduce){
+    .updc-grid[data-dir],.updc-grid[data-dir] .updc-card{animation:none!important;}
 }
 .updc-card{
     display:flex;flex-direction:column;height:100%;
@@ -8247,6 +8814,7 @@ NAV_PAGES = [
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🏦", "DeFi",      "defi"),
+    ("🪪", "Passport",  "passport"),
     ("🧩", "DApps",     "ecosystem"),
     ("💸", "Pay",       "pay"),
     ("🧾", "Request",   "request"),
@@ -8262,7 +8830,7 @@ NAV_PAGES = [
 # delegated click handler installed once in the parent document by the
 # height-0 bootstrap component further down. No page dispatch logic,
 # session handling, or routing behaviour changes.
-for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("📡", "Pulse", "pulse")]:
+for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("📡", "Pulse", "pulse"), ("🏅", "Sailor", "nominee")]:
     if st.button(_n_label, key="nav_" + _n_key):
         st.session_state.page = _n_key
         st.rerun()
@@ -8369,12 +8937,14 @@ _pnav_dd_products = [
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
+    ("🧠", "Memory Ledger", "memory"),
 ]
 _pnav_dd_explore = [
+    ("🪪", "Passport",      "passport"),
+    ("🏅", "Sailor of the Week", "nominee"),
     ("🧩", "DApps",         "ecosystem"),
     ("🌐", "Network",       "network"),
     ("📡", "Market Pulse",  "pulse"),
-    ("🧠", "Memory Ledger", "memory"),
     ("👥", "Community",     "community"),
 ]
 
@@ -9845,6 +10415,7 @@ components.html(
       {t:'SPNs',            s:'staking restaking native yield',  k:'spns',     i:'⚡', g:'Page'},
       {t:'Campaigns',       s:'quests rewards events active',    k:'campaigns', i:'🎯', g:'Page'},
       {t:'Updates',         s:'news announcements blog latest',  k:'updates',   i:'📰', g:'Page'},
+      {t:'Passport',        s:'reputation passport pros score on-chain identity wallet badges tier', k:'passport', i:'🪪', g:'Page'},
       {t:'DApps',           s:'ecosystem dapps projects apps defi rwa', k:'ecosystem', i:'🧩', g:'Page'},
       {t:'DeFi Hub',        s:'bridge liquidity staking lp positions wallet score rwa realfi explorer', k:'defi', i:'🏦', g:'Page'},
       {t:'Network',         s:'stats validators tps chain',      k:'network',   i:'🌐', g:'Page'},
@@ -15849,8 +16420,13 @@ elif st.session_state.page == "updates":
                     return cat, color, bg
             return "Announcement", "#1A1AFF", "rgba(26,26,255,0.08)"
 
+        # one-shot: only the render right after a Prev/Next click animates,
+        # so the periodic fragment auto-refresh doesn't re-trigger the slide
+        _dir = st.session_state.pop("updates_feed_dir", None)
+
         def _build_cards_html(slice_):
-            html_ = '<div class="updc-grid">'
+            _attr = (' data-dir="' + esc(_dir) + '"') if _dir in ("next", "prev") else ''
+            html_ = '<div class="updc-grid"' + _attr + '>'
             for _n in slice_:
                 _text  = (_n.get("text") or "").strip()
                 _parts = re.split(r"(?<=[.!?])\s+|\n+", _text, maxsplit=1)
@@ -15890,6 +16466,7 @@ elif st.session_state.page == "updates":
             with _ac1:
                 if st.button("←", key="updates_prev", use_container_width=True,
                              disabled=(_page == 0)):
+                    st.session_state["updates_feed_dir"] = "prev"
                     st.session_state[_page_key] = max(0, _page - 1)
                     st.rerun()
             with _ac2:
@@ -15897,6 +16474,7 @@ elif st.session_state.page == "updates":
             with _ac3:
                 if st.button("→", key="updates_next", use_container_width=True,
                              disabled=(_page >= _page_count - 1)):
+                    st.session_state["updates_feed_dir"] = "next"
                     st.session_state[_page_key] = min(_page_count - 1, _page + 1)
                     st.rerun()
         else:
@@ -15913,15 +16491,26 @@ elif st.session_state.page == "updates":
         unsafe_allow_html=True,
     )
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
-    with col2:
-        if st.button("🔄 Refresh feed", key="refresh_news"):
-            live_invalidate("xposts")   # force a background refresh of the feed
-            st.session_state.pop("pharos_x_cache", None)
-            st.session_state.pop("updates_feed_page", None)
-            st.rerun()
+    # Two small, equal-size pills centered below the cards
+    st.markdown(
+        "<style>"
+        "html[data-octo-page=\"updates\"] .st-key-upd_actions [data-testid=\"stHorizontalBlock\"]{justify-content:center;gap:12px;}"
+        "html[data-octo-page=\"updates\"] .st-key-upd_actions a,"
+        "html[data-octo-page=\"updates\"] .st-key-upd_actions button{border-radius:999px!important;min-height:40px!important;height:40px!important;"
+        "padding:0 20px!important;font-size:12.5px!important;font-weight:600!important;white-space:nowrap!important;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="upd_actions"):
+        _sa, _b1, _b2, _sb = st.columns([1, 1.1, 1.1, 1], gap="small")
+        with _b1:
+            st.link_button("Follow @pharos_network on X ↗", PHAROS_X_URL, use_container_width=True)
+        with _b2:
+            if st.button("🔄 Refresh feed", key="refresh_news", use_container_width=True):
+                live_invalidate("xposts")   # force a background refresh of the feed
+                st.session_state.pop("pharos_x_cache", None)
+                st.session_state.pop("updates_feed_page", None)
+                st.rerun()
 
 
 # ═════════════════════════════════════════════
@@ -16001,50 +16590,73 @@ body:has(.octo-bg-trade) [data-testid="stMainBlockContainer"] > [data-testid="st
 /* with the phantom gaps collapsed, this padding is the ONLY nav clearance, so it
    must clear the 64px fixed nav pill (bottom ~78px) plus a little breathing room */
 body:has(.octo-bg-trade) [data-testid="stMainBlockContainer"]{padding-top:9.2rem!important;}
-.st-key-tradex_hero{position:relative;overflow:hidden;border-radius:16px;
-  background:linear-gradient(135deg,#052422 0%,#0a3b3a 44%,#0e5150 100%)!important;
-  border:1px solid rgba(120,240,220,0.24)!important;
-  box-shadow:0 18px 44px -20px rgba(6,44,42,0.7),inset 0 1px 0 rgba(255,255,255,0.09)!important;
-  padding:0.72rem 1.5rem!important;margin:0 0 1rem!important;
-  transition:box-shadow 340ms cubic-bezier(0.23,1,0.32,1),border-color 340ms ease;}
-.st-key-tradex_hero::before{content:"";position:absolute;inset:-28%;pointer-events:none;z-index:0;
-  background:radial-gradient(38% 60% at 16% 26%,rgba(52,224,176,0.5),transparent 60%),radial-gradient(46% 58% at 84% 24%,rgba(72,216,255,0.5),transparent 62%),radial-gradient(55% 75% at 62% 108%,rgba(160,240,120,0.4),transparent 60%);
-  filter:blur(18px);animation:tx-mesh 15s ease-in-out infinite alternate;}
-.st-key-tradex_hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0.45;
-  background-image:linear-gradient(rgba(180,255,240,0.10) 1px,transparent 1px),linear-gradient(90deg,rgba(180,255,240,0.10) 1px,transparent 1px);background-size:36px 36px;
-  -webkit-mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);mask-image:radial-gradient(130% 105% at 50% -10%,#000 42%,transparent 100%);
-  animation:nx-grid 22s linear infinite;}
-@keyframes tx-mesh{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-5%,-4%) scale(1.1);}}
-@media(hover:hover){.st-key-tradex_hero:hover{border-color:rgba(140,245,225,0.55)!important;box-shadow:0 30px 74px -20px rgba(30,180,160,0.5),0 0 0 1px rgba(140,245,225,0.35),inset 0 1px 0 rgba(255,255,255,0.14)!important;}}
+.st-key-tradex_hero{position:relative;overflow:hidden;border-radius:18px;
+  background:linear-gradient(140deg,#05070f 0%,#090f28 46%,#0d1740 100%)!important;
+  border:1px solid rgba(96,140,235,0.20)!important;
+  box-shadow:0 20px 50px -24px rgba(4,10,34,0.82),inset 0 1px 0 rgba(150,185,255,0.10)!important;
+  padding:1.15rem 1.6rem!important;margin:0 0 1rem!important;min-height:98px;display:flex;align-items:center;
+  transition:box-shadow 360ms cubic-bezier(0.23,1,0.32,1),border-color 360ms ease;}
+/* atmospheric depth — soft blue light pools drifting slowly */
+.st-key-tradex_hero::before{content:"";position:absolute;inset:-30%;pointer-events:none;z-index:0;
+  background:radial-gradient(40% 62% at 14% 20%,rgba(70,120,255,0.30),transparent 62%),radial-gradient(48% 60% at 88% 30%,rgba(96,168,255,0.24),transparent 64%),radial-gradient(60% 80% at 66% 118%,rgba(60,96,220,0.22),transparent 62%);
+  filter:blur(26px);animation:tx-mesh 20s ease-in-out infinite alternate;}
+/* fine coordinate grid, masked to a vignette — very restrained */
+.st-key-tradex_hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0.35;
+  background-image:linear-gradient(rgba(150,185,255,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(150,185,255,0.07) 1px,transparent 1px);background-size:40px 40px;
+  -webkit-mask-image:radial-gradient(135% 110% at 50% -10%,#000 40%,transparent 100%);mask-image:radial-gradient(135% 110% at 50% -10%,#000 40%,transparent 100%);
+  animation:nx-grid 26s linear infinite;}
+@keyframes tx-mesh{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-4%,-3%) scale(1.08);}}
+@media(hover:hover){.st-key-tradex_hero:hover{border-color:rgba(120,165,255,0.42)!important;box-shadow:0 34px 80px -26px rgba(30,70,200,0.5),0 0 0 1px rgba(120,165,255,0.24),inset 0 1px 0 rgba(160,195,255,0.14)!important;}}
 .st-key-tradex_hero [data-testid="stVerticalBlock"]{position:relative;z-index:2;}
-/* slim strip: one horizontal row — identity on the left, chips on the right */
-.tradex-strip{display:flex;align-items:center;justify-content:space-between;gap:1.2rem 1.8rem;flex-wrap:wrap;position:relative;z-index:2;}
-.tradex-left{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;min-width:0;}
-.tradex-bars{position:absolute;right:20%;top:0;height:100%;width:20%;z-index:1;pointer-events:none;opacity:0.7;}
-.tradex-bars svg{width:100%;height:100%;}
-.tx-bar{transform-origin:center bottom;transform-box:fill-box;animation:tx-grow 2.6s ease-in-out infinite;}
-@keyframes tx-grow{0%,100%{transform:scaleY(0.4);opacity:0.55;}50%{transform:scaleY(1);opacity:1;}}
-.tradex-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:9px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:#8FF0D8;white-space:nowrap;}
-.tx-nd{width:6px;height:6px;border-radius:50%;background:#34E0B0;animation:tx-pulse 2s ease-in-out infinite;}
-@keyframes tx-pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,224,176,0.55);}55%{box-shadow:0 0 0 8px rgba(52,224,176,0);}}
-body:has(.octo-bg-trade) .tradex-title{font-family:Syne,'Space Grotesk',sans-serif!important;font-size:1.38rem!important;font-weight:800!important;letter-spacing:-0.02em!important;line-height:1!important;color:#fff!important;margin:0!important;text-shadow:0 6px 20px rgba(6,44,42,0.6)!important;-webkit-text-fill-color:#fff!important;white-space:nowrap;}
-body:has(.octo-bg-trade) .tradex-title b{font-weight:800!important;background:linear-gradient(100deg,#7DF0D0,#48D8FF 55%,#B7F5A8)!important;-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
+/* one horizontal row — identity on the left, chips on the right, generous negative space */
+.tradex-strip{display:flex;align-items:center;justify-content:space-between;gap:1.2rem 1.8rem;flex-wrap:wrap;position:relative;z-index:2;width:100%;}
+.tradex-left{display:flex;flex-direction:column;gap:9px;min-width:0;}
+/* abstract market visual: concentric orbit rings + a drifting node + fine data-flow — no candlesticks */
+.tradex-orbit{position:absolute;right:1.4rem;top:50%;transform:translateY(-50%);height:150%;aspect-ratio:1;z-index:1;pointer-events:none;opacity:0.9;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 42%);mask-image:linear-gradient(90deg,transparent,#000 42%);}
+.tradex-orbit svg{width:100%;height:100%;overflow:visible;}
+.tx-ring{transform-origin:center;transform-box:view-box;}
+.tx-ring.r1{animation:tx-spin 26s linear infinite;}
+.tx-ring.r2{animation:tx-spin 40s linear infinite reverse;}
+@keyframes tx-spin{to{transform:rotate(360deg);}}
+.tx-orb{animation:tx-orbit 14s linear infinite;transform-origin:100px 100px;transform-box:view-box;}
+@keyframes tx-orbit{to{transform:rotate(360deg);}}
+.tx-flow{stroke-dasharray:5 7;animation:tx-dash 3.2s linear infinite;}
+@keyframes tx-dash{to{stroke-dashoffset:-24;}}
+.tx-spark{animation:tx-tw 3s ease-in-out infinite;}
+@keyframes tx-tw{0%,100%{opacity:0.25;}50%{opacity:0.9;}}
+.tradex-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:9.5px;font-weight:800;letter-spacing:0.22em;text-transform:uppercase;color:#8FB4FF;white-space:nowrap;}
+.tx-nd{width:6px;height:6px;border-radius:50%;background:#5b9dff;animation:tx-pulse 2.2s ease-in-out infinite;}
+@keyframes tx-pulse{0%,100%{box-shadow:0 0 0 0 rgba(91,157,255,0.5);}55%{box-shadow:0 0 0 8px rgba(91,157,255,0);}}
+body:has(.octo-bg-trade) .tradex-title{font-family:Syne,'Space Grotesk',sans-serif!important;font-size:1.62rem!important;font-weight:800!important;letter-spacing:-0.025em!important;line-height:1!important;color:#fff!important;margin:0!important;text-shadow:0 6px 24px rgba(6,16,50,0.7)!important;-webkit-text-fill-color:#fff!important;white-space:nowrap;}
+body:has(.octo-bg-trade) .tradex-title b{font-weight:800!important;background:linear-gradient(100deg,#9EC2FF,#5b9dff 55%,#7DA8FF)!important;-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important;}
 .tradex-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-.tradex-chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:#E4F7F1;background:rgba(10,58,56,0.62);border:1px solid rgba(120,240,220,0.34);border-radius:999px;padding:5px 11px;}
-@media(prefers-reduced-motion:reduce){.st-key-tradex_hero::before,.st-key-tradex_hero::after,.tx-bar,.tx-nd{animation:none!important;}}
+.tradex-chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:0.03em;color:#DCE7FF;background:rgba(18,30,66,0.55);border:1px solid rgba(110,150,240,0.28);border-radius:999px;padding:5px 12px;
+  backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);}
+@media(max-width:640px){.tradex-orbit{opacity:0.4;height:120%;right:-2rem;}.tradex-chips{width:100%;}body:has(.octo-bg-trade) .tradex-title{font-size:1.42rem!important;white-space:normal;}}
+@media(prefers-reduced-motion:reduce){.st-key-tradex_hero::before,.st-key-tradex_hero::after,.tx-ring,.tx-orb,.tx-flow,.tx-spark,.tx-nd{animation:none!important;}}
 </style>
 """, unsafe_allow_html=True)
     with st.container(key="tradex_hero"):
         st.markdown(
-            '<div class="tradex-bars"><svg viewBox="0 0 300 150" fill="none" preserveAspectRatio="xMidYMid meet">'
-            '<g>'
-            '<rect class="tx-bar" x="30" y="40" width="18" height="90" rx="4" fill="#34E0B0"/>'
-            '<rect class="tx-bar" x="72" y="30" width="18" height="100" rx="4" fill="#48D8FF" style="animation-delay:-0.5s"/>'
-            '<rect class="tx-bar" x="114" y="55" width="18" height="75" rx="4" fill="#9FEB7C" style="animation-delay:-1s"/>'
-            '<rect class="tx-bar" x="156" y="22" width="18" height="108" rx="4" fill="#5FEAD0" style="animation-delay:-1.5s"/>'
-            '<rect class="tx-bar" x="198" y="46" width="18" height="84" rx="4" fill="#6CC8FF" style="animation-delay:-0.8s"/>'
-            '<rect class="tx-bar" x="240" y="34" width="18" height="96" rx="4" fill="#8AF0C4" style="animation-delay:-2s"/>'
-            '</g></svg></div>'
+            '<div class="tradex-orbit"><svg viewBox="0 0 200 200" fill="none" preserveAspectRatio="xMidYMid meet">'
+            '<defs><radialGradient id="txg" cx="50%" cy="50%" r="50%">'
+            '<stop offset="0" stop-color="#5b9dff" stop-opacity="0.22"/><stop offset="1" stop-color="#5b9dff" stop-opacity="0"/></radialGradient></defs>'
+            '<circle cx="100" cy="100" r="78" fill="url(#txg)"/>'
+            # concentric orbit rings (slow counter-rotation)
+            '<g class="tx-ring r1"><ellipse cx="100" cy="100" rx="74" ry="30" stroke="rgba(140,180,255,0.30)" stroke-width="1"/></g>'
+            '<g class="tx-ring r2"><ellipse cx="100" cy="100" rx="52" ry="52" stroke="rgba(120,160,245,0.22)" stroke-width="1"/></g>'
+            '<circle cx="100" cy="100" r="30" stroke="rgba(150,185,255,0.28)" stroke-width="1"/>'
+            # data-flow arc + drifting node
+            '<path class="tx-flow" d="M26 100a74 74 0 0 1 148 0" stroke="#7DB0FF" stroke-width="1.4" stroke-linecap="round"/>'
+            '<g class="tx-orb"><circle cx="174" cy="100" r="3.4" fill="#9EC2FF"/></g>'
+            # fine particles / data points
+            '<circle class="tx-spark" cx="150" cy="52" r="1.6" fill="#bcd4ff"/>'
+            '<circle class="tx-spark" cx="60" cy="60" r="1.4" fill="#9EC2FF" style="animation-delay:-1s"/>'
+            '<circle class="tx-spark" cx="132" cy="150" r="1.5" fill="#bcd4ff" style="animation-delay:-1.8s"/>'
+            '<circle class="tx-spark" cx="58" cy="140" r="1.3" fill="#8FB4FF" style="animation-delay:-0.6s"/>'
+            '<circle cx="100" cy="100" r="2.6" fill="#cfe0ff"/>'
+            '</svg></div>'
             '<div class="tradex-strip">'
             '<div class="tradex-left">'
             '<span class="tradex-eyebrow"><span class="tx-nd"></span>Pharos · CEX Trading</span>'
@@ -16138,6 +16750,1403 @@ body:has(.octo-bg-trade) .tradex-title b{font-weight:800!important;background:li
         unsafe_allow_html=True,
         
     )
+
+
+# ═════════════════════════════════════════════
+# PAGE: SAILOR OF THE WEEK — community nominee showcase
+# ═════════════════════════════════════════════
+elif st.session_state.page == "nominee":
+    _awards_bg = get_awards_bg_b64()
+    _week_bg = get_week_bg_b64()
+    _nm_logo = get_pharos_logo_b64()
+    # awards_bg shown as-is (like other pages), just a whisper of scrim for text contrast
+    _nm_page_bg = ("linear-gradient(180deg,rgba(7,11,20,0.14),rgba(6,9,16,0.30)),url('" + _awards_bg
+                   + "') center center / cover no-repeat fixed") if _awards_bg else \
+                  "radial-gradient(1200px 640px at 50% -12%,#12233d 0%,#0a1120 58%,#070b14 100%)"
+
+    st.markdown(
+        "<style>"
+        "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');"
+        "body:has(.nomi-top) [data-testid=\"stApp\"]{background:" + _nm_page_bg + "!important;}"
+        "body:has(.nomi-top) [data-testid=\"stAppViewContainer\"],body:has(.nomi-top) section[data-testid=\"stMain\"],body:has(.nomi-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;}"
+        "body:has(.nomi-top) #aura-3d-canvas,body:has(.nomi-top) .gs-env{display:none!important;}"
+        "body:has(.nomi-top) [data-testid=\"stMainBlockContainer\"]{padding-top:2.2rem!important;max-width:1120px!important;margin:0 auto!important;}"
+        # loader = full-viewport overlay so the entry form never leaks behind it
+        "body:has(.nm-load) [data-testid=\"stApp\"],body:has(.nm-load) [data-testid=\"stAppViewContainer\"],"
+        "body:has(.nm-load) section[data-testid=\"stMain\"],body:has(.nm-load) [data-testid=\"stMainBlockContainer\"],"
+        "body:has(.nm-load) [data-testid=\"stMainBlockContainer\"] [data-testid=\"stVerticalBlock\"],"
+        "body:has(.nm-load) [data-testid=\"stMainBlockContainer\"] [data-testid=\"stElementContainer\"]"
+        "{transform:none!important;perspective:none!important;filter:none!important;contain:none!important;will-change:auto!important;}"
+        ".nm-head{max-width:680px;margin:6px auto 26px;text-align:center;display:flex;flex-direction:column;align-items:center;animation:nm-enter 500ms cubic-bezier(0.23,1,0.32,1) both;}"
+        ".nm-logo{width:58px;height:58px;border-radius:16px;object-fit:contain;padding:10px;margin-bottom:16px;"
+        "background:rgba(91,157,255,0.1);border:1px solid rgba(122,150,208,0.24);box-shadow:0 12px 30px -14px rgba(47,120,215,0.6);"
+        "animation:nm-float 4s ease-in-out infinite;}"
+        "@keyframes nm-float{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}"
+        ".nm-eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#8fb6ee;}"
+        ".nm-eyebrow .dot{width:5px;height:5px;border-radius:50%;background:#5b9dff;box-shadow:0 0 0 3px rgba(91,157,255,0.18);}"
+        ".nm-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:2.5rem;letter-spacing:-0.025em;color:#f3f7ff;margin:14px 0 12px;line-height:1.02;}"
+        ".nm-title b{font-weight:600;background:linear-gradient(96deg,#8fd0ff,#a79bff 55%,#7fead0);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}"
+        ".nm-sub{font-family:'Inter',sans-serif;font-size:14px;line-height:1.65;color:#a6b6d4;margin:0 auto;max-width:50ch;}"
+        "@keyframes nm-enter{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}"
+        "@media(prefers-reduced-motion:reduce){.nm-logo{animation:none;}}"
+        # ── shimmer cycling-text loader (ref: kokonutui AI Text Loading, ported to CSS) ──
+        ".nm-load{position:fixed!important;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;"
+        "background:" + _nm_page_bg + ";animation:nm-fade 240ms ease both;}"
+        "@keyframes nm-fade{from{opacity:0;}to{opacity:1;}}"
+        ".nm-load-mark{width:66px;height:66px;border-radius:18px;object-fit:contain;padding:12px;"
+        "background:rgba(91,157,255,0.12);border:1px solid rgba(122,150,208,0.26);box-shadow:0 0 40px -6px rgba(60,150,255,0.6);"
+        "animation:nm-float 3s ease-in-out infinite;}"
+        ".nm-shim{position:relative;height:2.6rem;min-width:340px;}"
+        ".nm-shim span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;"
+        "font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.9rem;letter-spacing:-0.01em;opacity:0;"
+        "background:linear-gradient(90deg,#37507a 0%,#eaf1ff 50%,#37507a 100%);background-size:200% 100%;"
+        "-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;"
+        "animation:nm-shimmer 2.4s linear infinite,nm-cycle 5.4s ease-in-out infinite;}"
+        ".nm-shim span:nth-child(1){animation-delay:0s,0s;}"
+        ".nm-shim span:nth-child(2){animation-delay:0s,1.8s;}"
+        ".nm-shim span:nth-child(3){animation-delay:0s,3.6s;}"
+        "@keyframes nm-shimmer{0%{background-position:200% center;}100%{background-position:-200% center;}}"
+        "@keyframes nm-cycle{0%,33%,100%{opacity:0;}6%,27%{opacity:1;}}"
+        # ── Apple grouped-form: stacked whitish-teal liquid-glass cards ──
+        "body:has(.nomi-top) .st-key-nomi_ubox,body:has(.nomi-top) .st-key-nomi_lbox{max-width:540px;margin:0 auto 16px;display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden;"
+        "background:linear-gradient(180deg,rgba(120,170,255,0.20),rgba(48,90,205,0.06));border:1px solid rgba(150,195,255,0.28);"
+        "border-radius:22px;padding:20px;backdrop-filter:blur(46px) saturate(200%);-webkit-backdrop-filter:blur(46px) saturate(200%);"
+        "box-shadow:inset 0 1px 0 rgba(255,255,255,0.38),inset 0 -14px 26px -18px rgba(30,70,170,0.4),inset 0 0 0 1px rgba(150,190,255,0.05),0 28px 56px -32px rgba(6,14,44,0.85);"
+        "animation:nm-enter 620ms cubic-bezier(0.23,1,0.32,1) both;}"
+        # glossy top sheen — a bright highlight raking across the liquid glass
+        "body:has(.nomi-top) .st-key-nomi_ubox::before,body:has(.nomi-top) .st-key-nomi_lbox::before{content:'';position:absolute;inset:0 0 auto 0;height:52%;pointer-events:none;"
+        "background:linear-gradient(180deg,rgba(255,255,255,0.20),rgba(255,255,255,0.03) 60%,rgba(255,255,255,0));}"
+        "body:has(.nomi-top) .st-key-nomi_ubox{animation-delay:60ms;}"
+        "body:has(.nomi-top) .st-key-nomi_lbox{animation-delay:120ms;}"
+        "@media(prefers-reduced-transparency:reduce){body:has(.nomi-top) .st-key-nomi_ubox,body:has(.nomi-top) .st-key-nomi_lbox{background:#18223e;backdrop-filter:none;-webkit-backdrop-filter:none;}}"
+        # inputs — recessed translucent fields on the blue glass (never light-on-light), placeholder-only
+        "body:has(.nomi-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"input\"]{background:rgba(6,12,28,0.32)!important;border:1px solid rgba(150,195,255,0.16)!important;border-radius:13px!important;overflow:hidden!important;position:relative;z-index:1;transition:border-color 200ms ease,box-shadow 200ms ease,background 200ms ease!important;}"
+        "body:has(.nomi-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"base-input\"]{background:transparent!important;display:flex!important;align-items:center!important;}"
+        "body:has(.nomi-top) [data-testid=\"stTextInput\"] input{background:transparent!important;color:#EAF1FF!important;border:none!important;height:50px!important;line-height:50px!important;padding:0 15px!important;font-size:14px!important;font-family:'DM Mono',ui-monospace,monospace!important;}"
+        "body:has(.nomi-top) [data-testid=\"stTextInput\"] input::placeholder{color:#93a6c8!important;font-family:'Inter',sans-serif!important;}"
+        "body:has(.nomi-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"input\"]:focus-within{border-color:rgba(110,170,255,0.85)!important;background:rgba(6,12,28,0.42)!important;box-shadow:0 0 0 4px rgba(60,130,240,0.18)!important;}"
+        "body:has(.nomi-top) .st-key-nomi_go{max-width:540px;margin:8px auto 0;display:flex;flex-direction:column;align-items:center;animation:nm-enter 620ms cubic-bezier(0.23,1,0.32,1) 180ms both;}"
+        "body:has(.nomi-top) .st-key-nomi_go [data-testid=\"stElementContainer\"]{width:auto!important;}"
+        # primary — refined brand-accent (violet), Apple press physics
+        "body:has(.nomi-top) .st-key-nomi_go button{width:auto!important;padding:0 44px!important;background:linear-gradient(180deg,#3a8ae0,#2f6fd0)!important;color:#fff!important;border:1px solid rgba(150,195,250,0.6)!important;"
+        "border-radius:999px!important;font-family:'Space Grotesk',sans-serif!important;font-weight:600!important;font-size:14.5px!important;letter-spacing:0.01em!important;height:52px!important;min-height:52px!important;"
+        "box-shadow:inset 0 1px 0 rgba(255,255,255,0.32),0 16px 32px -12px rgba(47,120,215,0.8)!important;transition:transform 200ms cubic-bezier(0.23,1,0.32,1),filter 180ms ease,box-shadow 220ms ease!important;}"
+        "@media(hover:hover){body:has(.nomi-top) .st-key-nomi_go button:hover{filter:brightness(1.07);transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.34),0 20px 40px -12px rgba(47,120,215,0.9)!important;}}"
+        "body:has(.nomi-top) .st-key-nomi_go button:active{transform:scale(0.97)!important;transition:transform 100ms ease-out!important;}"
+        "@media(prefers-reduced-transparency:reduce){body:has(.nomi-top) .st-key-nomi_panel{background:#1a1c2b;backdrop-filter:none;-webkit-backdrop-filter:none;}}"
+        ".nm-hint{font-family:'Inter',sans-serif;font-size:11.5px;color:#7c88a5;max-width:520px;margin:14px auto 0;text-align:center;line-height:1.5;}"
+        "body:has(.nomi-top) .st-key-nomi_back{max-width:1040px;margin:0 auto 4px;}"
+        "body:has(.nomi-top) .st-key-nomi_back button{background:rgba(26,32,48,0.7)!important;color:#c6d2e8!important;border:1px solid rgba(122,150,208,0.28)!important;"
+        "border-radius:10px!important;font-weight:600!important;font-size:13px!important;padding:7px 15px!important;transition:transform 140ms ease,background 160ms ease!important;}"
+        "body:has(.nomi-top) .st-key-nomi_back button:hover{background:rgba(34,42,62,0.85)!important;}"
+        # readable posts list under the card
+        ".nm-posts{max-width:1040px;margin:22px auto 0;}"
+        ".nm-posts-h{font-family:'Inter',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8fb0e6;margin:0 0 12px;text-align:center;}"
+        ".nm-posts-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}"
+        ".nm-post{background:rgba(17,26,46,0.72);border:1px solid rgba(122,150,208,0.18);border-radius:12px;padding:14px 16px;"
+        "box-shadow:0 2px 4px rgba(3,8,20,0.3),0 16px 40px -30px rgba(3,10,26,0.85);animation:nm-enter 460ms cubic-bezier(0.23,1,0.32,1) both;}"
+        ".nm-post-t{font-family:'Inter',sans-serif;font-size:13px;line-height:1.55;color:#dbe6fb;margin:0 0 9px;}"
+        ".nm-post-m{display:flex;gap:16px;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#8b98b6;}"
+        ".nm-post-m span{display:inline-flex;align-items:center;gap:5px;}"
+        ".nm-empty{max-width:540px;margin:0 auto;text-align:center;font-family:'Inter',sans-serif;font-size:13px;color:#9db0cf;"
+        "background:rgba(17,26,46,0.72);border:1px solid rgba(122,150,208,0.18);border-radius:14px;padding:20px;}"
+        "@media(max-width:760px){.nm-posts-grid{grid-template-columns:1fr;}}"
+        "</style>"
+        "<div class=\"nomi-top\" style=\"display:none\"></div>",
+        unsafe_allow_html=True,
+    )
+
+    if "nomi_view" not in st.session_state:
+        st.session_state.nomi_view = "form"
+    if "nomi_handle" not in st.session_state:
+        st.session_state.nomi_handle = ""
+    st.session_state.setdefault("nomi_l1", "")
+    st.session_state.setdefault("nomi_l2", "")
+    _nv = st.session_state.nomi_view
+
+    # ── FORM (entry) ──
+    if _nv == "form":
+        _logo_tag = ('<img class="nm-logo" src="' + _nm_logo + '" alt="Pharos">') if _nm_logo else ''
+        st.markdown(
+            '<div class="nm-head">' + _logo_tag +
+            '<div class="nm-eyebrow"><span class="dot"></span>Pharos · Community</div>'
+            '<div class="nm-title">Sailor of the <b>Week</b></div>'
+            '<p class="nm-sub">Crown a community member. Drop their X handle and OctoBot frames '
+            'their best posts into a shareable card.</p></div>',
+            unsafe_allow_html=True)
+        with st.container(key="nomi_ubox"):
+            _inh = st.text_input("handle", value=st.session_state.nomi_handle,
+                                 placeholder="@username", key="nomi_h_in",
+                                 label_visibility="collapsed")
+        with st.container(key="nomi_lbox"):
+            _inl1 = st.text_input("link1", value=st.session_state.nomi_l1,
+                                  placeholder="Paste a post link (x.com/…/status/…)", key="nomi_l1_in",
+                                  label_visibility="collapsed")
+            _inl2 = st.text_input("link2", value=st.session_state.nomi_l2,
+                                  placeholder="Paste a second post link (optional)", key="nomi_l2_in",
+                                  label_visibility="collapsed")
+        with st.container(key="nomi_go"):
+            _go = st.button("Reveal the Sailor  →", use_container_width=False)
+        st.markdown('<div class="nm-hint">Leave the links empty and OctoBot auto-detects their top '
+                    '<b>Pharos</b> posts. Paste 1–2 links to feature exactly those.</div>',
+                    unsafe_allow_html=True)
+        if _go:
+            _hh = re.sub(r"[^A-Za-z0-9_]", "", (_inh or "").lstrip("@")[:15])
+            if not _hh:
+                st.warning("Enter an X username to feature.")
+            else:
+                st.session_state.nomi_handle = _hh
+                st.session_state.nomi_l1 = (_inl1 or "").strip()
+                st.session_state.nomi_l2 = (_inl2 or "").strip()
+                st.session_state.nomi_view = "loading"
+                st.rerun()
+
+    # ── LOADING (app's default loader) ──
+    elif _nv == "loading":
+        import time as _time
+        _load_mark = ('<img class="nm-load-mark" src="' + _nm_logo + '" alt="">') if _nm_logo else ''
+        st.markdown(
+            '<div class="nm-load">' + _load_mark +
+            '<div class="nm-shim">'
+            '<span>Charting the course…</span>'
+            '<span>Reading their voyage…</span>'
+            '<span>Framing the sailor…</span>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+        _t0 = _time.time()
+        try:
+            fetch_x_showcase(st.session_state.nomi_handle)
+            get_x_avatar_datauri(st.session_state.nomi_handle)
+        except Exception:
+            pass
+        _el = _time.time() - _t0
+        if _el < 2.2:
+            _time.sleep(2.2 - _el)
+        st.session_state.nomi_view = "result"
+        st.rerun()
+
+    # ── RESULT (the nomi_bg card + posts) ──
+    else:
+        with st.container(key="nomi_back"):
+            if st.button("←  Pick another sailor"):
+                st.session_state.nomi_view = "form"
+                st.rerun()
+
+        _h = st.session_state.nomi_handle
+        _l1 = st.session_state.get("nomi_l1", "")
+        _l2 = st.session_state.get("nomi_l2", "")
+        _links = [x for x in (_l1, _l2) if x]
+
+        _prof = fetch_x_profile(_h) or {}
+        _name = _prof.get("name") if _prof.get("ok") else ""
+        _av = get_x_avatar_datauri(_h)
+        _foll = _prof.get("followers") if _prof.get("ok") else None
+
+        _posts = []
+        if _links:
+            # curator picked exact posts — feature only those (image + summary)
+            for _lk in _links:
+                _tw = fetch_tweet_by_id(_tweet_id_from_url(_lk))
+                if _tw.get("ok"):
+                    _tw["imgdata"] = img_to_datauri(_tw.get("img"), 900) if _tw.get("img") else ""
+                    _posts.append(_tw)
+                    if not _name and _tw.get("name"):
+                        _name = _tw["name"]
+                    if not _av and _tw.get("avatar"):
+                        _av = img_to_datauri(_tw["avatar"], 400)
+        else:
+            # auto-detect: ONLY Pharos-related posts
+            _sc = fetch_x_showcase(_h) or {}
+            if _sc.get("ok"):
+                if not _name:
+                    _name = _sc.get("name") or ""
+                if _foll is None:
+                    _foll = _sc.get("followers")
+                _KW = ("pharos", "$pros", "pharos_network", "prosper")
+                _posts = [p for p in _sc.get("posts", [])
+                          if any(k in (p.get("text") or "").lower() for k in _KW)][:4]
+
+        _name = _name or _h
+        _posts = _posts[:4]
+        _n = len(_posts)
+
+        # portrait — data-URI (taint-safe for capture) or silhouette
+        if _av:
+            _face = '<img class="sc-face" src="' + _av + '" alt="">'
+        else:
+            _face = ('<div class="sc-face sc-face-ph"><svg viewBox="0 0 100 120" fill="none" '
+                     'xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="42" r="20" fill="#9a93d8"/>'
+                     '<path d="M18 108c0-19 14-30 32-30s32 11 32 30z" fill="#9a93d8"/></svg></div>')
+        _brand = ('<img class="sc-brand" src="' + _nm_logo + '" alt="Pharos">') if _nm_logo else ''
+        _foll_html = ('<div class="sc-foll">' + f'{int(_foll):,}' + ' followers</div>') \
+            if isinstance(_foll, (int, float)) and _foll else ''
+
+        _posts_html = ""
+        for _p in _posts:
+            _u = esc_url(_p.get("url") or ("https://x.com/" + _h))
+            _t = esc((_p.get("text") or "")[:240])
+            _imgd = _p.get("imgdata") or ""
+            _imgh = ('<img class="sc-post-img" src="' + _imgd + '" alt="">') if _imgd else ''
+            _m = ("♥ " + f'{int(_p.get("likes") or 0):,}'
+                  + " ↺ " + f'{int(_p.get("rts") or 0):,}')
+            _posts_html += ('<a class="sc-post" href="' + _u + '" target="_blank" rel="noopener">'
+                            + _imgh
+                            + '<div class="sc-post-t">' + _t + '</div>'
+                            '<div class="sc-post-m"><span>' + _m + '</span>'
+                            '<span class="sc-open">Open ↗</span></div></a>')
+        if not _posts_html:
+            _posts_html = ('<div class="sc-noposts">No Pharos posts found for @' + esc(_h)
+                           + ' yet — paste a post link above to feature one.</div>')
+
+        _TROPHY = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+                   'stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/>'
+                   '<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 5H4v1.5a3 3 0 0 0 3 3"/>'
+                   '<path d="M17 5h3v1.5a3 3 0 0 1-3 3"/></svg>')
+
+        _card_html = (
+            '<div class="sc-card" id="nomicard">'
+            '<div class="sc-top"><div class="sc-ribbon">' + _TROPHY + 'Sailor of the Week</div>' + _brand + '</div>'
+            '<div class="sc-body">'
+            '<div class="sc-profile"><div class="sc-face-wrap">' + _face + '</div>'
+            '<div class="sc-name">' + esc(_name) + '</div>'
+            '<a class="sc-handle" href="https://x.com/' + esc(_h) + '" target="_blank" rel="noopener">@' + esc(_h) + '</a>'
+            + _foll_html
+            + '<div class="sc-chip">⚓ Pharos Community</div></div>'
+            '<div class="sc-right"><div class="sc-posts-h">Posts of the Week</div>'
+            '<div class="sc-posts" data-n="' + str(_n) + '">' + _posts_html + '</div></div>'
+            '</div>'
+            '<div class="sc-foot">Pharos · Community · Sailor of the Week</div>'
+            '</div>')
+
+        _share_txt = ("\U0001F3C5 " + _name + " is the Pharos Sailor of the Week! "
+                      "Charting the course with @pharos_network \U0001F30A⚓")
+        _dl_name = "pharos-sailor-" + re.sub(r"[^A-Za-z0-9]", "", _h) + ".jpg"
+
+        components.html(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<script src='https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.js'></script>"
+            "<script src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'></script>"
+            "<style>"
+            "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');"
+            "*{box-sizing:border-box;}html,body{margin:0;background:transparent;}"
+            ".nomi-stage{max-width:1060px;margin:0 auto;}"
+            ".sc-card{position:relative;container-type:inline-size;width:100%;border-radius:2.4cqw;overflow:hidden;padding:3.4cqw 3.6cqw 3cqw;color:#EDEFF7;"
+            "background:radial-gradient(ellipse 92% 60% at 50% -8%,rgba(140,124,255,0.34),transparent 62%),"
+            "linear-gradient(165deg,rgba(20,17,48,0.86),rgba(10,9,28,0.92)),"
+            "url('" + (_week_bg or "") + "') center center / cover no-repeat,#0c0a22;"
+            "border:1px solid rgba(130,150,255,0.18);box-shadow:0 40px 90px -40px rgba(0,0,0,0.85),inset 0 1px 0 rgba(160,170,255,0.08);"
+            "animation:sc-enter 720ms cubic-bezier(0.23,1,0.32,1) both;}"
+            "@keyframes sc-enter{0%{opacity:0;transform:translateY(16px) scale(0.97);}60%{opacity:1;}100%{opacity:1;transform:none;}}"
+            ".sc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:3cqw;}"
+            ".sc-ribbon{display:inline-flex;align-items:center;gap:1cqw;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.55cqw;letter-spacing:0.26em;text-transform:uppercase;color:#c9c2ff;background:rgba(120,110,255,0.15);border:1px solid rgba(140,130,255,0.34);padding:0.9cqw 1.7cqw;border-radius:999px;}"
+            ".sc-ribbon svg{width:2cqw;height:2cqw;color:#a79bff;}"
+            ".sc-brand{height:5.6cqw;width:5.6cqw;object-fit:contain;border-radius:1.5cqw;background:none;border:none;padding:0;filter:drop-shadow(0 0.4cqw 1cqw rgba(0,0,0,0.5));}"
+            ".sc-body{display:grid;grid-template-columns:31% 1fr;gap:3.4cqw;align-items:stretch;}"
+            ".sc-profile{display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;}"
+            ".sc-face-wrap{width:20cqw;height:20cqw;border-radius:50%;padding:0.55cqw;background:conic-gradient(from 210deg,#8b7bff,#5b9dff,#7fead0,#8b7bff);box-shadow:0 0 9cqw -2cqw rgba(120,110,255,0.9);}"
+            ".sc-face{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#12173a;}"
+            ".sc-face-ph{display:grid;place-items:center;background:radial-gradient(circle at 50% 36%,#2a2f66,#141a3e);}"
+            ".sc-face-ph svg{width:60%;height:60%;}"
+            ".sc-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:2.9cqw;line-height:1.08;color:#fff;margin-top:1.8cqw;letter-spacing:-0.01em;}"
+            ".sc-handle{font-size:1.65cqw;color:#c3bcff;font-weight:600;text-decoration:none;margin-top:0.5cqw;}"
+            ".sc-handle:hover{text-decoration:underline;}"
+            ".sc-foll{font-size:1.35cqw;color:#8f97c4;margin-top:0.5cqw;}"
+            ".sc-chip{margin-top:1.5cqw;display:inline-flex;align-items:center;gap:0.6cqw;font-size:1.3cqw;font-weight:600;color:#c3bcff;background:rgba(120,110,255,0.14);border:1px solid rgba(140,130,255,0.3);padding:0.7cqw 1.4cqw;border-radius:999px;}"
+            ".sc-right{display:flex;flex-direction:column;justify-content:center;}"
+            ".sc-posts-h{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.4cqw;letter-spacing:0.2em;text-transform:uppercase;color:#c9c2ff;margin-bottom:1.6cqw;display:flex;align-items:center;gap:0.8cqw;}"
+            ".sc-posts-h::before{content:'';width:1cqw;height:1cqw;border-radius:50%;background:#8b7bff;box-shadow:0 0 0 0.3cqw rgba(139,123,255,0.3);}"
+            ".sc-posts{display:grid;grid-template-columns:1fr 1fr;gap:2cqw;}"
+            ".sc-posts[data-n=\"1\"]{grid-template-columns:1fr;max-width:62%;}"
+            ".sc-posts[data-n=\"2\"]{grid-template-columns:1fr 1fr;}"
+            ".sc-post-img{width:100%;height:11cqw;object-fit:cover;border-radius:1.1cqw;margin-bottom:1.1cqw;display:block;}"
+            ".sc-posts[data-n=\"1\"] .sc-post-img{height:15cqw;}"
+            ".sc-posts[data-n=\"1\"] .sc-post-t{-webkit-line-clamp:4;font-size:1.7cqw;}"
+            ".sc-post{display:flex;flex-direction:column;text-decoration:none;color:inherit;background:rgba(255,255,255,0.05);border:1px solid rgba(140,130,255,0.22);border-radius:1.7cqw;padding:1.7cqw 1.8cqw;min-height:11cqw;overflow:hidden;transition:transform 180ms cubic-bezier(0.23,1,0.32,1),border-color 180ms ease,background 180ms ease;}"
+            "@media(hover:hover){.sc-post:hover{transform:translateY(-0.5cqw);border-color:rgba(165,155,255,0.6);background:rgba(255,255,255,0.09);}}"
+            ".sc-post-t{font-size:1.46cqw;line-height:1.44;color:#e9ebf7;flex:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}"
+            ".sc-post-m{display:flex;align-items:center;justify-content:space-between;margin-top:1.3cqw;font-size:1.24cqw;font-weight:600;color:#AEB6D8;}"
+            ".sc-open{color:#c3bcff;}"
+            ".sc-noposts{grid-column:1/-1;display:grid;place-items:center;min-height:20cqw;border:1px dashed rgba(140,130,255,0.32);border-radius:1.7cqw;color:#8f97c4;font-size:1.5cqw;}"
+            ".sc-foot{margin-top:2.8cqw;text-align:center;font-size:1.12cqw;letter-spacing:0.26em;text-transform:uppercase;color:#7C86AE;font-weight:600;}"
+            "@media(max-width:640px){.sc-body{grid-template-columns:1fr;}.sc-posts{grid-template-columns:1fr;}}"
+            "@media(prefers-reduced-motion:reduce){.sc-card{animation:sc-fade 320ms ease both;}}@keyframes sc-fade{from{opacity:0;}to{opacity:1;}}"
+            ".nomi-tools{max-width:1040px;margin:16px auto 0;display:flex;justify-content:center;gap:12px;font-family:Inter,system-ui,sans-serif;}"
+            ".nomi-btn{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-weight:700;font-size:13.5px;border-radius:12px;padding:11px 20px;"
+            "transition:transform 150ms cubic-bezier(0.23,1,0.32,1),filter 160ms ease,background 160ms ease;border:1px solid transparent;}"
+            ".nomi-btn:active{transform:scale(0.97);}"
+            ".nomi-btn.dl{background:linear-gradient(135deg,#2f6fd0,#3a8ae0);color:#fff;box-shadow:0 12px 26px -12px rgba(47,120,215,0.8);}"
+            ".nomi-btn.dl:hover{filter:brightness(1.07);transform:translateY(-1px);}"
+            ".nomi-btn.sx{background:rgba(18,24,38,0.9);color:#eaf0fb;border-color:rgba(120,150,210,0.4);}"
+            ".nomi-btn.sx:hover{background:rgba(30,38,58,0.95);transform:translateY(-1px);}"
+            ".nomi-btn svg{width:16px;height:16px;}.nomi-btn[disabled]{opacity:0.6;cursor:progress;}"
+            "@media(prefers-reduced-motion:reduce){.nomi-card{animation:nmc-fade 320ms ease both;}}@keyframes nmc-fade{from{opacity:0;}to{opacity:1;}}"
+            "</style></head><body>"
+            "<div class='nomi-stage'>" + _card_html + "</div>"
+            "<div class='nomi-tools'>"
+            "<button class='nomi-btn dl' id='nomidl'>"
+            "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3v12m0 0l-4-4m4 4l4-4M5 21h14'/></svg>"
+            "Download Card</button>"
+            "<button class='nomi-btn sx' id='nomisx'>"
+            "<svg viewBox='0 0 24 24' fill='currentColor'><path d='M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.22-6.82-5.97 6.82H1.66l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.84L7.01 4.13H5.03l12.05 15.64z'/></svg>"
+            "Share on X</button>"
+            "</div>"
+            "<script>(function(){"
+            "var TXT=" + json.dumps(_share_txt) + ",FN=" + json.dumps(_dl_name) + ";"
+            "function shareURL(){try{var L=window.parent.location;return L.origin+L.pathname;}catch(e){return 'https://pharosnetwork.xyz';}}"
+            "var dl=document.getElementById('nomidl'),sx=document.getElementById('nomisx'),card;"
+            "sx.addEventListener('click',function(){var u='https://twitter.com/intent/tweet?text='+encodeURIComponent(TXT)+'&url='+encodeURIComponent(shareURL());window.open(u,'_blank','noopener');});"
+            "function _capHTI(){return window.htmlToImage.toBlob(card,{type:'image/jpeg',quality:0.95,pixelRatio:2.4,cacheBust:true,skipAutoScale:true,"
+            "backgroundColor:'#0c0a22',style:{transform:'none',animation:'none',borderRadius:'0'}});}"
+            "function _capH2C(){return html2canvas(card,{backgroundColor:'#0c0a22',scale:2.4,useCORS:true,allowTaint:false,imageTimeout:0,logging:false})"
+            ".then(function(c){return new Promise(function(res){c.toBlob(res,'image/jpeg',0.92);});});}"
+            "function _cap(t){var p=window.htmlToImage?_capHTI():_capH2C();"
+            "return p.then(function(b){if(!b)throw new Error('empty');return b;})"
+            ".catch(function(e){if(t>0){return new Promise(function(r){setTimeout(r,180);}).then(function(){return _cap(t-1);});}"
+            "if(window.html2canvas){return _capH2C();}throw e;});}"
+            "dl.addEventListener('click',function(){card=document.getElementById('nomicard');var lbl=dl.getAttribute('data-lbl')||dl.innerHTML;dl.setAttribute('data-lbl',lbl);if(!card)return;"
+            "if(!window.htmlToImage&&!window.html2canvas){dl.textContent='Renderer offline';setTimeout(function(){dl.innerHTML=lbl;},1800);return;}"
+            "dl.setAttribute('disabled','');dl.textContent='Rendering\\u2026';"
+            "(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){return _cap(4);}).then(function(blob){"
+            "if(!blob){dl.removeAttribute('disabled');dl.textContent='Try again';setTimeout(function(){dl.innerHTML=lbl;},1600);return;}"
+            "var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=FN;a.rel='noopener';a.style.display='none';"
+            "document.body.appendChild(a);a.click();"
+            "setTimeout(function(){try{a.remove();}catch(e){}try{URL.revokeObjectURL(url);}catch(e){}},4000);"
+            "dl.removeAttribute('disabled');dl.textContent='Saved \\u2713';setTimeout(function(){dl.innerHTML=lbl;},1800);"
+            "}).catch(function(){dl.removeAttribute('disabled');dl.textContent='Try again';setTimeout(function(){dl.innerHTML=lbl;},1600);});});"
+            "})();</script></body></html>",
+            height=680,
+        )
+
+        # readable list of the featured posts under the card
+        if _posts:
+            _pl = '<div class="nm-posts"><div class="nm-posts-h">Featured posts</div><div class="nm-posts-grid">'
+            for _p in _posts:
+                _pl += ('<div class="nm-post"><p class="nm-post-t">' + esc((_p.get("text") or "")[:280])
+                        + '</p><div class="nm-post-m">'
+                        + '<span>♥ ' + f'{int(_p.get("likes") or 0):,}' + '</span>'
+                        + '<span>↺ ' + f'{int(_p.get("rts") or 0):,}' + '</span></div></div>')
+            _pl += '</div></div>'
+            st.markdown(_pl, unsafe_allow_html=True)
+        elif not _show.get("ok"):
+            st.markdown('<div class="nm-posts"><div class="nm-empty">Couldn’t reach X for '
+                        '<b>@' + esc(_h) + '</b> right now — the card still shows their name & handle. '
+                        'Try again in a moment.</div></div>', unsafe_allow_html=True)
+
+
+# ═════════════════════════════════════════════
+# PAGE: REPUTATION PASSPORT — on-chain identity
+# ═════════════════════════════════════════════
+elif st.session_state.page == "passport":
+
+    _TRIDENT = ('<svg class="rp-tri" viewBox="0 0 32 32" fill="none" stroke="currentColor" '
+                'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+                '<path d="M16 4v24"/><path d="M9.5 28h13"/>'
+                '<path d="M8 8.5v3.5a8 8 0 0 0 16 0V8.5"/>'
+                '<path d="M8 8.5 6 12M24 8.5 26 12M16 3.2l-2.2 3.3h4.4z"/></svg>')
+    _SILHOUETTE = ('<svg viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                   '<path d="M50 20c-14 0-22 10-22 26 0 10 5 16 5 20-8 3-21 9-25 20-2 6-3 14-3 14h90s-1-8-3-14'
+                   'c-4-11-17-17-25-20 0-4 5-10 5-20 0-16-8-26-22-26z" fill="#3a4358" opacity="0.55"/>'
+                   '<circle cx="50" cy="40" r="15" fill="#2b3348" opacity="0.5"/></svg>')
+
+    _logo_uri = get_pharos_logo_b64()
+    _pass_bg = get_passport_bg_b64()
+    _gen_bg = get_gen_bg_b64()
+    # realistic lighthouse + Atlantic-waves photo behind the banner title card
+    _hero_bg = ""
+    try:
+        with open("pass_hero.jpg", "rb") as _hf:
+            _hero_bg = "data:image/jpeg;base64," + base64.b64encode(_hf.read()).decode()
+    except Exception:
+        _hero_bg = ""
+    _hero_layer = (
+        "linear-gradient(90deg,rgba(10,16,32,0.88) 0%,rgba(11,18,36,0.66) 32%,"
+        "rgba(11,18,36,0.34) 62%,rgba(11,18,36,0.2) 100%),"
+        "url('" + _hero_bg + "') center 40% / 100% auto no-repeat,rgba(17,26,46,0.72)"
+    ) if _hero_bg else "rgba(17,26,46,0.72)"
+    # procedural aged-paper grain (SVG fractal noise → no external asset)
+    _grain_svg = ("<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>"
+                  "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/>"
+                  "<feColorMatrix type='saturate' values='0'/></filter>"
+                  "<rect width='160' height='160' filter='url(#n)'/></svg>")
+    _grain = "data:image/svg+xml;base64," + base64.b64encode(_grain_svg.encode()).decode()
+    # faint tall-ship engraving for the right page
+    _SHIP = ("<svg class='rp-ship' viewBox='0 0 120 120' fill='none' stroke='#33405c' stroke-width='1' "
+             "stroke-linecap='round' stroke-linejoin='round'>"
+             "<path d='M18 96h84l-11 11H29z'/><path d='M60 10v82'/>"
+             "<path d='M38 40h44M34 60h52M30 80h60'/>"
+             "<path d='M60 14c15 4 23 13 25 26-11-5-19-5-25-3z'/>"
+             "<path d='M60 14c-15 4-23 13-25 26 11-5 19-5 25-3z'/>"
+             "<path d='M60 44c11 3 17 10 19 19-9-4-15-4-19-2z'/>"
+             "<path d='M60 44c-11 3-17 10-19 19 9-4 15-4 19-2z'/>"
+             "<path d='M60 10l7 4-7 4z'/><path d='M6 100c30 6 78 6 108 0'/></svg>")
+    _logo_wm = ('<img class="rp-wm" src="' + _logo_uri + '" alt="">') if _logo_uri else ''
+
+    # ── surface + passport styling, scoped to .pass-top ──
+    st.markdown(
+        "<style>"
+        "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600;700&family=Special+Elite&display=swap');"
+        # full-bleed passport-surface wallpaper (the leather + nautical stamps art),
+        # same technique as the other pages — the passport rests on top of it
+        "body:has(.pass-top) [data-testid=\"stApp\"]{--ocbg:url('" + (_pass_bg or "") + "');"
+        "background:var(--ocbg) center center / cover no-repeat fixed!important;}"
+        "body:has(.pass-top) [data-testid=\"stAppViewContainer\"],body:has(.pass-top) section[data-testid=\"stMain\"],"
+        "body:has(.pass-top) [data-testid=\"stMainBlockContainer\"]{background:transparent!important;}"
+        "body:has(.pass-top) #aura-3d-canvas,body:has(.pass-top) .gs-env{display:none!important;}"
+        "body:has(.pass-top) [data-testid=\"stMainBlockContainer\"]{padding-top:1.2rem!important;max-width:1440px!important;margin:0 auto!important;}"
+        # input bar
+        ".rp-lead{color:#C9D2E6;font-family:Syne,sans-serif;font-weight:800;font-size:1.15rem;letter-spacing:-0.01em;margin:0 0 2px;}"
+        ".rp-sub{color:#7E869C;font-size:0.82rem;margin:0 0 0.5rem;}"
+        # the visible box lives on the baseweb wrapper (complete on all sides, radius clips the input); the raw input is transparent & vertically centered
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"input\"]{background:rgba(12,19,36,0.98)!important;border:1px solid rgba(150,180,232,0.55)!important;border-radius:10px!important;box-shadow:inset 0 1px 2px rgba(0,0,0,0.35)!important;overflow:hidden!important;transition:border-color 150ms ease,box-shadow 150ms ease!important;}"
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"base-input\"]{background:transparent!important;border:none!important;display:flex!important;align-items:center!important;}"
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] input{background:transparent!important;color:#F2F6FF!important;border:none!important;height:50px!important;line-height:50px!important;padding:0 16px!important;font-size:14px!important;font-family:'DM Mono',ui-monospace,monospace!important;box-shadow:none!important;}"
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] input::placeholder{color:#7683a0!important;font-family:'Inter',sans-serif!important;line-height:normal!important;}"
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] div[data-baseweb=\"input\"]:focus-within{border-color:rgba(90,150,235,0.9)!important;box-shadow:inset 0 1px 2px rgba(0,0,0,0.3),0 0 0 3px rgba(60,120,215,0.22)!important;}"
+        "body:has(.pass-top) .st-key-pp_panel [data-testid=\"stTextInput\"]{margin-bottom:2px!important;}"
+        "body:has(.pass-top) [data-testid=\"stTextInput\"] label p{color:#93a2be!important;font-size:10.5px!important;font-weight:700!important;letter-spacing:0.12em!important;text-transform:uppercase!important;margin-bottom:6px!important;}"
+        "body:has(.pass-top) .st-key-pp_go button{background:linear-gradient(135deg,#2f6fd0,#3a8ae0)!important;color:#fff!important;border:1px solid rgba(150,190,240,0.45)!important;border-radius:10px!important;font-family:'Space Grotesk',sans-serif!important;font-weight:600!important;letter-spacing:0.01em!important;height:52px!important;min-height:52px!important;box-shadow:0 10px 24px -14px rgba(47,120,215,0.9)!important;transition:transform 150ms cubic-bezier(0.23,1,0.32,1),filter 160ms ease!important;}"
+        "body:has(.pass-top) .st-key-pp_go button:hover{filter:brightness(1.08);transform:translateY(-1px);}"
+        "body:has(.pass-top) .st-key-pp_go button:active{transform:scale(0.97);}"
+        # back button (result view)
+        "body:has(.pass-top) .st-key-pp_back{max-width:1104px;margin:0 auto;}"
+        "body:has(.pass-top) .st-key-pp_back button{background:rgba(26,32,48,0.7)!important;color:#c6d2e8!important;border:1px solid rgba(120,150,210,0.28)!important;border-radius:10px!important;font-weight:700!important;font-size:13px!important;padding:7px 15px!important;transition:transform 140ms ease,background 160ms ease!important;}"
+        "body:has(.pass-top) .st-key-pp_back button:hover{background:rgba(38,46,68,0.85)!important;transform:translateX(-2px);}"
+        "body:has(.pass-top) .st-key-pp_back button:active{transform:scale(0.97);}"
+        # ── outer leather cover the passport rests in (compact, Web3-glow) ──
+        ".rp-frame{position:relative;max-width:1080px;margin:0.2rem auto 0;padding:28px 30px;zoom:0.8;background:transparent;}"
+        ".rp-frame::before,.rp-frame::after,.rp-cover-t{display:none;}"
+        # ── the passport book (landscape spread) ──
+        ".rp-book{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;"
+        "border-radius:6px;overflow:hidden;box-shadow:0 50px 120px -36px rgba(0,0,0,0.92),0 30px 90px -40px rgba(28,110,190,0.4),0 0 0 1px rgba(20,15,10,0.6),0 0 0 7px rgba(10,12,20,0.5);}"
+        ".rp-page{position:relative;padding:22px 28px 44px;min-height:418px;color:#26324a;overflow:hidden;"
+        "background:radial-gradient(60% 45% at 22% 28%,rgba(120,95,55,0.10),transparent 60%),"
+        "radial-gradient(52% 42% at 84% 80%,rgba(110,88,50,0.13),transparent 55%),"
+        "radial-gradient(130% 120% at 50% -8%,rgba(255,252,244,0.24),transparent 46%),"
+        "linear-gradient(158deg,#dcd7c7 0%,#cdc7b6 46%,#bcb4a0 100%);}"
+        # procedural paper grain
+        ".rp-page::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0.11;mix-blend-mode:multiply;"
+        "background-image:url(" + _grain + ");background-size:160px 160px;}"
+        # edge vignette + side creases
+        ".rp-page::after{content:'';position:absolute;inset:0;pointer-events:none;"
+        "background:linear-gradient(90deg,rgba(40,30,18,0.16),transparent 11%,transparent 89%,rgba(40,30,18,0.16));"
+        "box-shadow:inset 0 0 130px rgba(60,48,30,0.42),inset 0 0 28px rgba(40,32,18,0.32);}"
+        # faint embossed logo watermark + ship engraving
+        ".rp-wm{position:absolute;top:50%;left:50%;width:300px;height:300px;transform:translate(-50%,-50%) rotate(-6deg);"
+        "object-fit:contain;opacity:0.05;filter:grayscale(1) contrast(0.6);pointer-events:none;z-index:1;}"
+        ".rp-ship{position:absolute;right:26px;top:116px;width:152px;height:152px;pointer-events:none;z-index:1;}"
+        ".rp-left{border-right:1px solid rgba(70,60,45,0.3);}"
+        # center spine
+        ".rp-book::after{content:'';position:absolute;top:0;bottom:0;left:50%;width:38px;transform:translateX(-50%);pointer-events:none;z-index:6;"
+        "background:linear-gradient(90deg,transparent,rgba(40,30,20,0.3) 40%,rgba(15,11,7,0.5) 50%,rgba(40,30,20,0.3) 60%,transparent);}"
+        ".rp-page>*{position:relative;z-index:2;}"
+        # typography — engraved serif masthead (Cinzel), Garamond body, typewriter micro
+        ".rp-mast-k{font-family:Cinzel,serif;font-size:10px;letter-spacing:0.5em;color:#4a5570;text-align:center;text-transform:uppercase;}"
+        ".rp-mast{font-family:Cinzel,serif;font-size:1.5rem;font-weight:600;letter-spacing:0.05em;color:#1c2b47;text-align:center;line-height:1.02;margin:2px 0 5px;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,0.3);}"
+        ".rp-mast-sub{font-family:'Special Elite',monospace;font-size:8px;letter-spacing:0.24em;color:#5b6478;text-align:center;text-transform:uppercase;border-top:1px solid rgba(70,60,45,0.32);border-bottom:1px solid rgba(70,60,45,0.32);padding:4px 0;margin:0 0 13px;}"
+        ".rp-idrow{display:grid;grid-template-columns:116px 1fr;gap:14px;align-items:start;}"
+        ".rp-face-wrap{position:relative;width:116px;height:144px;padding:4px;background:linear-gradient(160deg,#c8c1af,#b3ab97);box-shadow:0 6px 16px rgba(30,24,14,0.42);}"
+        ".rp-face{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.08) brightness(0.94);"
+        "border:1px solid rgba(60,50,35,0.55);box-shadow:inset 0 0 34px rgba(35,28,16,0.5);background:#b0a894;display:block;}"
+        ".rp-face-ph{display:flex;align-items:flex-end;justify-content:center;}"
+        ".rp-face-ph svg{width:122px;height:auto;}"
+        ".rp-face-wrap::after{content:'';position:absolute;inset:5px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12);}"
+        ".rp-ghost{position:absolute;right:-98px;top:8px;width:150px;height:182px;object-fit:cover;filter:grayscale(1);opacity:0.05;transform:scale(1.7);pointer-events:none;}"
+        ".rp-fields{display:flex;flex-direction:column;gap:6px;}"
+        ".rp-f-k{font-family:'Special Elite',monospace;font-size:8px;letter-spacing:0.22em;color:#6a7288;text-transform:uppercase;}"
+        ".rp-f-v{font-family:'EB Garamond',Georgia,serif;font-size:1.02rem;font-weight:600;color:#1c2b47;letter-spacing:0.01em;line-height:1.14;}"
+        ".rp-f-v.mono{font-family:'Special Elite',monospace;font-weight:400;font-size:0.86rem;letter-spacing:0.02em;}"
+        ".rp-xh{color:#2f5c8f;font-weight:600;}"
+        ".rp-muted{color:#8a8676;font-style:italic;font-weight:600;}"
+        ".rp-vserial{position:absolute;left:9px;top:78px;writing-mode:vertical-rl;transform:rotate(180deg);font-family:'Special Elite',monospace;font-size:9px;letter-spacing:0.28em;color:#5b6478;opacity:0.85;}"
+        ".rp-sign{font-family:'Segoe Script','Brush Script MT',cursive;font-size:1.55rem;color:#22314e;transform:rotate(-4deg);opacity:0.85;margin:12px 0 0 6px;}"
+        ".rp-tagline{font-family:'EB Garamond',Georgia,serif;font-style:italic;color:#4a5570;font-size:0.86rem;line-height:1.35;margin-top:8px;}"
+        ".rp-barcode{height:26px;margin-top:16px;background:repeating-linear-gradient(90deg,#26324a 0 1px,transparent 1px 3px,#26324a 3px 5px,transparent 5px 6px,#26324a 6px 9px,transparent 9px 11px);opacity:0.82;}"
+        ".rp-micro{font-family:'Special Elite',monospace;font-size:8px;letter-spacing:0.16em;color:#6a7288;margin-top:6px;}"
+        # stamps — inky, worn, slightly transparent so text bleeds through
+        ".rp-stamp{position:absolute;font-family:Cinzel,serif;text-transform:uppercase;text-align:center;line-height:1.15;pointer-events:none;z-index:4;mix-blend-mode:multiply;}"
+        ".rp-stamp-rect{border:2.5px solid #2f5c8f;color:#2f5c8f;padding:5px 11px;font-family:'Special Elite',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;border-radius:2px;opacity:0.66;}"
+        ".rp-stamp-rect b{display:block;font-family:Cinzel,serif;font-size:15px;letter-spacing:0.14em;}"
+        ".rp-stamp-circ{width:100px;height:100px;border-radius:50%;border:2.5px solid #33507a;color:#33507a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;letter-spacing:0.12em;opacity:0.52;}"
+        ".rp-stamp-circ .rp-tri{width:20px;height:20px;margin:3px 0;}"
+        ".rp-stamp-circ .rp-dbl{position:absolute;width:88px;height:88px;border-radius:50%;border:1px solid currentColor;}"
+        # right page — score
+        ".rp-score-k{font-family:'Special Elite',monospace;font-size:11px;letter-spacing:0.28em;color:#5b6478;text-transform:uppercase;}"
+        ".rp-score{font-family:Cinzel,serif;font-weight:700;color:#16233c;line-height:0.92;letter-spacing:0;margin:4px 0 4px;text-shadow:0 1px 0 rgba(255,255,255,0.3);}"
+        ".rp-score b{font-size:3.3rem;}"
+        ".rp-score span{font-size:1.4rem;color:#5b6478;font-weight:600;}"
+        ".rp-rule{height:1px;background:rgba(70,60,45,0.34);margin:10px 0;}"
+        ".rp-tier-row{display:flex;align-items:center;gap:15px;}"
+        ".rp-tier-emb{width:50px;height:50px;flex:none;color:#2f5c8f;border:1.5px solid rgba(47,92,143,0.55);border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(47,92,143,0.06);box-shadow:inset 0 0 0 3px rgba(47,92,143,0.12);}"
+        ".rp-tier-emb .rp-tri{width:28px;height:28px;}"
+        ".rp-tier-name{font-family:Cinzel,serif;font-size:1.5rem;font-weight:700;color:#16233c;letter-spacing:0.05em;line-height:1;}"
+        ".rp-tier-line{font-family:'EB Garamond',serif;font-size:0.84rem;color:#5b6478;font-style:italic;margin-top:3px;}"
+        ".rp-sec-k{font-family:'Special Elite',monospace;font-size:10px;letter-spacing:0.24em;color:#4a5570;text-transform:uppercase;margin:0 0 11px;}"
+        # breakdown bars — hand-inked look
+        ".rp-brow{display:grid;grid-template-columns:150px 1fr 28px;gap:10px;align-items:center;margin-bottom:6px;}"
+        ".rp-blabel{font-family:'Special Elite',monospace;font-size:9px;letter-spacing:0.1em;color:#4a5570;text-transform:uppercase;}"
+        ".rp-btrack{height:8px;background:rgba(70,60,45,0.16);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(70,60,45,0.16);}"
+        ".rp-bfill{display:block;height:100%;background:linear-gradient(90deg,#33507a,#1c2c47);}"
+        ".rp-bval{font-family:'Special Elite',monospace;font-size:11px;color:#1c2b47;text-align:right;}"
+        # badges — passport seals
+        ".rp-badges{display:grid;grid-template-columns:repeat(4,1fr);gap:11px 8px;margin-top:4px;}"
+        ".rp-badge{text-align:center;}"
+        ".rp-seal{width:38px;height:38px;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;color:#2f5c8f;position:relative;"
+        "background:rgba(47,92,143,0.08);border:1.5px solid rgba(47,92,143,0.5);clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);}"
+        ".rp-seal::after{content:'';position:absolute;inset:4px;border:1px solid rgba(47,92,143,0.3);clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);}"
+        ".rp-seal .rp-tri{width:22px;height:22px;}"
+        ".rp-bname{display:block;font-family:Cinzel,serif;font-size:10px;font-weight:600;color:#1c2b47;letter-spacing:0.05em;text-transform:uppercase;}"
+        ".rp-bdesc{display:block;font-family:'EB Garamond',serif;font-size:9px;color:#6a7288;line-height:1.3;margin-top:3px;font-style:italic;}"
+        ".rp-badge.locked{opacity:0.34;filter:grayscale(1);}"
+        ".rp-badge.locked .rp-seal{color:#5b5f6b;border-color:rgba(70,70,75,0.4);background:rgba(70,70,75,0.06);}"
+        ".rp-foot{display:flex;align-items:center;gap:8px;margin-top:18px;padding-top:11px;border-top:1px solid rgba(70,60,45,0.32);font-family:'Special Elite',monospace;font-size:8.5px;letter-spacing:0.12em;color:#5b6478;text-transform:uppercase;}"
+        ".rp-foot .rp-tri{width:14px;height:14px;color:#2f5c8f;}"
+        # ── machine-readable zone (authentic passport strip, bottom of left page) ──
+        ".rp-mrz{position:absolute;left:0;right:0;bottom:0;padding:7px 30px 8px;z-index:3;"
+        "background:linear-gradient(180deg,rgba(214,207,190,0),rgba(210,203,185,0.92) 42%);border-top:1px solid rgba(70,60,45,0.34);"
+        "font-family:'Special Elite','Courier New',monospace;font-size:11.5px;letter-spacing:0.1em;color:#20304e;line-height:1.55;white-space:nowrap;overflow:hidden;}"
+        ".rp-mrz b{display:block;font-weight:400;opacity:0.92;}"
+        # ── holographic security ribbon (Web3 strip across the top of the spread) ──
+        ".rp-ribbon{position:relative;z-index:2;height:26px;margin:0 0 13px;border-radius:7px;overflow:hidden;display:flex;align-items:center;"
+        "background:linear-gradient(90deg,#0e1524,#16233c 50%,#0e1524);border:1px solid rgba(120,160,220,0.24);box-shadow:inset 0 0 14px rgba(60,130,210,0.2);}"
+        ".rp-ribbon::before{content:'';position:absolute;inset:0;pointer-events:none;"
+        "background:linear-gradient(115deg,transparent 40%,rgba(120,200,255,0.5) 48%,rgba(200,150,255,0.45) 51%,rgba(120,255,220,0.45) 54%,transparent 62%);"
+        "background-size:250% 100%;animation:rp-holo 6s cubic-bezier(0.23,1,0.32,1) infinite;}"
+        ".rp-ribbon span{position:relative;white-space:nowrap;font-family:'Special Elite',monospace;font-size:9px;letter-spacing:0.34em;"
+        "color:rgba(184,208,242,0.82);text-transform:uppercase;padding-left:18px;animation:rp-marquee 26s linear infinite;}"
+        "@keyframes rp-holo{0%{background-position:130% 0;}55%,100%{background-position:-42% 0;}}"
+        "@keyframes rp-marquee{from{transform:translateX(0);}to{transform:translateX(-50%);}}"
+        "@media(prefers-reduced-motion:reduce){.rp-ribbon::before,.rp-ribbon span{animation:none;}}"
+        "@media(max-width:720px){.rp-frame{padding:16px;zoom:1;}.rp-frame::before,.rp-frame::after,.rp-cover-t{display:none;}.rp-book{grid-template-columns:1fr;}.rp-left{border-right:none;border-bottom:1px solid rgba(70,60,45,0.3);}.rp-book::after{display:none;}.rp-ghost,.rp-ship{display:none;}}"
+        # ══ landing dashboard (form view) — compact, colour-coded ══
+        ".pd-hero{max-width:1180px;margin:0 auto 12px;text-align:center;}"
+        ".pd-eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:'Special Elite',monospace;font-size:9.5px;letter-spacing:0.3em;text-transform:uppercase;color:#8FB0E6;background:rgba(47,92,143,0.14);border:1px solid rgba(120,160,220,0.3);border-radius:999px;padding:5px 13px;}"
+        ".pd-eyebrow svg{width:12px;height:12px;color:#8FB0E6;}"
+        ".pd-title{font-family:Cinzel,serif;font-size:1.82rem;font-weight:700;letter-spacing:0.02em;color:#EAF1FF;margin:9px 0 5px;line-height:1.02;}"
+        ".pd-title b{font-weight:700;background:linear-gradient(100deg,#8fd0ff,#a79bff 60%,#7fead0);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}"
+        ".pd-sub{max-width:560px;margin:0 auto;color:#9AA6C0;font-size:0.86rem;line-height:1.5;}"
+        ".pd-stats{max-width:1180px;margin:13px auto 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}"
+        ".pd-stat{position:relative;overflow:hidden;background:rgba(20,26,42,0.6);border:1px solid rgba(120,150,210,0.16);border-radius:12px;padding:10px 14px;text-align:center;}"
+        ".pd-stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ac);}"
+        ".pd-stat b{display:block;font-family:Cinzel,serif;font-size:1.2rem;color:var(--ac);line-height:1;}"
+        ".pd-stat span{display:block;margin-top:4px;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8792ab;}"
+        "body:has(.pass-top) .st-key-pp_panel{max-width:1180px;margin:0 auto 26px;position:relative;overflow:hidden;"
+        "background:rgba(17,26,46,0.72);border:1px solid rgba(122,150,208,0.18);border-radius:18px;padding:28px 30px;"
+        "box-shadow:0 2px 4px rgba(3,8,20,0.35),0 20px 46px -30px rgba(3,10,26,0.9);}"
+        "body:has(.pass-top) .st-key-pp_panel::before{content:'';position:absolute;left:24px;right:24px;top:0;height:1px;pointer-events:none;"
+        "background:linear-gradient(90deg,transparent,rgba(150,180,240,0.28),transparent);}"
+        "body:has(.pass-top) .st-key-pp_panel [data-testid=\"stHorizontalBlock\"]{position:relative;z-index:2;align-items:center;}"
+        ".pd-mint-lbl{font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#7fa6e0;}"
+        ".pd-mint-h{font-family:'Space Grotesk',sans-serif;font-size:1.26rem;font-weight:600;color:#eef3ff;letter-spacing:-0.01em;margin:6px 0 6px;line-height:1.15;}"
+        ".pd-mint-s{font-family:'Inter',sans-serif;color:#9fb0d0;font-size:0.82rem;line-height:1.55;margin:0;max-width:42ch;}"
+        ".pd-mint-card{width:66px;height:66px;flex:none;background:transparent;border:none;display:flex;align-items:center;justify-content:center;position:relative;}"
+        ".pd-mint-card img{width:60px;height:60px;object-fit:contain;border-radius:15px;box-shadow:0 6px 18px -8px rgba(20,40,90,0.6);}"
+        ".pd-mint-card .pd-mint-wm{display:none;}"
+        ".pd-panel-h{display:flex;align-items:center;gap:8px;font-family:Syne,sans-serif;font-size:0.92rem;color:#e9f1ff;margin:0 0 2px;font-weight:700;}"
+        ".pd-panel-h svg{width:15px;height:15px;color:#8fc0ff;}"
+        ".pd-panel-s{color:#a9bbdd;font-size:0.76rem;margin:0 0 10px;}"
+        # two-column info layout so tiers + badges sit beside the signals (no long scroll)
+        ".pd-cols{max-width:1180px;margin:16px auto 0;display:grid;grid-template-columns:1.12fr 1fr;gap:18px;align-items:start;}"
+        ".pd-sec-h{margin:0 0 8px;font-family:Cinzel,serif;font-size:0.9rem;color:#DCE6F8;letter-spacing:0.02em;display:flex;align-items:center;gap:8px;}"
+        ".pd-sec-h svg{width:13px;height:13px;color:#5f86b8;}"
+        ".pd-grid{display:grid;gap:8px;}"
+        ".pd-sig{grid-template-columns:repeat(2,1fr);}"
+        ".pd-card{position:relative;display:flex;gap:10px;background:rgba(18,23,38,0.62);border:1px solid rgba(120,150,210,0.13);border-left:3px solid var(--ac);border-radius:11px;padding:9px 12px;transition:transform 170ms cubic-bezier(0.23,1,0.32,1),border-color 170ms ease;}"
+        "@media(hover:hover){.pd-card:hover{transform:translateY(-2px);border-color:rgba(120,160,220,0.3);}}"
+        ".pd-ic{width:30px;height:30px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--ac);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);}"
+        ".pd-ic svg{width:17px;height:17px;}"
+        ".pd-card-b{min-width:0;flex:1;}"
+        ".pd-card-t{display:flex;justify-content:space-between;align-items:baseline;gap:6px;}"
+        ".pd-card-n{font-weight:700;color:#E4ECFB;font-size:0.82rem;}"
+        ".pd-card-w{font-family:'Special Elite',monospace;font-size:10px;color:var(--ac);white-space:nowrap;}"
+        ".pd-card-d{color:#828db0;font-size:0.72rem;line-height:1.35;margin-top:2px;}"
+        ".pd-card-bar{height:3px;border-radius:3px;background:rgba(255,255,255,0.07);margin-top:8px;overflow:hidden;}"
+        ".pd-card-bar span{display:block;height:100%;border-radius:3px;background:var(--ac);box-shadow:0 0 8px -1px var(--ac);}"
+        # tiers as slim colour-coded rows
+        ".pd-tiers{grid-template-columns:1fr;gap:6px;}"
+        ".pd-tier{display:flex;align-items:center;gap:11px;background:rgba(18,23,38,0.6);border:1px solid rgba(120,150,210,0.13);border-left:3px solid var(--tc);border-radius:11px;padding:7px 12px;}"
+        ".pd-tier-em{width:29px;height:29px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--tc);border:1.5px solid var(--tc);}"
+        ".pd-tier-em svg{width:16px;height:16px;}"
+        ".pd-tier-n{font-family:Cinzel,serif;font-weight:700;font-size:0.82rem;color:#E4ECFB;letter-spacing:0.03em;flex:1;}"
+        ".pd-tier-r{font-family:'Special Elite',monospace;font-size:10px;color:#8792ab;}"
+        # badges compact 2-col
+        ".pd-badges2{grid-template-columns:repeat(2,1fr);gap:7px;}"
+        ".pd-bdg{display:flex;align-items:center;gap:9px;background:rgba(18,23,38,0.55);border:1px solid rgba(120,150,210,0.12);border-radius:10px;padding:7px 10px;}"
+        ".pd-bdg-s{width:28px;height:28px;flex:none;color:var(--ac);display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);border:1px solid var(--ac);clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);}"
+        ".pd-bdg-s svg{width:14px;height:14px;}"
+        ".pd-bdg-n{font-size:0.76rem;font-weight:700;color:#E4ECFB;line-height:1.1;}"
+        ".pd-bdg-d{font-size:0.68rem;color:#828db0;margin-top:1px;}"
+        # ══ Reputation Passport banner — flat glass, Memory-Ledger aesthetic ══
+        "body:has(.pass-top) .st-key-pp_hero{max-width:1180px;margin:0 auto 18px;position:relative;overflow:hidden;min-height:172px;display:flex;flex-direction:column;justify-content:center;"
+        "border-radius:16px;padding:26px 24px;border:1px solid rgba(122,150,208,0.18);"
+        "background:" + _hero_layer + ";box-shadow:0 2px 4px rgba(3,8,20,0.35),0 20px 46px -30px rgba(3,10,26,0.9);}"
+        "body:has(.pass-top) .st-key-pp_hero::after{content:'';position:absolute;left:24px;right:24px;top:0;height:1px;pointer-events:none;"
+        "background:linear-gradient(90deg,transparent,rgba(150,180,240,0.28),transparent);}"
+        "body:has(.pass-top) .st-key-pp_hero [data-testid=\"stHorizontalBlock\"]{align-items:center;position:relative;z-index:2;}"
+        # ── decorative navigation/coordinate overlay (subtle, right-anchored, non-interactive) ──
+        ".ph-nav{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:16px;"
+        "-webkit-mask-image:linear-gradient(90deg,transparent,#000 46%);mask-image:linear-gradient(90deg,transparent,#000 46%);}"
+        ".ph-nav svg{position:absolute;right:-8px;top:50%;transform:translateY(-50%);height:230%;aspect-ratio:1;overflow:visible;opacity:0.9;}"
+        ".ph-ring{transform-origin:center;transform-box:view-box;animation:ph-spin 60s linear infinite;}"
+        ".ph-ring.b{animation-duration:90s;animation-direction:reverse;}"
+        "@keyframes ph-spin{to{transform:rotate(360deg);}}"
+        ".ph-orb{transform-origin:100px 100px;transform-box:view-box;animation:ph-spin 22s linear infinite;}"
+        ".ph-pt{animation:ph-tw 3.4s ease-in-out infinite;}"
+        "@keyframes ph-tw{0%,100%{opacity:0.25;}50%{opacity:0.85;}}"
+        "@media(prefers-reduced-motion:reduce){.ph-ring,.ph-orb,.ph-pt{animation:none!important;}}"
+        "@media(max-width:640px){.ph-nav svg{opacity:0.4;height:180%;right:-40px;}}"
+        # page entrance — sections ease/fade in when the passport view renders (banner, then mint; cards have their own pd-rise)
+        "@keyframes pp-enter{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}"
+        "body:has(.pass-top) .st-key-pp_hero{animation:pp-enter 460ms cubic-bezier(0.23,1,0.32,1) both;}"
+        "body:has(.pass-top) .st-key-pp_panel{animation:pp-enter 460ms cubic-bezier(0.23,1,0.32,1) 80ms both;}"
+        "@media(prefers-reduced-motion:reduce){body:has(.pass-top) .st-key-pp_hero,body:has(.pass-top) .st-key-pp_panel{animation:none!important;}}"
+        ".ph-l,.ph-tx{min-width:0;}"
+        ".ph-eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#7fa6e0;}"
+        ".ph-eyebrow .dot{width:5px;height:5px;border-radius:50%;background:#5b9dff;box-shadow:0 0 0 3px rgba(91,157,255,0.18);}"
+        ".ph-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.94rem;line-height:1.02;letter-spacing:-0.028em;margin:12px 0 13px;color:#f2f6ff;text-shadow:0 4px 24px rgba(4,10,30,0.55);}"
+        ".ph-title b{font-weight:700;background:linear-gradient(100deg,#a9c8ff,#5b9dff 60%,#8fb6ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}"
+        ".ph-sub{font-family:'Inter',sans-serif;font-size:13px;line-height:1.6;color:#9db0cf;margin:0;max-width:50ch;}"
+        ".ph-r{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:10px;}"
+        ".ph-chip{display:inline-flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:0.02em;color:#f4f8ff;"
+        "background:rgba(22,32,56,0.34);border:1px solid rgba(255,255,255,0.28);border-radius:10px;padding:6px 11px;text-shadow:0 1px 3px rgba(0,0,0,0.55);"
+        "backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);"
+        "box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),inset 0 -6px 14px -8px rgba(120,170,255,0.35),0 6px 18px -8px rgba(0,0,0,0.5);}"
+        ".ph-chip svg{width:12px;height:12px;color:#cfe2ff;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));}"
+        # help pill (opens the explainer view) — restrained soft accent
+        "body:has(.pass-top) .st-key-pp_help{display:flex;flex-direction:column;align-items:flex-end;}"
+        "body:has(.pass-top) .st-key-pp_help [data-testid=\"stElementContainer\"]{width:auto!important;}"
+        "body:has(.pass-top) .st-key-pp_help button{width:auto!important;display:inline-flex!important;background:rgba(22,32,56,0.34)!important;color:#f4f8ff!important;border:1px solid rgba(255,255,255,0.28)!important;"
+        "border-radius:10px!important;font-family:'Inter',sans-serif!important;font-weight:600!important;font-size:11.5px!important;padding:7px 14px!important;min-height:34px!important;white-space:nowrap!important;text-shadow:0 1px 3px rgba(0,0,0,0.55)!important;"
+        "backdrop-filter:blur(14px) saturate(1.5)!important;-webkit-backdrop-filter:blur(14px) saturate(1.5)!important;"
+        "box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),inset 0 -6px 14px -8px rgba(120,170,255,0.35),0 6px 18px -8px rgba(0,0,0,0.5)!important;"
+        "transition:transform 150ms cubic-bezier(0.23,1,0.32,1),background 160ms ease!important;}"
+        "body:has(.pass-top) .st-key-pp_help button:hover{background:rgba(38,54,92,0.5)!important;}"
+        "body:has(.pass-top) .st-key-pp_help button:active{transform:scale(0.97);}"
+        # 4 summary cards — flat, restrained, Memory-Ledger KPI aesthetic
+        ".pd-sum{max-width:1180px;margin:4px auto 22px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}"
+        ".pd-sumc{position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:178px;border-radius:14px;padding:16px 16px 15px;"
+        "background:rgba(17,26,46,0.72);border:1px solid rgba(122,150,208,0.18);"
+        "box-shadow:0 2px 4px rgba(3,8,20,0.3),0 16px 40px -30px rgba(3,10,26,0.85);"
+        "transition:transform 200ms cubic-bezier(0.23,1,0.32,1),border-color 200ms ease;animation:pd-rise 460ms cubic-bezier(0.23,1,0.32,1) both;}"
+        ".pd-sumc::before{content:'';position:absolute;top:0;left:16px;width:26px;height:2px;border-radius:0 0 2px 2px;background:var(--ac);}"
+        "@keyframes pd-rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}"
+        ".pd-sum .pd-sumc:nth-child(1){animation-delay:40ms;}.pd-sum .pd-sumc:nth-child(2){animation-delay:80ms;}"
+        ".pd-sum .pd-sumc:nth-child(3){animation-delay:120ms;}.pd-sum .pd-sumc:nth-child(4){animation-delay:160ms;}"
+        "@media(hover:hover){.pd-sumc:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--ac) 42%,rgba(122,150,208,0.18));}}"
+        "@media(prefers-reduced-motion:reduce){.pd-sumc{animation:none;}}"
+        ".pd-sum-top{display:flex;align-items:center;gap:9px;margin-bottom:14px;}"
+        ".pd-sum-ic{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;color:var(--ac);"
+        "background:color-mix(in srgb,var(--ac) 14%,transparent);border:1px solid color-mix(in srgb,var(--ac) 26%,transparent);}"
+        ".pd-sum-ic svg{width:16px;height:16px;}"
+        ".pd-sum-l{font-family:'Inter',sans-serif;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#8b98b6;font-weight:700;}"
+        ".pd-sum-n{font-family:'Space Grotesk',sans-serif;font-size:1.86rem;font-weight:600;color:#eef3ff;line-height:1;letter-spacing:-0.015em;}"
+        ".pd-sum-d{font-family:'Inter',sans-serif;font-size:0.76rem;color:#8695b5;margin-top:6px;line-height:1.45;}"
+        ".pd-sum-viz{margin-top:auto;padding-top:12px;height:30px;}"
+        ".pd-sum-viz svg{width:100%;height:100%;display:block;overflow:visible;}"
+        "@media(max-width:1000px){.pd-sum{grid-template-columns:repeat(2,1fr);}}"
+        "@media(max-width:560px){.pd-sum{grid-template-columns:1fr;}}"
+        # ══ DARK passport pages (recolor override, wins via source order) — a deep
+        #    navy leather document with the Pharos logo glowing behind, light ink ══
+        ".rp-frame{max-width:1000px;padding:22px 26px;}"
+        # gen_bg is the passport CARD surface; elements sit on top of it via a
+        # readability scrim. Pages are transparent so it reads as ONE landscape image.
+        ".rp-book{background:linear-gradient(180deg,rgba(7,11,20,0.62),rgba(7,11,20,0.5) 40%,rgba(7,11,20,0.7)),"
+        "url('" + (_gen_bg or "") + "') center center / cover no-repeat,linear-gradient(160deg,#16203a,#0c1322)!important;}"
+        ".rp-page{background:transparent!important;color:#c3cfe8!important;}"
+        ".rp-page::before{opacity:0.06!important;}"
+        ".rp-page::after{background:linear-gradient(90deg,rgba(0,0,0,0.28),transparent 12%,transparent 88%,rgba(0,0,0,0.28))!important;"
+        "box-shadow:inset 0 0 140px rgba(0,4,14,0.6),inset 0 0 30px rgba(0,4,14,0.45)!important;}"
+        ".rp-left{border-right:1px solid rgba(150,175,230,0.14)!important;}"
+        ".rp-wm{opacity:0.14!important;filter:none!important;}"   # logo glows behind
+        # light ink for headings / values / body
+        "body:has(.pass-top) .rp-mast,body:has(.pass-top) .rp-score,.rp-score b,.rp-tier-name,.rp-f-v,.rp-bname{color:#eaf1ff!important;-webkit-text-fill-color:#eaf1ff!important;}"
+        ".rp-mast-k,.rp-mast-sub,.rp-f-k,.rp-blabel,.rp-sec-k,.rp-bdesc,.rp-tier-line,.rp-micro,.rp-foot,.rp-vserial,.rp-score span,.rp-bval,.rp-tagline{color:#8ea0c6!important;}"
+        ".rp-f-v.mono,.rp-mrz,.rp-mrz b{color:#a9b8dd!important;}"
+        ".rp-mast-sub{border-color:rgba(150,175,230,0.2)!important;}"
+        ".rp-rule{background:rgba(150,175,230,0.16)!important;}"
+        ".rp-btrack{background:rgba(255,255,255,0.08)!important;box-shadow:inset 0 0 0 1px rgba(150,175,230,0.12)!important;}"
+        ".rp-bfill{background:linear-gradient(90deg,#5fb8ff,#3a74b0)!important;}"
+        ".rp-foot{border-color:rgba(150,175,230,0.16)!important;}"
+        ".rp-mrz{background:linear-gradient(180deg,rgba(14,20,34,0),rgba(14,20,34,0.92) 42%)!important;border-color:rgba(150,175,230,0.2)!important;}"
+        ".rp-barcode{background:repeating-linear-gradient(90deg,#aebbdd 0 1px,transparent 1px 3px,#aebbdd 3px 5px,transparent 5px 6px,#aebbdd 6px 9px,transparent 9px 11px)!important;opacity:0.55!important;}"
+        ".rp-sign{color:#9fc4ff!important;}"
+        ".rp-face-wrap{background:linear-gradient(160deg,#26324e,#1a2237)!important;}"
+        # seals / stamps → cool blue on dark
+        ".rp-seal{color:#6fb0ee!important;border-color:rgba(90,160,230,0.5)!important;background:rgba(90,160,230,0.08)!important;}"
+        ".rp-seal::after{border-color:rgba(90,160,230,0.3)!important;}"
+        ".rp-bname{color:#dbe6fb!important;}"
+        ".rp-badge.locked .rp-seal{color:#5a6070!important;border-color:rgba(120,130,150,0.4)!important;}"
+        ".rp-tier-emb{color:#6fb0ee!important;border-color:rgba(90,160,230,0.55)!important;background:rgba(90,160,230,0.08)!important;}"
+        ".rp-ship{opacity:0.2!important;}.rp-ship path{stroke:#5f88c8!important;}"
+        ".rp-stamp-rect{border-color:#5f9fe0!important;color:#5f9fe0!important;}"
+        ".rp-stamp-circ{border-color:#5f9fe0!important;color:#5f9fe0!important;}"
+        # ══ SINGLE landscape passport card (not an open book) — like holding the
+        #    data page of a real passport: photo + identity, no spine, no split ══
+        ".rp-book::after{display:none!important;}"                 # remove book spine
+        ".rp-left{border-right:none!important;}"                   # seamless single card
+        ".rp-book{border-radius:14px!important;box-shadow:0 44px 100px -34px rgba(0,0,0,0.92),0 26px 70px -38px rgba(28,110,190,0.42),0 0 0 1px rgba(120,150,210,0.18)!important;}"
+        ".rp-frame{max-width:960px!important;padding:26px!important;zoom:0.76!important;}"
+        ".rp-page{min-height:392px!important;}"
+        # a subtle inset frame line around the whole card so it reads as one document
+        ".rp-book::before{content:'';position:absolute;inset:9px;pointer-events:none;z-index:5;border:1px solid rgba(150,175,230,0.14);border-radius:8px;}"
+        # ══ compact the content so the single card reads LANDSCAPE (wider than tall) ══
+        ".rp-page{min-height:0!important;padding:18px 22px 38px!important;}"
+        ".rp-mast{font-size:1.22rem!important;margin:0 0 3px!important;}"
+        ".rp-mast-k{font-size:9px!important;}"
+        ".rp-mast-sub{padding:3px 0!important;margin:0 0 9px!important;}"
+        ".rp-idrow{grid-template-columns:96px 1fr!important;gap:12px!important;}"
+        ".rp-face-wrap{width:96px!important;height:118px!important;}"
+        ".rp-fields{gap:3px!important;}"
+        ".rp-f-v{font-size:0.9rem!important;}"
+        ".rp-sign{font-size:1.15rem!important;margin:6px 0 0 4px!important;}"
+        ".rp-tagline{font-size:0.76rem!important;margin-top:4px!important;}"
+        ".rp-barcode{height:16px!important;margin-top:8px!important;}"
+        ".rp-micro{margin-top:3px!important;}"
+        ".rp-score{margin:2px 0!important;}.rp-score b{font-size:2.5rem!important;}.rp-score span{font-size:1.15rem!important;}"
+        ".rp-rule{margin:6px 0!important;}"
+        ".rp-sec-k{margin:0 0 6px!important;}"
+        ".rp-tier-emb{width:38px!important;height:38px!important;}"
+        ".rp-tier-name{font-size:1.2rem!important;}"
+        ".rp-brow{margin-bottom:2px!important;grid-template-columns:132px 1fr 26px!important;}"
+        ".rp-btrack{height:6px!important;}"
+        ".rp-badges{grid-template-columns:repeat(8,1fr)!important;gap:4px 4px!important;margin-top:2px!important;}"
+        ".rp-seal{width:27px!important;height:27px!important;margin:0 auto 3px!important;}"
+        ".rp-seal .rp-tri{width:14px!important;height:14px!important;}"
+        ".rp-bname{font-size:7px!important;letter-spacing:0.01em!important;}"
+        ".rp-bdesc{display:none!important;}"
+        ".rp-foot{margin-top:9px!important;padding-top:7px!important;}"
+        ".rp-ship{width:110px!important;height:110px!important;top:80px!important;}"
+        # keep the MRZ pinned to the very bottom of the (now shorter) left page
+        ".rp-frame{zoom:0.82!important;}"
+        "</style>"
+        "<div class=\"pass-top\" style=\"display:none\"></div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── state machine: form → loading → result ──
+    if "pp_view" not in st.session_state:
+        st.session_state.pp_view = "form"
+    if "pp_addr" not in st.session_state:
+        st.session_state.pp_addr = ""
+        st.session_state.pp_x = ""
+
+    # shared link (?passport=&px=) → straight to the result view
+    _pp_q = valid_addr(st.query_params.get("passport", ""))
+    _pp_qx = re.sub(r"[^A-Za-z0-9_]", "", st.query_params.get("px", "")[:15])
+    if _pp_q and _pp_qx:
+        st.session_state.pp_addr = _pp_q
+        st.session_state.pp_x = _pp_qx
+        st.session_state.pp_view = "result"
+        try: st.query_params.clear()
+        except Exception: pass
+    elif _pp_q:
+        st.session_state.pp_addr = _pp_q
+        try: st.query_params.clear()
+        except Exception: pass
+
+    _view = st.session_state.pp_view
+
+    # ══════════════ FORM VIEW — compact colour-coded dashboard ══════════════
+    if _view == "form":
+        _SVO = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+                'stroke-linecap="round" stroke-linejoin="round">')
+        _ICN = {
+            "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            "coin": '<circle cx="12" cy="12" r="8"/><path d="M12 8v8"/><path d="M14.5 9.6h-4a1.6 1.6 0 0 0 0 3.2h3a1.6 1.6 0 0 1 0 3.2h-4"/>',
+            "swap": '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
+            "grid": '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+            "flame": '<path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3.2 1-3.2s.2 1.9 1.8 1.9c1.4 0 1.4-1.9 2.2-3.7z"/>',
+            "bridge": '<path d="M3 15a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4M3 15h18M7 15v-3M17 15v-3M12 11V6"/>',
+            "gauge": '<path d="M4 19a8 8 0 1 1 16 0"/><path d="M12 19l4-5"/>',
+            "shield": '<path d="M12 3l7 3v6c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/>',
+            "star": '<path d="M12 3l2.4 5.3L20 9l-4 3.8 1 6-5-2.9-5 2.9 1-6L4 9l5.6-.7z"/>',
+            "anchor": '<circle cx="12" cy="5" r="2"/><path d="M12 7v13M6 12a6 6 0 0 0 12 0M4 12h4M16 12h4"/>',
+            "gem": '<path d="M6 4h12l3 5-9 11L3 9z"/><path d="M3 9h18M9 4l-1.5 5M15 4l1.5 5"/>',
+            "bolt": '<path d="M13 3L5 13h6l-1 8 8-11h-6z"/>',
+            "wheel": '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3.6M12 16.4V20M4 12h3.6M16.4 12H20M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M17.7 6.3l-2.5 2.5M8.8 15.2l-2.5 2.5"/>',
+        }
+        def _icon(k):
+            return _SVO + _ICN.get(k, _ICN["star"]) + "</svg>"
+
+        # ── UNIFIED identity banner: eyebrow + "How it's calculated" pill on top,
+        #    then title/sub (left) and the logo + status chips (right) — one opaque
+        #    panel so the page wallpaper never leaks through. ──
+        _hero_orb = ('<img src="' + _logo_uri + '" alt="Pharos">') if _logo_uri else _icon("anchor")
+        _svl = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+                'stroke-linecap="round" stroke-linejoin="round">')
+        _ic_verified = _svl + '<circle cx="12" cy="12" r="9"/><path d="M8.4 12.4l2.6 2.6 4.6-5.2"/></svg>'
+        _ic_onchain  = _svl + '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>'
+        _ic_navig    = _svl + '<circle cx="12" cy="12" r="9"/><path d="M15.6 8.4l-2.3 5.3-5.3 2.3 2.3-5.3z"/></svg>'
+        with st.container(key="pp_hero"):
+            st.markdown(
+                '<div class="ph-nav"><svg viewBox="0 0 200 200" fill="none">'
+                '<defs><radialGradient id="phg" cx="50%" cy="50%" r="50%">'
+                '<stop offset="0" stop-color="#5b9dff" stop-opacity="0.16"/><stop offset="1" stop-color="#5b9dff" stop-opacity="0"/></radialGradient></defs>'
+                '<circle cx="100" cy="100" r="82" fill="url(#phg)"/>'
+                # fine coordinate crosshair (navigation)
+                '<line x1="4" y1="100" x2="196" y2="100" stroke="rgba(150,185,255,0.16)" stroke-width="0.8"/>'
+                '<line x1="100" y1="4" x2="100" y2="196" stroke="rgba(150,185,255,0.16)" stroke-width="0.8"/>'
+                # concentric orbit rings — compass geometry
+                '<g class="ph-ring"><circle cx="100" cy="100" r="80" stroke="rgba(140,180,255,0.22)" stroke-width="0.9" stroke-dasharray="2 6"/></g>'
+                '<g class="ph-ring b"><ellipse cx="100" cy="100" rx="80" ry="34" stroke="rgba(120,160,245,0.20)" stroke-width="0.9"/></g>'
+                '<circle cx="100" cy="100" r="50" stroke="rgba(150,185,255,0.20)" stroke-width="0.9"/>'
+                # drifting locator node + small data points
+                '<g class="ph-orb"><circle cx="180" cy="100" r="2.8" fill="#9EC2FF"/></g>'
+                '<circle class="ph-pt" cx="150" cy="46" r="1.5" fill="#bcd4ff"/>'
+                '<circle class="ph-pt" cx="54" cy="60" r="1.4" fill="#9EC2FF" style="animation-delay:-1.1s"/>'
+                '<circle class="ph-pt" cx="140" cy="150" r="1.4" fill="#bcd4ff" style="animation-delay:-1.9s"/>'
+                '<circle cx="100" cy="100" r="2.4" fill="#cfe0ff"/>'
+                '</svg></div>',
+                unsafe_allow_html=True)
+            _hl, _hr = st.columns([1.5, 1], gap="medium")
+            with _hl:
+                st.markdown(
+                    '<div class="ph-l"><div class="ph-tx">'
+                    '<div class="ph-eyebrow"><span class="dot"></span>Pharos · On-Chain Identity</div>'
+                    '<div class="ph-title">Reputation <b>Passport</b></div>'
+                    '<p class="ph-sub">Your live on-chain identity, scored and stamped on Pharos.</p>'
+                    '</div></div>',
+                    unsafe_allow_html=True)
+            with _hr:
+                with st.container(key="pp_help"):
+                    if st.button("How it's calculated", use_container_width=False):
+                        st.session_state.pp_view = "explain"
+                        st.rerun()
+                st.markdown(
+                    '<div class="ph-r">'
+                    '<span class="ph-chip">' + _ic_verified + 'Verified</span>'
+                    '<span class="ph-chip">' + _ic_onchain + 'On-Chain</span>'
+                    '<span class="ph-chip">' + _ic_navig + 'Navigator</span>'
+                    '</div>',
+                    unsafe_allow_html=True)
+
+        # ── 4 SUMMARY CARDS (rendered at the BOTTOM, after the mint panel) ──
+        # refined mini-viz: smooth line w/ soft area + end node · a clean tier track ·
+        # even badge nodes · a tidy ascending bar set. All on a 100×28 grid, aligned.
+        _viz_score = (
+            '<svg viewBox="0 0 100 28" preserveAspectRatio="none">'
+            '<defs><linearGradient id="vzL" x1="0" y1="0" x2="0" y2="1">'
+            '<stop offset="0" stop-color="#5b9dff" stop-opacity="0.28"/><stop offset="1" stop-color="#5b9dff" stop-opacity="0"/></linearGradient></defs>'
+            '<path d="M0,23 C14,21 20,16 32,17 C46,18 52,9 66,10 C80,11 88,5 100,4 L100,28 L0,28 Z" fill="url(#vzL)"/>'
+            '<path d="M0,23 C14,21 20,16 32,17 C46,18 52,9 66,10 C80,11 88,5 100,4" fill="none" stroke="#5b9dff" '
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'
+            '<circle cx="100" cy="4" r="2.6" fill="#8fc0ff">'
+            '<animate attributeName="r" values="2.6;4;2.6" dur="1.8s" repeatCount="indefinite"/>'
+            '<animate attributeName="opacity" values="1;0.5;1" dur="1.8s" repeatCount="indefinite"/></circle></svg>')
+        _viz_tiers = (
+            '<svg viewBox="0 0 100 28"><line x1="8" y1="14" x2="92" y2="14" stroke="#4fd6a0" stroke-width="2" '
+            'stroke-linecap="round" opacity="0.28"/>'
+            + "".join('<circle cx="' + str(8 + i * 21) + '" cy="14" r="' + ("4.6" if i == 2 else "3") + '" fill="#4fd6a0" '
+                      'opacity="' + ("1" if i == 2 else "0.55") + '"/>' for i in range(5))
+            + '<circle cx="50" cy="14" r="7.5" fill="none" stroke="#4fd6a0" stroke-width="1.4" opacity="0.5">'
+            '<animate attributeName="r" values="7.5;10;7.5" dur="2.2s" repeatCount="indefinite"/>'
+            '<animate attributeName="opacity" values="0.5;0.12;0.5" dur="2.2s" repeatCount="indefinite"/></circle></svg>')
+        _viz_badges = (
+            '<svg viewBox="0 0 100 28">'
+            + "".join('<circle cx="' + str(9 + i * 13.6) + '" cy="14" r="5" fill="#ffb454" '
+                      'opacity="' + ("0.95" if i < 5 else "0.28") + '">'
+                      + ('<animate attributeName="opacity" values="0.95;0.4;0.95" dur="1.6s" begin="'
+                         + str(round(i * 0.2, 2)) + 's" repeatCount="indefinite"/>' if i < 5 else '')
+                      + '</circle>' for i in range(7))
+            + '</svg>')
+        _viz_sig = (
+            '<svg viewBox="0 0 100 28" preserveAspectRatio="none">'
+            + "".join('<rect x="' + str(3 + i * 14) + '" y="' + str(25 - h) + '" width="9" height="' + str(h)
+                      + '" rx="2.5" fill="#a78bfa" opacity="' + str(round(0.5 + i * 0.07, 2)) + '">'
+                      + '<animate attributeName="opacity" values="' + str(round(0.5 + i * 0.07, 2))
+                      + ';1;' + str(round(0.5 + i * 0.07, 2)) + '" dur="1.5s" begin="'
+                      + str(round(i * 0.12, 2)) + 's" repeatCount="indefinite"/></rect>'
+                      for i, h in enumerate([7, 10, 13, 15, 18, 20, 23]))
+            + '</svg>')
+        _summ = [
+            ("0–1000", "PROS Score", "Your on-chain reputation score", "#5b9dff", "gauge", _viz_score),
+            ("5", "Reputation Tiers", "From Explorer to Legend", "#4fd6a0", "shield", _viz_tiers),
+            ("8", "On-Chain Badges", "Earned across the ecosystem", "#ffb454", "gem", _viz_badges),
+            ("7", "Scoring Signals", "Wallet activity, balance, usage & more", "#a78bfa", "grid", _viz_sig),
+        ]
+        _summ_html = "".join(
+            '<div class="pd-sumc" style="--ac:' + c + '">'
+            '<div class="pd-sum-top"><div class="pd-sum-ic">' + _icon(ic) + '</div>'
+            '<div class="pd-sum-l">' + esc(l) + '</div></div>'
+            '<div class="pd-sum-n">' + esc(v) + '</div>'
+            '<div class="pd-sum-d">' + esc(d) + '</div>'
+            '<div class="pd-sum-viz">' + viz + '</div></div>'
+            for v, l, d, c, ic, viz in _summ)
+
+        # ── Mint panel — the central card, directly below the banner.
+        #    Right side: wallet address (top row) + X username (below), Generate at right ──
+        with st.container(key="pp_panel"):
+            _pl, _pr = st.columns([0.9, 1.85], gap="large")
+            with _pl:
+                _mc = ('<img src="' + _logo_uri + '" alt="">') if _logo_uri else _icon("anchor")
+                st.markdown(
+                    '<div style="display:flex;gap:18px;align-items:center;">'
+                    '<div class="pd-mint-card">' + _mc + '<span class="pd-mint-wm">PHAROS</span></div>'
+                    '<div><div class="pd-mint-lbl">Mint your passport</div>'
+                    '<div class="pd-mint-h">Create Your On&nbsp;Chain Identity</div>'
+                    '<div class="pd-mint-s">Wallet address and X username are both required. '
+                    'Your X photo becomes the passport portrait.</div></div></div>',
+                    unsafe_allow_html=True)
+            with _pr:
+                _if, _ig = st.columns([2.3, 1], gap="medium")
+                with _if:
+                    _in_addr = st.text_input("Wallet address *", value=st.session_state.pp_addr,
+                                             placeholder="0x…", key="pp_addr_in")
+                    _in_x = st.text_input("X username *", value=st.session_state.pp_x,
+                                          placeholder="@username", key="pp_x_in")
+                with _ig:
+                    st.markdown('<div style="height:48px"></div>', unsafe_allow_html=True)
+                    with st.container(key="pp_go"):
+                        _go = st.button("Generate  →", use_container_width=True)
+            if _go:
+                _a = (_in_addr or "").strip()
+                _xh = re.sub(r"[^A-Za-z0-9_]", "", (_in_x or "").lstrip("@")[:15])
+                if not valid_addr(_a):
+                    st.warning("Enter a valid 0x wallet address.")
+                elif not _xh:
+                    st.warning("Enter your X (Twitter) username — it's required for the passport portrait.")
+                else:
+                    st.session_state.pp_addr = _a
+                    st.session_state.pp_x = _xh
+                    st.session_state.pp_view = "loading"
+                    st.rerun()
+
+        # ── 4 summary cards at the bottom of the dashboard ──
+        st.markdown('<div class="pd-sum">' + _summ_html + '</div>', unsafe_allow_html=True)
+
+    # ══════════════ LOADING VIEW ══════════════
+    elif _view == "loading":
+        import time as _time
+        # ── Loader = the app's GENUINE default loader (_data_sync_screen): the
+        #    same spinning ring + tile + stepped chips used across the app. No
+        #    custom overlay — just the default, reworded for the passport. ──
+        st.markdown(
+            _data_sync_screen(
+                "Loading your on-chain passport",
+                "Reading your wallet live from the Pharos chain…",
+                steps=("Pharos RPC", "Scoring", "Stamping"),
+                emojis=("🔗", "🧮", "🎫"),
+            ),
+            unsafe_allow_html=True,
+        )
+        _t0 = _time.time()
+        try:
+            compute_passport(st.session_state.pp_addr)
+            fetch_x_profile(st.session_state.pp_x)
+            get_x_avatar_datauri(st.session_state.pp_x)   # warm the portrait cache before the reveal
+        except Exception:
+            pass
+        _el = _time.time() - _t0
+        if _el < 2.4:
+            _time.sleep(2.4 - _el)   # let the loader animation settle
+        st.session_state.pp_view = "result"
+        st.rerun()
+
+    # ══════════════ EXPLAINER VIEW (opened by the "?" help button) ══════════════
+    elif _view == "explain":
+        with st.container(key="pp_back"):
+            if st.button("←  Back to passport"):
+                st.session_state.pp_view = "form"
+                st.rerun()
+
+        _HSVO = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+                 'stroke-linecap="round" stroke-linejoin="round">')
+        _HICN = {
+            "swap":   '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
+            "coin":   '<circle cx="12" cy="12" r="8"/><path d="M12 8v8"/><path d="M14.5 9.6h-4a1.6 1.6 0 0 0 0 3.2h3a1.6 1.6 0 0 1 0 3.2h-4"/>',
+            "clock":  '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            "grid":   '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+            "flame":  '<path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3.2 1-3.2s.2 1.9 1.8 1.9c1.4 0 1.4-1.9 2.2-3.7z"/>',
+            "bridge": '<path d="M3 15a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4M3 15h18M7 15v-3M17 15v-3M12 11V6"/>',
+            "gauge":  '<path d="M4 19a8 8 0 1 1 16 0"/><path d="M12 19l4-5"/>',
+        }
+        def _hxi(k):
+            return _HSVO + _HICN.get(k, _HICN["gauge"]) + "</svg>"
+
+        # (name, weight%, weight-fraction-of-max, live?, accent, icon)
+        _hx_sigs = [
+            ("Total Transactions", "20", "Lifetime tx count from the wallet nonce.", True,  "#5b9dff", "swap"),
+            ("$PROS Balance",      "20", "Current holdings, log-scaled.",            True,  "#4fd6a0", "coin"),
+            ("Wallet Age",         "15", "Time active on-chain.",                    False, "#a78bfa", "clock"),
+            ("Unique dApps",       "15", "Distinct protocols touched.",              False, "#ffb454", "grid"),
+            ("Holding Streak",     "12", "Consistency & recency.",                   False, "#ff7ab6", "flame"),
+            ("Bridge / Cross-chain","10","Cross-chain moves into Pharos.",           False, "#38d0e0", "bridge"),
+            ("Gas Spent",          "8",  "Real usage, proxied by gas.",              False, "#f0864f", "gauge"),
+        ]
+        _hx_sig_html = "".join(
+            '<div class="hx-sig" style="--ac:' + c + '">'
+            '<span class="hx-ic">' + _hxi(ic) + '</span>'
+            '<span class="hx-b"><span class="hx-n">' + esc(n) + '</span>'
+            '<span class="hx-d">' + esc(d) + '</span></span>'
+            '<span class="hx-meta"><span class="hx-w">' + w + '<i>%</i></span>'
+            '<span class="hx-tag ' + ('is-live' if live else 'is-est') + '">' + ('Live' if live else 'Est') + '</span></span>'
+            '<span class="hx-bar"><span style="width:' + str(int(int(w) / 20 * 100)) + '%"></span></span>'
+            '</div>'
+            for n, w, d, live, c, ic in _hx_sigs)
+
+        _hx_tiers = [
+            ("Driftwood", "0–249", "#8794ab"),
+            ("Deckhand", "250–449", "#9db4d8"),
+            ("Sailor", "450–649", "#6fcfc0"),
+            ("Navigator", "650–849", "#7fb0ee"),
+            ("Captain", "850–1000", "#ffcf7a"),
+        ]
+        _hx_tier_html = "".join(
+            '<div class="hx-node" style="--ac:' + c + '"><span class="dot"></span>'
+            '<span class="nm">' + esc(nm) + '</span><span class="rg">' + esc(rg) + '</span></div>'
+            for nm, rg, c in _hx_tiers)
+
+        st.markdown(
+            "<style>"
+            ".hx-wrap{max-width:1080px;margin:0 auto;zoom:0.9;font-family:'Inter',system-ui,sans-serif;"
+            "animation:hx-fade 440ms cubic-bezier(0.23,1,0.32,1) both;}"
+            "@keyframes hx-fade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}"
+            ".hx-head{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:16px;}"
+            ".hx-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#7fa6e0;}"
+            ".hx-eyebrow .dot{width:5px;height:5px;border-radius:50%;background:#5b9dff;box-shadow:0 0 0 3px rgba(91,157,255,0.18);}"
+            ".hx-h1{font-family:'Syne',sans-serif;font-weight:800;font-size:1.55rem;letter-spacing:-0.02em;color:#eef4ff;margin:7px 0 5px;line-height:1.04;}"
+            ".hx-intro{font-size:12px;line-height:1.5;color:#93a4c4;max-width:64ch;margin:0;}"
+            # sleek formula equation
+            ".hx-eq{flex:none;display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:14px;"
+            "background:linear-gradient(160deg,#12213e,#0d1830);border:1px solid rgba(130,168,232,0.24);box-shadow:inset 0 1px 0 rgba(170,200,255,0.08);}"
+            ".hx-eq b{font-family:'DM Mono',ui-monospace,monospace;font-weight:500;font-size:0.82rem;color:#dbe7ff;background:rgba(60,120,210,0.2);border:1px solid rgba(130,170,235,0.3);border-radius:8px;padding:6px 10px;white-space:nowrap;}"
+            ".hx-eq i{font-family:'DM Mono',monospace;color:#7f9bc4;font-style:normal;font-size:0.95rem;}"
+            ".hx-sec{display:flex;align-items:baseline;gap:10px;margin:0 0 9px;}"
+            ".hx-sec h3{font-family:'Syne',sans-serif;font-weight:800;font-size:0.98rem;color:#eaf1ff;margin:0;}"
+            ".hx-sec span{font-size:11px;color:#8794b0;}"
+            # signals — one clean grid of compact rows
+            ".hx-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}"
+            ".hx-sig{position:relative;display:flex;align-items:center;gap:11px;padding:11px 13px 13px;border-radius:12px;"
+            "background:#111c31;border:1px solid rgba(120,150,210,0.15);overflow:hidden;"
+            "animation:hx-rise 420ms cubic-bezier(0.23,1,0.32,1) both;}"
+            "@keyframes hx-rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}"
+            ".hx-grid .hx-sig:nth-child(1){animation-delay:40ms;}.hx-grid .hx-sig:nth-child(2){animation-delay:75ms;}"
+            ".hx-grid .hx-sig:nth-child(3){animation-delay:110ms;}.hx-grid .hx-sig:nth-child(4){animation-delay:145ms;}"
+            ".hx-grid .hx-sig:nth-child(5){animation-delay:180ms;}.hx-grid .hx-sig:nth-child(6){animation-delay:215ms;}"
+            ".hx-grid .hx-sig:nth-child(7){animation-delay:250ms;}"
+            ".hx-ic{width:34px;height:34px;flex:none;border-radius:10px;display:grid;place-items:center;color:var(--ac);"
+            "background:color-mix(in srgb,var(--ac) 15%,#0c1425);border:1px solid color-mix(in srgb,var(--ac) 34%,transparent);}"
+            ".hx-ic svg{width:17px;height:17px;}"
+            ".hx-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}"
+            ".hx-n{font-weight:700;font-size:0.85rem;color:#eef4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}"
+            ".hx-d{font-size:0.72rem;color:#8394b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}"
+            ".hx-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;}"
+            ".hx-w{font-family:'Syne',sans-serif;font-weight:800;font-size:1.05rem;color:#eef4ff;line-height:1;}"
+            ".hx-w i{font-style:normal;font-size:0.68rem;color:#8fa0bf;font-weight:700;margin-left:1px;}"
+            ".hx-tag{font-size:8.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:2px 7px;border-radius:999px;}"
+            ".hx-tag.is-live{color:#6fe3ac;background:rgba(56,208,140,0.14);border:1px solid rgba(56,208,140,0.4);}"
+            ".hx-tag.is-est{color:#9fb0cf;background:rgba(120,150,210,0.12);border:1px solid rgba(120,150,210,0.3);}"
+            ".hx-bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(120,150,210,0.1);}"
+            ".hx-bar span{display:block;height:100%;background:var(--ac);box-shadow:0 0 8px -1px var(--ac);}"
+            # tiers — sleek horizontal progression rail
+            ".hx-rail{position:relative;display:grid;grid-template-columns:repeat(5,1fr);padding-top:2px;}"
+            ".hx-rail::before{content:'';position:absolute;left:10%;right:10%;top:9px;height:3px;border-radius:3px;"
+            "background:linear-gradient(90deg,#8794ab,#9db4d8 26%,#6fcfc0 52%,#7fb0ee 76%,#ffcf7a);opacity:0.7;}"
+            ".hx-node{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}"
+            ".hx-node .dot{width:19px;height:19px;border-radius:50%;background:#0b1424;border:3px solid var(--ac);box-shadow:0 0 0 4px rgba(11,20,36,1),0 0 12px -2px var(--ac);}"
+            ".hx-node .nm{font-family:'Syne',sans-serif;font-weight:800;font-size:0.86rem;color:#eaf1ff;}"
+            ".hx-node .rg{font-family:'DM Mono',ui-monospace,monospace;font-size:0.76rem;font-weight:600;color:var(--ac);}"
+            ".hx-note{margin-top:16px;padding:11px 15px;border-radius:12px;font-size:0.78rem;line-height:1.5;color:#9fb0cf;"
+            "background:#111d34;border:1px solid rgba(120,150,210,0.18);border-left:3px solid #4fd6a0;}"
+            ".hx-note b{color:#cfe0ff;}"
+            "@media(prefers-reduced-motion:reduce){.hx-wrap,.hx-sig{animation:none;}}"
+            "@media(max-width:820px){.hx-grid{grid-template-columns:1fr;}.hx-rail{grid-template-columns:repeat(2,1fr);gap:14px;}.hx-rail::before{display:none;}.hx-eq{width:100%;}}"
+            "</style>"
+            '<div class="hx-wrap">'
+            '<div class="hx-head"><div>'
+            '<div class="hx-eyebrow"><span class="dot"></span>Pharos · Scoring Methodology</div>'
+            '<h1 class="hx-h1">How Your PROS Score Is Calculated</h1>'
+            '<p class="hx-intro">One number, 0–1000, from seven weighted signals — each scored 0–100, weighted, and '
+            'summed. Two read live from Pharos RPC; the rest are estimated until a public indexer ships.</p></div>'
+            '<div class="hx-eq"><b>Σ (signal × weight)</b><i>×</i><b>10</b><i>=</i><b>PROS</b></div>'
+            '</div>'
+            '<div class="hx-sec"><h3>The Seven Signals</h3><span>Ordered by weight · Live = read from chain</span></div>'
+            '<div class="hx-grid">' + _hx_sig_html + '</div>'
+            '<div class="hx-sec"><h3>Reputation Tiers</h3><span>Your score places you on the voyage</span></div>'
+            '<div class="hx-rail">' + _hx_tier_html + '</div>'
+            '<div class="hx-note"><b>Data honesty —</b> only <b>$PROS balance</b> and <b>transaction count</b> are read '
+            'live from RPC today. The other five are derived deterministically from the wallet address until Pharos '
+            'ships a public indexer; the formula stays identical when they go live.</div>'
+            '</div>',
+            unsafe_allow_html=True)
+
+    # ══════════════ RESULT VIEW ══════════════
+    else:
+        _addr = st.session_state.pp_addr
+        if not valid_addr(_addr):
+            st.session_state.pp_view = "form"
+            st.rerun()
+        _P = compute_passport(_addr)
+        _xp = fetch_x_profile(st.session_state.pp_x) if st.session_state.pp_x else {"ok": False}
+
+        with st.container(key="pp_back"):
+            if st.button("←  Generate another passport"):
+                st.session_state.pp_view = "form"
+                st.rerun()
+
+        # portrait — fetched server-side as a data: URI so the downloaded PNG is
+        # not blocked by a cross-origin canvas taint. The data: URI is embedded
+        # directly (esc_url only passes http/https, so it would blank a data: URI);
+        # if the fetch failed we fall back to the live unavatar URL (still displays,
+        # html2canvas useCORS attempts the capture).
+        _av = get_x_avatar_datauri(st.session_state.pp_x)
+        if _av:
+            # data: URI only — never a cross-origin <img>, so the html2canvas
+            # capture is never tainted and the PNG download always succeeds.
+            _portrait = ('<img src="' + _av + '" alt="X profile portrait" '
+                         "onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex';\">"
+                         '<div class="gp-photo-ph" style="display:none">' + _SILHOUETTE + '</div>')
+        else:
+            _portrait = '<div class="gp-photo-ph" style="display:flex">' + _SILHOUETTE + '</div>'
+
+        if _xp.get("ok"):
+            _fol = ("" if _xp.get("followers") is None
+                    else ' · ' + f'{int(_xp["followers"]):,}' + ' followers')
+            _xline = esc(_xp["name"]) + ' <span class="gp-xh">@' + esc(_xp["handle"]) + '</span>' + _fol
+        else:
+            _xline = '<span class="gp-xh">@' + esc(st.session_state.pp_x) + '</span>'
+
+        _status = "VERIFIED ON-CHAIN" if _P["reachable"] else "UNVERIFIED"
+
+        # machine-readable zone (authentic passport strip)
+        _mrz1 = ("P<PHAROS" + _P["alias"].replace(" ", "<") + "<" * 44)[:44]
+        _mrz2 = ((_P["short"].replace("…", "").replace("0x", "") + "<PROS" + str(_P["pros"]).zfill(4)
+                  + "<<" + _P["tier"]).replace(" ", "<") + "<" * 44)[:44]
+
+        # ── REAL on-chain facts only (read live from Pharos RPC). No estimated /
+        #    derived values are shown here — Pharos has no public indexer, so wallet
+        #    age / dApps / gas etc. are not freely available and are intentionally
+        #    omitted rather than faked. ──
+        _facts = [
+            ("Total Transactions", f"{_P['tx_count']:,}"),
+            ("$PROS Balance",      _P["balance_fmt"] + " PROS"),
+            ("Account Type",       "Contract" if _P["is_contract"] else "Wallet · EOA"),
+            ("Network",            "Pharos"),
+        ]
+        _facts_html = "".join(
+            '<div class="gp-stat"><span class="gp-stat-k">' + esc(n) + '</span>'
+            '<span class="gp-stat-dots"></span>'
+            '<span class="gp-stat-v">' + esc(val) + '</span></div>'
+            for n, val in _facts)
+
+        # distinct minimal icon per badge (not the same trident everywhere)
+        _BSVO = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+                 'stroke-linecap="round" stroke-linejoin="round">')
+        _BADGE_ICN = {
+            "First Voyage":   '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z"/>',
+            "Multi-Deck":     '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+            "RWA Pioneer":    '<rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9.5 21v-3h5v3"/>',
+            "Bridge Voyager": '<path d="M3 15a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4M3 15h18M7 15v-3M17 15v-3M12 11V6"/>',
+            "Diamond Hands":  '<path d="M6 4h12l3 5-9 11L3 9z"/><path d="M3 9h18M9 4l-1.5 5M15 4l1.5 5"/>',
+            "Whale":          '<path d="M3 13c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/><path d="M4.5 9c3.2-3.6 11.8-3.6 15 0"/>',
+            "OG":             '<path d="M12 3l2.4 5.3L20 9l-4 3.8 1 6-5-2.9-5 2.9 1-6L4 9l5.6-.7z"/>',
+            "Active":         '<path d="M13 3L5 13h6l-1 8 8-11h-6z"/>',
+        }
+        def _bicon(nm):
+            return _BSVO + _BADGE_ICN.get(nm, _BADGE_ICN["First Voyage"]) + "</svg>"
+
+        # badges earned strictly from REAL on-chain facts (tx count + $PROS balance)
+        _rtx, _rbal = _P["tx_count"], _P["balance"]
+        _rbadges = [
+            ("First Voyage", "Made a transaction on Pharos", _rtx > 0,     "First Voyage"),
+            ("Active",       "50+ transactions",             _rtx >= 50,   "Active"),
+            ("Holder",       "Holds $PROS",                  _rbal > 0,    "Diamond Hands"),
+            ("Whale",        "1,000+ $PROS held",            _rbal >= 1000,"Whale"),
+        ]
+        _earned = [(nm, ds, ic) for nm, ds, ok, ic in _rbadges if ok]
+        if _earned:
+            _badges_html = "".join(
+                '<div class="gp-bd" title="' + esc(nm) + ' — ' + esc(ds) + '">'
+                '<span class="gp-bd-seal">' + _bicon(ic) + '</span>'
+                '<span class="gp-bd-n">' + esc(nm) + '</span></div>'
+                for nm, ds, ic in _earned)
+        else:
+            _badges_html = '<div class="gp-bd-empty">No on-chain activity yet — your voyage is just beginning.</div>'
+
+        # the whole passport CARD html (shared by the on-screen render and the PNG capture)
+        _card_html = (
+            '<div class="gp-card" id="gpcard" role="img" aria-label="Pharos Reputation Passport for wallet '
+            + esc(_P["short"]) + ', PROS score ' + str(_P["pros"]) + ' of 1000, tier ' + esc(_P["tier"]) + '">'
+            '<div class="gp-inner">'
+            '<div class="gp-col gp-col-l">'
+            '<div class="gp-eyebrow">— Pharos —</div>'
+            '<div class="gp-title">Reputation Passport</div>'
+            '<div class="gp-titsub">Your on-chain identity</div>'
+            '<div class="gp-idrow">'
+            '<div class="gp-photo">' + _portrait + '</div>'
+            '<div class="gp-fields">'
+            '<div><div class="gp-fk">Wallet ID</div><div class="gp-fv mono">' + esc(_P["short"]) + '</div></div>'
+            '<div><div class="gp-fk">Alias</div><div class="gp-fv">' + esc(_P["alias"]) + '</div></div>'
+            '<div><div class="gp-fk">Operative (X)</div><div class="gp-fv gp-fv-x">' + _xline + '</div></div>'
+            '<div><div class="gp-fk">Status</div><div class="gp-fv">' + _status + '</div></div>'
+            '<div><div class="gp-fk">Account</div><div class="gp-fv">' + ('Contract' if _P['is_contract'] else 'Wallet · EOA') + '</div></div>'
+            '</div></div>'
+            '<div class="gp-sign">Gocto</div>'
+            '<div class="gp-tag">Not just a wallet — a story written on-chain.</div>'
+            '<div class="gp-mrz"><span>' + esc(_mrz1) + '</span><span>' + esc(_mrz2) + '</span></div>'
+            '</div>'
+            '<div class="gp-col gp-col-r">'
+            '<div class="gp-plabel">PROS Score · ' + esc(_P["serial"]) + '</div>'
+            '<div class="gp-score"><b>' + str(_P["pros"]) + '</b><span>/ 1000</span></div>'
+            '<div class="gp-rule"></div>'
+            '<div class="gp-tier"><span class="gp-tier-emb">' + _TRIDENT + '</span>'
+            '<div><div class="gp-tier-name">' + esc(_P["tier"]) + '</div>'
+            '<div class="gp-tier-line">' + esc(_P["tier_line"]) + '</div></div></div>'
+            '<div class="gp-rule"></div>'
+            '<div class="gp-sec gp-sec-live">Live · Pharos RPC</div>'
+            '<div class="gp-facts">' + _facts_html + '</div>'
+            '<div class="gp-rule"></div>'
+            '<div class="gp-sec">Unlocked Badges</div>'
+            '<div class="gp-badges">' + _badges_html + '</div>'
+            '</div>'
+            '</div></div>')
+
+        # share metadata (built safely for the in-iframe script)
+        _sx = ("&px=" + st.session_state.pp_x) if st.session_state.pp_x else ""
+        _share_qs = "?passport=" + _addr + _sx
+        _share_txt = ("My Pharos Reputation Passport is live — PROS " + str(_P["pros"])
+                      + "/1000, tier " + _P["tier"] + " ⚓️. Mint your on-chain identity:")
+        _dl_name = "pharos-passport-" + re.sub(r"[^A-Za-z0-9]", "", _P["short"]) + ".jpg"
+
+        # ── self-contained iframe: gen_bg card (data-URIs only) + working
+        #    Download-card (html2canvas → PNG) and Share-on-X buttons. ──
+        components.html(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<script src='https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.js'></script>"
+            "<script src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'></script>"
+            "<style>"
+            "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=EB+Garamond:ital,wght@0,500;0,600;1,400;1,500&family=Special+Elite&family=Inter:wght@600;700;800&display=swap');"
+            "*{box-sizing:border-box;}html,body{margin:0;background:transparent;}"
+            ".gp-stage{perspective:1700px;max-width:1040px;margin:0 auto;padding-top:2px;}"
+            ".gp-card{position:relative;width:100%;aspect-ratio:2752/1536;border-radius:14px;overflow:hidden;"
+            "background:url('" + (_gen_bg or "") + "') center center / cover no-repeat,linear-gradient(160deg,#efe9db,#e4dcc9);"
+            "box-shadow:0 40px 92px -34px rgba(10,16,30,0.7),0 18px 50px -32px rgba(28,90,160,0.32),0 0 0 1px rgba(70,90,130,0.16);"
+            "transform-origin:50% 55%;animation:gpEnter 800ms cubic-bezier(0.23,1,0.32,1) both;}"
+            "@keyframes gpEnter{0%{opacity:0;transform:rotateX(16deg) rotateY(-10deg) scale(0.9) translateY(24px);}"
+            "54%{opacity:1;}100%{opacity:1;transform:rotateX(0) rotateY(0) scale(1) translateY(0);}}"
+            ".gp-inner{position:absolute;inset:0;padding:6.2% 14%;display:grid;grid-template-columns:1fr 1fr;gap:0;"
+            "background:radial-gradient(ellipse 90% 100% at 50% 50%,rgba(249,246,238,0.74),rgba(249,246,238,0.5) 54%,rgba(249,246,238,0.16) 76%,rgba(249,246,238,0) 94%);}"
+            ".gp-col{position:relative;display:flex;flex-direction:column;min-width:0;justify-content:center;}"
+            ".gp-col-l{padding-right:5.5%;}.gp-col-r{padding-left:5.5%;}"
+            ".gp-eyebrow{font-family:'Special Elite',monospace;font-size:0.66rem;letter-spacing:0.32em;color:#5f4e2c;text-transform:uppercase;}"
+            ".gp-title{font-family:'Cinzel',serif;font-weight:700;font-size:1.9rem;line-height:1;color:#14203a;letter-spacing:0.02em;margin-top:4px;}"
+            ".gp-titsub{font-family:'EB Garamond',serif;font-style:italic;font-weight:500;font-size:1.02rem;color:#33425f;margin-top:4px;}"
+            ".gp-idrow{display:flex;gap:17px;margin-top:16px;align-items:flex-start;}"
+            ".gp-photo{position:relative;width:172px;height:212px;flex:none;padding:5px;"
+            "background:linear-gradient(158deg,#e9e2d0,#d0c7ae);box-shadow:0 12px 24px rgba(30,24,14,0.36),inset 0 0 0 1px rgba(255,255,255,0.5);}"
+            ".gp-photo img{width:100%;height:100%;object-fit:cover;display:block;filter:contrast(1.02) saturate(1.03);}"
+            ".gp-photo-ph{align-items:flex-end;justify-content:center;width:100%;height:100%;background:#e9e2d0;}"
+            ".gp-photo-ph svg{width:120px;height:auto;}"
+            ".gp-photo::after{content:'';position:absolute;inset:5px;box-shadow:inset 0 0 0 1px rgba(20,32,58,0.3);pointer-events:none;}"
+            ".gp-fields{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0;}"
+            ".gp-fk{font-family:'Special Elite',monospace;font-size:0.68rem;letter-spacing:0.15em;text-transform:uppercase;color:#6a5836;}"
+            ".gp-fv{font-family:'EB Garamond',serif;font-size:1.14rem;font-weight:600;color:#14203a;line-height:1.15;word-break:break-word;}"
+            ".gp-fv.mono{font-family:ui-monospace,Menlo,monospace;font-size:0.98rem;letter-spacing:0.01em;}"
+            ".gp-fv-x{font-size:0.98rem;}"
+            ".gp-xh{color:#295687;font-weight:700;}"
+            ".gp-sign{font-family:'Cinzel',serif;font-style:italic;font-weight:600;font-size:1.4rem;color:#111d33;margin-top:14px;text-shadow:0 1px 2px rgba(249,246,238,0.9);}"
+            ".gp-tag{font-family:'EB Garamond',serif;font-style:italic;font-weight:600;font-size:1.04rem;color:#243350;line-height:1.35;margin-top:4px;text-shadow:0 1px 2px rgba(249,246,238,0.85);}"
+            ".gp-mrz{margin-top:11px;display:flex;flex-direction:column;gap:2px;border-top:1px solid rgba(40,54,84,0.4);padding-top:7px;"
+            "font-family:ui-monospace,monospace;font-size:0.7rem;font-weight:600;letter-spacing:0.04em;color:#26344f;white-space:nowrap;overflow:hidden;text-shadow:0 1px 2px rgba(249,246,238,0.8);}"
+            ".gp-plabel{font-family:'Special Elite',monospace;font-size:0.72rem;letter-spacing:0.22em;text-transform:uppercase;color:#6a5836;}"
+            ".gp-score{font-family:'Cinzel',serif;font-weight:700;color:#14203a;line-height:0.86;display:flex;align-items:baseline;gap:10px;margin-top:5px;}"
+            ".gp-score b{font-size:4.3rem;}.gp-score span{font-size:1.22rem;color:#51617f;font-weight:600;}"
+            ".gp-rule{height:1px;background:linear-gradient(90deg,rgba(50,64,94,0.4),rgba(50,64,94,0.05));margin:14px 0;}"
+            ".gp-tier{display:flex;align-items:center;gap:12px;}"
+            ".gp-tier-emb{width:46px;height:46px;flex:none;border-radius:50%;display:grid;place-items:center;color:#295687;"
+            "background:radial-gradient(circle,rgba(41,86,135,0.16),rgba(41,86,135,0.02));border:1px solid rgba(41,86,135,0.46);}"
+            ".gp-tier-emb svg{width:23px;height:23px;}"
+            ".gp-tier-name{font-family:'Cinzel',serif;font-weight:700;font-size:1.44rem;color:#14203a;letter-spacing:0.03em;}"
+            ".gp-tier-line{font-family:'EB Garamond',serif;font-style:italic;font-size:0.94rem;color:#51617f;}"
+            ".gp-sec{font-family:'Special Elite',monospace;font-size:0.68rem;letter-spacing:0.18em;text-transform:uppercase;color:#6a5836;margin-bottom:8px;display:flex;align-items:center;gap:7px;}"
+            ".gp-sec::before{content:'';width:7px;height:7px;border-radius:50%;background:#6a5836;flex:none;}"
+            ".gp-sec-live{color:#1c6a44;}.gp-sec-live::before{background:#1f9e63;box-shadow:0 0 0 3px rgba(31,158,99,0.18);}"
+            ".gp-sec-est{color:#5a5170;}.gp-sec-est::before{background:#8a7fb0;}"
+            # live/estimated two-column breakdown
+            ".gp-break2{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;align-items:start;}"
+            ".gp-facts{display:flex;flex-direction:column;gap:12px;}"
+            ".gp-bcol{display:flex;flex-direction:column;gap:8px;}"
+            ".gp-stat{display:flex;align-items:baseline;gap:10px;}"
+            ".gp-stat-k{font-family:'EB Garamond',serif;font-size:1.02rem;color:#33425f;flex:none;}"
+            ".gp-stat-dots{flex:1 1 auto;align-self:flex-end;margin-bottom:5px;border-bottom:1.5px dotted rgba(40,54,84,0.34);min-width:18px;}"
+            ".gp-stat-v{font-family:ui-monospace,'DM Mono',monospace;font-weight:700;font-size:1.16rem;color:#111d33;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;flex:none;}"
+            ".gp-row{display:flex;align-items:center;gap:9px;}"
+            ".gp-rk{font-family:'EB Garamond',serif;font-size:0.84rem;color:#3a4967;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}"
+            ".gp-rt{width:52px;height:6px;flex:none;border-radius:3px;background:rgba(50,64,94,0.16);overflow:hidden;}"
+            ".gp-rf{height:100%;background:#9a8fce;border-radius:3px;}"
+            ".gp-badges{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;}"
+            ".gp-bd{display:flex;flex-direction:column;align-items:center;gap:5px;width:52px;cursor:default;transition:transform 180ms cubic-bezier(0.23,1,0.32,1);}"
+            "@media(hover:hover){.gp-bd:hover{transform:translateY(-3px) scale(1.06);}}"
+            ".gp-bd-seal{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;color:#1f4a7a;"
+            "border:1.5px solid rgba(31,74,122,0.6);background:radial-gradient(circle at 50% 34%,rgba(95,147,208,0.32),rgba(41,86,135,0.1));"
+            "box-shadow:0 4px 10px -4px rgba(20,40,80,0.4),inset 0 1px 0 rgba(255,255,255,0.4);}"
+            ".gp-bd-seal svg{width:20px;height:20px;}"
+            ".gp-bd-n{font-family:'EB Garamond',serif;font-weight:600;font-size:0.72rem;letter-spacing:0.01em;color:#26365a;text-align:center;line-height:1.1;}"
+            ".gp-bd-empty{font-family:'EB Garamond',serif;font-style:italic;font-size:0.86rem;color:#4a5772;}"
+            # toolbar (outside the captured card)
+            ".gp-tools{max-width:1040px;margin:16px auto 0;display:flex;justify-content:center;gap:12px;font-family:Inter,system-ui,sans-serif;}"
+            ".gp-btn{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-weight:700;font-size:13.5px;border-radius:12px;padding:11px 20px;"
+            "transition:transform 150ms cubic-bezier(0.23,1,0.32,1),filter 160ms ease,background 160ms ease;border:1px solid transparent;}"
+            ".gp-btn:active{transform:scale(0.97);}"
+            ".gp-btn.dl{background:linear-gradient(135deg,#2f6fd0,#3a8ae0);color:#fff;box-shadow:0 12px 26px -12px rgba(47,120,215,0.8);}"
+            ".gp-btn.dl:hover{filter:brightness(1.07);transform:translateY(-1px);}"
+            ".gp-btn.sx{background:rgba(18,24,38,0.9);color:#eaf0fb;border-color:rgba(120,150,210,0.4);}"
+            ".gp-btn.sx:hover{background:rgba(30,38,58,0.95);transform:translateY(-1px);}"
+            ".gp-btn svg{width:16px;height:16px;}"
+            ".gp-btn[disabled]{opacity:0.6;cursor:progress;}"
+            "@media(max-width:760px){.gp-card{aspect-ratio:auto;}.gp-inner{position:relative;grid-template-columns:1fr;padding:26px 22px;gap:20px;background:rgba(249,246,238,0.8);}"
+            ".gp-col-l,.gp-col-r{padding:0;}.gp-photo{width:140px;height:172px;}.gp-score b{font-size:3rem;}}"
+            "@media(prefers-reduced-motion:reduce){.gp-card{animation:gpFade 320ms ease both;}}@keyframes gpFade{from{opacity:0;}to{opacity:1;}}"
+            "</style></head><body>"
+            "<div class='gp-stage'>" + _card_html + "</div>"
+            "<div class='gp-tools'>"
+            "<button class='gp-btn dl' id='gpdl'>"
+            "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3v12m0 0l-4-4m4 4l4-4M5 21h14'/></svg>"
+            "Download Card</button>"
+            "<button class='gp-btn sx' id='gpsx'>"
+            "<svg viewBox='0 0 24 24' fill='currentColor'><path d='M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.22-6.82-5.97 6.82H1.66l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.84L7.01 4.13H5.03l12.05 15.64z'/></svg>"
+            "Share on X</button>"
+            "</div>"
+            "<script>(function(){"
+            "var TXT=" + json.dumps(_share_txt) + ",QS=" + json.dumps(_share_qs) + ",FN=" + json.dumps(_dl_name) + ";"
+            "function shareURL(){try{var L=window.parent.location;return L.origin+L.pathname+QS;}catch(e){return QS;}}"
+            "var dl=document.getElementById('gpdl'),sx=document.getElementById('gpsx');"
+            "sx.addEventListener('click',function(){var u='https://twitter.com/intent/tweet?text='+encodeURIComponent(TXT)+'&url='+encodeURIComponent(shareURL());window.open(u,'_blank','noopener');});"
+            # Capture returns a Blob. PRIMARY = html-to-image: it rasterises the real
+            # DOM through the browser's own SVG engine, so the PNG is a true 1:1 of what
+            # is on screen (fonts, gradients, gen_bg, filters — all exact). html2canvas
+            # is only a fallback if html-to-image is unavailable. Retry loop for both.
+            # HD but LIGHT: JPEG @ q0.92, pixelRatio 2 (~2080px, crisp) — a fraction of
+            # the old multi-MB PNG, so it loads fast when shared. Square corners + a
+            # solid backdrop keep the shared image clean. Still a true 1:1 of the card.
+            "function _capHTI(){return window.htmlToImage.toBlob(card,{type:'image/jpeg',quality:0.92,pixelRatio:2,cacheBust:true,skipAutoScale:true,"
+            "backgroundColor:'#0c1526',style:{transform:'none',animation:'none',borderRadius:'0'}});}"
+            "function _capH2C(){return html2canvas(card,{backgroundColor:'#0c1526',scale:2,useCORS:true,allowTaint:false,imageTimeout:0,logging:false})"
+            ".then(function(c){return new Promise(function(res){c.toBlob(res,'image/jpeg',0.92);});});}"
+            "function _cap(tries){var p=window.htmlToImage?_capHTI():_capH2C();"
+            "return p.then(function(b){if(!b)throw new Error('empty');return b;})"
+            ".catch(function(e){if(tries>0){return new Promise(function(r){setTimeout(r,180);}).then(function(){return _cap(tries-1);});}"
+            "if(window.html2canvas){return _capH2C();}throw e;});}"
+            "var card;"
+            "dl.addEventListener('click',function(){card=document.getElementById('gpcard');var lbl=dl.getAttribute('data-lbl')||dl.innerHTML;dl.setAttribute('data-lbl',lbl);if(!card)return;"
+            "if(!window.htmlToImage&&!window.html2canvas){dl.textContent='Renderer offline';setTimeout(function(){dl.innerHTML=lbl;},1800);return;}"
+            "dl.setAttribute('disabled','');dl.textContent='Rendering\\u2026';"
+            "(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){"
+            "return _cap(4);"
+            "}).then(function(blob){"
+            "if(!blob){dl.removeAttribute('disabled');dl.textContent='Try again';setTimeout(function(){dl.innerHTML=lbl;},1600);return;}"
+            # in-iframe <a download> — the component sandbox grants allow-downloads.
+            "var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=FN;a.rel='noopener';a.style.display='none';"
+            "document.body.appendChild(a);a.click();"
+            "setTimeout(function(){try{a.remove();}catch(e){}try{URL.revokeObjectURL(url);}catch(e){}},4000);"
+            "dl.removeAttribute('disabled');dl.textContent='Saved \\u2713';setTimeout(function(){dl.innerHTML=lbl;},1800);"
+            "}).catch(function(){dl.removeAttribute('disabled');dl.textContent='Try again';setTimeout(function(){dl.innerHTML=lbl;},1600);});});"
+            "})();</script></body></html>",
+            height=720,
+        )
+        st.caption("On-chain balance & transaction count are read live from Pharos RPC. "
+                   "Age, dApps, streak, bridge-ins & gas are estimated per-wallet until a public "
+                   "Pharos indexer is available.")
 
 
 # ═════════════════════════════════════════════
