@@ -3703,7 +3703,7 @@ X402_PAYTO_ADDRESS = os.getenv(
     "X402_PAYTO_ADDRESS",
     "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4",
 )
-X402_PRICE_PROS   = 0.05      # price per premium call, in native units
+X402_PRICE_PROS   = 0.02      # price per premium call, in native units
 X402_TOLERANCE    = 0.10      # accept payments within 10% under (gas/rounding)
 
 def x402_get_payto() -> str:
