@@ -16612,6 +16612,24 @@ elif st.session_state.page == "portfolio":
     html[data-octo-page="portfolio"] [data-testid="stTextInput"] input:focus{
       border-color:var(--pa-accent)!important;box-shadow:0 0 0 1px var(--pa-accent)!important;}
     html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p{color:var(--pa-text)!important;}
+    html[data-octo-page="portfolio"] .pa-title,
+    html[data-octo-page="portfolio"] .pa-sub,
+    html[data-octo-page="portfolio"] [data-testid="stMarkdownContainer"],
+    html[data-octo-page="portfolio"] [data-testid="stMarkdownContainer"] p,
+    html[data-octo-page="portfolio"] [data-testid="stMarkdownContainer"] strong,
+    html[data-octo-page="portfolio"] [data-testid="stHeading"] h1,
+    html[data-octo-page="portfolio"] [data-testid="stHeading"] h2,
+    html[data-octo-page="portfolio"] [data-testid="stHeading"] h3,
+    html[data-octo-page="portfolio"] [data-testid="stCaptionContainer"],
+    html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"],
+    html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p,
+    html[data-octo-page="portfolio"] [data-testid="stForm"] label,
+    html[data-octo-page="portfolio"] [data-testid="stForm"] label p,
+    html[data-octo-page="portfolio"] [data-testid="stAlert"],
+    html[data-octo-page="portfolio"] [data-testid="stAlert"] *{color:var(--pa-text)!important;}
+    html[data-octo-page="portfolio"] .pa-kicker,
+    html[data-octo-page="portfolio"] .pa-answer-label{color:var(--pa-accent)!important;}
+    html[data-octo-page="portfolio"] [data-testid="stCaptionContainer"]{opacity:.88;}
     .pa-hero{position:relative;display:flex;align-items:center;gap:16px;overflow:hidden;
       padding:17px 22px;border:1px solid var(--pa-line);border-radius:20px;
       background:linear-gradient(115deg,var(--pa-accent-soft),var(--pa-surface));
@@ -16769,7 +16787,58 @@ elif st.session_state.page == "portfolio":
             if not _portfolio_question.strip():
                 st.session_state["portfolio_answer"] = "Enter a question about the current snapshot."
             else:
-                st.session_state["portfolio_answer"] = answer_portfolio_question(_portfolio_question, _snapshot)
+                _docs_hits = []
+                _chain_result = ""
+                _docs_error = None
+                _chain_error = None
+                try:
+                    _docs_raw = mcp_text(call_local_docs_tool(
+                        "search_pharos_docs",
+                        {"query": "Pharos " + _portfolio_question.strip(), "limit": 5},
+                    ))
+                    _docs_hits = json.loads(_docs_raw) if _docs_raw else []
+                    if not isinstance(_docs_hits, list):
+                        _docs_hits = []
+                except Exception as _exc:
+                    _docs_error = str(_exc)[:200]
+                try:
+                    # Chain MCP is queried on every submitted portfolio question.
+                    # get_balance is a read-only operation and is used only to
+                    # corroborate the wallet snapshot; no signing/broadcast tool is called.
+                    _chain_result = mcp_text(call_remote_pharos_tool(
+                        "get_balance", {"address": _snapshot["wallet"]},
+                    ))
+                    if not _chain_result:
+                        _chain_error = "Chain MCP returned no readable balance data."
+                except Exception as _exc:
+                    _chain_error = str(_exc)[:200]
+
+                _portfolio_answer = answer_portfolio_question(_portfolio_question, _snapshot)
+                if _portfolio_answer.startswith("I can answer wallet token balances"):
+                    _document_excerpts = [
+                        (str(hit.get("title") or "Pharos Developer Docs"),
+                         str(hit.get("excerpt") or "").strip()[:900])
+                        for hit in _docs_hits if isinstance(hit, dict) and hit.get("excerpt")
+                    ][:2]
+                    if _document_excerpts:
+                        _portfolio_answer = (
+                            "The wallet snapshot does not contain this information. "
+                            "The Developer Docs MCP returned these relevant excerpts; "
+                            "they describe the documented network or protocol behavior, "
+                            "but do not verify wallet-specific state.\n\n"
+                            + "\n\n".join(f"{title}: {excerpt}" for title, excerpt in _document_excerpts)
+                        )
+                    elif not _docs_error:
+                        _portfolio_answer = (
+                            "The wallet snapshot does not contain this information, and the "
+                            "Developer Docs MCP returned no supporting material. I can’t verify "
+                            "this request from the available sources, so I won’t guess."
+                        )
+                st.session_state["portfolio_answer"] = _portfolio_answer
+                st.session_state["portfolio_question_sources"] = {
+                    "docs": _docs_hits, "chain_result": _chain_result,
+                    "docs_error": _docs_error, "chain_error": _chain_error,
+                }
         if st.session_state.get("portfolio_answer"):
             _answer_html = esc(st.session_state["portfolio_answer"]).replace("\n", "<br>")
             st.markdown(
@@ -16778,6 +16847,22 @@ elif st.session_state.page == "portfolio":
                 + _answer_html + '</section>',
                 unsafe_allow_html=True,
             )
+            _question_sources = st.session_state.get("portfolio_question_sources", {})
+            if _question_sources.get("docs_error"):
+                st.caption("Developer Docs MCP unavailable: " + _question_sources["docs_error"])
+            elif _question_sources.get("docs"):
+                st.caption("Developer Docs MCP sources consulted")
+                for _doc in _question_sources["docs"][:3]:
+                    if isinstance(_doc, dict) and _doc.get("url", "").startswith("https://docs.pharos.xyz/"):
+                        st.markdown(f"- [{esc(_doc.get('title', 'Pharos Developer Docs'))}]({_doc['url']})")
+            else:
+                st.caption("Developer Docs MCP returned no supporting documentation for this question; the answer uses only readable snapshot data.")
+            if _question_sources.get("chain_error"):
+                st.caption("Chain MCP corroboration unavailable: " + _question_sources["chain_error"])
+            elif _question_sources.get("chain_result"):
+                st.caption("Chain MCP read-only balance check completed for this wallet.")
+                with st.expander("Chain MCP balance result"):
+                    st.code(_question_sources["chain_result"][:2000], language="text")
 
 elif st.session_state.page == "campaigns":
 
