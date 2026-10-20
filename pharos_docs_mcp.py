@@ -13,8 +13,14 @@ MAX_CHARS = 6000
 
 
 def search_docs(query: str, limit: int = 5) -> list[dict[str, str]]:
-    terms = {term for term in re.findall(r"[a-z0-9_-]{2,}", query.lower()) if term not in {"what", "does", "the", "how", "with", "from", "about", "please"}}
-    hits: list[tuple[int, dict[str, str]]] = []
+    normalized_query = re.sub(r"([a-z])([A-Z])", r"\1 \2", query).replace("_", " ").lower()
+    terms = {term for term in re.findall(r"[a-z0-9-]{2,}", normalized_query) if term not in {
+        "what", "does", "the", "how", "with", "from", "about", "please", "use",
+        "on", "and", "for", "of", "to", "in", "a", "an", "my", "me", "do",
+        "eth", "get", "id",
+    }}
+    hits: list[tuple[int, int, dict[str, str]]] = []
+    best_by_source: dict[str, tuple[int, int, dict[str, str]]] = {}
     if not DOCS.exists() or not terms:
         return []
     for path in DOCS.glob("*.txt"):
@@ -22,18 +28,36 @@ def search_docs(query: str, limit: int = 5) -> list[dict[str, str]]:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        low = text.lower()
-        score = sum(low.count(term) for term in terms)
-        if score:
+        lines = text.splitlines()
+        source = next((line.partition(": ")[2].strip() for line in lines[:8] if line.startswith("SOURCE_URL:")), "")
+        # This MCP is specifically the Developer Docs MCP. Ignore scraped
+        # third-party pages (which often repeat words such as "testnet" and
+        # previously outranked the actual Pharos documentation).
+        if not source.startswith("https://docs.pharos.xyz/"):
+            continue
+        title = next((line.partition(": ")[2].strip() for line in lines[:8] if line.startswith("TITLE:")), path.stem)
+        # Split camelCase JSON-RPC names (eth_getBalance) so method docs can
+        # be found with normal user language (balance).
+        searchable = re.sub(r"([a-z])([A-Z])", r"\1 \2", text).replace("_", " ")
+        low = searchable.lower()
+        matches = {term for term in terms if term in low}
+        relevant_terms = terms - {"atlantic", "pacific", "testnet", "mainnet", "pharos", "network"}
+        coverage = len(matches & relevant_terms)
+        # A supported plan needs at least two topic terms in the source; broad
+        # keyword overlap alone is not enough to claim the docs cover it.
+        if coverage >= min(2, len(relevant_terms)):
+            score = sum(min(low.count(term), 12) for term in matches) + coverage * 5
             # Return a bounded excerpt around the densest matching region.
-            lines = text.splitlines()
-            best = max(range(len(lines)), key=lambda i: sum(sum(term in lines[j].lower() for term in terms) for j in range(max(0, i-2), min(len(lines), i+3))))
+            best = max(range(len(lines)), key=lambda i: sum(sum(term in lines[j].lower() for term in matches) for j in range(max(0, i-2), min(len(lines), i+3))))
             excerpt = "\n".join(lines[max(0, best-2):min(len(lines), best+5)])[:MAX_CHARS]
-            source = next((line.partition(": ")[2].strip() for line in lines[:8] if line.startswith("SOURCE_URL:")), "")
-            title = next((line.partition(": ")[2].strip() for line in lines[:8] if line.startswith("TITLE:")), path.stem)
-            hits.append((score, {"title": title, "url": source, "excerpt": excerpt}))
-    hits.sort(key=lambda pair: pair[0], reverse=True)
-    return [item for _, item in hits[:max(1, min(int(limit), 10))]]
+            item = {"title": title, "url": source, "excerpt": excerpt}
+            candidate = (coverage, score, item)
+            current = best_by_source.get(source)
+            if current is None or candidate[:2] > current[:2]:
+                best_by_source[source] = candidate
+    hits = list(best_by_source.values())
+    hits.sort(key=lambda pair: (pair[0], pair[1]), reverse=True)
+    return [item for _, _, item in hits[:max(1, min(int(limit), 10))]]
 
 
 def respond(message: dict) -> dict | None:

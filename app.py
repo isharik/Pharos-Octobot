@@ -633,6 +633,7 @@ if "sources_history" not in st.session_state: st.session_state.sources_history =
 if "show_sources"    not in st.session_state: st.session_state.show_sources    = True
 if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
 if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "free"
+if "pharos_agent_transfer_draft" not in st.session_state: st.session_state.pharos_agent_transfer_draft = None
 if "octobot_lang"    not in st.session_state: st.session_state.octobot_lang    = "English"
 if "build_path_goal" not in st.session_state: st.session_state.build_path_goal = None
 if "build_path_data" not in st.session_state: st.session_state.build_path_data = None
@@ -3988,6 +3989,182 @@ def free_mcp_rpc_answer(question: str) -> tuple[str, list[dict], list[str]]:
     if not context and not rpc_result:
         parts.append("No matching documentation or supported live RPC result was found. Try a narrower question or include an address / transaction hash.")
     return "\n\n".join(parts), sources, list(dict.fromkeys(labels))
+
+
+def pharos_agent_answer(question: str) -> tuple[str, list[dict], list[str]]:
+    """Docs-first, fail-closed Pharos how-to agent with verified read actions.
+
+    This deliberately supports a small set of documented workflows. The hosted
+    Network MCP is read-only; a native transfer is handed to the existing Pay
+    page as a draft and is never signed or broadcast by this server.
+    """
+    q = question.lower()
+    addr_match = re.search(r"0x[a-fA-F0-9]{40}", question)
+    tx_match = re.search(r"0x[a-fA-F0-9]{64}", question)
+    is_testnet = any(term in q for term in ("atlantic", "testnet"))
+    network_name = "Atlantic Testnet" if is_testnet else "Pacific Mainnet"
+    explorer = PHAROS_TESTNET_EXPLORER_URL if is_testnet else PHAROS_EXPLORER_URL
+    rpc = PHAROS_TESTNET_RPC_URL if is_testnet else None
+
+    workflow = None
+    if tx_match and any(word in q for word in ("transaction", "receipt", "status", "verify", "hash", "tx")):
+        workflow = "transaction"
+        docs_query = f"{network_name} eth_getTransactionReceipt eth_getTransactionByHash JSON-RPC explorer transaction status"
+    elif addr_match and any(word in q for word in ("balance", "holdings", "funds", "check my wallet")):
+        workflow = "balance"
+        docs_query = f"{network_name} eth_getBalance eth_getTransactionCount RPC native PHRS balance"
+    elif ("phrs" in q and any(word in q for word in ("send", "transfer", "pay"))) or "send native" in q or "transfer native" in q:
+        workflow = "transfer"
+        docs_query = f"{network_name} Pharos Skill Engine wallet send native PHRS transaction sign"
+    elif any(word in q for word in ("network status", "latest block", "block height", "gas price", "chain id", "network info")):
+        workflow = "network"
+        docs_query = f"{network_name} eth_chainId eth_blockNumber eth_gasPrice RPC network"
+    else:
+        return (
+            "I can’t safely plan this action from the Pharos Developer Docs MCP and supported chain tools. "
+            "This agent currently handles wallet balance checks, transaction status/receipt checks, "
+            "network status (chain ID, block, gas price), and native PHRS transfer drafts. "
+            "I won’t guess steps for an undocumented or unsupported request.", [], [],
+        )
+
+    if workflow == "transfer" and not any(term in q for term in ("atlantic", "testnet", "pacific", "mainnet")):
+        return ("A transfer needs an explicit network to avoid preparing a payment on the wrong chain. "
+                "Ask again with `Atlantic testnet` or `Pacific mainnet`. No docs search or transaction action was started.", [], [])
+
+    # Retrieve documentation before touching the chain and require at least
+    # one usable source. No Gemini response or undocumented fallback is used.
+    try:
+        raw = mcp_text(call_local_docs_tool(
+            "search_pharos_docs", {"query": docs_query, "limit": 10},
+        ))
+        hits = json.loads(raw) if raw else []
+    except Exception as exc:
+        return ("**Plan unavailable:** Developer Docs MCP could not be reached, so I did not act. "
+                "Details: " + str(exc), [], ["Pharos Docs MCP"])
+    hits = [h for h in hits if isinstance(h, dict) and h.get("url") and h.get("excerpt")]
+    required_doc = {
+        "balance": "api-and-sdk",
+        "transaction": "api-and-sdk",
+        "network": "api-and-sdk",
+        "transfer": "pharos-skill-engine-guide",
+    }[workflow]
+    grounded_hits = [h for h in hits if required_doc in h["url"].lower()]
+    if not grounded_hits:
+        return ("The Developer Docs MCP did not return the Pharos documentation needed to support this specific action. "
+                "I can’t verify a plan, so I did not perform any chain action.", [], ["Pharos Docs MCP"])
+    # Keep the directly relevant workflow docs first and add network setup
+    # docs where available so each plan is grounded in its actual API guide.
+    hits = grounded_hits + [h for h in hits if h not in grounded_hits]
+    if not hits:
+        return ("The Developer Docs MCP did not return a source for this request. "
+                "I can’t verify a plan, so I did not perform any chain action.", [], ["Pharos Docs MCP"])
+    sources = [{"title": h.get("title", "Pharos Developer Docs"), "url": h["url"]} for h in hits[:3]]
+    citations = " ".join(f"[{s['title']}]({s['url']})" for s in sources)
+    plan_steps = {
+        "balance": ["Use the documented Pharos network endpoint for the selected network.",
+                    "Read the supplied address balance and transaction count without signing.",
+                    "Report the RPC response and link the address in the matching explorer."],
+        "transaction": ["Look up the supplied transaction hash on the selected network.",
+                        "Read its transaction and receipt status from RPC.",
+                        "Compare the mined status with the receipt and link the explorer record."],
+        "network": ["Read chain ID, current block, and gas price from the selected network RPC.",
+                    "Compare the chain ID with the Developer Docs network entry.",
+                    "Report which values were returned and link the network explorer."],
+        "transfer": ["Use the selected network’s documented chain details.",
+                     "Prepare a native PHRS transfer draft in OctoBot Pay.",
+                     "The connected wallet must review and sign; after broadcast, verify the receipt by hash."],
+    }
+    answer = "**Plan (from Pharos Developer Docs MCP; before chain access)**\n"
+    answer += "\n".join(f"{i}. {step}" for i, step in enumerate(plan_steps[workflow], 1))
+    answer += "\n\n**Sources:** " + citations + "\n\n"
+    labels = ["Pharos Docs MCP"]
+
+    if workflow == "balance":
+        try:
+            if not is_testnet:
+                mcp_result = call_remote_pharos_tool("get_balance", {"address": addr_match.group(0)})
+                mcp_value = mcp_text(mcp_result)
+                if not mcp_value:
+                    return answer + "**Execution failed:** Pharos Network MCP returned no balance data.", sources, labels
+                answer += "**Chain MCP result:** " + mcp_value + "\n\n"
+                sources.append({"title": "Pharos Network MCP · get_balance", "url": "https://github.com/PharosNetwork/pharos-mcp"})
+                labels.append("Pharos Network MCP")
+            account = fetch_pharos_onchain_data(addr_match.group(0), rpc_override=rpc)
+            if not account.get("available"):
+                return answer + "**Execution failed:** RPC did not return verified account data: " + str(account.get("error") or "unavailable"), sources, labels
+            # The request result itself is the verification for this read-only operation.
+            answer += (f"**Executed and verified on {network_name}:** native balance **{account.get('balance_pros')} PHRS**; "
+                       f"transaction count **{account.get('tx_count')}**; contract account: **{'yes' if account.get('is_contract') else 'no'}**.\n\n"
+                       f"[View address on explorer]({explorer}/address/{addr_match.group(0)})")
+            labels.append("Pharos RPC · read-only")
+            sources.append({"title": f"{network_name} RPC result", "url": f"{explorer}/address/{addr_match.group(0)}"})
+        except Exception as exc:
+            answer += "**Execution failed:** Pharos RPC lookup failed: " + str(exc)
+    elif workflow == "transaction":
+        try:
+            if not is_testnet:
+                mcp_result = call_remote_pharos_tool("get_transaction_receipt", {"hash": tx_match.group(0)})
+                mcp_value = mcp_text(mcp_result)
+                if not mcp_value:
+                    return answer + "**Verification inconclusive:** Pharos Network MCP returned no receipt data.", sources, labels
+                answer += "**Chain MCP receipt:** " + mcp_value + "\n\n"
+                sources.append({"title": "Pharos Network MCP · get_transaction_receipt", "url": "https://github.com/PharosNetwork/pharos-mcp"})
+                labels.append("Pharos Network MCP")
+            tx = fetch_pharos_transaction(tx_match.group(0), rpc_override=rpc)
+            if not tx.get("available"):
+                answer += "**Verification inconclusive:** RPC did not return a transaction/receipt: " + str(tx.get("error") or "not found or pending")
+            else:
+                status = tx.get("status") or "pending / receipt unavailable"
+                answer += (f"**Executed and verified on {network_name}:** status **{status}**; "
+                           f"block **{tx.get('block_number') or 'pending'}**; from `{tx.get('from_addr') or 'unknown'}`; "
+                           f"to `{tx.get('to_addr') or 'contract creation'}`.\n\n"
+                           f"[View transaction on explorer]({explorer}/tx/{tx_match.group(0)})")
+                labels.append("Pharos RPC · read-only")
+                sources.append({"title": f"{network_name} RPC transaction result", "url": f"{explorer}/tx/{tx_match.group(0)}"})
+        except Exception as exc:
+            answer += "**Verification failed:** Pharos RPC lookup failed: " + str(exc)
+    elif workflow == "network":
+        try:
+            if not is_testnet:
+                for tool_name in ("get_chain_info", "get_block_number", "get_gas_price"):
+                    mcp_result = call_remote_pharos_tool(tool_name, {})
+                    mcp_value = mcp_text(mcp_result)
+                    if mcp_value:
+                        answer += f"**Chain MCP · {tool_name}:** {mcp_value}\n\n"
+                        sources.append({"title": "Pharos Network MCP · " + tool_name, "url": "https://github.com/PharosNetwork/pharos-mcp"})
+                        labels.append("Pharos Network MCP")
+                if "Pharos Network MCP" not in labels:
+                    return answer + "**Execution failed:** Pharos Network MCP returned no network data.", sources, labels
+            chain_id = int(_rpc("eth_chainId", [], rpc_url=rpc), 16)
+            block = int(_rpc("eth_blockNumber", [], rpc_url=rpc), 16)
+            gas_gwei = int(_rpc("eth_gasPrice", [], rpc_url=rpc), 16) / 1e9
+            expected_chain = 688689 if is_testnet else 1672
+            answer += (f"**Executed and verified:** {network_name} RPC reports chain ID **{chain_id}** "
+                       f"({'matches' if chain_id == expected_chain else 'does not match'} the documented ID {expected_chain}), "
+                       f"latest block **{block}**, gas price **{gas_gwei:g} Gwei**.\n\n[Open explorer]({explorer})")
+            labels.append("Pharos RPC · read-only")
+            sources.append({"title": f"{network_name} live RPC", "url": explorer})
+        except Exception as exc:
+            answer += "**Execution failed:** Could not read network state from RPC: " + str(exc)
+    else:
+        amount_match = re.search(r"\b(\d+(?:\.\d+)?)\s*phrs\b", q)
+        if not addr_match or not amount_match:
+            answer += "**Draft not prepared yet:** include a recipient address and amount, for example `How do I send 0.1 PHRS to 0x… on Atlantic testnet?` No transaction was submitted."
+        else:
+            amount = float(amount_match.group(1))
+            if amount <= 0 or amount > 1_000_000:
+                answer += "**Draft rejected:** enter a positive amount no greater than 1,000,000 PHRS. No transaction was submitted."
+            else:
+                st.session_state.pharos_agent_transfer_draft = {
+                    "to": addr_match.group(0), "amount": amount,
+                    "network": "testnet" if is_testnet else "mainnet",
+                }
+                answer += (f"**Transfer prepared for wallet review:** {amount:g} PHRS to `{addr_match.group(0)}` on {network_name}. "
+                           "The server cannot sign or broadcast this transaction. Use the **Review transfer in Pay** button below; "
+                           "your connected wallet will show the transaction and requires your signature. No funds have moved.")
+    if is_testnet and workflow in ("balance", "transaction", "network"):
+        answer += "\n\n*Atlantic Testnet uses the documented public RPC here; the hosted Pharos Network MCP endpoint only serves Pacific Mainnet.*"
+    return answer, sources, list(dict.fromkeys(labels))
 
 def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") -> str:
     """Generate the ENHANCED (premium) answer that the paid call unlocks.
@@ -14850,7 +15027,7 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
     # read the toggle's own widget key first — Streamlit updates it *before* the
     # rerun, so the trigger label reflects a just-flipped premium state at once
     # (the assigned `x402_enabled` mirror only refreshes further down the script).
-    _x402_on     = (not is_free_mode) and bool(st.session_state.get("x402_enabled_toggle_main",
+    _x402_on     = (not is_free_mode and current_mode != "pharos_agent") and bool(st.session_state.get("x402_enabled_toggle_main",
                                                                      st.session_state.get("x402_enabled")))
 
     # ── Welcome strip — a full-width header banner across the TOP of the chat
@@ -14925,7 +15102,7 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"]{background:li
 html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color:#EDEFF7!important;}
 </style>
 """, unsafe_allow_html=True)
-    _mode_lbl = "Free · MCP + RPC" if is_free_mode else "Docs + General" if is_general else "Docs only"
+    _mode_lbl = "Free · MCP + RPC" if is_free_mode else "Docs + General" if is_general else "Pharos How-to Agent" if current_mode == "pharos_agent" else "Docs only"
     _prem_tag = "   ·   💠 x402" if _x402_on else ""
     with st.popover(f"⚙    {cur_flag} {cur_lang}    ·    {_mode_lbl}{_prem_tag}", use_container_width=False):
         st.markdown('<div class="copt-sec">Response language</div>', unsafe_allow_html=True)
@@ -14950,8 +15127,14 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
                      use_container_width=True,
                      help="Free retrieval mode. Uses local docs and public read-only MCP/RPC; no Gemini API."):
             st.session_state.chat_mode = "free"; st.rerun()
+        if st.button("🧭 Pharos How-to Agent" + ("  ✓" if current_mode == "pharos_agent" else ""), key="mode_pharos_agent",
+                     use_container_width=True,
+                     help="Plans from cited Pharos Developer Docs, runs supported chain reads, and verifies results. No Gemini API."):
+            st.session_state.chat_mode = "pharos_agent"; st.rerun()
         if is_free_mode:
             st.caption("Free mode returns docs/MCP/RPC results directly. No Gemini or LLM API is used.")
+        elif current_mode == "pharos_agent":
+            st.caption("Docs-first execution: balance, transaction and network checks; PHRS transfers are drafts for wallet signature. Unsupported actions fail closed.")
         else:
             st.markdown('<div class="copt-sec">Premium answers</div>', unsafe_allow_html=True)
             st.session_state.x402_enabled = st.toggle(
@@ -15097,7 +15280,7 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
         # of chat and payment continues through the connected testnet wallet.
         # Free mode skips this entirely.
         _x402_ch = x402_make_challenge(question)
-        _x402_premium = (st.session_state.get("chat_mode") != "free"
+        _x402_premium = (st.session_state.get("chat_mode") not in ("free", "pharos_agent")
                          and bool(st.session_state.get("x402_enabled")))
         _x402_paid = _x402_ch["resource"] in st.session_state.get("x402_unlocked", {})
 
@@ -15119,7 +15302,10 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
             with st.spinner(""):
                 try:
-                    if st.session_state.get("chat_mode") == "free":
+                    if st.session_state.get("chat_mode") == "pharos_agent":
+                        answer, sources, _mcp_labels = pharos_agent_answer(question)
+                        st.session_state.mcp_last_sources = _mcp_labels
+                    elif st.session_state.get("chat_mode") == "free":
                         answer, sources, _mcp_labels = free_mcp_rpc_answer(question)
                         st.session_state.mcp_last_sources = _mcp_labels
                     # x402: if this question's resource was paid for, generate
@@ -15205,6 +15391,27 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
                             st.code("PAYMENT-RESPONSE: " + _report["payment_response_header"], language="text")
 
             st.markdown(answer)
+
+            _agent_draft = st.session_state.get("pharos_agent_transfer_draft")
+            if st.session_state.get("chat_mode") == "pharos_agent" and _agent_draft:
+                st.info(f"Draft: {_agent_draft['amount']:g} PHRS → {_agent_draft['to']} · {('Atlantic Testnet' if _agent_draft['network'] == 'testnet' else 'Pacific Mainnet')}. No transaction has been sent.")
+                if st.button("Review transfer in Pay", key="agent_review_transfer_" + str(len(st.session_state.messages)), type="primary"):
+                    st.session_state.pay_network = _agent_draft["network"]
+                    st.session_state.pay_intent_raw = f"Send {_agent_draft['amount']:g} PHRS to {_agent_draft['to']}"
+                    # Seed a strictly bounded native-token send preview from
+                    # the already validated draft; do not invoke Gemini to
+                    # reinterpret a request that can move funds.
+                    st.session_state.pay_parsed = {
+                        "recipient": _agent_draft["to"],
+                        "amount": _agent_draft["amount"],
+                        "reason": "Pharos How-to Agent prepared transfer",
+                        "_intent": "send",
+                    }
+                    st.session_state.pay_confirmed = False
+                    st.session_state.pay_result = None
+                    st.session_state.pharos_agent_transfer_draft = None
+                    st.session_state.page = "pay"
+                    st.rerun()
 
             # ── Build Path card (feature 2) ───────────
             msg_idx = str(len(st.session_state.messages))
@@ -18766,7 +18973,7 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             "rpc":          PHAROS_RPC_URL,
             "explorer":     PHAROS_EXPLORER_URL,
             "chain_id_dec": PHAROS_CHAIN_ID_DEC,
-            "symbol":       "PROS",
+            "symbol":       "PHRS",
         }
 
     def _estimate_native_transfer(rpc_url: str, sender: str, recipient: str, amount_hex: str) -> dict:
