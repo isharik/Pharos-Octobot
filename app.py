@@ -3963,7 +3963,9 @@ def x402_render_pending_gate() -> bool:
     _challenge_body = None
     _facilitator_error = None
     try:
-        _challenge_response = requests.get(X402_FACILITATOR_URL + "/premium", timeout=8)
+        # Free facilitator hosts may sleep when idle and need about a minute to
+        # wake. Give the first challenge request enough time to reach the app.
+        _challenge_response = requests.get(X402_FACILITATOR_URL + "/premium", timeout=(5, 90))
         if _challenge_response.status_code == 402:
             _challenge_body = _challenge_response.json()
             _accepted = (_challenge_body.get("accepts") or [{}])[0]

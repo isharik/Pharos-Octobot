@@ -132,7 +132,7 @@ This is OctoBot's Atlantic native-PHRS x402 profile (`pharos-native-transfer`), 
 
 Streamlit Community Cloud hosts the Streamlit app; it does not run the separate Uvicorn facilitator process. Deploy the facilitator as its own public service, then give the Streamlit app its HTTPS URL:
 
-1. Push this repository to GitHub and open [Render](https://dashboard.render.com/). Choose **New → Blueprint**, select this repository and the `dev` branch, and let Render read the root `render.yaml` file. The Blueprint creates `octobot-x402-facilitator`, installs only `requirements-facilitator.txt`, runs Uvicorn on Render's assigned port, and keeps SQLite reports on a persistent disk. The disk requires a paid Render service plan.
+1. Push this repository to GitHub and open [Render](https://dashboard.render.com/). Choose **New → Blueprint**, select this repository and the `dev` branch, and let Render read the root `render.yaml` file. The Blueprint creates `octobot-x402-facilitator` on Render's **Free** plan and installs only `requirements-facilitator.txt`.
 2. When prompted for `X402_PAYTO_ADDRESS`, enter the public Atlantic Testnet address that should receive the 0.005/0.01 PHRS route payments. This is a public address, not a private key. Deploy the Blueprint and wait until its `/health` check succeeds.
 3. Copy the facilitator's public URL from its Render dashboard, for example `https://octobot-x402-facilitator.onrender.com`. Check `/supported` on that domain; it should report chain ID `688689`, `payToConfigured: true`, both paid routes, and `/health`.
 4. In Streamlit Community Cloud, open the OctoBot app's **Settings → Secrets** and add:
@@ -145,7 +145,7 @@ Streamlit Community Cloud hosts the Streamlit app; it does not run the separate 
    The receiving address must match the one configured on Render. Streamlit Cloud settings are separate from the local root `.env`; the app reads either environment variables or Streamlit secrets. Save the settings and reboot the app.
 5. Open the public OctoBot app, enable the Premium option, and check that the payment challenge is for `0.01 PHRS` on Atlantic Testnet. Test a settlement with a funded test wallet, then check the transaction on the Atlantic explorer and the facilitator's `/reports` page.
 
-Render may sleep or restart services depending on its plan. The configured persistent disk preserves settlement reports across restarts and deployments. Never commit `.env` or Streamlit `secrets.toml`; `.env` is ignored by Git.
+Render's Free service sleeps after 15 minutes without traffic and can take about a minute to wake; the app allows extra time for that first request. Its filesystem is temporary, so the facilitator's SQLite report history can disappear when the service sleeps, restarts, or redeploys. The on-chain transactions remain verifiable from Atlantic PharosScan. Never commit `.env` or Streamlit `secrets.toml`; `.env` is ignored by Git.
 
 > The knowledge base ships pre-built in `chroma_gemini/`. To rebuild it from scratch, run `crawl_docs.py` then `build_vectorstore.py` — you'll need `GEMINI_API_KEY` set, since embeddings are generated via the Gemini API.
 
