@@ -234,96 +234,203 @@ def read_wallet_snapshot(
 
 
 def answer_portfolio_question(question: str, snapshot: dict[str, Any]) -> str:
-    """Answer common portfolio questions from snapshot data only."""
+    """Answer only from the supplied block-pinned snapshot; explain coverage limits."""
     q = str(question or "").strip().lower()
     balances = snapshot.get("balances", [])
-    positions = [p for p in snapshot.get("positions", []) if p.get("available")]
-    known_symbols = sorted({str(row.get("symbol", "")).lower() for row in balances}
-                           | {str(row.get("asset_symbol", "")).lower() for row in positions},
-                           key=len, reverse=True)
+    positions_all = snapshot.get("positions", [])
+    positions = [row for row in positions_all if row.get("available")]
+    failed_balances = [row for row in balances if row.get("amount") is None]
+    failed_positions = [row for row in positions_all if not row.get("available")]
 
-    def refs(rows: list[dict[str, Any]]) -> str:
-        return "\n".join(
-            f"- Source: {row.get('source_contract')} · block {row.get('block_number')}"
-            for row in rows
+    def source_line(row: dict[str, Any]) -> str:
+        source = row.get("source_contract") or "Unknown contract"
+        block = row.get("block_number", snapshot.get("block_number", "unknown"))
+        return f"Source: {source} · block {block}"
+
+    def fmt(amount: Any) -> str:
+        return f"{float(amount):,.8g}"
+
+    def token_key(row: dict[str, Any], is_vault: bool = False) -> str:
+        address = row.get("asset_address") if is_vault else row.get("token_address")
+        if address:
+            return str(address).lower()
+        return "native:pros"
+
+    known_symbols = sorted(
+        {str(row.get("symbol", "")).strip().lower() for row in balances if row.get("symbol")}
+        | {str(row.get("asset_symbol", "")).strip().lower() for row in positions if row.get("asset_symbol")},
+        key=len, reverse=True,
+    )
+    requested = next((symbol for symbol in known_symbols if re.search(
+        rf"(?<![a-z0-9]){re.escape(symbol)}(?![a-z0-9])", q,
+    )), None)
+
+    if any(word in q for word in ("apy", "apr", "yield", "earning", "earnings", "rewards", "interest", "returns", "profit", "income")):
+        if not positions:
+            message = "I can’t calculate earnings: no configured vault position was readable in this snapshot."
+        else:
+            message = (
+                "I can read the configured vault balances, but this snapshot doesn’t include a verified "
+                "APY, accrued-reward, or interest adapter. ERC-4626 share conversion alone does not prove "
+                "how much yield you earned, so I won’t estimate it."
+            )
+        if positions:
+            message += "\nReadable vaults checked:\n" + "\n".join(
+                f"- {row['protocol']}: {fmt(row['assets'])} {row['asset_symbol']} "
+                f"({fmt(row['shares'])} shares); {source_line(row)}"
+                for row in positions
+            )
+        if failed_positions:
+            message += f"\n{len(failed_positions)} configured vault read(s) failed, so those positions were not included."
+        return message
+
+    if any(term in q for term in ("worth", "usd value", "value in usd", "portfolio value", "net worth", "dollar value")):
+        return (
+            "I can report token amounts, but this snapshot has no verified, block-matched price feed. "
+            "I can’t calculate a trustworthy USD portfolio value from these balances, so I won’t guess."
         )
 
-    requested = next((symbol for symbol in known_symbols if symbol and re.search(
-        rf"(?<![a-z0-9]){re.escape(symbol)}(?![a-z0-9])", q)), None)
-    if any(term in q for term in ("earning", "yield", "apy", "apr", "rewards", "interest")):
-        if not positions:
-            return ("I can’t determine earnings because no configured ERC-4626 vault position was readable. "
-                    "No yield figure is available from this snapshot.")
-        return ("I can read your configured vault share positions, but ERC-4626 does not standardize "
-                "current APY or accrued rewards. This snapshot has no reviewed protocol-specific yield "
-                "adapter, so I can’t verify what you’re earning and won’t estimate it.\n\n" + refs(positions))
-
-    if any(term in q for term in ("where", "held", "holding", "holdings", "located", "which protocol")) and requested:
-        token_rows = [row for row in balances if row.get("symbol", "").lower() == requested]
-        vault_rows = [row for row in positions if row.get("asset_symbol", "").lower() == requested]
-        failed_rows = [row for row in token_rows if row.get("amount") is None]
-        if failed_rows and not any(row.get("amount") is not None for row in token_rows) and not vault_rows:
-            return (f"I couldn’t read the {requested.upper()} balance from its token contract at block "
-                    f"{failed_rows[0]['block_number']}. The value is unavailable, not zero.\n" + refs(failed_rows))
-        if not token_rows and not vault_rows:
-            return f"No readable {requested.upper()} balance or configured vault position was found in this snapshot."
-        lines = [f"{requested.upper()} locations in this snapshot:"]
-        lines.extend(f"- Wallet: {row['amount']:.8g} {row['symbol']}" for row in token_rows
-                     if row.get("amount") is not None)
-        lines.extend(f"- {row['protocol']} vault: {row['assets']:.8g} {row['asset_symbol']} "
-                     f"({row['shares']:.8g} shares)" for row in vault_rows)
-        lines.append(refs([row for row in token_rows if row.get("amount") is not None] + vault_rows))
-        return "\n".join(lines)
-
-    if any(term in q for term in ("position", "vault", "deposited", "invested")):
-        if not positions:
-            return ("No configured ERC-4626 vault positions were readable. Add vault contract addresses "
-                    "on this page; unsupported contracts are reported instead of treated as positions.")
-        lines = ["Readable configured vault positions:"]
-        lines.extend(f"- {p['protocol']}: {p['assets']:.8g} {p['asset_symbol']} "
-                f"backed by {p['shares']:.8g} shares" for p in positions)
-        lines.append(refs(positions))
-        return "\n".join(lines)
-
-    if any(term in q for term in ("balance", "balances", "holdings", "portfolio")):
-        rows = [row for row in balances if row.get("amount") is not None]
-        if not rows:
-            return "No wallet token balances were readable in this snapshot."
-        lines = ["Readable wallet balances:"]
-        lines.extend(f"- {row['amount']:.8g} {row['symbol']}" for row in rows)
-        lines.append(refs(rows))
-        failed = [row for row in balances if row.get("amount") is None]
-        if failed:
-            lines.append("Unavailable token reads (not treated as zero): " + ", ".join(row["symbol"] for row in failed))
-        return "\n".join(lines)
-
-    if any(term in q for term in ("biggest", "largest", "most")):
-        rows = ([row for row in balances if row.get("amount") is not None and row["amount"] > 0]
-                + [{"symbol": p["asset_symbol"], "amount": p["assets"],
-                   "source_contract": p["source_contract"], "block_number": p["block_number"],
-                   "protocol": p["protocol"]} for p in positions])
-        symbols = {row["symbol"] for row in rows}
-        if len(symbols) != 1:
-            return ("I can’t rank positions across different assets without verified prices at the same "
-                    "valuation time. This snapshot has no complete, sourced price set, so I won’t call "
-                    "one position the largest.")
-        if not rows:
-            return "There are no readable balances or vault positions to rank."
-        top = max(rows, key=lambda row: row["amount"])
-        label = top.get("protocol", "wallet")
-        return (f"Largest position by {top['symbol']} units: {top['amount']:.8g} {top['symbol']} "
-                f"at {label}.\n- Source: {top['source_contract']} · block {top['block_number']}")
+    if any(word in q for word in ("biggest", "largest", "most", "highest")):
+        rank_balances = balances
+        rank_positions = positions
+        if requested:
+            rank_balances = [row for row in balances if str(row.get("symbol", "")).strip().lower() == requested]
+            rank_positions = [row for row in positions if str(row.get("asset_symbol", "")).strip().lower() == requested]
+        candidates = [
+            {**row, "_asset_key": token_key(row)}
+            for row in rank_balances if row.get("amount") is not None and row["amount"] > 0
+        ]
+        candidates.extend(
+            {**row, "symbol": row["asset_symbol"], "amount": row["assets"],
+             "_asset_key": token_key(row, is_vault=True)}
+            for row in rank_positions if row.get("assets") is not None and row["assets"] > 0
+        )
+        if not candidates:
+            message = "I can’t rank positions because this snapshot has no readable, non-zero balances."
+            if failed_balances or failed_positions:
+                message += " Some reads failed, so the available data may be incomplete."
+            return message
+        asset_keys = {row["_asset_key"] for row in candidates}
+        if len(asset_keys) != 1:
+            return (
+                "I can’t identify one largest position from these figures. They use different token "
+                "contracts or assets, and the snapshot has no complete, block-matched price data to "
+                "compare their values. I won’t compare unlike token amounts."
+            )
+        top = max(candidates, key=lambda row: row["amount"])
+        location = top.get("protocol", "wallet")
+        answer = (
+            f"The largest readable position is {location}: {fmt(top['amount'])} {top['symbol']} "
+            f"by token units. This compares the same token only; it is not a USD ranking.\n"
+            f"{source_line(top)}"
+        )
+        if failed_balances or failed_positions:
+            answer += "\nSome configured reads failed, so an unreadable position could be larger."
+        return answer
 
     if requested:
-        rows = [row for row in balances if row.get("symbol", "").lower() == requested]
-        if not rows:
-            return f"No readable {requested.upper()} wallet balance was found in this snapshot."
-        row = rows[0]
-        if row.get("amount") is None:
-            return f"The {requested.upper()} balance read failed: {row.get('error', 'RPC unavailable')}"
-        return (f"Wallet balance: {row['amount']:.8g} {row['symbol']} ({row['label']}).\n"
-                f"- Source: {row['source_contract']} · block {row['block_number']}")
+        wallet_rows = [row for row in balances if str(row.get("symbol", "")).strip().lower() == requested]
+        vault_rows = [row for row in positions if str(row.get("asset_symbol", "")).strip().lower() == requested]
+        unavailable_wallet = [row for row in wallet_rows if row.get("amount") is None]
+        readable_wallet = [row for row in wallet_rows if row.get("amount") is not None]
+        if not wallet_rows and not vault_rows:
+            message = (
+                f"I don’t have a readable {requested.upper()} entry in this snapshot. "
+                "The app checks its tracked token list and the vaults configured on this page; "
+                "that doesn’t prove the wallet has no other tokens."
+            )
+            if failed_positions:
+                message += f" {len(failed_positions)} configured vault read(s) also failed, so I can’t rule out a position there."
+            return message
 
-    return ("I can answer wallet token balances, where a tracked token is held, configured ERC-4626 "
-            "positions, largest positions when comparable in the same asset, and whether yield data "
-            "is available. This request doesn’t match one of those supported reads; I haven’t guessed.")
+        wallet_only = any(term in q for term in ("in my wallet", "in the wallet", "wallet only", "wallet balance"))
+        is_total = any(term in q for term in ("total", "altogether", "in all", "across", "combined", "how much"))
+        if wallet_only:
+            vault_rows = []
+            is_total = False
+        rows_for_sum = [(row, token_key(row)) for row in readable_wallet]
+        rows_for_sum.extend((row, token_key(row, is_vault=True)) for row in vault_rows)
+        identities = {key for _, key in rows_for_sum}
+        wants_location = any(term in q for term in ("where", "held", "holding", "holdings", "located", "which protocol"))
+
+        if is_total and len(identities) > 1:
+            return (
+                f"I found entries labeled {requested.upper()}, but they point to different token contracts. "
+                "I can list them separately, but can’t safely add them into one total."
+            )
+
+        lines = []
+        if wants_location:
+            lines.append(f"Here’s where {requested.upper()} appears in the readable snapshot:")
+        else:
+            lines.append(f"Readable {requested.upper()} amounts in this snapshot:")
+        for row in readable_wallet:
+            lines.append(f"- Wallet: {fmt(row['amount'])} {row['symbol']}")
+            lines.append(f"  {source_line(row)}")
+        for row in vault_rows:
+            lines.append(
+                f"- {row['protocol']} vault: {fmt(row['assets'])} {row['asset_symbol']} "
+                f"backed by {fmt(row['shares'])} shares"
+            )
+            lines.append(f"  {source_line(row)}")
+
+        if is_total and rows_for_sum and len(identities) == 1:
+            total = sum(float(row["amount"] if "amount" in row else row["assets"]) for row, _ in rows_for_sum)
+            lines.append(f"Total across these locations: {fmt(total)} {requested.upper()}.")
+        if unavailable_wallet:
+            lines.append(
+                f"I couldn’t read {requested.upper()} from {len(unavailable_wallet)} token contract read(s); "
+                "those values are unavailable, not zero."
+            )
+            lines.extend(source_line(row) for row in unavailable_wallet)
+        if failed_positions and (is_total or wants_location):
+            lines.append(
+                f"Note: {len(failed_positions)} configured vault read(s) failed. "
+                "The listed amounts may not include every configured vault."
+            )
+        return "\n".join(lines)
+
+    if any(word in q for word in ("position", "vault", "deposited", "invested", "protocol")):
+        if not positions_all:
+            return (
+                "No vaults are configured in this snapshot, so I can’t report protocol positions. "
+                "Add the vault contract addresses and read the portfolio again."
+            )
+        lines = ["Configured vault reads (only the contracts listed here were checked; this is not a complete protocol scan. Assets shown use ERC-4626 convertToAssets at this block, not an APY or redemption quote):"]
+        for row in positions_all:
+            if not row.get("available"):
+                lines.append(f"- {row['protocol']}: unavailable ({row.get('error', 'contract read failed')}). {source_line(row)}")
+            elif row.get("shares", 0) == 0:
+                lines.append(f"- {row['protocol']}: no shares held at this block.")
+                lines.append(f"  {source_line(row)}")
+            else:
+                lines.append(
+                    f"- {row['protocol']}: {fmt(row['assets'])} {row['asset_symbol']} "
+                    f"from {fmt(row['shares'])} shares."
+                )
+                lines.append(f"  {source_line(row)}")
+        return "\n".join(lines)
+
+    if any(word in q for word in ("balance", "balances", "holdings", "portfolio", "wallet", "assets")):
+        readable = [row for row in balances if row.get("amount") is not None]
+        if not readable:
+            return "I couldn’t read any tracked wallet balances at this snapshot block."
+        lines = ["Tracked wallet balances:"]
+        for row in readable:
+            lines.append(f"- {fmt(row['amount'])} {row['symbol']} ({row.get('label', 'wallet balance')})")
+            lines.append(f"  {source_line(row)}")
+        if failed_balances:
+            lines.append(
+                f"{len(failed_balances)} tracked token balance(s) could not be read; "
+                "they’re shown as unavailable, not zero."
+            )
+            lines.extend(f"- {row['symbol']}: {source_line(row)}" for row in failed_balances)
+        if "portfolio" in q:
+            lines.append("These are token amounts, not a USD portfolio valuation; no verified price feed is available in this snapshot.")
+        return "\n".join(lines)
+
+    return (
+        "I can answer from this snapshot about tracked wallet balances, a tracked token’s locations, "
+        "configured ERC-4626 vault positions, comparable same-token amounts, and whether yield data "
+        "is available. This snapshot doesn’t support the question as asked, so I can’t verify an answer."
+    )

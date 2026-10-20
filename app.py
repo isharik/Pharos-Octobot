@@ -16761,7 +16761,7 @@ elif st.session_state.page == "portfolio":
             except Exception as _exc:
                 _chain_error = str(_exc)[:200]
             _portfolio_answer = answer_portfolio_question(_portfolio_question, _snapshot)
-            if _portfolio_answer.startswith("I can answer wallet token balances"):
+            if _portfolio_answer.startswith("I can answer from this snapshot"):
                 _excerpts = [
                     (str(hit.get("title") or "Pharos Developer Docs"),
                      str(hit.get("excerpt") or "").strip()[:900])
