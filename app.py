@@ -32,6 +32,9 @@ from mcp_client import (
     call_local_docs_tool, call_remote_pharos_tool, mcp_text,
     network_tool_for_question,
 )
+from portfolio_assistant import (
+    PortfolioReadError, answer_portfolio_question, read_wallet_snapshot,
+)
 
 # ─────────────────────────────────────────────
 # PERFORMANCE: shared, cached Gemini client factory
@@ -9145,6 +9148,7 @@ NAV_PAGES = [
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🏦", "DeFi",      "defi"),
+    ("📈", "Positions", "portfolio"),
     ("🪪", "Passport",  "passport"),
     ("🧩", "DApps",     "ecosystem"),
     ("💸", "Pay",       "pay"),
@@ -9268,6 +9272,7 @@ _pnav_dd_products = [
     ("💬", "Chat",    "chat"),
     ("📊", "Trade",   "trade"),
     ("🏦", "DeFi",    "defi"),
+    ("📈", "Positions", "portfolio"),
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
@@ -9663,7 +9668,7 @@ _pnav_html = (
     '<div class="pnav-logo" data-pnav-go="home" title="OctoBot · Home">' + _pnav_logo_inner + '</div>'
     '<div class="pnav-ver">v2.0<span class="pnav-caret"></span></div>'
     '<div class="pnav-links">'
-    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
+    '<div class="pnav-item' + (" on" if _pg in ("chat", "trade", "defi", "portfolio", "pay", "request", "spns") else "") + '">Products<span class="pnav-caret"></span>'
     '<div class="pnav-dd">' + _pnav_dd_items(_pnav_dd_products) + '</div>'
     '</div>'
     '<div class="pnav-item' + (" on" if _pg == "campaigns" else "") + '" data-pnav-go="campaigns">Campaigns</div>'
@@ -10790,6 +10795,7 @@ components.html(
       {t:'Passport',        s:'reputation passport pros score on-chain identity wallet badges tier', k:'passport', i:'🪪', g:'Page'},
       {t:'DApps',           s:'ecosystem dapps projects apps defi rwa', k:'ecosystem', i:'🧩', g:'Page'},
       {t:'DeFi Hub',        s:'bridge liquidity staking lp positions wallet score rwa realfi explorer', k:'defi', i:'🏦', g:'Page'},
+      {t:'Portfolio Assistant', s:'wallet balances holdings protocol vault positions yield APY USDC', k:'portfolio', i:'📈', g:'Page'},
       {t:'Network',         s:'stats validators tps chain',      k:'network',   i:'🌐', g:'Page'},
       {t:'Market Pulse',    s:'sentiment community bullish bearish market', k:'pulse', i:'📡', g:'Page'},
       {t:'Memory Ledger',   s:'wallet on-chain intelligence profile', k:'memory', i:'🧠', g:'Page'},
@@ -16573,6 +16579,149 @@ elif st.session_state.page == "defi":
                         height=392, scrolling=False)
         st.caption("Hover any card to expand it and read the integration's details · click to open the app.")
 
+
+elif st.session_state.page == "portfolio":
+
+    st.markdown("""
+    <style>
+    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{max-width:1120px!important;padding-top:6rem!important;padding-bottom:3rem!important;}
+    .pa-hero{padding:28px 30px;border:1px solid rgba(105,115,145,.22);border-radius:22px;background:linear-gradient(135deg,rgba(90,103,255,.10),rgba(80,180,210,.06));margin-bottom:18px;}
+    .pa-kicker{font-size:11px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:#5365D9;margin-bottom:8px;}
+    .pa-title{font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.035em;margin:0 0 8px;color:var(--text-color,#171A2A);}
+    .pa-sub{font-size:14px;line-height:1.6;color:var(--secondary-text-color,#6A7185);max-width:760px;margin:0;}
+    html[data-theme="dark"] .pa-kicker{color:#A8B1FF;}
+    html[data-theme="dark"] .pa-title{color:#F3F5FA;}
+    html[data-theme="dark"] .pa-sub{color:#ABB3C9;}
+    html[data-theme="dark"] .pa-hero{background:linear-gradient(135deg,rgba(106,116,255,.13),rgba(58,151,180,.08));border-color:rgba(150,160,200,.18);}
+    </style>
+    <section class="pa-hero">
+      <div class="pa-kicker">Read-only wallet intelligence</div>
+      <h1 class="pa-title">Portfolio Assistant</h1>
+      <p class="pa-sub">Ask about tracked Pharos balances and configured ERC-4626 vault positions. Every value is read at one pinned block and shown with its source contract. No signing or transaction submission.</p>
+    </section>
+    """, unsafe_allow_html=True)
+
+    st.caption("Pacific Mainnet · Chain 1672 · RPC reads only")
+    st.info(
+        "This assistant reads native PROS, the app’s verified token registry, and up to three ERC-4626 vaults you configure. "
+        "Vaults must expose the standard ERC-4626 view methods. Their labels and addresses are supplied by you; the app does not infer protocol support. "
+        "Standard vault calls do not provide APY or accrued rewards, so yield is reported only when a verified adapter is added."
+    )
+
+    _connected_wallet = st.session_state.get("w3_address") or st.session_state.get("wallet_address", "")
+    _configured_vaults = st.session_state.get("portfolio_vaults", [])
+    with st.form("portfolio_snapshot_form", clear_on_submit=False):
+        st.subheader("Wallet and vaults")
+        _portfolio_wallet = st.text_input(
+            "Wallet address", value=_connected_wallet, key="portfolio_wallet_input",
+            placeholder="0x…", help="A connected wallet address is prefilled when available. No signature is requested.",
+        )
+        st.markdown("**Vault contracts** · leave unused rows blank")
+        _vault_configs = []
+        for _idx in range(3):
+            _old = _configured_vaults[_idx] if _idx < len(_configured_vaults) else {}
+            _left, _right = st.columns([1, 2])
+            with _left:
+                _protocol = st.text_input(
+                    f"Protocol or vault name {_idx + 1}", value=_old.get("protocol", ""),
+                    key=f"portfolio_vault_protocol_{_idx}", placeholder="e.g. My lending vault",
+                )
+            with _right:
+                _contract = st.text_input(
+                    f"ERC-4626 contract {_idx + 1}", value=_old.get("address", ""),
+                    key=f"portfolio_vault_address_{_idx}", placeholder="0x…",
+                )
+            _vault_configs.append({"protocol": _protocol.strip(), "address": _contract.strip()})
+        _read_snapshot = st.form_submit_button("Read portfolio", type="primary", use_container_width=True)
+
+    if _read_snapshot:
+        st.session_state.pop("portfolio_answer", None)
+        try:
+            if not valid_addr(_portfolio_wallet):
+                raise PortfolioReadError("Enter a valid wallet address.")
+            _active_vaults = [v for v in _vault_configs if v["address"]]
+            for _vault in _active_vaults:
+                if not valid_addr(_vault["address"]):
+                    raise PortfolioReadError("Each configured vault needs a valid EVM contract address.")
+            with st.spinner("Reading wallet and vault state at one Pharos block…"):
+                _snapshot = read_wallet_snapshot(
+                    _portfolio_wallet, PHAROS_TOKENS, _active_vaults,
+                    PHAROS_RPC_URL, PHAROS_EXPLORER_URL,
+                )
+            st.session_state["portfolio_snapshot"] = _snapshot
+            st.session_state["portfolio_vaults"] = _active_vaults
+            st.session_state.pop("portfolio_read_error", None)
+        except PortfolioReadError as _exc:
+            st.session_state["portfolio_read_error"] = str(_exc)
+            st.session_state.pop("portfolio_snapshot", None)
+        except Exception as _exc:
+            st.session_state["portfolio_read_error"] = "Portfolio read failed: " + str(_exc)[:240]
+            st.session_state.pop("portfolio_snapshot", None)
+
+    if st.session_state.get("portfolio_read_error"):
+        st.error(st.session_state["portfolio_read_error"])
+
+    _snapshot = st.session_state.get("portfolio_snapshot")
+    if _snapshot:
+        _balances = _snapshot["balances"]
+        _positions = _snapshot["positions"]
+        _readable_positions = [p for p in _positions if p.get("available")]
+        _unreadable_positions = [p for p in _positions if not p.get("available")]
+        _m1, _m2, _m3 = st.columns(3)
+        _m1.metric("Tracked assets", sum(1 for b in _balances if b.get("amount") is not None))
+        _m2.metric("Readable vault positions", len(_readable_positions))
+        _m3.metric("Snapshot block", f"{_snapshot['block_number']:,}")
+        st.caption(f"Snapshot for `{_snapshot['wallet']}` · Pharos Pacific Mainnet · all values below use block {_snapshot['block_number']:,}.")
+
+        st.subheader("Wallet balances")
+        _balance_data = [{
+            "Asset": row["symbol"], "Balance": (f"{row['amount']:,.8g}" if row.get("amount") is not None else "Unavailable"),
+            "Source contract": row["source_contract"], "Block": row["block_number"],
+        } for row in _balances]
+        st.dataframe(pd.DataFrame(_balance_data), hide_index=True, use_container_width=True)
+        with st.expander("Balance source details"):
+            for _row in _balances:
+                st.markdown(f"**{_row['symbol']}** · block {_row['block_number']:,}")
+                st.code(_row["source_contract"], language="text")
+                if _row.get("error"):
+                    st.caption("Read failed: " + _row["error"])
+                elif _row.get("token_address"):
+                    st.markdown(f"[Open token contract]({_row['explorer_url']}/address/{_row['token_address']})")
+                else:
+                    st.markdown(f"[Open wallet]({_row['explorer_url']}/address/{_snapshot['wallet']})")
+
+        st.subheader("Configured vault positions")
+        if not _positions:
+            st.caption("No vault contracts configured. Add up to three ERC-4626 contracts above and read again.")
+        for _position in _positions:
+            with st.container(border=True):
+                if _position.get("available"):
+                    st.write(f"{_position['protocol']} · {_position['assets']:,.8g} {_position['asset_symbol']}")
+                    st.caption(f"Share balance: {_position['shares']:,.8g} · yield: not reported by standard ERC-4626")
+                else:
+                    st.write(f"{_position['protocol']} · position unavailable")
+                    st.caption(_position.get("error", "Contract did not return readable ERC-4626 data."))
+                st.markdown(f"Contract · block {_position['block_number']:,}")
+                st.code(_position["source_contract"], language="text")
+                st.markdown(f"[Open vault contract]({_position['explorer_url']}/address/{_position['vault_address']})")
+
+        if len(_readable_positions) < 2:
+            st.warning("For a multi-vault comparison, configure at least two readable ERC-4626 vaults. The app won’t invent missing protocol positions.")
+        if _unreadable_positions:
+            st.warning(f"{len(_unreadable_positions)} configured vault read(s) failed. Those contracts are excluded from answers; inspect each error above.")
+
+        st.subheader("Ask about this snapshot")
+        st.caption("Examples: “Where is my USDC?”, “What is my WETH balance?”, “Show my configured vault positions”, “What am I earning?”, “What’s my biggest position?”")
+        with st.form("portfolio_question_form"):
+            _portfolio_question = st.text_input("Question", key="portfolio_question_input", placeholder="Ask a question about this snapshot…", label_visibility="collapsed")
+            _ask_portfolio = st.form_submit_button("Answer from this snapshot", use_container_width=True)
+        if _ask_portfolio:
+            if not _portfolio_question.strip():
+                st.session_state["portfolio_answer"] = "Enter a question about the current snapshot."
+            else:
+                st.session_state["portfolio_answer"] = answer_portfolio_question(_portfolio_question, _snapshot)
+        if st.session_state.get("portfolio_answer"):
+            st.text(st.session_state["portfolio_answer"])
 
 elif st.session_state.page == "campaigns":
 

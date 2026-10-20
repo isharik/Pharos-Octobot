@@ -25,6 +25,7 @@ OctoBot collapses that into one interface: ask it, and it reads the docs, reads 
 |---|---|
 | **Verified Q&A (RAG)** | Every ecosystem question is answered from a Chroma vector store built from a full crawl of `docs.pharos.xyz`, the Pharos GitHub orgs, and vetted deep-dive articles — grounded in real sources, not model memory. |
 | **Wallet Intelligence** | Give it any address; it pulls live on-chain data via Pharos RPC (balance, tx count, contract status) and has Gemini synthesize a plain-English profile — read-only, nothing is ever signed or spent. |
+| **Portfolio Assistant** | A dedicated page outside Chat reads Pharos Pacific wallet balances and user-configured ERC-4626 vault shares at one pinned block. Every figure identifies its source contract and block. It never signs or submits transactions; APY and rewards remain unknown without a reviewed protocol-specific reader. |
 | **Transaction Explanation** | Paste a tx hash and get a human explanation of what happened, the transfer flow, and how it executed — no more staring at raw calldata. |
 | **Memory Ledger** | Wallet profiles and explained transactions persist per-session as an inspectable, searchable ledger — not a one-off answer that disappears. |
 | **Live Ecosystem Data** | $PROS price, ecosystem news, and the official Pharos X feed, all served through a non-blocking background-fetch layer so pages never hang waiting on the network. |
@@ -74,6 +75,8 @@ The knowledge base (`chroma_gemini/`) is built once from a full crawl of Pharos 
 - **Chain data:** `web3.py` over Pharos RPC
 - **Market data:** CoinGecko API
 - **Language:** Python 3
+
+The Portfolio Assistant reads native PROS, the app's verified Pharos token registry, and up to three ERC-4626 vault contracts supplied by the user. It does not discover protocol positions automatically, and vault labels are user-provided. Unsupported contracts are reported as unreadable. ERC-4626 does not define standard APY or accrued-rewards reads, so the assistant declines yield estimates without a protocol-specific reader. All values in a snapshot use the same Pharos Pacific block.
 
 ---
 
@@ -161,6 +164,7 @@ Render's Free service sleeps after 15 minutes without traffic and can take about
 
 ```
 app.py                      # the full Streamlit app — every page, all UI
+portfolio_assistant.py      # read-only, block-pinned wallet and ERC-4626 reads
 octobot.py                  # RAG engine: embeddings + Chroma + Gemini LLM
 mcp_client.py               # MCP HTTP client and bundled docs MCP bridge
 pharos_docs_mcp.py          # read-only Pharos documentation MCP server
@@ -177,8 +181,8 @@ raw_docs/                    # crawled source documentation
 
 ## Roadmap
 
-- AI portfolio intelligence & personalized recommendations
-- Yield opportunity discovery across Pharos DeFi
+- Reviewed protocol-specific position and yield adapters
+- Sourced portfolio valuation and yield opportunity discovery
 - RWA, lending, and stablecoin analytics
 - Deeper protocol integrations as new RealFi apps launch on Pharos
 - Expanded x402 premium workflows and AI-driven transaction automation
