@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: octobot-x402-facilitator
+    runtime: python
+    branch: dev
+    plan: starter
+    buildCommand: pip install -r requirements-facilitator.txt
+    startCommand: uvicorn x402_facilitator:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: x402-settlements
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: X402_PAYTO_ADDRESS
+        sync: false
+      - key: X402_FACILITATOR_DB
+        value: /var/data/x402_facilitator.sqlite3

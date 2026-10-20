@@ -113,7 +113,7 @@ uvicorn skill_api:app --host 0.0.0.0 --port 8000
 
 The Chat uses two MCP sources: the official, read-only Pharos Network MCP for live chain lookups and the bundled `pharos-docs` stdio MCP for searches over `raw_docs/`. The server configuration is in `.mcp.json`; set `PHAROS_NETWORK_MCP_URL` to override the hosted network endpoint. The hosted Network MCP currently targets Pharos mainnet, so x402 payments below remain isolated on Atlantic testnet.
 
-For the Atlantic x402 demo, set `X402_PAYTO_ADDRESS` to a receiving address on Atlantic in `.env`, then run the facilitator and Streamlit app in separate terminals:
+For local Atlantic x402 development, set `X402_PAYTO_ADDRESS` to a receiving address on Atlantic in `.env`, then run the facilitator and Streamlit app in separate terminals:
 
 ```powershell
 # Put X402_PAYTO_ADDRESS=0xYourAtlanticReceivingAddress in .env first.
@@ -127,6 +127,25 @@ streamlit run app.py
 The free `GET /health` route costs nothing; `GET /data` costs 0.005 PHRS and `GET /premium` costs 0.01 PHRS. The Chat's Premium toggle uses `/premium`. The facilitator exposes `/verify`, `/settle`, `/supported`, and `/reports`; rejected or underpaid attempts receive another HTTP 402. After the wallet submits a signed native PHRS transaction on chain 688689, the Chat replays the request with `PAYMENT-SIGNATURE`, requires HTTP 200 and a matching `PAYMENT-RESPONSE`, then displays the settled hash linked to Atlantic PharosScan. Settlement reports are stored in SQLite.
 
 This is OctoBot's Atlantic native-PHRS x402 profile (`pharos-native-transfer`), rather than the ERC-20 `exact` scheme used by Pharos's test-USDC example. The wallet broadcasts the user's transaction; the facilitator verifies its mined receipt and records settlement. OctoBot and the facilitator never need the user's private key. The payment address is public; do not add a private key to `.env`.
+
+### Public deployment: Streamlit Community Cloud + Render
+
+Streamlit Community Cloud hosts the Streamlit app; it does not run the separate Uvicorn facilitator process. Deploy the facilitator as its own public service, then give the Streamlit app its HTTPS URL:
+
+1. Push this repository to GitHub and open [Render](https://dashboard.render.com/). Choose **New → Blueprint**, select this repository and the `dev` branch, and let Render read the root `render.yaml` file. The Blueprint creates `octobot-x402-facilitator`, installs only `requirements-facilitator.txt`, runs Uvicorn on Render's assigned port, and keeps SQLite reports on a persistent disk. The disk requires a paid Render service plan.
+2. When prompted for `X402_PAYTO_ADDRESS`, enter the public Atlantic Testnet address that should receive the 0.005/0.01 PHRS route payments. This is a public address, not a private key. Deploy the Blueprint and wait until its `/health` check succeeds.
+3. Copy the facilitator's public URL from its Render dashboard, for example `https://octobot-x402-facilitator.onrender.com`. Check `/supported` on that domain; it should report chain ID `688689`, `payToConfigured: true`, both paid routes, and `/health`.
+4. In Streamlit Community Cloud, open the OctoBot app's **Settings → Secrets** and add:
+
+   ```toml
+   X402_PAYTO_ADDRESS = "0xYourAtlanticReceivingAddress"
+   X402_FACILITATOR_URL = "https://your-facilitator.onrender.com"
+   ```
+
+   The receiving address must match the one configured on Render. Streamlit Cloud settings are separate from the local root `.env`; the app reads either environment variables or Streamlit secrets. Save the settings and reboot the app.
+5. Open the public OctoBot app, enable the Premium option, and check that the payment challenge is for `0.01 PHRS` on Atlantic Testnet. Test a settlement with a funded test wallet, then check the transaction on the Atlantic explorer and the facilitator's `/reports` page.
+
+Render may sleep or restart services depending on its plan. The configured persistent disk preserves settlement reports across restarts and deployments. Never commit `.env` or Streamlit `secrets.toml`; `.env` is ignored by Git.
 
 > The knowledge base ships pre-built in `chroma_gemini/`. To rebuild it from scratch, run `crawl_docs.py` then `build_vectorstore.py` — you'll need `GEMINI_API_KEY` set, since embeddings are generated via the Gemini API.
 

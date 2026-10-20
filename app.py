@@ -3764,14 +3764,25 @@ def fetch_pharos_transaction(tx_hash: str, rpc_override: str = None) -> dict:
 # Where micro-payments are sent for the demo. Override via env if you want
 # to point at your own receiving address. This is a PUBLIC pay-to address;
 # no private key lives in the app.
-X402_PAYTO_ADDRESS = os.getenv(
-    "X402_PAYTO_ADDRESS",
-    "",
-)
+def _x402_deployment_setting(name: str, default: str = "") -> str:
+    """Read x402 settings from env vars (local/Render) or Streamlit Cloud secrets."""
+    env_value = os.getenv(name)
+    if env_value:
+        return env_value.strip()
+    try:
+        return str(st.secrets.get(name, default) or default).strip()
+    except Exception:
+        # Streamlit raises when no secrets file/configuration is available.
+        return default
+
+
+X402_PAYTO_ADDRESS = _x402_deployment_setting("X402_PAYTO_ADDRESS")
 X402_PRICE_PROS   = 0.01      # premium chat route, Atlantic testnet PHRS
 X402_CHAIN_ID     = 688689
 X402_NETWORK      = "eip155:688689"
-X402_FACILITATOR_URL = os.getenv("X402_FACILITATOR_URL", "http://127.0.0.1:8765").rstrip("/")
+X402_FACILITATOR_URL = _x402_deployment_setting(
+    "X402_FACILITATOR_URL", "http://127.0.0.1:8765"
+).rstrip("/")
 X402_SCHEME       = "pharos-native-transfer"
 
 def x402_get_payto() -> str:

@@ -1,0 +1,4 @@
+fastapi
+requests==2.34.2
+python-dotenv==1.2.2
+uvicorn==0.48.0
