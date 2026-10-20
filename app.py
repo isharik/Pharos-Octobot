@@ -16585,32 +16585,21 @@ elif st.session_state.page == "portfolio":
     st.markdown("""
     <style>
     html[data-octo-page="portfolio"]{
-      --pa-text:var(--t1);
-      --pa-muted:var(--t2);
-      --pa-line:var(--border);
-      --pa-accent:var(--blue);
-      --pa-accent-soft:var(--subtle);
-      --pa-surface:var(--glass);
-      --pa-input:var(--bg);
-      --pa-shadow:var(--shadow-md);
+      --pa-text:var(--t1);--pa-muted:var(--t2);--pa-line:var(--border);
+      --pa-accent:var(--blue);--pa-accent-soft:var(--subtle);
+      --pa-surface:var(--glass);--pa-input:var(--bg);--pa-shadow:var(--shadow-md);
     }
     html[data-octo-page="portfolio"] .stApp:has(.pa-hero) [data-testid="stMainBlockContainer"]{
-      max-width:900px!important;padding-top:1.1rem!important;padding-bottom:2rem!important;}
-    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
-      gap:.7rem!important;}
+      max-width:1360px!important;padding:.8rem 1.5rem 1.25rem!important;}
+    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{gap:.55rem!important;}
     html[data-octo-page="portfolio"] [data-testid="stForm"]{
-      border:1px solid var(--pa-line)!important;border-radius:16px!important;
-      background:var(--pa-surface)!important;padding:.9rem 1.1rem!important;
-      box-shadow:var(--pa-shadow)!important;}
-    html[data-octo-page="portfolio"] [data-testid="stAlert"]{padding:.45rem .75rem!important;margin:.1rem 0!important;}
-    html[data-octo-page="portfolio"] [data-testid="stAlert"] p{margin:.1rem 0!important;line-height:1.45!important;}
+      border:1px solid var(--pa-line)!important;border-radius:15px!important;
+      background:var(--pa-surface)!important;padding:.65rem .8rem!important;box-shadow:var(--pa-shadow)!important;}
     html[data-octo-page="portfolio"] [data-testid="stTextInput"] input{
-      color:var(--pa-text)!important;background:var(--pa-input)!important;
-      border-color:var(--pa-line)!important;border-radius:11px!important;}
-    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input::placeholder{
-      color:var(--pa-muted)!important;opacity:.8!important;}
-    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input:focus{
-      border-color:var(--pa-accent)!important;box-shadow:0 0 0 1px var(--pa-accent)!important;}
+      color:var(--pa-text)!important;background:var(--pa-input)!important;border-color:var(--pa-line)!important;
+      border-radius:10px!important;min-height:2.35rem!important;}
+    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input::placeholder{color:var(--pa-muted)!important;opacity:.8!important;}
+    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input:focus{border-color:var(--pa-accent)!important;box-shadow:0 0 0 1px var(--pa-accent)!important;}
     html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p{color:var(--pa-text)!important;}
     html[data-octo-page="portfolio"] .pa-title,
     html[data-octo-page="portfolio"] .pa-sub,
@@ -16622,82 +16611,107 @@ elif st.session_state.page == "portfolio":
     html[data-octo-page="portfolio"] [data-testid="stHeading"] h3,
     html[data-octo-page="portfolio"] [data-testid="stCaptionContainer"],
     html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"],
-    html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p,
     html[data-octo-page="portfolio"] [data-testid="stForm"] label,
     html[data-octo-page="portfolio"] [data-testid="stForm"] label p,
     html[data-octo-page="portfolio"] [data-testid="stAlert"],
     html[data-octo-page="portfolio"] [data-testid="stAlert"] *{color:var(--pa-text)!important;}
     html[data-octo-page="portfolio"] .pa-kicker,
     html[data-octo-page="portfolio"] .pa-answer-label{color:var(--pa-accent)!important;}
-    html[data-octo-page="portfolio"] [data-testid="stCaptionContainer"]{opacity:.88;}
-    .pa-hero{position:relative;display:flex;align-items:center;gap:16px;overflow:hidden;
-      padding:17px 22px;border:1px solid var(--pa-line);border-radius:20px;
+    html[data-octo-page="portfolio"] [data-testid="stAlert"]{padding:.35rem .65rem!important;margin:.1rem 0!important;}
+    html[data-octo-page="portfolio"] [data-testid="stAlert"] p{margin:.1rem 0!important;line-height:1.4!important;}
+    .pa-hero{display:flex;align-items:center;gap:14px;overflow:hidden;padding:14px 16px;
+      border:1px solid var(--pa-line);border-radius:18px;
       background:linear-gradient(115deg,var(--pa-accent-soft),var(--pa-surface));
-      box-shadow:var(--pa-shadow);backdrop-filter:blur(18px);margin:0 0 2px;}
-    .pa-mark{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:14px;
-      background:var(--subtle);color:var(--pa-accent);font-size:22px;}
+      box-shadow:var(--pa-shadow);backdrop-filter:blur(18px);margin:0 0 4px;}
+    .pa-mark{width:48px;height:48px;flex:none;display:block;object-fit:cover;border-radius:14px;}
     .pa-copy{min-width:0;}
-    .pa-kicker{font-size:10px;font-weight:750;letter-spacing:.15em;text-transform:uppercase;
-      color:var(--pa-accent);margin-bottom:6px;}
-    .pa-title{font-size:clamp(22px,2.7vw,28px);line-height:1.12;font-weight:800;
-      letter-spacing:-.035em;margin:0 0 5px;color:var(--pa-text);}
-    .pa-sub{font-size:13px;line-height:1.5;color:var(--pa-muted);max-width:68ch;margin:0;}
-    .pa-answer{margin:12px 0 4px;padding:17px 19px;border:1px solid var(--pa-line);
-      border-radius:18px 18px 18px 5px;background:var(--pa-surface);
-      color:var(--pa-text);box-shadow:var(--pa-shadow);line-height:1.7;overflow-wrap:anywhere;}
-    .pa-answer-label{font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase;
-      color:var(--pa-accent);margin:0 0 7px;}
+    .pa-kicker{font-size:9px;font-weight:750;letter-spacing:.15em;text-transform:uppercase;margin-bottom:4px;}
+    .pa-title{font-size:clamp(21px,2.1vw,26px);line-height:1.12;font-weight:800;letter-spacing:-.035em;margin:0 0 4px;}
+    .pa-sub{font-size:12px;line-height:1.45;max-width:58ch;margin:0;}
+    .pa-panel-title{font-size:1.12rem;font-weight:750;letter-spacing:-.02em;margin:0 0 .15rem;}
+    .pa-answer{margin:8px 0 2px;padding:12px 14px;border:1px solid var(--pa-line);border-radius:14px 14px 14px 5px;
+      background:var(--pa-surface);color:var(--pa-text);box-shadow:var(--pa-shadow);line-height:1.55;overflow-wrap:anywhere;}
+    .pa-answer-label{font-size:9px;font-weight:750;letter-spacing:.13em;text-transform:uppercase;margin:0 0 5px;}
+    @media(max-width:820px){
+      html[data-octo-page="portfolio"] .stApp:has(.pa-hero) [data-testid="stMainBlockContainer"]{padding:.75rem 1rem 1.25rem!important;}
+      .pa-hero{padding:13px;}
+    }
     @media(max-width:640px){
-      html[data-octo-page="portfolio"] .stApp:has(.pa-hero) [data-testid="stMainBlockContainer"]{padding:1rem 1rem 1.5rem!important;}
-      .pa-hero{align-items:flex-start;padding:15px 16px;gap:12px;}
-      html[data-octo-page="portfolio"] [data-testid="stForm"]{padding:.8rem!important;}
+      .pa-mark{width:42px;height:42px;border-radius:12px;}
+      html[data-octo-page="portfolio"] [data-testid="stForm"]{padding:.65rem!important;}
     }
     </style>
-    <section class="pa-hero" aria-labelledby="pa-title">
-      <div class="pa-mark" aria-hidden="true">◈</div>
-      <div class="pa-copy">
-        <div class="pa-kicker">Read-only wallet intelligence</div>
-        <h1 class="pa-title" id="pa-title">Portfolio Assistant</h1>
-        <p class="pa-sub">Explore tracked balances and configured vault positions with every figure pinned to its source contract and block.</p>
-      </div>
-    </section>
     """, unsafe_allow_html=True)
 
-    st.caption("Pacific Mainnet · Chain 1672 · RPC reads only")
-    st.info(
-        "This assistant reads native PROS, the app’s verified token registry, and up to three ERC-4626 vaults you configure. "
-        "Vaults must expose the standard ERC-4626 view methods. Their labels and addresses are supplied by you; the app does not infer protocol support. "
-        "Standard vault calls do not provide APY or accrued rewards, so yield is reported only when a verified adapter is added."
-    )
+    _logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pharos_logo.jpg")
+    try:
+        with open(_logo_path, "rb") as _logo_file:
+            _logo_data = base64.b64encode(_logo_file.read()).decode("ascii")
+        _logo_html = f'<img class="pa-mark" src="data:image/jpeg;base64,{_logo_data}" alt="Pharos logo">'
+    except OSError:
+        _logo_html = '<div class="pa-mark" aria-hidden="true">P</div>'
 
     _connected_wallet = st.session_state.get("w3_address") or st.session_state.get("wallet_address", "")
     _configured_vaults = st.session_state.get("portfolio_vaults", [])
-    with st.form("portfolio_snapshot_form", clear_on_submit=False):
-        st.subheader("Wallet and vaults")
-        _portfolio_wallet = st.text_input(
-            "Wallet address", value=_connected_wallet, key="portfolio_wallet_input",
-            placeholder="0x…", help="A connected wallet address is prefilled when available. No signature is requested.",
-        )
-        st.markdown("**Vault contracts** · leave unused rows blank")
-        _vault_configs = []
-        for _idx in range(3):
-            _old = _configured_vaults[_idx] if _idx < len(_configured_vaults) else {}
-            _left, _right = st.columns([1, 2])
-            with _left:
-                _protocol = st.text_input(
-                    f"Protocol or vault name {_idx + 1}", value=_old.get("protocol", ""),
-                    key=f"portfolio_vault_protocol_{_idx}", placeholder="e.g. My lending vault",
-                )
-            with _right:
-                _contract = st.text_input(
-                    f"ERC-4626 contract {_idx + 1}", value=_old.get("address", ""),
-                    key=f"portfolio_vault_address_{_idx}", placeholder="0x…",
-                )
-            _vault_configs.append({"protocol": _protocol.strip(), "address": _contract.strip()})
-        _read_snapshot = st.form_submit_button("Read portfolio", type="primary", use_container_width=True)
+    _read_snapshot = False
+    _ask_portfolio = False
+    _portfolio_question = ""
+    _left_col, _right_col = st.columns([.91, 1.21], gap="large", vertical_alignment="top")
+
+    with _left_col:
+        st.markdown(f"""
+        <section class="pa-hero" aria-labelledby="pa-title">
+          {_logo_html}
+          <div class="pa-copy">
+            <div class="pa-kicker">Read-only wallet intelligence</div>
+            <h1 class="pa-title" id="pa-title">Portfolio Assistant</h1>
+            <p class="pa-sub">Wallet balances and vault positions, sourced to contract and block.</p>
+          </div>
+        </section>
+        """, unsafe_allow_html=True)
+        st.caption("Pacific Mainnet · Chain 1672 · read-only RPC")
+        st.caption("Tracked balances and configured ERC-4626 vaults. Yield is not inferred.")
+
+        with st.form("portfolio_snapshot_form", clear_on_submit=False):
+            st.markdown('<div class="pa-panel-title">Wallet and vaults</div>', unsafe_allow_html=True)
+            _portfolio_wallet = st.text_input(
+                "Wallet address", value=_connected_wallet, key="portfolio_wallet_input",
+                placeholder="0x…", help="A connected wallet address is prefilled when available. No signature is requested.",
+            )
+            st.caption("Vault contracts · leave unused rows blank")
+            _vault_configs = []
+            for _idx in range(3):
+                _old = _configured_vaults[_idx] if _idx < len(_configured_vaults) else {}
+                _name_col, _address_col = st.columns([.9, 1.1], gap="small")
+                with _name_col:
+                    _protocol = st.text_input(
+                        f"Vault {_idx + 1}", value=_old.get("protocol", ""),
+                        key=f"portfolio_vault_protocol_{_idx}", placeholder="Protocol name",
+                    )
+                with _address_col:
+                    _contract = st.text_input(
+                        f"ERC-4626 address {_idx + 1}", value=_old.get("address", ""),
+                        key=f"portfolio_vault_address_{_idx}", placeholder="0x…",
+                    )
+                _vault_configs.append({"protocol": _protocol.strip(), "address": _contract.strip()})
+            _read_snapshot = st.form_submit_button("Read portfolio", type="primary", use_container_width=True)
+
+        if st.session_state.get("portfolio_snapshot"):
+            st.markdown('<div class="pa-panel-title" style="margin-top:1rem">Ask this snapshot</div>', unsafe_allow_html=True)
+            st.caption("Ask about balances, positions or yield data.")
+            with st.form("portfolio_question_form"):
+                _ask_col, _send_col = st.columns([5, 1], vertical_alignment="bottom")
+                with _ask_col:
+                    _portfolio_question = st.text_input(
+                        "Question", key="portfolio_question_input",
+                        placeholder="Where is my USDC?", label_visibility="collapsed",
+                    )
+                with _send_col:
+                    _ask_portfolio = st.form_submit_button("Ask", type="primary", use_container_width=True)
 
     if _read_snapshot:
         st.session_state.pop("portfolio_answer", None)
+        st.session_state.pop("portfolio_question_sources", None)
         try:
             if not valid_addr(_portfolio_wallet):
                 raise PortfolioReadError("Enter a valid wallet address.")
@@ -16720,149 +16734,141 @@ elif st.session_state.page == "portfolio":
             st.session_state["portfolio_read_error"] = "Portfolio read failed: " + str(_exc)[:240]
             st.session_state.pop("portfolio_snapshot", None)
 
-    if st.session_state.get("portfolio_read_error"):
-        st.error(st.session_state["portfolio_read_error"])
+    if _ask_portfolio:
+        _snapshot = st.session_state.get("portfolio_snapshot")
+        if not _portfolio_question.strip():
+            st.session_state["portfolio_answer"] = "Enter a question about the current snapshot."
+        elif _snapshot:
+            _docs_hits = []
+            _chain_result = ""
+            _docs_error = None
+            _chain_error = None
+            try:
+                _docs_raw = mcp_text(call_local_docs_tool(
+                    "search_pharos_docs", {"query": "Pharos " + _portfolio_question.strip(), "limit": 5},
+                ))
+                _docs_hits = json.loads(_docs_raw) if _docs_raw else []
+                if not isinstance(_docs_hits, list):
+                    _docs_hits = []
+            except Exception as _exc:
+                _docs_error = str(_exc)[:200]
+            try:
+                _chain_result = mcp_text(call_remote_pharos_tool(
+                    "get_balance", {"address": _snapshot["wallet"]},
+                ))
+                if not _chain_result:
+                    _chain_error = "Chain MCP returned no readable balance data."
+            except Exception as _exc:
+                _chain_error = str(_exc)[:200]
+            _portfolio_answer = answer_portfolio_question(_portfolio_question, _snapshot)
+            if _portfolio_answer.startswith("I can answer wallet token balances"):
+                _excerpts = [
+                    (str(hit.get("title") or "Pharos Developer Docs"),
+                     str(hit.get("excerpt") or "").strip()[:900])
+                    for hit in _docs_hits if isinstance(hit, dict) and hit.get("excerpt")
+                ][:2]
+                if _excerpts:
+                    _portfolio_answer = (
+                        "The wallet snapshot does not contain this information. The Developer Docs MCP "
+                        "returned these excerpts about documented network or protocol behavior; they do "
+                        "not verify wallet-specific state.\n\n"
+                        + "\n\n".join(f"{title}: {excerpt}" for title, excerpt in _excerpts)
+                    )
+                elif not _docs_error:
+                    _portfolio_answer = (
+                        "The snapshot and Developer Docs MCP do not contain this information. "
+                        "I can’t verify it from the available sources, so I won’t guess."
+                    )
+            st.session_state["portfolio_answer"] = _portfolio_answer
+            st.session_state["portfolio_question_sources"] = {
+                "docs": _docs_hits, "chain_result": _chain_result,
+                "docs_error": _docs_error, "chain_error": _chain_error,
+            }
 
-    _snapshot = st.session_state.get("portfolio_snapshot")
-    if _snapshot:
-        _balances = _snapshot["balances"]
-        _positions = _snapshot["positions"]
-        _readable_positions = [p for p in _positions if p.get("available")]
-        _unreadable_positions = [p for p in _positions if not p.get("available")]
-        _m1, _m2, _m3 = st.columns(3)
-        _m1.metric("Tracked assets", sum(1 for b in _balances if b.get("amount") is not None))
-        _m2.metric("Readable vault positions", len(_readable_positions))
-        _m3.metric("Snapshot block", f"{_snapshot['block_number']:,}")
-        st.caption(f"Snapshot for `{_snapshot['wallet']}` · Pharos Pacific Mainnet · all values below use block {_snapshot['block_number']:,}.")
-
-        st.subheader("Wallet balances")
-        _balance_data = [{
-            "Asset": row["symbol"], "Balance": (f"{row['amount']:,.8g}" if row.get("amount") is not None else "Unavailable"),
-            "Source contract": row["source_contract"], "Block": row["block_number"],
-        } for row in _balances]
-        st.dataframe(pd.DataFrame(_balance_data), hide_index=True, use_container_width=True)
-        with st.expander("Balance source details"):
-            for _row in _balances:
-                st.markdown(f"**{_row['symbol']}** · block {_row['block_number']:,}")
-                st.code(_row["source_contract"], language="text")
-                if _row.get("error"):
-                    st.caption("Read failed: " + _row["error"])
-                elif _row.get("token_address"):
-                    st.markdown(f"[Open token contract]({_row['explorer_url']}/address/{_row['token_address']})")
-                else:
-                    st.markdown(f"[Open wallet]({_row['explorer_url']}/address/{_snapshot['wallet']})")
-
-        st.subheader("Configured vault positions")
-        if not _positions:
-            st.caption("No vault contracts configured. Add up to three ERC-4626 contracts above and read again.")
-        for _position in _positions:
+    with _right_col:
+        if st.session_state.get("portfolio_read_error"):
+            st.error(st.session_state["portfolio_read_error"])
+        _snapshot = st.session_state.get("portfolio_snapshot")
+        if not _snapshot:
             with st.container(border=True):
-                if _position.get("available"):
-                    st.write(f"{_position['protocol']} · {_position['assets']:,.8g} {_position['asset_symbol']}")
-                    st.caption(f"Share balance: {_position['shares']:,.8g} · yield: not reported by standard ERC-4626")
+                st.markdown('<div class="pa-panel-title">Portfolio snapshot</div>', unsafe_allow_html=True)
+                st.caption("Read the wallet and optional vault contracts from the left to see balances and positions.")
+        else:
+            _balances = _snapshot["balances"]
+            _positions = _snapshot["positions"]
+            _readable_positions = [p for p in _positions if p.get("available")]
+            _unreadable_positions = [p for p in _positions if not p.get("available")]
+            _metrics = st.columns(3)
+            _metrics[0].metric("Assets", sum(1 for b in _balances if b.get("amount") is not None))
+            _metrics[1].metric("Vaults read", len(_readable_positions))
+            _metrics[2].metric("Block", f"{_snapshot['block_number']:,}")
+            st.caption(f"Wallet {_snapshot['wallet']} · Pacific Mainnet · block {_snapshot['block_number']:,}")
+
+            _balance_col, _position_col = st.columns(2, gap="medium")
+            with _balance_col:
+                st.markdown('<div class="pa-panel-title">Wallet balances</div>', unsafe_allow_html=True)
+                _balance_data = [{
+                    "Asset": row["symbol"],
+                    "Balance": f"{row['amount']:,.7g}" if row.get("amount") is not None else "Unavailable",
+                    "Source": row["source_contract"],
+                    "Block": row["block_number"],
+                } for row in _balances]
+                st.dataframe(pd.DataFrame(_balance_data), hide_index=True, use_container_width=True, height=250)
+                with st.expander("Balance explorer links"):
+                    for _row in _balances:
+                        if _row.get("error"):
+                            st.caption(f"{_row['symbol']} read failed: {_row['error']}")
+                        elif _row.get("token_address"):
+                            st.markdown(f"[{_row['symbol']} contract]({_row['explorer_url']}/address/{_row['token_address']}) · block {_row['block_number']:,}")
+                        else:
+                            st.markdown(f"[Wallet account]({_row['explorer_url']}/address/{_snapshot['wallet']}) · block {_row['block_number']:,}")
+
+            with _position_col:
+                st.markdown('<div class="pa-panel-title">Configured vault positions</div>', unsafe_allow_html=True)
+                if _positions:
+                    _position_data = [{
+                        "Vault": p["protocol"],
+                        "Position": f"{p['assets']:,.7g} {p['asset_symbol']}" if p.get("available") else "Unavailable",
+                        "Shares": f"{p['shares']:,.7g}" if p.get("available") else "—",
+                        "Contract": p["source_contract"],
+                        "Block": p["block_number"],
+                    } for p in _positions]
+                    st.dataframe(pd.DataFrame(_position_data), hide_index=True, use_container_width=True, height=250)
+                    with st.expander("Vault source details"):
+                        for _position in _positions:
+                            if not _position.get("available"):
+                                st.caption(f"{_position['protocol']} read failed: {_position.get('error', 'ERC-4626 data unavailable')}")
+                            st.markdown(f"[{_position['protocol']} contract]({_position['explorer_url']}/address/{_position['vault_address']}) · block {_position['block_number']:,}")
                 else:
-                    st.write(f"{_position['protocol']} · position unavailable")
-                    st.caption(_position.get("error", "Contract did not return readable ERC-4626 data."))
-                st.markdown(f"Contract · block {_position['block_number']:,}")
-                st.code(_position["source_contract"], language="text")
-                st.markdown(f"[Open vault contract]({_position['explorer_url']}/address/{_position['vault_address']})")
+                    st.caption("No vault contracts configured.")
+            if _unreadable_positions:
+                st.warning(f"{len(_unreadable_positions)} configured vault read(s) failed. Those contracts are excluded from answers.")
+            if _positions and len(_readable_positions) < 2:
+                st.caption("Configure two readable vaults to compare positions. Yield is not inferred from share prices.")
 
-        if len(_readable_positions) < 2:
-            st.warning("For a multi-vault comparison, configure at least two readable ERC-4626 vaults. The app won’t invent missing protocol positions.")
-        if _unreadable_positions:
-            st.warning(f"{len(_unreadable_positions)} configured vault read(s) failed. Those contracts are excluded from answers; inspect each error above.")
-
-        st.subheader("Ask about this snapshot")
-        st.caption("Examples: “Where is my USDC?”, “What is my WETH balance?”, “Show my configured vault positions”, “What am I earning?”, “What’s my biggest position?”")
-        with st.form("portfolio_question_form"):
-            _ask_col, _send_col = st.columns([6, 1], vertical_alignment="bottom")
-            with _ask_col:
-                _portfolio_question = st.text_input(
-                    "Question", key="portfolio_question_input",
-                    placeholder="Ask about this wallet snapshot…", label_visibility="collapsed",
+            if st.session_state.get("portfolio_answer"):
+                _answer_html = esc(st.session_state["portfolio_answer"]).replace("\n", "<br>")
+                st.markdown(
+                    '<section class="pa-answer" aria-live="polite">'
+                    '<div class="pa-answer-label">Portfolio Assistant</div>'
+                    + _answer_html + '</section>',
+                    unsafe_allow_html=True,
                 )
-            with _send_col:
-                _ask_portfolio = st.form_submit_button("Ask", type="primary", use_container_width=True)
-        if _ask_portfolio:
-            if not _portfolio_question.strip():
-                st.session_state["portfolio_answer"] = "Enter a question about the current snapshot."
-            else:
-                _docs_hits = []
-                _chain_result = ""
-                _docs_error = None
-                _chain_error = None
-                try:
-                    _docs_raw = mcp_text(call_local_docs_tool(
-                        "search_pharos_docs",
-                        {"query": "Pharos " + _portfolio_question.strip(), "limit": 5},
-                    ))
-                    _docs_hits = json.loads(_docs_raw) if _docs_raw else []
-                    if not isinstance(_docs_hits, list):
-                        _docs_hits = []
-                except Exception as _exc:
-                    _docs_error = str(_exc)[:200]
-                try:
-                    # Chain MCP is queried on every submitted portfolio question.
-                    # get_balance is a read-only operation and is used only to
-                    # corroborate the wallet snapshot; no signing/broadcast tool is called.
-                    _chain_result = mcp_text(call_remote_pharos_tool(
-                        "get_balance", {"address": _snapshot["wallet"]},
-                    ))
-                    if not _chain_result:
-                        _chain_error = "Chain MCP returned no readable balance data."
-                except Exception as _exc:
-                    _chain_error = str(_exc)[:200]
-
-                _portfolio_answer = answer_portfolio_question(_portfolio_question, _snapshot)
-                if _portfolio_answer.startswith("I can answer wallet token balances"):
-                    _document_excerpts = [
-                        (str(hit.get("title") or "Pharos Developer Docs"),
-                         str(hit.get("excerpt") or "").strip()[:900])
-                        for hit in _docs_hits if isinstance(hit, dict) and hit.get("excerpt")
-                    ][:2]
-                    if _document_excerpts:
-                        _portfolio_answer = (
-                            "The wallet snapshot does not contain this information. "
-                            "The Developer Docs MCP returned these relevant excerpts; "
-                            "they describe the documented network or protocol behavior, "
-                            "but do not verify wallet-specific state.\n\n"
-                            + "\n\n".join(f"{title}: {excerpt}" for title, excerpt in _document_excerpts)
-                        )
-                    elif not _docs_error:
-                        _portfolio_answer = (
-                            "The wallet snapshot does not contain this information, and the "
-                            "Developer Docs MCP returned no supporting material. I can’t verify "
-                            "this request from the available sources, so I won’t guess."
-                        )
-                st.session_state["portfolio_answer"] = _portfolio_answer
-                st.session_state["portfolio_question_sources"] = {
-                    "docs": _docs_hits, "chain_result": _chain_result,
-                    "docs_error": _docs_error, "chain_error": _chain_error,
-                }
-        if st.session_state.get("portfolio_answer"):
-            _answer_html = esc(st.session_state["portfolio_answer"]).replace("\n", "<br>")
-            st.markdown(
-                '<section class="pa-answer" aria-live="polite">'
-                '<div class="pa-answer-label">Portfolio Assistant</div>'
-                + _answer_html + '</section>',
-                unsafe_allow_html=True,
-            )
-            _question_sources = st.session_state.get("portfolio_question_sources", {})
-            if _question_sources.get("docs_error"):
-                st.caption("Developer Docs MCP unavailable: " + _question_sources["docs_error"])
-            elif _question_sources.get("docs"):
-                st.caption("Developer Docs MCP sources consulted")
-                for _doc in _question_sources["docs"][:3]:
-                    if isinstance(_doc, dict) and _doc.get("url", "").startswith("https://docs.pharos.xyz/"):
-                        st.markdown(f"- [{esc(_doc.get('title', 'Pharos Developer Docs'))}]({_doc['url']})")
-            else:
-                st.caption("Developer Docs MCP returned no supporting documentation for this question; the answer uses only readable snapshot data.")
-            if _question_sources.get("chain_error"):
-                st.caption("Chain MCP corroboration unavailable: " + _question_sources["chain_error"])
-            elif _question_sources.get("chain_result"):
-                st.caption("Chain MCP read-only balance check completed for this wallet.")
-                with st.expander("Chain MCP balance result"):
-                    st.code(_question_sources["chain_result"][:2000], language="text")
+                _question_sources = st.session_state.get("portfolio_question_sources", {})
+                if _question_sources.get("docs_error"):
+                    st.caption("Developer Docs MCP unavailable: " + _question_sources["docs_error"])
+                elif _question_sources.get("docs"):
+                    st.caption("Developer Docs MCP sources consulted")
+                    for _doc in _question_sources["docs"][:3]:
+                        if isinstance(_doc, dict) and _doc.get("url", "").startswith("https://docs.pharos.xyz/"):
+                            st.markdown(f"- [{esc(_doc.get('title', 'Pharos Developer Docs'))}]({_doc['url']})")
+                else:
+                    st.caption("Developer Docs MCP returned no supporting documentation; answer uses readable snapshot data.")
+                if _question_sources.get("chain_error"):
+                    st.caption("Chain MCP corroboration unavailable: " + _question_sources["chain_error"])
+                elif _question_sources.get("chain_result"):
+                    with st.expander("Chain MCP read-only result"):
+                        st.code(_question_sources["chain_result"][:2000], language="text")
 
 elif st.session_state.page == "campaigns":
 
