@@ -632,7 +632,7 @@ if "octobot_chat_history" not in st.session_state: st.session_state.octobot_chat
 if "sources_history" not in st.session_state: st.session_state.sources_history = []
 if "show_sources"    not in st.session_state: st.session_state.show_sources    = True
 if "voice_reply"     not in st.session_state: st.session_state.voice_reply     = False
-if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "docs"
+if "chat_mode"       not in st.session_state: st.session_state.chat_mode       = "free"
 if "octobot_lang"    not in st.session_state: st.session_state.octobot_lang    = "English"
 if "build_path_goal" not in st.session_state: st.session_state.build_path_goal = None
 if "build_path_data" not in st.session_state: st.session_state.build_path_data = None
@@ -680,6 +680,9 @@ if "x402_tx_payer" not in st.session_state: st.session_state.x402_tx_payer = ""
 if "x402_start_send" not in st.session_state: st.session_state.x402_start_send = False
 if "x402_facilitator_reports" not in st.session_state: st.session_state.x402_facilitator_reports = []
 if "mcp_last_sources" not in st.session_state: st.session_state.mcp_last_sources = []
+if st.session_state.get("chat_mode") == "free":
+    st.session_state.x402_challenge = None
+    st.session_state.x402_tx_submitted = ""
 # Restore the persistent settlement report list (no signing data or secrets).
 if not st.session_state.x402_receipts:
     st.session_state.x402_receipts = _ledger_load_all("x402")
@@ -3905,6 +3908,87 @@ def mcp_context_for_chat(question: str) -> tuple[str, list[dict], list[str]]:
             st.session_state["mcp_network_notice"] = "Pharos Network MCP unavailable: " + str(exc)
     return "\n\n".join(context_parts), sources, labels
 
+
+def free_mcp_rpc_answer(question: str) -> tuple[str, list[dict], list[str]]:
+    """Return retrieved docs/MCP/RPC data directly, without any LLM or API key."""
+    context, sources, labels = mcp_context_for_chat(question)
+    q = question.lower()
+    use_testnet = any(word in q for word in ("atlantic", "testnet"))
+    rpc_url = PHAROS_TESTNET_RPC_URL if use_testnet else None
+    explorer = PHAROS_TESTNET_EXPLORER_URL if use_testnet else PHAROS_EXPLORER_URL
+    rpc_result = ""
+    rpc_ref = ""
+
+    # The hosted Pharos Network MCP is mainnet-only. For explicit Atlantic /
+    # testnet questions, query the public RPC directly instead.
+    if use_testnet or "Pharos Network MCP" not in labels:
+        tx_match = re.search(r"0x[a-fA-F0-9]{64}", question)
+        addr_match = re.search(r"0x[a-fA-F0-9]{40}", question)
+        try:
+            if tx_match and any(word in q for word in ("transaction", "receipt", "status", "hash", "tx ")):
+                tx = fetch_pharos_transaction(tx_match.group(0), rpc_override=rpc_url)
+                if tx.get("available"):
+                    rpc_result = (
+                        "**Read-only RPC transaction lookup**\n"
+                        f"- Status: {tx.get('status') or 'pending / unknown'}\n"
+                        f"- From: {tx.get('from_addr') or 'unknown'}\n"
+                        f"- To: {tx.get('to_addr') or 'contract creation'}\n"
+                        f"- Value: {tx.get('value_pros') if tx.get('value_pros') is not None else 'unknown'} PHRS\n"
+                        f"- Block: {tx.get('block_number') or 'pending / unknown'}"
+                    )
+                    rpc_ref = explorer + "/tx/" + tx_match.group(0)
+                else:
+                    rpc_result = "RPC transaction lookup: " + str(tx.get("error") or "transaction not found")
+            elif addr_match and any(word in q for word in ("balance", "holdings", "funds")):
+                account = fetch_pharos_onchain_data(addr_match.group(0), rpc_override=rpc_url)
+                if account.get("available"):
+                    rpc_result = (
+                        "**Read-only RPC account lookup**\n"
+                        f"- Native PHRS balance: {account.get('balance_pros')}\n"
+                        f"- Transaction count: {account.get('tx_count')}\n"
+                        f"- Contract address: {'yes' if account.get('is_contract') else 'no'}"
+                    )
+                    rpc_ref = explorer + "/address/" + addr_match.group(0)
+                else:
+                    rpc_result = "RPC account lookup: " + str(account.get("error") or "unavailable")
+            elif any(word in q for word in ("gas price", "gas fee", "current gas")):
+                value = _rpc("eth_gasPrice", [], rpc_url=rpc_url)
+                rpc_result = f"**Read-only RPC gas price:** {int(value, 16) / 1e9:g} Gwei"
+                rpc_ref = explorer
+            elif any(word in q for word in ("latest block", "block number", "block height")):
+                value = _rpc("eth_blockNumber", [], rpc_url=rpc_url)
+                rpc_result = f"**Read-only RPC latest block:** {int(value, 16)}"
+                rpc_ref = explorer
+            elif "nonce" in q and addr_match:
+                value = _rpc("eth_getTransactionCount", [addr_match.group(0), "latest"], rpc_url=rpc_url)
+                rpc_result = f"**Read-only RPC transaction count (nonce):** {int(value, 16)}"
+                rpc_ref = explorer + "/address/" + addr_match.group(0)
+            elif any(word in q for word in ("chain info", "network info", "chain id", "client version")):
+                chain_id = _rpc("eth_chainId", [], rpc_url=rpc_url)
+                client_version = _rpc("web3_clientVersion", [], rpc_url=rpc_url)
+                rpc_result = f"**Read-only RPC network info:** chain ID {int(chain_id, 16)}; client {client_version}"
+                rpc_ref = explorer
+        except Exception as exc:
+            rpc_result = "RPC lookup unavailable: " + str(exc)
+        if rpc_result:
+            labels.append("Pharos RPC")
+            if rpc_ref:
+                sources.append({"title": "Pharos RPC · read-only result", "url": rpc_ref})
+
+    parts = ["**Free mode — retrieved data only; no Gemini/LLM API is called.**"]
+    if context:
+        parts.append(context)
+    if rpc_result:
+        parts.append(rpc_result)
+    notice = st.session_state.pop("mcp_network_notice", None)
+    if notice and not (use_testnet and rpc_result):
+        parts.append("**Network note:** " + notice)
+    elif use_testnet and rpc_result:
+        parts.append("Atlantic Testnet data above came from its public RPC; the hosted Network MCP is mainnet-only.")
+    if not context and not rpc_result:
+        parts.append("No matching documentation or supported live RPC result was found. Try a narrower question or include an address / transaction hash.")
+    return "\n\n".join(parts), sources, list(dict.fromkeys(labels))
+
 def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") -> str:
     """Generate the ENHANCED (premium) answer that the paid call unlocks.
     Uses docs context from the bot, then asks Gemini for a deeper, structured
@@ -4653,22 +4737,9 @@ def octobot_wait(seconds: float = 10.0) -> dict:
 
 
 # ─────────────────────────────────────────────
-# START OCTOBOT INITIALISATION AT APP STARTUP — not on Chat navigation.
-# This is the actual fix for the slow first Chat visit: previously
-# load_octobot() was only ever called from inside the Chat page branch
-# below, so the embedding model / vector store / Gemini client didn't
-# even start loading until a user clicked Chat. Calling it here means
-# the background worker thread starts the moment the app boots (first
-# script run of the server process), so by the time anyone navigates
-# to Chat the knowledge base is already warm — or close to it.
-#
-# load_octobot() is idempotent and single-flight-guarded (see
-# `_octobot_lock` / holder["started"] above): every Streamlit rerun and
-# every new session calls this again, but the background thread itself
-# is only ever started once per server process. Cheap to call on every
-# rerun; does not block this script run.
+# Gemini-backed RAG is initialized lazily when a user selects Docs or
+# Docs + General. The Free MCP + RPC mode is the default and skips the worker.
 # ─────────────────────────────────────────────
-load_octobot(start=True)
 
 # ─────────────────────────────────────────────
 # MARKET & COMMUNITY PULSE — helpers
@@ -14247,7 +14318,10 @@ canvas{display:block;}
     # router) — but NOT on in-chat reruns like sending a message, which keep
     # the same view key, so the flag stays set and we skip straight to the
     # bot instead of re-showing "Preparing your chat" on every message.
-    if not st.session_state.get("_chatprep_done"):
+    if st.session_state.get("chat_mode") == "free":
+        # Free retrieval mode uses only the bundled docs MCP and public RPC/MCP.
+        _octo = {"bot": None, "error": None, "done": True, "chunk_count": 0}
+    elif not st.session_state.get("_chatprep_done"):
         # Same approach as _heavy_page_gate: draw the loader ONCE (transparent,
         # on the app background) and poll OctoBot readiness in an isolated
         # fragment. The main run reaches st.stop() normally so the stale
@@ -14281,7 +14355,7 @@ canvas{display:block;}
         # gate/console flashing behind the fading loader.
         _octo = octobot_wait(8.0)
 
-    if _octo.get("error") or _octo.get("bot") is None:
+    if st.session_state.get("chat_mode") != "free" and (_octo.get("error") or _octo.get("bot") is None):
         _err = esc(_octo.get("error") or "Unknown initialisation error")
         st.markdown(
             '<div style="max-width:560px;margin:3rem auto;background:#FFFFFF;'
@@ -14302,14 +14376,20 @@ canvas{display:block;}
             if st.button("↺ Retry loading", key="octo_retry"):
                 _octobot_reset()
                 st.rerun()
+        with _c2:
+            if st.button("🆓 Use Free MCP + RPC", key="octo_use_free_mode"):
+                st.session_state.chat_mode = "free"
+                st.rerun()
         st.stop()
 
-    bot = _octo["bot"]
+    bot = _octo.get("bot")
 
     # ── Settings moved to sidebar — just get chunk count here ──
     chunk_count = _octo.get("chunk_count")
     if chunk_count is None:
         try:
+            if bot is None:
+                raise RuntimeError("RAG bot is not loaded in Free MCP + RPC mode")
             chunk_count = bot.vectorstore._collection.count()
         except Exception:
             chunk_count = 0
@@ -14496,7 +14576,8 @@ html[data-octo-page="chat"] [data-testid="stSidebar"] [data-testid="stLinkButton
         if st.button("＋   New chat", use_container_width=True, key="reset_chat"):
             st.session_state.messages        = []
             st.session_state.sources_history = []
-            bot.reset_memory(st.session_state.octobot_chat_history)
+            if bot is not None:
+                bot.reset_memory(st.session_state.octobot_chat_history)
             st.rerun()
 
         # Explore — starter prompts
@@ -14765,11 +14846,12 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
     cur_flag = LANG_OPTIONS.get(cur_lang, "🌐")
     current_mode = st.session_state.chat_mode
     is_general   = current_mode == "general"
+    is_free_mode = current_mode == "free"
     # read the toggle's own widget key first — Streamlit updates it *before* the
     # rerun, so the trigger label reflects a just-flipped premium state at once
     # (the assigned `x402_enabled` mirror only refreshes further down the script).
-    _x402_on     = bool(st.session_state.get("x402_enabled_toggle_main",
-                                             st.session_state.get("x402_enabled")))
+    _x402_on     = (not is_free_mode) and bool(st.session_state.get("x402_enabled_toggle_main",
+                                                                     st.session_state.get("x402_enabled")))
 
     # ── Welcome strip — a full-width header banner across the TOP of the chat
     #    surface (empty state only). Rendered BEFORE the options menu so the menu
@@ -14782,8 +14864,13 @@ html[data-theme="dark"] [data-testid="stHorizontalBlock"]:has(.st-key-mode_docs)
             '<div class="chero-text">'
             '<div class="chero-eyebrow">Pharos AI Guide</div>'
             '<h1 class="chero-title">Welcome aboard, ' + esc(_sname) + '</h1>'
-            '<p class="chero-sub">Ask me anything about Pharos — SPNs, Native Restaking, RWA, '
-            'consensus, or the $PROS token. I answer in your language.</p>'
+            '<p class="chero-sub">' + (
+                'Free mode searches bundled Pharos docs and public read-only chain data. '
+                'It returns source excerpts directly without Gemini.'
+                if is_free_mode else
+                'Ask me anything about Pharos — SPNs, Native Restaking, RWA, '
+                'consensus, or the $PROS token. I answer in your language.'
+            ) + '</p>'
             '</div></div></div>',
             unsafe_allow_html=True,
         )
@@ -14838,7 +14925,7 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"]{background:li
 html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color:#EDEFF7!important;}
 </style>
 """, unsafe_allow_html=True)
-    _mode_lbl = "Docs + General" if is_general else "Docs only"
+    _mode_lbl = "Free · MCP + RPC" if is_free_mode else "Docs + General" if is_general else "Docs only"
     _prem_tag = "   ·   💠 x402" if _x402_on else ""
     with st.popover(f"⚙    {cur_flag} {cur_lang}    ·    {_mode_lbl}{_prem_tag}", use_container_width=False):
         st.markdown('<div class="copt-sec">Response language</div>', unsafe_allow_html=True)
@@ -14852,22 +14939,29 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
         st.markdown('<div class="copt-sec">Answer mode</div>', unsafe_allow_html=True)
         _mm1, _mm2 = st.columns(2)
         with _mm1:
-            if st.button("📚 Docs" + ("  ✓" if not is_general else ""), key="mode_docs",
+            if st.button("📚 Docs" + ("  ✓" if current_mode == "docs" else ""), key="mode_docs",
                          use_container_width=True):
                 st.session_state.chat_mode = "docs"; st.rerun()
         with _mm2:
             if st.button("🌐 Docs + General" + ("  ✓" if is_general else ""), key="mode_general",
                          use_container_width=True):
                 st.session_state.chat_mode = "general"; st.rerun()
-        st.markdown('<div class="copt-sec">Premium answers</div>', unsafe_allow_html=True)
-        st.session_state.x402_enabled = st.toggle(
-            "💠 Premium answers",
-            value=st.session_state.x402_enabled,
-            key="x402_enabled_toggle_main",
-            help="Premium chat uses x402 on Pharos Atlantic testnet and costs 0.01 PHRS per answer.",
-        )
-        if st.session_state.get("x402_enabled"):
-            st.caption(f"💠 Premium on — next paid answer costs {X402_PRICE_PROS:.2f} testnet PHRS on Atlantic (chain {X402_CHAIN_ID}).")
+        if st.button("🆓 Free · MCP + RPC" + ("  ✓" if is_free_mode else ""), key="mode_free",
+                     use_container_width=True,
+                     help="Free retrieval mode. Uses local docs and public read-only MCP/RPC; no Gemini API."):
+            st.session_state.chat_mode = "free"; st.rerun()
+        if is_free_mode:
+            st.caption("Free mode returns docs/MCP/RPC results directly. No Gemini or LLM API is used.")
+        else:
+            st.markdown('<div class="copt-sec">Premium answers</div>', unsafe_allow_html=True)
+            st.session_state.x402_enabled = st.toggle(
+                "💠 Premium answers",
+                value=st.session_state.x402_enabled,
+                key="x402_enabled_toggle_main",
+                help="Premium chat uses x402 on Pharos Atlantic testnet and costs 0.01 PHRS per answer.",
+            )
+            if st.session_state.get("x402_enabled"):
+                st.caption(f"💠 Premium on — next paid answer costs {X402_PRICE_PROS:.2f} testnet PHRS on Atlantic (chain {X402_CHAIN_ID}).")
     with st.expander("\U0001F9FE x402 settlement reports · " + str(len(st.session_state.x402_receipts)), expanded=False):
             if st.session_state.x402_receipts:
                 for _r in reversed(st.session_state.x402_receipts[-8:]):
@@ -15003,7 +15097,8 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
         # of chat and payment continues through the connected testnet wallet.
         # Free mode skips this entirely.
         _x402_ch = x402_make_challenge(question)
-        _x402_premium = bool(st.session_state.get("x402_enabled"))
+        _x402_premium = (st.session_state.get("chat_mode") != "free"
+                         and bool(st.session_state.get("x402_enabled")))
         _x402_paid = _x402_ch["resource"] in st.session_state.get("x402_unlocked", {})
 
         if _x402_premium and not _x402_paid:
@@ -15024,10 +15119,12 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
             with st.spinner(""):
                 try:
+                    if st.session_state.get("chat_mode") == "free":
+                        answer, sources, _mcp_labels = free_mcp_rpc_answer(question)
+                        st.session_state.mcp_last_sources = _mcp_labels
                     # x402: if this question's resource was paid for, generate
                     # the ENHANCED premium answer instead of the standard one.
-                    _x402_ch_now = x402_make_challenge(question)
-                    if _x402_ch_now["resource"] in st.session_state.get("x402_unlocked", {}):
+                    elif (_x402_ch_now := x402_make_challenge(question))["resource"] in st.session_state.get("x402_unlocked", {}):
                         answer  = x402_generate_premium_answer(question, bot, sel_lang)
                         sources = []
                     elif detect_app_feature(question):
@@ -15113,9 +15210,13 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             msg_idx = str(len(st.session_state.messages))
             goal = st.session_state.get("build_path_goal")
             if goal and st.session_state.get("build_path_data") is None:
-                with st.spinner("Generating your build path…"):
-                    bp_data = build_path_generator(goal, bot)
-                st.session_state.build_path_data = bp_data
+                if bot is None:
+                    st.info("Build-path generation uses Gemini. Switch to Docs or Docs + General for this feature.")
+                    st.session_state.build_path_data = None
+                else:
+                    with st.spinner("Generating your build path…"):
+                        bp_data = build_path_generator(goal, bot)
+                    st.session_state.build_path_data = bp_data
                 st.session_state.build_path_goal = None
 
             bp = st.session_state.get("build_path_data")
@@ -15214,10 +15315,13 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
             # ── Follow-up questions ───────────────────
             try:
-                if "fups_" + msg_idx not in st.session_state:
+                if st.session_state.get("chat_mode") == "free":
+                    fups = []
+                elif "fups_" + msg_idx not in st.session_state:
                     fups = get_followup_questions(question, answer)
                     st.session_state["fups_" + msg_idx] = fups
-                fups = st.session_state.get("fups_" + msg_idx, [])
+                if st.session_state.get("chat_mode") != "free":
+                    fups = st.session_state.get("fups_" + msg_idx, [])
             except Exception:
                 fups = []
 

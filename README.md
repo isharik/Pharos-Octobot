@@ -111,7 +111,13 @@ uvicorn skill_api:app --host 0.0.0.0 --port 8000
 
 ### Pharos MCP and x402 testnet demo
 
-The Chat uses two MCP sources: the official, read-only Pharos Network MCP for live chain lookups and the bundled `pharos-docs` stdio MCP for searches over `raw_docs/`. The server configuration is in `.mcp.json`; set `PHAROS_NETWORK_MCP_URL` to override the hosted network endpoint. The hosted Network MCP currently targets Pharos mainnet, so x402 payments below remain isolated on Atlantic testnet.
+The Chat offers three answer modes in **⚙ Options → Answer mode**:
+
+- **Free · MCP + RPC** is the default and does not initialize Gemini-backed RAG or call an LLM. It searches the bundled `pharos-docs` stdio MCP over `raw_docs/`, uses the official read-only Pharos Network MCP for supported mainnet queries, and falls back to direct public JSON-RPC for supported live lookups. It displays retrieved excerpts/results directly, so it is not a generative or translation model.
+- **Docs** uses the Gemini-embedded Chroma knowledge base and Gemini to answer from documentation.
+- **Docs + General** uses the same documentation retrieval and may use Gemini for broader answers.
+
+Example free-mode questions: “How do I deploy a contract on Pharos?”, “What is the latest block number?”, “What is the balance of `0x…`?”, and “Check transaction `0x…`.” Add “Atlantic testnet” or “testnet” for supported direct RPC lookups on chain 688689. The hosted Network MCP serves Pharos Pacific mainnet (chain 1672), so it is not used for Atlantic queries. Free-mode results stay in the source language and are not rewritten by an LLM. The MCP server configuration is also in `.mcp.json`; set `PHAROS_NETWORK_MCP_URL` to override the hosted network endpoint.
 
 For local Atlantic x402 development, set `X402_PAYTO_ADDRESS` to a receiving address on Atlantic in `.env`, then run the facilitator and Streamlit app in separate terminals:
 

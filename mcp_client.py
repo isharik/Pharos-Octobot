@@ -104,10 +104,15 @@ def call_remote_pharos_tool(name: str, arguments: dict[str, Any]) -> dict[str, A
 def call_local_docs_tool(name: str, arguments: dict[str, Any], project_dir: str | None = None) -> dict[str, Any]:
     """Run the bundled Pharos docs MCP server over its standard stdio transport."""
     root = project_dir or os.path.dirname(os.path.abspath(__file__))
+    child_env = os.environ.copy()
+    # Keep the stdio JSON-RPC stream UTF-8 on Windows as well as Linux; the
+    # docs excerpts can contain typographic punctuation outside the console
+    # code page used by a local Windows Python process.
+    child_env["PYTHONIOENCODING"] = "utf-8"
     proc = subprocess.Popen(
         [sys.executable, os.path.join(root, "pharos_docs_mcp.py")],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, encoding="utf-8", cwd=root,
+        text=True, encoding="utf-8", cwd=root, env=child_env,
     )
     try:
         def send(msg: dict[str, Any], expect: bool = True) -> dict[str, Any] | None:
