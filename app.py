@@ -16696,19 +16696,6 @@ elif st.session_state.page == "portfolio":
                 _vault_configs.append({"protocol": _protocol.strip(), "address": _contract.strip()})
             _read_snapshot = st.form_submit_button("Read portfolio", type="primary", use_container_width=True)
 
-        if st.session_state.get("portfolio_snapshot"):
-            st.markdown('<div class="pa-panel-title" style="margin-top:1rem">Ask this snapshot</div>', unsafe_allow_html=True)
-            st.caption("Ask about balances, positions or yield data.")
-            with st.form("portfolio_question_form"):
-                _ask_col, _send_col = st.columns([5, 1], vertical_alignment="bottom")
-                with _ask_col:
-                    _portfolio_question = st.text_input(
-                        "Question", key="portfolio_question_input",
-                        placeholder="Where is my USDC?", label_visibility="collapsed",
-                    )
-                with _send_col:
-                    _ask_portfolio = st.form_submit_button("Ask", type="primary", use_container_width=True)
-
     if _read_snapshot:
         st.session_state.pop("portfolio_answer", None)
         st.session_state.pop("portfolio_question_sources", None)
@@ -16733,6 +16720,20 @@ elif st.session_state.page == "portfolio":
         except Exception as _exc:
             st.session_state["portfolio_read_error"] = "Portfolio read failed: " + str(_exc)[:240]
             st.session_state.pop("portfolio_snapshot", None)
+
+    if st.session_state.get("portfolio_snapshot"):
+        with _left_col:
+            st.markdown('<div class="pa-panel-title" style="margin-top:.8rem">Ask this snapshot</div>', unsafe_allow_html=True)
+            st.caption("Examples: Where is my USDC? · What are my vault positions? · What am I earning?")
+            with st.form("portfolio_question_form"):
+                _ask_col, _send_col = st.columns([5, 1], vertical_alignment="bottom")
+                with _ask_col:
+                    _portfolio_question = st.text_input(
+                        "Question", key="portfolio_question_input",
+                        placeholder="Ask about balances, positions or yield…", label_visibility="collapsed",
+                    )
+                with _send_col:
+                    _ask_portfolio = st.form_submit_button("Ask", type="primary", use_container_width=True)
 
     if _ask_portfolio:
         _snapshot = st.session_state.get("portfolio_snapshot")
@@ -16804,47 +16805,44 @@ elif st.session_state.page == "portfolio":
             _metrics[2].metric("Block", f"{_snapshot['block_number']:,}")
             st.caption(f"Wallet {_snapshot['wallet']} · Pacific Mainnet · block {_snapshot['block_number']:,}")
 
-            _balance_col, _position_col = st.columns(2, gap="medium")
-            with _balance_col:
-                st.markdown('<div class="pa-panel-title">Wallet balances</div>', unsafe_allow_html=True)
-                _balance_data = [{
-                    "Asset": row["symbol"],
-                    "Balance": f"{row['amount']:,.7g}" if row.get("amount") is not None else "Unavailable",
-                    "Source": row["source_contract"],
-                    "Block": row["block_number"],
-                } for row in _balances]
-                st.dataframe(pd.DataFrame(_balance_data), hide_index=True, use_container_width=True, height=250)
-                with st.expander("Balance explorer links"):
-                    for _row in _balances:
-                        if _row.get("error"):
-                            st.caption(f"{_row['symbol']} read failed: {_row['error']}")
-                        elif _row.get("token_address"):
-                            st.markdown(f"[{_row['symbol']} contract]({_row['explorer_url']}/address/{_row['token_address']}) · block {_row['block_number']:,}")
-                        else:
-                            st.markdown(f"[Wallet account]({_row['explorer_url']}/address/{_snapshot['wallet']}) · block {_row['block_number']:,}")
+            st.markdown('<div class="pa-panel-title">Wallet balances</div>', unsafe_allow_html=True)
+            _balance_data = [{
+                "Asset": row["symbol"],
+                "Balance": f"{row['amount']:,.7g}" if row.get("amount") is not None else "Unavailable",
+                "Source contract": row["source_contract"],
+                "Block": row["block_number"],
+            } for row in _balances]
+            st.dataframe(pd.DataFrame(_balance_data), hide_index=True, use_container_width=True, height=205)
+            with st.expander("Balance explorer links"):
+                for _row in _balances:
+                    if _row.get("error"):
+                        st.caption(f"{_row['symbol']} read failed: {_row['error']}")
+                    elif _row.get("token_address"):
+                        st.markdown(f"[{_row['symbol']} contract]({_row['explorer_url']}/address/{_row['token_address']}) · block {_row['block_number']:,}")
+                    else:
+                        st.markdown(f"[Wallet account]({_row['explorer_url']}/address/{_snapshot['wallet']}) · block {_row['block_number']:,}")
 
-            with _position_col:
-                st.markdown('<div class="pa-panel-title">Configured vault positions</div>', unsafe_allow_html=True)
-                if _positions:
-                    _position_data = [{
-                        "Vault": p["protocol"],
-                        "Position": f"{p['assets']:,.7g} {p['asset_symbol']}" if p.get("available") else "Unavailable",
-                        "Shares": f"{p['shares']:,.7g}" if p.get("available") else "—",
-                        "Contract": p["source_contract"],
-                        "Block": p["block_number"],
-                    } for p in _positions]
-                    st.dataframe(pd.DataFrame(_position_data), hide_index=True, use_container_width=True, height=250)
-                    with st.expander("Vault source details"):
-                        for _position in _positions:
-                            if not _position.get("available"):
-                                st.caption(f"{_position['protocol']} read failed: {_position.get('error', 'ERC-4626 data unavailable')}")
-                            st.markdown(f"[{_position['protocol']} contract]({_position['explorer_url']}/address/{_position['vault_address']}) · block {_position['block_number']:,}")
-                else:
-                    st.caption("No vault contracts configured.")
+            st.markdown('<div class="pa-panel-title" style="margin-top:.55rem">Configured vault positions</div>', unsafe_allow_html=True)
+            if _positions:
+                _position_data = [{
+                    "Vault": p["protocol"],
+                    "Position": f"{p['assets']:,.7g} {p['asset_symbol']}" if p.get("available") else "Unavailable",
+                    "Shares": f"{p['shares']:,.7g}" if p.get("available") else "—",
+                    "Contract": p["source_contract"],
+                    "Block": p["block_number"],
+                } for p in _positions]
+                st.dataframe(pd.DataFrame(_position_data), hide_index=True, use_container_width=True, height=170)
+                with st.expander("Vault source details"):
+                    for _position in _positions:
+                        if not _position.get("available"):
+                            st.caption(f"{_position['protocol']} read failed: {_position.get('error', 'ERC-4626 data unavailable')}")
+                        st.markdown(f"[{_position['protocol']} contract]({_position['explorer_url']}/address/{_position['vault_address']}) · block {_position['block_number']:,}")
+            else:
+                st.info("Configure at least two readable ERC-4626 vaults on the left to compare protocol positions.")
             if _unreadable_positions:
                 st.warning(f"{len(_unreadable_positions)} configured vault read(s) failed. Those contracts are excluded from answers.")
             if _positions and len(_readable_positions) < 2:
-                st.caption("Configure two readable vaults to compare positions. Yield is not inferred from share prices.")
+                st.info("Only wallet balances are available so far. Configure at least two readable vaults to meet the multi-vault requirement. Yield is never inferred from share prices.")
 
             if st.session_state.get("portfolio_answer"):
                 _answer_html = esc(st.session_state["portfolio_answer"]).replace("\n", "<br>")
