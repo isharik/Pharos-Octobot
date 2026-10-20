@@ -19989,6 +19989,34 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             '</div>',
             unsafe_allow_html=True,
         )
+        if entry.get("status") == "pending" and st.button("↻ Refresh payment status", key="req_refresh_paid_status"):
+            _rcfg = _req_net_config("testnet" if int(entry.get("chain_id") or 0) == PHAROS_TESTNET_CHAIN_ID_DEC else "mainnet")
+            _receipt = fetch_pharos_transaction(entry["tx_hash"], rpc_override=_rcfg["rpc"])
+            _status = _receipt.get("status") if _receipt.get("available") else None
+            if _status == "success":
+                try:
+                    _wanted = float(entry.get("amount") or 0)
+                    _matches = ((_receipt.get("to_addr") or "").lower() == (entry.get("to") or "").lower()
+                                and _receipt.get("value_pros") is not None
+                                and abs(float(_receipt["value_pros"]) - _wanted) <= max(1e-12, _wanted * 1e-9))
+                except (TypeError, ValueError):
+                    _matches = False
+                if not _matches:
+                    _status = "verification_failed"
+                    _receipt["error"] = "The confirmed transfer does not match this payment request."
+            entry["status"] = "confirmed" if _status == "success" else "failed" if _status == "failed" else "pending"
+            if _status == "verification_failed":
+                entry["status"] = "verification_failed"
+            entry["error"] = _receipt.get("error") if (_status in (None, "verification_failed") or not _receipt.get("available")) else None
+            for _invoice in st.session_state.req_invoices:
+                if _invoice.get("tx_hash") == entry.get("tx_hash"):
+                    _invoice.update(entry)
+            if not _ledger_save("request_payment", entry.get("to", ""), entry):
+                _warn_ledger_unavailable()
+            st.session_state.req_draft["mode"] = "paid_success" if entry["status"] == "confirmed" else "payment_failed" if entry["status"] in ("failed", "verification_failed") else "payment_pending"
+            st.rerun()
+
+
         if st.button("🧾 Create a New Request", key="req_new_after_pay"):
             st.session_state.req_draft = None
             st.rerun()
@@ -20023,30 +20051,6 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             f'</div>',
             unsafe_allow_html=True,
         )
-        if entry.get("status") == "pending" and st.button("↻ Refresh payment status", key="req_refresh_paid_status"):
-            _rcfg = _req_net_config("testnet" if int(entry.get("chain_id") or 0) == PHAROS_TESTNET_CHAIN_ID_DEC else "mainnet")
-            _receipt = fetch_pharos_transaction(entry["tx_hash"], rpc_override=_rcfg["rpc"])
-            _status = _receipt.get("status") if _receipt.get("available") else None
-            if _status == "success":
-                try:
-                    _wanted = float(entry.get("amount") or 0)
-                    _matches = ((_receipt.get("to_addr") or "").lower() == (entry.get("to") or "").lower()
-                                and _receipt.get("value_pros") is not None
-                                and abs(float(_receipt["value_pros"]) - _wanted) <= max(1e-12, _wanted * 1e-9))
-                except (TypeError, ValueError):
-                    _matches = False
-                if not _matches:
-                    _status = "verification_failed"
-                    _receipt["error"] = "The confirmed transfer does not match this payment request."
-            entry["status"] = "confirmed" if _status == "success" else "failed" if _status == "failed" else "pending"
-            if _status == "verification_failed":
-                entry["status"] = "verification_failed"
-            entry["error"] = _receipt.get("error") if (_status in (None, "verification_failed") or not _receipt.get("available")) else None
-            if not _ledger_save("request_payment", entry.get("to", ""), entry):
-                _warn_ledger_unavailable()
-            st.session_state.req_draft["mode"] = "paid_success" if entry["status"] == "confirmed" else "payment_failed" if entry["status"] in ("failed", "verification_failed") else "payment_pending"
-            st.rerun()
-
         st.markdown('<div class="req-section-gap"></div>', unsafe_allow_html=True)
 
         # Two-column layout: form left, summary right
