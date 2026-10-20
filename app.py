@@ -14697,6 +14697,46 @@ html[data-octo-page="chat"]{--csb-tx:#151A2E;--csb-mut:#71778C;--csb-line:rgba(2
   --csb-hover:rgba(20,20,60,0.05);--csb-active:rgba(37,49,214,0.10);}
 html[data-theme="dark"][data-octo-page="chat"]{--csb-tx:#EDEFF7;--csb-mut:#868EA6;--csb-line:rgba(255,255,255,0.08);
   --csb-hover:rgba(255,255,255,0.06);--csb-active:rgba(126,139,255,0.16);}
+/* Conversation-first layout: narrow reading column, quiet assistant turns,
+   right-aligned user bubbles, and a low-noise fixed composer. */
+html[data-octo-page="chat"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+  max-width:820px!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]{
+  width:100%!important;max-width:780px!important;margin:0 auto!important;
+  padding:0.85rem 0!important;gap:0.75rem!important;contain:none!important;
+  animation:chat-msg-in 0.18s ease-out both;}
+html[data-octo-page="chat"] [data-testid="stChatMessageAvatarUser"],
+html[data-octo-page="chat"] [data-testid="stChatMessageAvatarAssistant"]{display:none!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div:last-child{
+  width:fit-content!important;max-width:min(82%,680px)!important;margin-left:auto!important;
+  padding:0.78rem 1rem!important;border-radius:20px 20px 5px 20px!important;
+  background:#EEF0F7!important;border:1px solid rgba(30,35,65,0.07)!important;}
+html[data-theme="dark"][data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div:last-child{
+  background:#25293A!important;border-color:rgba(255,255,255,0.07)!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p{
+  margin:0!important;line-height:1.55!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) > div:last-child{
+  width:100%!important;max-width:100%!important;margin:0!important;padding:0.25rem 0!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p{
+  line-height:1.75!important;margin-bottom:0.7rem!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) h1,
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) h2,
+html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) h3{
+  margin-top:1rem!important;margin-bottom:0.45rem!important;}
+html[data-octo-page="chat"] [data-testid="stChatMessage"] [data-testid="stExpander"]{
+  margin:0.35rem 0!important;border-radius:12px!important;}
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] > [data-testid="stVerticalBlock"]{
+  max-width:820px!important;}
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{
+  background:linear-gradient(180deg,transparent,rgba(248,249,252,0.92) 30%)!important;
+  padding:1.3rem 2rem 1.1rem!important;}
+html[data-theme="dark"][data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{
+  background:linear-gradient(180deg,transparent,rgba(15,17,25,0.94) 30%)!important;}
+@media(max-width:800px){
+  html[data-octo-page="chat"] [data-testid="stMainBlockContainer"]{margin-left:0!important;padding:1rem!important;}
+  html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{margin-left:0!important;padding:1rem 1rem 0.8rem!important;}
+  html[data-octo-page="chat"] [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div:last-child{max-width:92%!important;}
+}
 /* brand */
 .csb-brand{display:flex;align-items:center;gap:11px;padding:2px 4px 15px;margin-bottom:4px;
   border-bottom:1px solid var(--csb-line);}
@@ -15493,36 +15533,34 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             if st.session_state.voice_reply:
                 speak_text(answer)
 
-            # ── Action buttons row ────────────────────
-            render_copy_share_download(answer, btn_key=msg_idx)
+            # Keep secondary utilities out of the reading flow.
+            with st.expander("⋯ Answer tools", expanded=False):
+                render_copy_share_download(answer, btn_key=msg_idx)
+                if st.button("🔊 Read aloud", key="replay_" + msg_idx):
+                    speak_text(answer)
 
-            # Read aloud button
-            if st.button("🔊 Read", key="replay_" + msg_idx, help="Read aloud"):
-                speak_text(answer)
-
-            # ── Show relevant images ──────────────────
-            img_key = "show_imgs_" + msg_idx
-            if img_key not in st.session_state:
-                st.session_state[img_key] = False
-            if not st.session_state[img_key]:
-                if st.button("🖼 Show Images", key="imgs_btn_" + msg_idx):
-                    st.session_state[img_key] = True
-                    st.rerun()
-            else:
-                imgs = get_image_search_results(question)
-                img_cols = st.columns(3)
-                for ci, img in enumerate(imgs[:3]):
-                    with img_cols[ci]:
-                        try:
-                            st.image(img["url"], use_container_width=True, caption="")
-                        except Exception:
-                            st.markdown(
-                                f'<img src="{img["url"]}" style="width:100%;border-radius:8px;" />',
-                                unsafe_allow_html=True,
-                            )
-                if st.button("✕ Hide images", key="imgs_hide_" + msg_idx):
+                img_key = "show_imgs_" + msg_idx
+                if img_key not in st.session_state:
                     st.session_state[img_key] = False
-                    st.rerun()
+                if not st.session_state[img_key]:
+                    if st.button("🖼 Show images", key="imgs_btn_" + msg_idx):
+                        st.session_state[img_key] = True
+                        st.rerun()
+                else:
+                    imgs = get_image_search_results(question)
+                    img_cols = st.columns(3)
+                    for ci, img in enumerate(imgs[:3]):
+                        with img_cols[ci]:
+                            try:
+                                st.image(img["url"], use_container_width=True, caption="")
+                            except Exception:
+                                st.markdown(
+                                    f'<img src="{img["url"]}" style="width:100%;border-radius:8px;" />',
+                                    unsafe_allow_html=True,
+                                )
+                    if st.button("✕ Hide images", key="imgs_hide_" + msg_idx):
+                        st.session_state[img_key] = False
+                        st.rerun()
 
             # ── Price chart if relevant ───────────────
             q_lower = question.lower()
@@ -15548,25 +15586,17 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
             # ── Follow-up questions ───────────────────
             try:
-                if st.session_state.get("chat_mode") == "free":
+                if st.session_state.get("chat_mode") in ("free", "pharos_agent"):
                     fups = []
                 elif "fups_" + msg_idx not in st.session_state:
                     fups = get_followup_questions(question, answer)
                     st.session_state["fups_" + msg_idx] = fups
-                if st.session_state.get("chat_mode") != "free":
+                if st.session_state.get("chat_mode") not in ("free", "pharos_agent"):
                     fups = st.session_state.get("fups_" + msg_idx, [])
             except Exception:
                 fups = []
 
             if fups:
-                st.markdown(
-                    '<div style="margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid #D0D3E0;">'
-                    '<div style="font-size:10px;font-weight:600;color:#7A7F96;letter-spacing:0.08em;'
-                    'text-transform:uppercase;margin-bottom:0.5rem;">Follow-up questions</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown('<div class="followup-btn-row">', unsafe_allow_html=True)
                 fup_cols = st.columns(len(fups))
                 for fup_i, (fcol, fq) in enumerate(zip(fup_cols, fups)):
                     with fcol:
@@ -15585,10 +15615,19 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
                             # its own fresh set instead of reusing this one.
                             st.session_state.pop("fups_" + msg_idx, None)
                             st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
 
         st.session_state.messages.append({"role":"assistant","content":answer})
         st.session_state.sources_history.append(sources)
+        components.html("""
+<script>
+setTimeout(function(){
+  try{
+    var main=window.parent.document.querySelector('section[data-testid="stMain"]');
+    if(main) main.scrollTo({top:main.scrollHeight,behavior:'smooth'});
+  }catch(e){}
+},120);
+</script>
+""", height=0)
 
 
 # ═════════════════════════════════════════════
