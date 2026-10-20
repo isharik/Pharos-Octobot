@@ -28,7 +28,7 @@ OctoBot collapses that into one interface: ask it, and it reads the docs, reads 
 | **Transaction Explanation** | Paste a tx hash and get a human explanation of what happened, the transfer flow, and how it executed — no more staring at raw calldata. |
 | **Memory Ledger** | Wallet profiles and explained transactions persist per-session as an inspectable, searchable ledger — not a one-off answer that disappears. |
 | **Live Ecosystem Data** | $PROS price, ecosystem news, and the official Pharos X feed, all served through a non-blocking background-fetch layer so pages never hang waiting on the network. |
-| **x402 Micro-payments** | Implements Pharos's own `x402` HTTP 402 pay-per-call standard for premium, higher-depth AI replies — a working example of on-chain-native monetization, not just a mock. |
+| **x402 Micro-payments** | Atlantic testnet x402 chat payments in native PHRS, with facilitator verification, settlement reports, and explorer-linked receipts. |
 | **Payment Agent** | Send $PROS with plain English ("send 5 PROS to 0x1234…") — OctoBot builds and routes the request. |
 | **Multilingual, dual-mode chat** | Ask in any language; toggle between "Docs only" (strictly source-grounded) and "Docs + General" (Gemini fills gaps outside the docs). |
 | **Agent-callable Skill API** | A standalone FastAPI service (`skill_api.py`) exposes the RAG answer engine, wallet profiling, and tx explanation as REST endpoints with OpenAPI docs — built for the **Pharos AI Agent Carnival**, so other agents can call OctoBot's intelligence directly. |
@@ -109,6 +109,25 @@ uvicorn skill_api:app --host 0.0.0.0 --port 8000
 # Interactive docs at http://localhost:8000/docs
 ```
 
+### Pharos MCP and x402 testnet demo
+
+The Chat uses two MCP sources: the official, read-only Pharos Network MCP for live chain lookups and the bundled `pharos-docs` stdio MCP for searches over `raw_docs/`. The server configuration is in `.mcp.json`; set `PHAROS_NETWORK_MCP_URL` to override the hosted network endpoint. The hosted Network MCP currently targets Pharos mainnet, so x402 payments below remain isolated on Atlantic testnet.
+
+For the Atlantic x402 demo, set `X402_PAYTO_ADDRESS` to a receiving address on Atlantic in `.env`, then run the facilitator and Streamlit app in separate terminals:
+
+```powershell
+# Put X402_PAYTO_ADDRESS=0xYourAtlanticReceivingAddress in .env first.
+# Terminal 1
+uvicorn x402_facilitator:app --host 0.0.0.0 --port 8765
+
+# Terminal 2
+streamlit run app.py
+```
+
+The free `GET /health` route costs nothing; `GET /data` costs 0.005 PHRS and `GET /premium` costs 0.01 PHRS. The Chat's Premium toggle uses `/premium`. The facilitator exposes `/verify`, `/settle`, `/supported`, and `/reports`; rejected or underpaid attempts receive another HTTP 402. After the wallet submits a signed native PHRS transaction on chain 688689, the Chat replays the request with `PAYMENT-SIGNATURE`, requires HTTP 200 and a matching `PAYMENT-RESPONSE`, then displays the settled hash linked to Atlantic PharosScan. Settlement reports are stored in SQLite.
+
+This is OctoBot's Atlantic native-PHRS x402 profile (`pharos-native-transfer`), rather than the ERC-20 `exact` scheme used by Pharos's test-USDC example. The wallet broadcasts the user's transaction; the facilitator verifies its mined receipt and records settlement. OctoBot and the facilitator never need the user's private key. The payment address is public; do not add a private key to `.env`.
+
 > The knowledge base ships pre-built in `chroma_gemini/`. To rebuild it from scratch, run `crawl_docs.py` then `build_vectorstore.py` — you'll need `GEMINI_API_KEY` set, since embeddings are generated via the Gemini API.
 
 ---
@@ -118,6 +137,9 @@ uvicorn skill_api:app --host 0.0.0.0 --port 8000
 ```
 app.py                      # the full Streamlit app — every page, all UI
 octobot.py                  # RAG engine: embeddings + Chroma + Gemini LLM
+mcp_client.py               # MCP HTTP client and bundled docs MCP bridge
+pharos_docs_mcp.py          # read-only Pharos documentation MCP server
+x402_facilitator.py         # Atlantic testnet x402 resource server/facilitator
 skill_api.py                # standalone FastAPI agent-callable API
 build_vectorstore.py        # builds the Chroma vector store from raw_docs/
 crawl_docs.py                # crawls docs.pharos.xyz into raw_docs/

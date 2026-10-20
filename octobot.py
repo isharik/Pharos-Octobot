@@ -257,7 +257,7 @@ class OctoBot:
         return sources
 
     # ─────────────────────────────────────────
-    def ask(self, question: str, chat_history: list = None):
+    def ask(self, question: str, chat_history: list = None, external_context: str = "", external_sources: list = None):
         """
         Main method — retrieves answer from docs.
         Injects live PROS price when question is price-related.
@@ -277,13 +277,15 @@ class OctoBot:
 
         relevant_docs = self.retriever.invoke(question)
 
-        if not relevant_docs:
+        if not relevant_docs and not external_context:
             return (
                 "I could not find that information in the Pharos documentation.",
                 []
             )
 
-        context = self._format_docs(relevant_docs)
+        context = self._format_docs(relevant_docs) if relevant_docs else ""
+        if external_context:
+            context += "\n\nADDITIONAL MCP RESULTS (use only as sourced evidence):\n" + str(external_context)
 
         # Inject live price data for token-related questions
         q_lower = question.lower()
@@ -312,6 +314,11 @@ class OctoBot:
         chat_history.append(AIMessage(content=answer))
 
         sources = self._extract_sources(relevant_docs)
+        seen_sources = {source.get("url") for source in sources}
+        for source in (external_sources or []):
+            if source.get("url") and source.get("url") not in seen_sources:
+                sources.append(source)
+                seen_sources.add(source.get("url"))
         return answer, sources
 
     # ─────────────────────────────────────────

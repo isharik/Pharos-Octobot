@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pharos-network": {
+      "type": "http",
+      "url": "https://mcp.pharos.xyz/mcp"
+    },
+    "pharos-docs": {
+      "command": "python",
+      "args": ["pharos_docs_mcp.py"]
+    }
+  }
+}

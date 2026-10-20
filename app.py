@@ -20,11 +20,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 import html
 from urllib.parse import urlparse
+
+load_dotenv()
+from mcp_client import (
+    call_local_docs_tool, call_remote_pharos_tool, mcp_text,
+    network_tool_for_question,
+)
 
 # ─────────────────────────────────────────────
 # PERFORMANCE: shared, cached Gemini client factory
@@ -103,6 +110,17 @@ def _ledger_load(kind: str, wallet: str) -> list:
             rows = db.execute("SELECT payload FROM payment_ledger WHERE kind=? AND wallet=? ORDER BY updated_at DESC LIMIT 100", (kind, wallet.lower())).fetchall()
         finally:
             db.close()
+        return [json.loads(row[0]) for row in rows]
+    except (OSError, sqlite3.Error, ValueError):
+        return []
+
+
+def _ledger_load_all(kind: str) -> list:
+    """Load a bounded cross-wallet report list for the chat settlement view."""
+    try:
+        with sqlite3.connect(_ledger_path(), timeout=5) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS payment_ledger (kind TEXT NOT NULL, wallet TEXT NOT NULL, identity TEXT NOT NULL, chain_id INTEGER NOT NULL DEFAULT 0, payload TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(kind,wallet,identity,chain_id))")
+            rows = db.execute("SELECT payload FROM payment_ledger WHERE kind=? ORDER BY updated_at DESC LIMIT 100", (kind,)).fetchall()
         return [json.loads(row[0]) for row in rows]
     except (OSError, sqlite3.Error, ValueError):
         return []
@@ -656,7 +674,15 @@ if "x402_enabled"    not in st.session_state: st.session_state.x402_enabled    =
 if "x402_challenge"  not in st.session_state: st.session_state.x402_challenge  = None    # active 402 challenge awaiting payment
 if "x402_unlocked"   not in st.session_state: st.session_state.x402_unlocked   = {}      # resource_id -> verified tx hash
 if "x402_receipts"   not in st.session_state: st.session_state.x402_receipts   = []      # list of settled premium calls
-if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4")  # default receiving address
+if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "")
+if "x402_tx_submitted" not in st.session_state: st.session_state.x402_tx_submitted = ""
+if "x402_tx_payer" not in st.session_state: st.session_state.x402_tx_payer = ""
+if "x402_start_send" not in st.session_state: st.session_state.x402_start_send = False
+if "x402_facilitator_reports" not in st.session_state: st.session_state.x402_facilitator_reports = []
+if "mcp_last_sources" not in st.session_state: st.session_state.mcp_last_sources = []
+# Restore the persistent settlement report list (no signing data or secrets).
+if not st.session_state.x402_receipts:
+    st.session_state.x402_receipts = _ledger_load_all("x402")
 # Do not retain prior demo/manual-hash unlocks as proof of a protocol settlement.
 if not st.session_state.get("_x402_fail_closed_applied"):
     st.session_state.x402_unlocked = {}
@@ -675,6 +701,13 @@ if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.session_state.wallet_data    = None
     st.session_state.wallet_profile = None
     st.query_params.clear()
+
+_x402_tx_query = valid_txhash(st.query_params.get("x402_tx", ""))
+if _x402_tx_query:
+    st.session_state.x402_tx_submitted = _x402_tx_query
+    st.session_state.x402_tx_payer = valid_addr(st.query_params.get("x402_payer", "")) or st.session_state.get("w3_address", "")
+    st.query_params.pop("x402_tx", None)
+    st.query_params.pop("x402_payer", None)
 
 # ── Global EIP-1193 wallet bridge (browser → Python) ──────────
 # The connect button lives in the parent document and talks to the real
@@ -3716,18 +3749,16 @@ def fetch_pharos_transaction(tx_hash: str, rpc_override: str = None) -> dict:
 # ═════════════════════════════════════════════════════════════
 # x402 — Pay-per-call AI (HTTP 402 "Payment Required" for OctoBot)
 # ─────────────────────────────────────────────────────────────
-# Faithful model of the x402 flow Pharos Research built:
-#   1. Client requests a PREMIUM resource (a deep OctoBot answer).
-#   2. Server replies 402 Payment Required + payment details (this is the
-#      "challenge": pay-to address, amount, resource id, nonce).
-#   3. Client pays the micro-amount on-chain (Pharos testnet/mainnet).
-#   4. Client returns the tx hash as proof; server VERIFIES it on-chain
-#      (recipient + amount + success) using the existing read-only RPC.
-#   5. Server settles the request and returns the premium answer.
+# Native-PHRS x402 flow, restricted to Pharos Atlantic (chain 688689):
+#   1. The facilitator returns a 402 challenge for /premium.
+#   2. The connected browser wallet signs and broadcasts the required transfer.
+#   3. Chat replays the request with PAYMENT-SIGNATURE.
+#   4. The facilitator verifies the mined transfer, records settlement and
+#      returns HTTP 200 with PAYMENT-RESPONSE.
 #
 # Free answering is completely unaffected — this path only runs when the
 # user explicitly opts into a premium (x402) call. All verification is
-# read-only; the app never holds keys or moves funds itself.
+# verification reads on-chain data; the app never holds a private key.
 # ═════════════════════════════════════════════════════════════
 
 # Where micro-payments are sent for the demo. Override via env if you want
@@ -3735,28 +3766,22 @@ def fetch_pharos_transaction(tx_hash: str, rpc_override: str = None) -> dict:
 # no private key lives in the app.
 X402_PAYTO_ADDRESS = os.getenv(
     "X402_PAYTO_ADDRESS",
-    "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4",
+    "",
 )
-X402_PRICE_PROS   = 0.02      # price per premium call, in native units
-X402_TOLERANCE    = 0.10      # accept payments within 10% under (gas/rounding)
+X402_PRICE_PROS   = 0.01      # premium chat route, Atlantic testnet PHRS
+X402_CHAIN_ID     = 688689
+X402_NETWORK      = "eip155:688689"
+X402_FACILITATOR_URL = os.getenv("X402_FACILITATOR_URL", "http://127.0.0.1:8765").rstrip("/")
+X402_SCHEME       = "pharos-native-transfer"
 
 def x402_get_payto() -> str:
-    """Resolve the active pay-to address: a UI-set address (validated) takes
-    precedence, otherwise the env/default constant. Always returns a string."""
-    try:
-        import streamlit as _st
-        ui_addr = _st.session_state.get("x402_payto", "")
-        v = valid_addr(ui_addr)
-        if v:
-            return v
-    except Exception:
-        pass
-    return X402_PAYTO_ADDRESS
+    """Return only the deployment-configured receiver; never a stale session address."""
+    # Only the deployment's configured Atlantic pay-to is authoritative. Do
+    # not reuse an old session value that could point at the prior mainnet demo.
+    return valid_addr(X402_PAYTO_ADDRESS) or ""
 
 def x402_make_challenge(question: str) -> dict:
-    """Build the 402 'Payment Required' challenge for a premium question.
-    Deterministic resource id + nonce so the same paid tx maps to one answer.
-    """
+    """Create the local identity for one Atlantic testnet premium chat call."""
     nonce = hashlib.sha256(
         (question + str(int(time.time() // 3600))).encode("utf-8")
     ).hexdigest()[:16]
@@ -3766,11 +3791,13 @@ def x402_make_challenge(question: str) -> dict:
     return {
         "status":      402,
         "resource":    resource_id,
+        "route":       "/premium",
         "pay_to":      x402_get_payto(),
         "amount_pros": X402_PRICE_PROS,
         "nonce":       nonce,
-        "scheme":      "exact",
-        "network":     "pharos",
+        "scheme":      X402_SCHEME,
+        "network":     X402_NETWORK,
+        "chain_id":    X402_CHAIN_ID,
         "question":    question,
     }
 
@@ -3786,51 +3813,86 @@ def x402_payment_uri(challenge: dict, chain_id_dec: int) -> str:
     pay_to = challenge.get("pay_to", "")
     return "ethereum:" + pay_to + "@" + str(chain_id_dec) + "?value=" + str(wei)
 
-def x402_verify_payment(tx_hash: str, challenge: dict) -> dict:
-    """Verify an on-chain payment settles the 402 challenge.
-    Reuses fetch_pharos_transaction (read-only). Confirms:
-      • tx exists and succeeded
-      • recipient matches the required pay-to address
-      • value paid >= required amount (within tolerance)
-    Returns {ok, reason, tx} — never raises.
-    """
-    out = {"ok": False, "reason": None, "tx": None}
+def x402_payment_signature(tx_hash: str, payer: str) -> str:
+    """Encode the Pharos native-transfer proof in the x402 request header."""
+    payload = {"x402Version": 2, "scheme": X402_SCHEME, "network": X402_NETWORK,
+               "payload": {"txHash": tx_hash, "payer": payer}}
+    return base64.b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
 
+
+def x402_replay_and_settle(tx_hash: str, challenge: dict, payer: str) -> dict:
+    """Replay the paid chat resource with PAYMENT-SIGNATURE and require 200 + receipt."""
     th = valid_txhash(tx_hash)
-    if not th:
-        out["reason"] = "That doesn't look like a valid Pharos transaction hash."
-        return out
-
-    tx = fetch_pharos_transaction(th)
-    out["tx"] = tx
-
-    if not tx.get("available") or tx.get("error"):
-        out["reason"] = tx.get("error") or "Could not read that transaction yet — it may still be pending."
-        return out
-    if tx.get("status") == "failed":
-        out["reason"] = "That transaction failed on-chain, so the payment didn't settle."
-        return out
-    if tx.get("status") is None:
-        out["reason"] = "That transaction is still pending — wait for it to confirm, then try again."
-        return out
-
-    want_to = (challenge.get("pay_to") or "").lower()
-    got_to  = (tx.get("to_addr") or "").lower()
-    if want_to and got_to and want_to != got_to:
-        out["reason"] = "That payment went to a different address than the one required."
-        return out
-
-    need = float(challenge.get("amount_pros", 0)) * (1.0 - X402_TOLERANCE)
-    paid = tx.get("value_pros")
-    if paid is None or paid < need:
-        out["reason"] = (
-            "The amount paid (" + (("%.4f" % paid) if paid is not None else "0")
-            + " PROS) is less than the required " + ("%.4f" % float(challenge.get("amount_pros", 0))) + " PROS."
+    wallet = valid_addr(payer)
+    if not th or not wallet:
+        return {"ok": False, "reason": "Connect an EVM wallet and submit a valid transaction hash."}
+    try:
+        response = requests.get(
+            X402_FACILITATOR_URL + str(challenge.get("route", "/premium")),
+            headers={"PAYMENT-SIGNATURE": x402_payment_signature(th, wallet)}, timeout=20,
         )
-        return out
+        if response.status_code == 402:
+            detail = response.json()
+            reason = detail.get("error", "Payment verification failed")
+            return {"ok": False, "reason": str(reason), "challenge": detail}
+        response.raise_for_status()
+        encoded = response.headers.get("PAYMENT-RESPONSE", "")
+        receipt = json.loads(base64.b64decode(encoded).decode()) if encoded else response.json().get("settlement", {})
+        if not receipt.get("success") or receipt.get("transaction", "").lower() != th.lower():
+            return {"ok": False, "reason": "Facilitator did not return a matching settled transaction receipt."}
+        return {"ok": True, "receipt": receipt, "payment_response_header": encoded}
+    except requests.RequestException as exc:
+        return {"ok": False, "reason": "Could not reach the Atlantic x402 facilitator: " + str(exc)}
+    except (ValueError, TypeError, KeyError) as exc:
+        return {"ok": False, "reason": "Invalid facilitator settlement response: " + str(exc)}
 
-    out["ok"] = True
-    return out
+
+def mcp_context_for_chat(question: str) -> tuple[str, list[dict], list[str]]:
+    """Fetch documentation and, when asked, live Pharos chain data through MCP."""
+    context_parts: list[str] = []
+    sources: list[dict] = []
+    labels: list[str] = []
+    try:
+        docs_result = call_local_docs_tool("search_pharos_docs", {"query": question, "limit": 5})
+        docs_text = mcp_text(docs_result)
+        docs_hits = json.loads(docs_text) if docs_text else []
+        for hit in docs_hits:
+            if not isinstance(hit, dict) or not hit.get("excerpt"):
+                continue
+            context_parts.append(
+                "[Pharos Docs MCP: " + str(hit.get("title", "Pharos docs")) + "]\n"
+                + str(hit["excerpt"])
+            )
+            if hit.get("url"):
+                sources.append({"title": hit.get("title", "Pharos docs"), "url": hit["url"]})
+        if docs_hits:
+            labels.append("Pharos Docs MCP")
+    except Exception:
+        # The existing Chroma retriever remains the graceful docs fallback.
+        pass
+
+    route = network_tool_for_question(question)
+    if route is None and any(word in question.lower() for word in ("testnet", "atlantic")):
+        st.session_state["mcp_network_notice"] = (
+            "The hosted Pharos Network MCP serves Pacific mainnet only (chain 1672). "
+            "Configure PHAROS_NETWORK_MCP_URL to use a testnet-compatible MCP endpoint."
+        )
+    if route:
+        try:
+            tool_name, arguments = route
+            network_result = call_remote_pharos_tool(tool_name, arguments)
+            network_text = mcp_text(network_result)
+            if network_text:
+                context_parts.append(
+                    "[Live read-only result from Pharos Network MCP tool " + tool_name
+                    + "; this hosted endpoint is Pacific mainnet, chain 1672]\n" + network_text
+                )
+                sources.append({"title": "Pharos Network MCP · " + tool_name, "url": "https://github.com/PharosNetwork/pharos-mcp"})
+                labels.append("Pharos Network MCP")
+        except Exception as exc:
+            # A remote MCP outage must not prevent ordinary docs chat.
+            st.session_state["mcp_network_notice"] = "Pharos Network MCP unavailable: " + str(exc)
+    return "\n\n".join(context_parts), sources, labels
 
 def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") -> str:
     """Generate the ENHANCED (premium) answer that the paid call unlocks.
@@ -3840,7 +3902,10 @@ def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") 
     """
     # Pull docs grounding from the existing RAG bot.
     try:
-        base_answer, _ = bot.ask(question)
+        _mcp_context, _mcp_sources, _mcp_labels = mcp_context_for_chat(question)
+        base_answer, _ = bot.ask(
+            question, external_context=_mcp_context, external_sources=_mcp_sources,
+        )
     except Exception:
         base_answer = ""
 
@@ -3871,13 +3936,7 @@ def x402_generate_premium_answer(question: str, bot, sel_lang: str = "English") 
 
 
 def x402_render_pending_gate() -> bool:
-    """Render the 402 payment gate from session_state (NOT from the transient
-    `question` variable). This fixes the bug where pasting a tx hash and clicking
-    Verify did nothing: the old gate lived inside `if question:`, so the rerun a
-    button click triggers — where chat_input is empty — skipped the whole block
-    and the button handler never ran. By rendering from st.session_state.x402_challenge,
-    the gate (and its buttons) persist across reruns. Returns True if a gate is shown.
-    """
+    """Render the facilitator 402 gate across Streamlit reruns and replay payment."""
     import streamlit as st
     _x402_ch = st.session_state.get("x402_challenge")
     if not _x402_ch:
@@ -3887,131 +3946,95 @@ def x402_render_pending_gate() -> bool:
         st.session_state.x402_challenge = None
         return False
 
-    # Fail closed: this repository has no HTTP 402 resource server, signed
-    # x402 authorization adapter, or configured facilitator/settlement client.
-    # A plain transaction hash is not an x402 payment authorization.
-    st.warning(
-        "Premium x402 is unavailable: no compatible HTTP 402 resource endpoint "
-        "or verified Pharos facilitator is configured. The premium answer remains gated."
-    )
-    if st.button("✕ Cancel premium request", key="x402_unconfigured_cancel"):
-        st.session_state.x402_challenge = None
-        st.rerun()
-    return True
-
-    _is_testnet = st.session_state.get("pay_network", "mainnet") == "testnet"
-    _chain_dec  = PHAROS_TESTNET_CHAIN_ID_DEC if _is_testnet else PHAROS_CHAIN_ID_DEC
-    _explorer   = PHAROS_TESTNET_EXPLORER_URL if _is_testnet else PHAROS_EXPLORER_URL
-    _net_label  = "Pharos Atlantic (testnet)" if _is_testnet else "Pharos Mainnet"
-    _uri        = x402_payment_uri(_x402_ch, _chain_dec)
-    _question   = _x402_ch.get("question", "")
-    _k          = _x402_ch.get("nonce", "x")
+    _question = _x402_ch.get("question", "")
+    _key = _x402_ch.get("nonce", "x")
+    _payto = x402_get_payto()
+    _challenge_body = None
+    _facilitator_error = None
+    try:
+        _challenge_response = requests.get(X402_FACILITATOR_URL + "/premium", timeout=8)
+        if _challenge_response.status_code == 402:
+            _challenge_body = _challenge_response.json()
+            _accepted = (_challenge_body.get("accepts") or [{}])[0]
+            _payto = valid_addr(_accepted.get("payTo")) or _payto
+            if int(_accepted.get("extra", {}).get("chainId", 0)) != X402_CHAIN_ID:
+                _facilitator_error = "Facilitator is not configured for Atlantic testnet (chain 688689)."
+        else:
+            _facilitator_error = "Facilitator did not return an HTTP 402 challenge."
+    except Exception as exc:
+        _facilitator_error = "Cannot reach facilitator at " + X402_FACILITATOR_URL + ": " + str(exc)
 
     with st.chat_message("assistant", avatar="🐙"):
+        st.markdown("### HTTP 402 · Payment required")
         st.markdown(
-            '<div style="background:linear-gradient(135deg,#0A0A28,#1414E8);'
-            'border-radius:16px;padding:1.1rem 1.3rem;color:#fff;margin-bottom:0.6rem;">'
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-            '<span style="font-family:DM Mono,monospace;font-size:11px;font-weight:700;'
-            'background:rgba(255,255,255,0.16);border-radius:6px;padding:2px 8px;">HTTP 402</span>'
-            '<span style="font-size:13px;font-weight:800;">Payment Required</span></div>'
-            '<div style="font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.55;">'
-            'This is a <b>premium (x402)</b> OctoBot call. Settle a small on-chain micro-payment '
-            'to unlock a deeper, expert answer. Your wallet does the signing — OctoBot only '
-            'verifies the payment on-chain.</div>'
-            '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:0.7rem;font-size:12px;">'
-            '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
-            'letter-spacing:0.05em;">Amount</div><div style="font-weight:800;">'
-            + ("%.2f" % _x402_ch["amount_pros"]) + ' PROS</div></div>'
-            '<div><div style="color:rgba(255,255,255,0.55);font-size:10px;text-transform:uppercase;'
-            'letter-spacing:0.05em;">Network</div><div style="font-weight:700;">' + esc(_net_label) + '</div></div>'
-            '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
-            'text-transform:uppercase;letter-spacing:0.05em;">Pay&nbsp;to</div>'
-            '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
-            + esc(_x402_ch["pay_to"]) + '</div></div>'
-            '<div style="min-width:0;"><div style="color:rgba(255,255,255,0.55);font-size:10px;'
-            'text-transform:uppercase;letter-spacing:0.05em;">Resource</div>'
-            '<div style="font-family:DM Mono,monospace;font-size:11px;word-break:break-all;">'
-            + esc(_x402_ch["resource"]) + '</div></div>'
-            '</div></div>',
-            unsafe_allow_html=True,
+            f"Premium answer on **Pharos Atlantic testnet** · **{X402_PRICE_PROS:.2f} PHRS** · "
+            f"chain ID **{X402_CHAIN_ID}**. The wallet signs and broadcasts the transfer; the "
+            "facilitator verifies it, settles the request, and returns `PAYMENT-RESPONSE`."
         )
+        if _facilitator_error:
+            st.error(_facilitator_error)
+            st.caption("Start the demo service with: `uvicorn x402_facilitator:app --host 0.0.0.0 --port 8765`")
+        elif _challenge_body:
+            with st.expander("402 payment requirements", expanded=False):
+                st.json(_challenge_body)
+        if not _payto:
+            st.error("Set X402_PAYTO_ADDRESS to the Atlantic testnet receiving wallet before accepting payments.")
+        else:
+            st.caption("Pay to: " + _payto)
 
-        _qcol, _vcol = st.columns([1, 1.3], gap="large")
-        with _qcol:
-            st.markdown(
-                '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
-                '📲 Scan to pay (EIP-681)</div>', unsafe_allow_html=True)
-            render_qr_code(_uri, size=150, key="x402_qr_" + _k)
-            st.markdown(
-                '<div style="font-size:10px;color:#7A7F96;word-break:break-all;margin-top:4px;">'
-                + esc(_uri) + '</div>', unsafe_allow_html=True)
-
-        with _vcol:
-            st.markdown(
-                '<div style="font-size:11px;font-weight:700;color:#0C0C1A;margin-bottom:4px;">'
-                '✅ Settle the 402 challenge</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div style="font-size:11.5px;color:#42475A;line-height:1.55;margin-bottom:6px;">'
-                'Pay from your wallet, then paste the transaction hash. OctoBot verifies it '
-                'on-chain (recipient + amount + success) before unlocking.</div>',
-                unsafe_allow_html=True)
-            _txh = st.text_input(
-                "Transaction hash", key="x402_txh_" + _k,
-                placeholder="0x… your payment tx hash",
-                label_visibility="collapsed",
-            )
-            _bcol1, _bcol2 = st.columns(2)
-            with _bcol1:
-                if st.button("🔓 Verify & unlock", key="x402_verify_" + _k,
-                             use_container_width=True):
-                    # Read the hash live from the widget's own session_state store
-                    # so we never rely on a stale local variable.
-                    _hash_now = st.session_state.get("x402_txh_" + _k, _txh) or _txh
-                    with st.spinner("Verifying payment on-chain…"):
-                        _res = x402_verify_payment(_hash_now, _x402_ch)
-                    if _res["ok"]:
-                        st.session_state.x402_unlocked[_x402_ch["resource"]] = (_hash_now or "").strip()
-                        st.session_state.x402_receipts.append({
-                            "amount": "%.2f" % _x402_ch["amount_pros"],
-                            "tx":     (_hash_now or "").strip(),
-                            "resource": _x402_ch["resource"],
-                        })
-                        st.session_state.x402_challenge = None
-                        st.session_state["pending_q"] = _question
-                        st.rerun()
-                    else:
-                        st.session_state["x402_last_error"] = str(_res.get("reason", "unknown error"))
-                        st.rerun()
-            with _bcol2:
-                if st.button("🧪 Simulate (demo)", key="x402_sim_" + _k,
-                             use_container_width=True,
-                             help="Demo only — marks the call as paid WITHOUT a real on-chain payment. "
-                                  "Use to preview the unlocked answer flow."):
-                    st.session_state.x402_unlocked[_x402_ch["resource"]] = "SIMULATED"
-                    st.session_state.x402_receipts.append({
-                        "amount": "%.2f" % _x402_ch["amount_pros"],
-                        "tx":     "SIMULATED (demo)",
-                        "resource": _x402_ch["resource"],
-                    })
-                    st.session_state.x402_challenge = None
-                    st.session_state["pending_q"] = _question
-                    st.rerun()
-
-            _err = st.session_state.pop("x402_last_error", None)
-            if _err:
-                st.error("Payment not verified: " + _err)
-
-            if _explorer:
-                st.markdown(
-                    '<a href="' + esc_url(_explorer) + '" target="_blank" rel="noopener noreferrer" '
-                    'style="font-size:11px;color:#1A1AFF;text-decoration:none;font-weight:600;">'
-                    'Open Pharos explorer ↗</a>', unsafe_allow_html=True)
-
-            if st.button("✕ Cancel premium call", key="x402_cancel_" + _k):
+        if st.session_state.get("x402_tx_submitted"):
+            _submitted_hash = st.session_state.x402_tx_submitted
+            st.session_state.x402_tx_submitted = ""
+            with st.spinner("Replaying the request and checking settlement with the facilitator…"):
+                _result = x402_replay_and_settle(_submitted_hash, _x402_ch, st.session_state.get("x402_tx_payer", ""))
+            st.session_state.x402_tx_payer = ""
+            if _result.get("ok"):
+                _receipt = _result["receipt"]
+                _record = {
+                    "amount": _receipt.get("amount", "0.010000"), "asset": "PHRS",
+                    "tx": _submitted_hash, "tx_hash": _submitted_hash,
+                    "resource": _x402_ch.get("resource", "/premium"),
+                    "payer": _receipt.get("payer", st.session_state.get("w3_address", "")),
+                    "chain_id": X402_CHAIN_ID, "network": X402_NETWORK,
+                    "block_number": _receipt.get("blockNumber"), "settled": True,
+                    "payment_response_header": _result.get("payment_response_header", ""),
+                }
+                st.session_state.x402_receipts = [r for r in st.session_state.x402_receipts if r.get("tx_hash", "").lower() != _submitted_hash.lower()]
+                st.session_state.x402_receipts.insert(0, _record)
+                _ledger_save("x402", _record["payer"], _record)
+                st.session_state.x402_unlocked[_x402_ch.get("resource")] = _submitted_hash
                 st.session_state.x402_challenge = None
+                st.session_state["pending_q"] = _question
                 st.rerun()
+            else:
+                st.error("Payment rejected with HTTP 402: " + str(_result.get("reason", "verification failed")))
 
+        _pay_clicked = st.button(
+            f"Pay {X402_PRICE_PROS:.2f} PHRS with connected wallet",
+            key="x402_pay_" + _key, type="primary", disabled=bool(_facilitator_error or not _payto),
+            use_container_width=True,
+        )
+        if _pay_clicked:
+            st.session_state.x402_start_send = True
+            st.rerun()
+        if st.session_state.get("x402_start_send") and _payto:
+            st.session_state.x402_start_send = False
+            components.html(
+                "<script>(function(){try{var p=window.parent;setTimeout(function(){"
+                "if(p.__x402send)p.__x402send(" + json.dumps(_payto) + "," + json.dumps(hex(int(X402_PRICE_PROS * 10**18))) + ");"
+                "},250);}catch(e){}})();</script>", height=0,
+            )
+
+        _error = st.session_state.pop("x402_last_error", None)
+        if _error:
+            st.error(str(_error))
+        st.markdown(
+            f"[Open Atlantic explorer ↗]({PHAROS_TESTNET_EXPLORER_URL}) · "
+            "Private keys never enter OctoBot."
+        )
+        if st.button("Cancel premium request", key="x402_cancel_" + _key):
+            st.session_state.x402_challenge = None
+            st.rerun()
     return True
 
 
@@ -10458,6 +10481,39 @@ components.html(
       }catch(e){ w3toast(w3err(e), 'err'); }
     };
 
+    /* x402 chat payment: Atlantic only. Switch/add the testnet explicitly,
+       then request a native PHRS transfer from the connected wallet. */
+    window.__x402send = async function(to, valueWei){
+      var g = w3conn || w3get();
+      if (!g || !g.p){ w3toast('Connect an EVM wallet first.', 'err'); return; }
+      try{
+        var accts = await g.p.request({method:'eth_requestAccounts'});
+        if (!accts || !accts.length){ w3toast('No wallet account was returned.', 'err'); return; }
+        var testChain = '0xa8231';
+        var cur = await g.p.request({method:'eth_chainId'});
+        if (String(cur).toLowerCase() !== testChain){
+          try{
+            await g.p.request({method:'wallet_switchEthereumChain',params:[{chainId:testChain}]});
+          }catch(switchErr){
+            var code = switchErr && (switchErr.code !== undefined ? switchErr.code : (switchErr.data && switchErr.data.code));
+            if (code !== 4902 && code !== -32603) throw switchErr;
+            await g.p.request({method:'wallet_addEthereumChain',params:[{chainId:testChain,chainName:'Pharos Atlantic Testnet',nativeCurrency:{name:'PHRS',symbol:'PHRS',decimals:18},rpcUrls:['https://atlantic.dplabs-internal.com'],blockExplorerUrls:['https://atlantic.pharosscan.xyz']} ]});
+            await g.p.request({method:'wallet_switchEthereumChain',params:[{chainId:testChain}]});
+          }
+        }
+        var now = await g.p.request({method:'eth_chainId'});
+        if (String(now).toLowerCase() !== testChain){ w3toast('Atlantic testnet is required for this payment.', 'err'); return; }
+        w3toast('Review the 0.01 PHRS payment in your wallet…', null, 9000);
+        var hash = await g.p.request({method:'eth_sendTransaction',params:[{from:accts[0],to:to,value:valueWei}]});
+        var u = new URL(window.location.href);
+        u.searchParams.set('x402_tx', hash);
+        u.searchParams.set('x402_payer', accts[0]);
+        window.history.replaceState({}, '', u.toString());
+        w3toast('Payment submitted. OctoBot is waiting for the Atlantic receipt…', 'ok', 5000);
+        if(window.__octoBridgeRerun) window.__octoBridgeRerun();
+      }catch(e){ w3toast(w3err(e), 'err', 6000); }
+    };
+
     /* ── COMMAND PALETTE (⌘K / Ctrl+K) ────────────────────
        Fuzzy search across pages, quick actions and docs topics.
        Built once, lives in the parent document, survives reruns. */
@@ -14795,24 +14851,46 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             "💠 Premium answers",
             value=st.session_state.x402_enabled,
             key="x402_enabled_toggle_main",
-            help=("Premium x402 is unavailable: no compatible resource endpoint or verified Pharos "
-                  "facilitator is configured. Turning this on keeps premium answers gated."),
+            help="Premium chat uses x402 on Pharos Atlantic testnet and costs 0.01 PHRS per answer.",
         )
         if st.session_state.get("x402_enabled"):
-            st.caption("💠 Premium on — next answer settles ~%.2f PROS on-chain · payments go to the team."
-                       % X402_PRICE_PROS)
-    if st.session_state.x402_receipts:
-        with st.expander("\U0001F9FE x402 receipts \u00b7 " + str(len(st.session_state.x402_receipts)), expanded=False):
-            for _r in reversed(st.session_state.x402_receipts[-8:]):
+            st.caption(f"💠 Premium on — next paid answer costs {X402_PRICE_PROS:.2f} testnet PHRS on Atlantic (chain {X402_CHAIN_ID}).")
+    with st.expander("\U0001F9FE x402 settlement reports · " + str(len(st.session_state.x402_receipts)), expanded=False):
+            if st.session_state.x402_receipts:
+                for _r in reversed(st.session_state.x402_receipts[-8:]):
+                    _tx_report = str(_r.get("tx_hash", _r.get("tx", "")))
+                    st.markdown(
+                        '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
+                        'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
+                        '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
+                        + esc(_r.get("amount", "")) + ' ' + esc(_r.get("asset", "PHRS")) + ' · settled on Atlantic testnet</div>'
+                        '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
+                        + '<a href="' + esc_url(PHAROS_TESTNET_EXPLORER_URL + '/tx/' + _tx_report) + '" target="_blank" rel="noopener noreferrer">'
+                        + esc(_tx_report) + ' ↗</a></div></div>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.caption("No settled x402 chat payments have been recorded in this app session yet.")
+            if st.button("Refresh facilitator reports", key="x402_refresh_reports"):
+                try:
+                    _report_response = requests.get(X402_FACILITATOR_URL + "/reports", timeout=8)
+                    _report_response.raise_for_status()
+                    st.session_state.x402_facilitator_reports = _report_response.json().get("settlements", [])
+                except Exception as _report_error:
+                    st.warning("Could not load facilitator reports: " + str(_report_error))
+            for _r in st.session_state.x402_facilitator_reports[:20]:
+                _tx_report = str(_r.get("tx_hash", ""))
                 st.markdown(
-                    '<div style="background:#F4F5F8;border-left:3px solid #1A1AFF;'
+                    '<div style="background:#EEF2FF;border-left:3px solid #7C3AED;'
                     'border-radius:0 8px 8px 0;padding:0.45rem 0.7rem;margin-bottom:0.4rem;">'
                     '<div style="font-size:11px;font-weight:700;color:#0C0C1A;">'
-                    + esc(_r.get("amount", "")) + ' PROS \u00b7 settled</div>'
+                    + esc(_r.get("amount_phrs", "")) + ' PHRS · ' + esc(_r.get("resource", "")) + ' · block ' + esc(_r.get("block_number", "")) + '</div>'
                     '<div style="font-size:10px;color:#7A7F96;word-break:break-all;">'
-                    + esc(_r.get("tx", "")[:22]) + '\u2026</div></div>',
+                    + '<a href="' + esc_url(PHAROS_TESTNET_EXPLORER_URL + '/tx/' + _tx_report) + '" target="_blank" rel="noopener noreferrer">'
+                    + esc(_tx_report) + ' ↗</a></div></div>',
                     unsafe_allow_html=True,
                 )
+            st.caption("Facilitator report: " + X402_FACILITATOR_URL + "/reports")
 
     # ── Chat welcome gate ───────────────────────────────────────────────
     # The gate (above, before this point in the script) is rendered with
@@ -14845,8 +14923,8 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
 
     # ── x402: render any pending payment gate FIRST (persists across reruns) ──
-    # Its Verify/Simulate buttons live here, not inside `if question:`, so a
-    # button click — which reruns with empty chat_input — still finds the gate.
+    # Its wallet payment button lives here, outside the transient question path,
+    # so the gate survives while the wallet signs the transaction.
     if st.session_state.get("x402_challenge"):
         if x402_render_pending_gate():
             st.stop()
@@ -14908,9 +14986,8 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
         # ── x402 GATE (trigger only) ─────────────────────────────
         # If premium mode is ON and this resource isn't paid yet, persist a
-        # challenge and rerun. The gate is rendered by x402_render_pending_gate()
-        # at the top of the chat page, so its Verify/Simulate buttons survive the
-        # rerun a click triggers (this fixes the "tx hash does nothing" bug).
+        # challenge and rerun. The facilitator challenge is rendered at the top
+        # of chat and payment continues through the connected testnet wallet.
         # Free mode skips this entirely.
         _x402_ch = x402_make_challenge(question)
         _x402_premium = bool(st.session_state.get("x402_enabled"))
@@ -14921,7 +14998,7 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             st.session_state.x402_challenge = _x402_ch
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": "⚠️ **Premium answer gated** — the x402 resource and settlement service are not configured, so this request cannot be verified or unlocked.",
+                "content": f"**HTTP 402 · Payment required** — settle {X402_PRICE_PROS:.2f} PHRS on Pharos Atlantic testnet to unlock this premium answer.",
             })
             st.session_state.sources_history.append([])
             st.rerun()
@@ -14959,10 +15036,17 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
                                 pass  # fall back to the English guide
                     else:
                         # General mode: try docs first, fall back to Gemini if not found
+                        _mcp_context, _mcp_sources, _mcp_labels = mcp_context_for_chat(question)
                         answer, sources = bot.ask(
                             guided_question,
                             chat_history=st.session_state.octobot_chat_history,
+                            external_context=_mcp_context,
+                            external_sources=_mcp_sources,
                         )
+                        st.session_state.mcp_last_sources = _mcp_labels
+                        _mcp_notice = st.session_state.pop("mcp_network_notice", None)
+                        if _mcp_notice:
+                            st.caption(_mcp_notice)
                         if (st.session_state.chat_mode == "general"
                                 and "I could not find that information" in answer):
                             fallback_llm = _get_gemini_client("gemini-2.5-flash", 0.5, os.getenv("GEMINI_API_KEY"))
@@ -14995,15 +15079,20 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             if x402_make_challenge(question)["resource"] in st.session_state.get("x402_unlocked", {}):
                 _rec_tx = st.session_state.get("x402_unlocked", {}).get(
                     x402_make_challenge(question)["resource"], "")
-                _sim = (_rec_tx == "SIMULATED")
+                _report = next((r for r in st.session_state.x402_receipts if r.get("tx_hash", "").lower() == str(_rec_tx).lower()), {})
                 st.markdown(
                     '<div style="display:inline-flex;align-items:center;gap:7px;'
                     'background:linear-gradient(135deg,#1414E8,#7c3aed);color:#fff;'
                     'border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;'
-                    'margin-bottom:8px;">⚡ Premium · x402 settled'
-                    + ('  ·  demo' if _sim else '') + '</div>',
+                    'margin-bottom:8px;">⚡ Premium · x402 settled · 0.01 PHRS · Atlantic testnet</div>',
                     unsafe_allow_html=True,
                 )
+                if _report.get("tx_hash"):
+                    st.caption("HTTP 200 · PAYMENT-RESPONSE settlement confirmed")
+                    st.markdown("[Settlement transaction ↗](" + esc_url(PHAROS_TESTNET_EXPLORER_URL + "/tx/" + _report["tx_hash"]) + ")")
+                    if _report.get("payment_response_header"):
+                        with st.expander("View PAYMENT-RESPONSE header", expanded=False):
+                            st.code("PAYMENT-RESPONSE: " + _report["payment_response_header"], language="text")
 
             st.markdown(answer)
 
