@@ -9148,7 +9148,7 @@ NAV_PAGES = [
     ("📰", "Updates",   "updates"),
     ("📊", "Trade",     "trade"),
     ("🏦", "DeFi",      "defi"),
-    ("📈", "Positions", "portfolio"),
+    ("📈", "Portfolio Assistant", "portfolio"),
     ("🪪", "Passport",  "passport"),
     ("🧩", "DApps",     "ecosystem"),
     ("💸", "Pay",       "pay"),
@@ -9272,7 +9272,7 @@ _pnav_dd_products = [
     ("💬", "Chat",    "chat"),
     ("📊", "Trade",   "trade"),
     ("🏦", "DeFi",    "defi"),
-    ("📈", "Positions", "portfolio"),
+    ("📈", "Portfolio Assistant", "portfolio"),
     ("💸", "Pay",     "pay"),
     ("🧾", "Request", "request"),
     ("⚡", "SPNs",    "spns"),
@@ -16584,20 +16584,63 @@ elif st.session_state.page == "portfolio":
 
     st.markdown("""
     <style>
-    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{max-width:1120px!important;padding-top:6rem!important;padding-bottom:3rem!important;}
-    .pa-hero{padding:28px 30px;border:1px solid rgba(105,115,145,.22);border-radius:22px;background:linear-gradient(135deg,rgba(90,103,255,.10),rgba(80,180,210,.06));margin-bottom:18px;}
-    .pa-kicker{font-size:11px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:#5365D9;margin-bottom:8px;}
-    .pa-title{font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.035em;margin:0 0 8px;color:var(--text-color,#171A2A);}
-    .pa-sub{font-size:14px;line-height:1.6;color:var(--secondary-text-color,#6A7185);max-width:760px;margin:0;}
-    html[data-theme="dark"] .pa-kicker{color:#A8B1FF;}
-    html[data-theme="dark"] .pa-title{color:#F3F5FA;}
-    html[data-theme="dark"] .pa-sub{color:#ABB3C9;}
-    html[data-theme="dark"] .pa-hero{background:linear-gradient(135deg,rgba(106,116,255,.13),rgba(58,151,180,.08));border-color:rgba(150,160,200,.18);}
+    html[data-octo-page="portfolio"]{
+      --pa-text:var(--t1);
+      --pa-muted:var(--t2);
+      --pa-line:var(--border);
+      --pa-accent:var(--blue);
+      --pa-accent-soft:var(--subtle);
+      --pa-surface:var(--glass);
+      --pa-input:var(--bg);
+      --pa-shadow:var(--shadow-md);
+    }
+    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{
+      max-width:900px!important;padding-top:6rem!important;padding-bottom:3rem!important;}
+    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
+      gap:1rem!important;}
+    html[data-octo-page="portfolio"] [data-testid="stForm"]{
+      border:1px solid var(--pa-line)!important;border-radius:18px!important;
+      background:var(--pa-surface)!important;padding:1.25rem 1.35rem!important;
+      box-shadow:var(--pa-shadow)!important;}
+    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input{
+      color:var(--pa-text)!important;background:var(--pa-input)!important;
+      border-color:var(--pa-line)!important;border-radius:11px!important;}
+    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input::placeholder{
+      color:var(--pa-muted)!important;opacity:.8!important;}
+    html[data-octo-page="portfolio"] [data-testid="stTextInput"] input:focus{
+      border-color:var(--pa-accent)!important;box-shadow:0 0 0 1px var(--pa-accent)!important;}
+    html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p{color:var(--pa-text)!important;}
+    .pa-hero{position:relative;display:flex;align-items:center;gap:20px;overflow:hidden;
+      padding:26px 30px;border:1px solid var(--pa-line);border-radius:22px;
+      background:linear-gradient(115deg,var(--pa-accent-soft),var(--pa-surface));
+      box-shadow:var(--pa-shadow);backdrop-filter:blur(18px);margin:0 0 4px;}
+    .pa-mark{width:58px;height:58px;flex:none;display:grid;place-items:center;border-radius:17px;
+      background:var(--subtle);color:var(--pa-accent);font-size:26px;}
+    .pa-copy{min-width:0;}
+    .pa-kicker{font-size:10px;font-weight:750;letter-spacing:.15em;text-transform:uppercase;
+      color:var(--pa-accent);margin-bottom:6px;}
+    .pa-title{font-size:clamp(24px,3vw,31px);line-height:1.12;font-weight:800;
+      letter-spacing:-.035em;margin:0 0 7px;color:var(--pa-text);}
+    .pa-sub{font-size:14px;line-height:1.6;color:var(--pa-muted);max-width:68ch;margin:0;}
+    .pa-answer{margin:12px 0 4px;padding:17px 19px;border:1px solid var(--pa-line);
+      border-radius:18px 18px 18px 5px;background:var(--pa-surface);
+      color:var(--pa-text);box-shadow:var(--pa-shadow);line-height:1.7;overflow-wrap:anywhere;}
+    .pa-answer-label{font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase;
+      color:var(--pa-accent);margin:0 0 7px;}
+    @media(max-width:640px){
+      html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{padding:5rem 1rem 2rem!important;}
+      .pa-hero{align-items:flex-start;padding:22px 20px;gap:14px;}
+      .pa-mark{width:46px;height:46px;border-radius:14px;font-size:21px;}
+      html[data-octo-page="portfolio"] [data-testid="stForm"]{padding:1rem!important;}
+    }
     </style>
-    <section class="pa-hero">
-      <div class="pa-kicker">Read-only wallet intelligence</div>
-      <h1 class="pa-title">Portfolio Assistant</h1>
-      <p class="pa-sub">Ask about tracked Pharos balances and configured ERC-4626 vault positions. Every value is read at one pinned block and shown with its source contract. No signing or transaction submission.</p>
+    <section class="pa-hero" aria-labelledby="pa-title">
+      <div class="pa-mark" aria-hidden="true">◈</div>
+      <div class="pa-copy">
+        <div class="pa-kicker">Read-only wallet intelligence</div>
+        <h1 class="pa-title" id="pa-title">Portfolio Assistant</h1>
+        <p class="pa-sub">Explore tracked balances and configured vault positions with every figure pinned to its source contract and block.</p>
+      </div>
     </section>
     """, unsafe_allow_html=True)
 
@@ -16713,15 +16756,27 @@ elif st.session_state.page == "portfolio":
         st.subheader("Ask about this snapshot")
         st.caption("Examples: “Where is my USDC?”, “What is my WETH balance?”, “Show my configured vault positions”, “What am I earning?”, “What’s my biggest position?”")
         with st.form("portfolio_question_form"):
-            _portfolio_question = st.text_input("Question", key="portfolio_question_input", placeholder="Ask a question about this snapshot…", label_visibility="collapsed")
-            _ask_portfolio = st.form_submit_button("Answer from this snapshot", use_container_width=True)
+            _ask_col, _send_col = st.columns([6, 1], vertical_alignment="bottom")
+            with _ask_col:
+                _portfolio_question = st.text_input(
+                    "Question", key="portfolio_question_input",
+                    placeholder="Ask about this wallet snapshot…", label_visibility="collapsed",
+                )
+            with _send_col:
+                _ask_portfolio = st.form_submit_button("Ask", type="primary", use_container_width=True)
         if _ask_portfolio:
             if not _portfolio_question.strip():
                 st.session_state["portfolio_answer"] = "Enter a question about the current snapshot."
             else:
                 st.session_state["portfolio_answer"] = answer_portfolio_question(_portfolio_question, _snapshot)
         if st.session_state.get("portfolio_answer"):
-            st.text(st.session_state["portfolio_answer"])
+            _answer_html = esc(st.session_state["portfolio_answer"]).replace("\n", "<br>")
+            st.markdown(
+                '<section class="pa-answer" aria-live="polite">'
+                '<div class="pa-answer-label">Portfolio Assistant</div>'
+                + _answer_html + '</section>',
+                unsafe_allow_html=True,
+            )
 
 elif st.session_state.page == "campaigns":
 
