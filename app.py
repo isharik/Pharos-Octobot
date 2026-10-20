@@ -14727,11 +14727,58 @@ html[data-octo-page="chat"] [data-testid="stChatMessage"] [data-testid="stExpand
   margin:0.35rem 0!important;border-radius:12px!important;}
 html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] > [data-testid="stVerticalBlock"]{
   max-width:820px!important;}
+html[data-octo-page="chat"]{
+  --chat-input-text:#1D2433;
+  --chat-input-placeholder:#697386;
+  --chat-input-caret:#4552FF;
+  --chat-input-surface:rgba(255,255,255,0.92);
+  --chat-input-border:rgba(200,204,220,0.72);
+}
+html[data-theme="dark"][data-octo-page="chat"]{
+  --chat-input-text:#F2F4FA;
+  --chat-input-placeholder:#9AA3B5;
+  --chat-input-caret:#A8B0FF;
+  --chat-input-surface:rgba(21,24,35,0.96);
+  --chat-input-border:rgba(135,145,180,0.34);
+}
+/* Keep Streamlit's fixed composer wrappers clear; only the rounded input paints a surface. */
+html[data-octo-page="chat"] [data-testid="stBottom"],
+html[data-octo-page="chat"] [data-testid="stBottom"] > div,
+html[data-octo-page="chat"] [data-testid="stBottom"] > div > div,
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"],
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] > div,
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] > div > div,
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] [data-testid="stVerticalBlock"],
+html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"] [data-testid="stElementContainer"],
+html[data-octo-page="chat"] [data-testid="stChatInput"] > div,
+html[data-octo-page="chat"] [data-testid="stChatInput"] [data-baseweb],
+html[data-octo-page="chat"] [data-testid="stChatInput"] [data-baseweb] > div{
+  background:transparent!important;
+  background-color:transparent!important;
+  box-shadow:none!important;
+}
+html[data-octo-page="chat"] [data-testid="stChatInput"]{
+  background:var(--chat-input-surface)!important;
+  border-color:var(--chat-input-border)!important;
+}
+html[data-octo-page="chat"] [data-testid="stChatInput"] textarea,
+html[data-octo-page="chat"] [data-testid="stChatInputTextArea"],
+html[data-octo-page="chat"] textarea[data-testid="stChatInputTextArea"]{
+  background:transparent!important;
+  background-color:transparent!important;
+  color:var(--chat-input-text)!important;
+  -webkit-text-fill-color:var(--chat-input-text)!important;
+  caret-color:var(--chat-input-caret)!important;
+}
+html[data-octo-page="chat"] [data-testid="stChatInput"] textarea::placeholder,
+html[data-octo-page="chat"] [data-testid="stChatInputTextArea"]::placeholder{
+  color:var(--chat-input-placeholder)!important;
+  -webkit-text-fill-color:var(--chat-input-placeholder)!important;
+  opacity:1!important;
+}
 html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{
-  background:linear-gradient(180deg,transparent,rgba(248,249,252,0.92) 30%)!important;
+  background:transparent!important;
   padding:1.3rem 2rem 1.1rem!important;}
-html[data-theme="dark"][data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{
-  background:linear-gradient(180deg,transparent,rgba(15,17,25,0.94) 30%)!important;}
 @media(max-width:800px){
   html[data-octo-page="chat"] [data-testid="stMainBlockContainer"]{margin-left:0!important;padding:1rem!important;}
   html[data-octo-page="chat"] [data-testid="stBottomBlockContainer"]{margin-left:0!important;padding:1rem 1rem 0.8rem!important;}
