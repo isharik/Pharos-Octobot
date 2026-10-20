@@ -18402,7 +18402,7 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
         '<div class="pay-strip-l">'
         '<div class="pay-strip-eyebrow">💸 Payment Agent · Pharos</div>'
         '<h2 class="pay-strip-title">Send PROS</h2>'
-        '<p class="pay-strip-sub">Say what you want to send in plain words. OctoBot drafts the transaction — you review and sign it yourself.</p>'
+        '<p class="pay-strip-sub">Natural Language Payment Agent. OctoBot drafts the transaction — you review and sign it yourself.</p>'
         '</div>'
         '<div class="pay-strip-r">'
         '<span class="pay-feature-pill">🔒 Non-custodial</span>'
