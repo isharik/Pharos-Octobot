@@ -12,7 +12,7 @@ Architecture: single-page with st.session_state["page"] router.
 All CSS in plain triple-quoted strings (no f-prefix).
 """
 
-import os, time, base64, json, re, hashlib, urllib.parse, threading
+import os, time, base64, json, re, hashlib, urllib.parse, threading, sqlite3
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -62,6 +62,56 @@ def esc(x) -> str:
 def valid_addr(a):
     a = (a or "").strip()
     return a if _ADDR_RE.match(a) else None
+
+
+def _ledger_path() -> str:
+    """Local durable ledger; overrideable for deployments with a persistent volume."""
+    _data_root = os.getenv("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.getenv("OCTOBOT_LEDGER_DB", os.path.join(_data_root, "OctoBot", "payment_ledger.sqlite3"))
+
+
+def _ledger_save(kind: str, wallet: str, record: dict) -> bool:
+    """Persist one wallet-scoped payment/request record without storing secrets."""
+    if not valid_addr(wallet):
+        return False
+    try:
+        path = _ledger_path()
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        identity = str(record.get("tx_hash") or record.get("request_id") or "")
+        if not identity:
+            return False
+        db = sqlite3.connect(path, timeout=5)
+        try:
+            db.execute("CREATE TABLE IF NOT EXISTS payment_ledger (kind TEXT NOT NULL, wallet TEXT NOT NULL, identity TEXT NOT NULL, chain_id INTEGER NOT NULL DEFAULT 0, payload TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(kind,wallet,identity,chain_id))")
+            db.execute("INSERT INTO payment_ledger(kind,wallet,identity,chain_id,payload,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(kind,wallet,identity,chain_id) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at",
+                       (kind, wallet.lower(), identity.lower(), int(record.get("chain_id") or 0), json.dumps(record), datetime.now(timezone.utc).isoformat()))
+            db.commit()
+        finally:
+            db.close()
+        return True
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return False
+
+
+def _ledger_load(kind: str, wallet: str) -> list:
+    if not valid_addr(wallet):
+        return []
+    try:
+        db = sqlite3.connect(_ledger_path(), timeout=5)
+        try:
+            db.execute("CREATE TABLE IF NOT EXISTS payment_ledger (kind TEXT NOT NULL, wallet TEXT NOT NULL, identity TEXT NOT NULL, chain_id INTEGER NOT NULL DEFAULT 0, payload TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(kind,wallet,identity,chain_id))")
+            rows = db.execute("SELECT payload FROM payment_ledger WHERE kind=? AND wallet=? ORDER BY updated_at DESC LIMIT 100", (kind, wallet.lower())).fetchall()
+        finally:
+            db.close()
+        return [json.loads(row[0]) for row in rows]
+    except (OSError, sqlite3.Error, ValueError):
+        return []
+
+
+def _warn_ledger_unavailable() -> None:
+    if not st.session_state.get("_ledger_warning_shown"):
+        st.warning("Local transaction storage is unavailable. These records may remain only in this browser session.")
+        st.session_state._ledger_warning_shown = True
 
 def valid_txhash(h):
     h = (h or "").strip()
@@ -592,10 +642,12 @@ if "pay_intent_raw"  not in st.session_state: st.session_state.pay_intent_raw  =
 if "pay_parsed"      not in st.session_state: st.session_state.pay_parsed      = None
 if "pay_confirmed"   not in st.session_state: st.session_state.pay_confirmed   = False
 if "pay_result"      not in st.session_state: st.session_state.pay_result      = None
+if "pay_submission_in_progress" not in st.session_state: st.session_state.pay_submission_in_progress = False
 if "pay_history"     not in st.session_state: st.session_state.pay_history     = []
 if "pay_network"     not in st.session_state: st.session_state.pay_network     = "mainnet"
 if "req_invoices"    not in st.session_state: st.session_state.req_invoices    = []
 if "req_draft"       not in st.session_state: st.session_state.req_draft       = None
+if "req_payment_in_progress" not in st.session_state: st.session_state.req_payment_in_progress = False
 if "net_stats_cache" not in st.session_state: st.session_state.net_stats_cache = {}
 if "spn_filter"      not in st.session_state: st.session_state.spn_filter      = "all"
 if "_app_initialized" not in st.session_state: st.session_state._app_initialized = False
@@ -605,6 +657,10 @@ if "x402_challenge"  not in st.session_state: st.session_state.x402_challenge  =
 if "x402_unlocked"   not in st.session_state: st.session_state.x402_unlocked   = {}      # resource_id -> verified tx hash
 if "x402_receipts"   not in st.session_state: st.session_state.x402_receipts   = []      # list of settled premium calls
 if "x402_payto"      not in st.session_state: st.session_state.x402_payto      = os.getenv("X402_PAYTO_ADDRESS", "0x3111e7e7c8141c0496db20bf90528577c5e1f0f4")  # default receiving address
+# Do not retain prior demo/manual-hash unlocks as proof of a protocol settlement.
+if not st.session_state.get("_x402_fail_closed_applied"):
+    st.session_state.x402_unlocked = {}
+    st.session_state._x402_fail_closed_applied = True
 
 # Logo assistant bubble → navigate to chat
 _goto = st.query_params.get("goto", "")
@@ -618,7 +674,6 @@ if _wallet and _wallet.lower() != st.session_state.wallet_address.lower():
     st.session_state.wallet_address = _wallet
     st.session_state.wallet_data    = None
     st.session_state.wallet_profile = None
-    st.session_state.page = "memory"
     st.query_params.clear()
 
 # ── Global EIP-1193 wallet bridge (browser → Python) ──────────
@@ -635,6 +690,9 @@ if _w3_act == "disconnect":
     st.session_state.w3_address = ""
     st.session_state.w3_chain   = ""
     st.session_state.w3_label   = ""
+    st.session_state.wallet_address = ""
+    st.session_state.wallet_data = None
+    st.session_state.wallet_profile = None
     st.query_params.clear()
 elif _w3_addr:
     _changed = (_w3_addr.lower() != (st.session_state.w3_address or "").lower()
@@ -648,6 +706,12 @@ elif _w3_addr:
         st.session_state.wallet_address = _w3_addr
         st.session_state.wallet_data    = None
         st.session_state.wallet_profile = None
+        st.query_params.clear()
+elif _w3_chain and _w3_chain != st.session_state.w3_chain:
+    # Keep legitimate chain-change events while retaining the active page.
+    if re.match(r"^0x[0-9a-fA-F]{1,8}$", _w3_chain):
+        st.session_state.w3_chain = _w3_chain
+        st.session_state.wallet_data = None
         st.query_params.clear()
 
 # ── Incoming payment-request link handler ─────────────────────────────────
@@ -2824,45 +2888,13 @@ canvas{
     document.getElementById('bubble').classList.toggle('vis');
   };
   window.goChat = function(){
-    var navigated = false;
-
-    // Primary approach: directly manipulate the REAL top-level page's
-    // URL bar via history API, then dispatch a popstate-like reload.
-    // This works even in cases where browsers silently block iframe-
-    // initiated full navigation (location.href / location.assign),
-    // because pushState + a manual reload of window.parent's own
-    // document is treated as same-origin same-document navigation,
-    // not a cross-frame redirect.
     try{
-      var pdoc = window.parent.document;
-      var purl = new URL(window.parent.location.href);
-      purl.searchParams.set('goto','chat');
-      window.parent.history.pushState({}, '', purl.toString());
-      window.parent.location.reload();
-      navigated = true;
+      if(window.parent && typeof window.parent.__pnavGo === 'function'){
+        window.parent.__pnavGo('chat');
+        return;
+      }
     }catch(e){}
-
-    if(!navigated){
-      try{
-        var url = new URL(window.top.location.href);
-        url.searchParams.set('goto','chat');
-        window.top.location.assign(url.toString());
-        navigated = true;
-      }catch(e2){}
-    }
-
-    if(!navigated){
-      try{
-        var url3 = new URL(window.parent.location.href);
-        url3.searchParams.set('goto','chat');
-        window.parent.location.assign(url3.toString());
-        navigated = true;
-      }catch(e3){}
-    }
-
-    if(!navigated){
-      document.getElementById('bubble').classList.remove('vis');
-    }
+    document.getElementById('bubble').classList.remove('vis');
   };
   document.addEventListener('click',function(e){
     var b=document.getElementById('logoBtn');
@@ -3586,7 +3618,7 @@ def fetch_tx_receipt(tx_hash: str) -> dict:
     return out
 
 
-def fetch_pharos_transaction(tx_hash: str) -> dict:
+def fetch_pharos_transaction(tx_hash: str, rpc_override: str = None) -> dict:
     """
     Reads PUBLIC transaction data via standard read-only JSON-RPC calls.
     Same safety profile as fetch_pharos_onchain_data: no signature, no
@@ -3613,7 +3645,9 @@ def fetch_pharos_transaction(tx_hash: str) -> dict:
         result["error"] = "Invalid transaction hash"
         return result
 
-    rpc_candidates = [PHAROS_RPC_URL, "https://pharos.drpc.org"]
+    if rpc_override and rpc_override not in ALLOWED_RPCS:
+        rpc_override = None
+    rpc_candidates = [rpc_override] if rpc_override else [PHAROS_RPC_URL, "https://pharos.drpc.org"]
     headers = {"Content-Type": "application/json"}
     last_error = None
 
@@ -3852,6 +3886,18 @@ def x402_render_pending_gate() -> bool:
     if _x402_ch.get("resource") in st.session_state.get("x402_unlocked", {}):
         st.session_state.x402_challenge = None
         return False
+
+    # Fail closed: this repository has no HTTP 402 resource server, signed
+    # x402 authorization adapter, or configured facilitator/settlement client.
+    # A plain transaction hash is not an x402 payment authorization.
+    st.warning(
+        "Premium x402 is unavailable: no compatible HTTP 402 resource endpoint "
+        "or verified Pharos facilitator is configured. The premium answer remains gated."
+    )
+    if st.button("✕ Cancel premium request", key="x402_unconfigured_cancel"):
+        st.session_state.x402_challenge = None
+        st.rerun()
+    return True
 
     _is_testnet = st.session_state.get("pay_network", "mainnet") == "testnet"
     _chain_dec  = PHAROS_TESTNET_CHAIN_ID_DEC if _is_testnet else PHAROS_CHAIN_ID_DEC
@@ -5015,6 +5061,7 @@ st.markdown("""
 <style>
 /* Hide functional nav buttons instantly — before main CSS loads */
 div[class*="st-key-nav_"],
+.st-key-_wallet_bridge_event,
 [data-testid="stElementContainer"]:has(iframe[height="0"]),
 .st-key-nav_home,.st-key-nav_chat,.st-key-nav_campaigns,
 .st-key-nav_updates,.st-key-nav_trade,.st-key-nav_defi,
@@ -8830,6 +8877,9 @@ NAV_PAGES = [
 # delegated click handler installed once in the parent document by the
 # height-0 bootstrap component further down. No page dispatch logic,
 # session handling, or routing behaviour changes.
+if st.button("Wallet bridge event", key="_wallet_bridge_event"):
+    pass  # JS updates query parameters first; this widget requests a Streamlit rerun.
+
 for _n_icon, _n_label, _n_key in NAV_PAGES + [("🧠", "Memory", "memory"), ("📡", "Pulse", "pulse"), ("🏅", "Sailor", "nominee")]:
     if st.button(_n_label, key="nav_" + _n_key):
         st.session_state.page = _n_key
@@ -9519,6 +9569,12 @@ components.html(
     if (window.__pnavBoot) return;
     window.__pnavBoot = true;
     var doc = document;
+    window.__octoBridgeRerun = function(){
+      try{
+        var b = doc.querySelector('[class*="st-key-_wallet_bridge_event"] button');
+        if(b && !b.disabled) b.click();
+      }catch(e){}
+    };
 
     /* ── GSAP loader (graceful) ─────────────────────────── */
     var gsapReady = false;
@@ -10144,7 +10200,7 @@ components.html(
     }
     try{ window.__w3toast = w3toast; }catch(e){}
 
-    /* Push wallet state into Python via query params + rerun. */
+    /* Push wallet state into Python with an in-app Streamlit rerun. */
     function w3report(addr, chain, label){
       try{
         var u = new URL(window.location.href);
@@ -10153,7 +10209,7 @@ components.html(
         u.searchParams.set('w3_label', label || 'Wallet');
         u.searchParams.delete('w3_act');
         window.history.replaceState({}, '', u.toString());
-        window.location.reload();
+        if(window.__octoBridgeRerun) window.__octoBridgeRerun();
       }catch(e){}
     }
     function w3reportDisconnect(){
@@ -10163,7 +10219,7 @@ components.html(
         u.searchParams.delete('w3_label');
         u.searchParams.set('w3_act', 'disconnect');
         window.history.replaceState({}, '', u.toString());
-        window.location.reload();
+        if(window.__octoBridgeRerun) window.__octoBridgeRerun();
       }catch(e){}
     }
 
@@ -10321,10 +10377,9 @@ components.html(
     }
 
     /* Live provider events — account switch, chain switch, disconnect. */
-    var w3bound = false;
     function w3bind(p){
-      if (w3bound || !p || !p.on) return;
-      w3bound = true;
+      if (!p || !p.on || p.__octobotW3Bound) return;
+      try{ p.__octobotW3Bound = true; }catch(e){}
       try{
         p.on('accountsChanged', function(a){
           if (!a || !a.length){ w3reportDisconnect(); return; }
@@ -10358,7 +10413,7 @@ components.html(
             var known = (u.searchParams.get('w3_addr') || '').toLowerCase();
             var pill  = doc.getElementById('w3-pill');
             var shown = pill && pill.classList.contains('w3-on');
-            /* Only reload if Python does not already know this account. */
+            /* Sync silently only when Python does not already know this account. */
             if (!shown && known !== accts[0].toLowerCase()){
               w3report(accts[0], chain, g.name);
             }
@@ -10398,7 +10453,7 @@ components.html(
           var u = new URL(window.location.href);
           u.searchParams.set('tx_sent', hash);
           window.history.replaceState({}, '', u.toString());
-          window.location.reload();
+          if(window.__octoBridgeRerun) window.__octoBridgeRerun();
         }catch(e){}
       }catch(e){ w3toast(w3err(e), 'err'); }
     };
@@ -14740,9 +14795,8 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             "💠 Premium answers",
             value=st.session_state.x402_enabled,
             key="x402_enabled_toggle_main",
-            help=("When ON, your next question is a premium (x402) call: OctoBot returns an HTTP 402 "
-                  "challenge, you settle a tiny PROS micro-payment on-chain, and it unlocks a deeper "
-                  "answer. Payments go to the team."),
+            help=("Premium x402 is unavailable: no compatible resource endpoint or verified Pharos "
+                  "facilitator is configured. Turning this on keeps premium answers gated."),
         )
         if st.session_state.get("x402_enabled"):
             st.caption("💠 Premium on — next answer settles ~%.2f PROS on-chain · payments go to the team."
@@ -14867,8 +14921,7 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
             st.session_state.x402_challenge = _x402_ch
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": "⚡ **402 Payment Required** — this premium question is waiting for an x402 "
-                           "micro-payment of " + ("%.2f" % _x402_ch["amount_pros"]) + " PROS to unlock.",
+                "content": "⚠️ **Premium answer gated** — the x402 resource and settlement service are not configured, so this request cannot be verified or unlocked.",
             })
             st.session_state.sources_history.append([])
             st.rerun()
@@ -15463,7 +15516,7 @@ elif st.session_state.page == "defi":
         var url=new URL(tgt.location.href);
         url.searchParams.set('swap_tx',txHash);
         tgt.history.pushState({{}},'',url.toString());
-        tgt.location.reload();
+        if(tgt.__octoBridgeRerun) tgt.__octoBridgeRerun();
       }}catch(e){{}}
     }},2200);
   }}catch(err){{
@@ -15525,7 +15578,7 @@ elif st.session_state.page == "defi":
     res.innerHTML='🎉 <strong>Tx Hash:</strong> '+txHash+'<br>'
       +'<a href="{explorer}/tx/'+txHash+'" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
     setTimeout(function(){{
-      try{{ (window.parent||window.top||window).location.reload(); }}catch(e){{}}
+      try{{ var tgt=window.parent||window.top||window; if(tgt.__octoBridgeRerun) tgt.__octoBridgeRerun(); }}catch(e){{}}
     }},2200);
   }}catch(err){{
     if(err.code===4001){{st('❌ Rejected — you cancelled.','#B91C1C','#E5484D');}}
@@ -18510,6 +18563,29 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             "symbol":       "PROS",
         }
 
+    def _estimate_native_transfer(rpc_url: str, sender: str, recipient: str, amount_hex: str) -> dict:
+        """Use the configured Pharos RPC for gas estimates; never invent a fee."""
+        out = {"available": False, "gas_limit": None, "gas_price_wei": None, "fee_native": None, "error": None}
+        if not (valid_addr(sender) and valid_addr(recipient) and re.match(r"^0x[0-9a-fA-F]+$", str(amount_hex or ""))):
+            out["error"] = "Sender, recipient, or amount is invalid."
+            return out
+        try:
+            headers = {"Content-Type": "application/json"}
+            estimate = _get_http_session().post(rpc_url, json={"jsonrpc":"2.0","id":1,"method":"eth_estimateGas","params":[{"from":sender,"to":recipient,"value":amount_hex}]}, headers=headers, timeout=5)
+            estimate.raise_for_status()
+            gas_hex = estimate.json().get("result")
+            price = _get_http_session().post(rpc_url, json={"jsonrpc":"2.0","id":2,"method":"eth_gasPrice","params":[]}, headers=headers, timeout=5)
+            price.raise_for_status()
+            price_hex = price.json().get("result")
+            if not (gas_hex and price_hex):
+                raise ValueError("RPC did not return both gas estimate and gas price.")
+            gas_limit, gas_price = int(gas_hex, 16), int(price_hex, 16)
+            out.update(available=True, gas_limit=gas_limit, gas_price_wei=gas_price,
+                       fee_native=(gas_limit * gas_price) / 1e18)
+        except Exception as exc:
+            out["error"] = str(exc)[:180]
+        return out
+
     def _tx_widget(chain_id, chain_name, rpc_url, explorer, net_symbol,
                    recipient, amount_hex, pay_net_ss,
                    amount_display, mode="send",
@@ -18565,12 +18641,12 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
       var bHash = await provider.request({{
         method: 'eth_sendTransaction',
         params: [{{ from: accounts[0], to: recipients[bi],
-                    value: '{amount_hex}', gas: '0x5208', chainId: '{chain_id}' }}]
+                    value: '{amount_hex}', chainId: '{chain_id}' }}]
       }});
       txHashes.push(bHash);
     }}
     var txHash = txHashes.join(',');
-    var resHtml = '🎉 Batch complete! ' + txHashes.length + ' transactions sent.<br>';
+    var resHtml = '⏳ Batch submitted: ' + txHashes.length + ' transactions awaiting confirmation.<br>';
     txHashes.forEach(function(h, i) {{
       resHtml += '<a href="{explorer}/tx/' + h + '" target="_blank" style="color:#1A1AFF;font-weight:600;font-size:11px;">Tx ' + (i+1) + ' ↗</a>&nbsp; ';
     }});
@@ -18591,9 +18667,9 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     var txHash = await provider.request({{
       method: 'eth_sendTransaction',
       params: [{{ from: accounts[0], to: '{recipient}',
-                  value: '0x0', data: data, gas: '0xF424', chainId: '{chain_id}' }}]
+                  value: '0x0', data: data, chainId: '{chain_id}' }}]
     }});
-    res.innerHTML = '✅ Approval granted!<br><strong>Spender:</strong> {spender}<br>' +
+    res.innerHTML = '⏳ Approval transaction submitted.<br><strong>Spender:</strong> {spender}<br>' +
       '🎉 <strong>Tx Hash:</strong> ' + txHash + '<br>' +
       '<a href="{explorer}/tx/' + txHash + '" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
 """
@@ -18604,7 +18680,7 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     var txHash = await provider.request({{
       method: 'eth_sendTransaction',
       params: [{{ from: accounts[0], to: '{recipient}',
-                  value: '{amount_hex}', gas: '0x5208', chainId: '{chain_id}' }}]
+                  value: '{amount_hex}', chainId: '{chain_id}' }}]
     }});
     res.innerHTML = '🎉 <strong>Tx Hash:</strong> ' + txHash + '<br>' +
       '<a href="{explorer}/tx/' + txHash + '" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
@@ -18634,6 +18710,12 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     msg.textContent = text; msg.style.color = color||'#5B5F6E';
     dot.style.background = dotColor||'#9499A8';
   }}
+  function reportPayError(code) {{
+    try {{ var t=window.parent||window.top||window, u=new URL(t.location.href);
+      u.searchParams.set('pay_error',code); t.history.replaceState({{}},'',u.toString());
+      if(t.__octoBridgeRerun) t.__octoBridgeRerun();
+    }} catch(e) {{}}
+  }}
   function resolveProvider() {{
     if (typeof window.ethereum !== 'undefined')        return window.ethereum;
     if (typeof window.okxwallet !== 'undefined')       return window.okxwallet;
@@ -18652,13 +18734,14 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
   }}
   if (!provider) {{
     status('❌ No Web3 wallet found. Unlock your wallet extension and try again.','#B91C1C','#E5484D');
+    reportPayError('wallet_error');
     return;
   }}
   try {{
     status('⏳ Requesting account access…','#5B5F6E','#F5C842');
     var accounts = await provider.request({{method:'eth_requestAccounts'}});
     if (!accounts||accounts.length===0) {{
-      status('❌ No accounts returned. Unlock your wallet.','#B91C1C','#E5484D'); return;
+      status('❌ No accounts returned. Unlock your wallet.','#B91C1C','#E5484D'); reportPayError('wallet_error'); return;
     }}
     status('⏳ Switching to {chain_name}…','#5B5F6E','#F5C842');
     try {{
@@ -18675,24 +18758,26 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
       }} else {{ throw swErr; }}
     }}
     {js_send_block}
-    status('✅ Done!','#15803D','#22C55E');
+    status('⏳ Submitted — checking Pharos confirmation…','#92400E','#F5C842');
     res.style.display='block';
     setTimeout(function(){{
       try {{
         var target=window.parent||window.top||window;
         var url=new URL(target.location.href);
         url.searchParams.set('pay_tx', typeof txHash!=='undefined'?txHash:'batch');
+        if('{mode}'==='batch' && typeof recipients!=='undefined') url.searchParams.set('pay_recipients', JSON.stringify(recipients));
         url.searchParams.set('pay_to', '{recipient}');
         url.searchParams.set('pay_amt','{amount_display}');
         url.searchParams.set('pay_net','{pay_net_ss}');
         url.searchParams.set('pay_mode','{mode}');
         target.history.pushState({{}},'',url.toString());
-        target.location.reload();
+        if(target.__octoBridgeRerun) target.__octoBridgeRerun();
       }} catch(e) {{}}
     }},2200);
   }} catch(err) {{
     if (err.code===4001) {{ status('❌ Rejected — you cancelled in the wallet.','#B91C1C','#E5484D'); }}
     else {{ status('❌ '+( err.message||JSON.stringify(err)),'#B91C1C','#E5484D'); }}
+    reportPayError(err.code===4001?'rejected':'wallet_error');
   }}
 }})();
 </script></body></html>"""
@@ -18930,10 +19015,16 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
         # ══════════════════════════
         if _intent == "send":
             recipient = p_data.get("recipient", "")
-            amount    = float(p_data.get("amount", 0))
+            try:
+                amount = float(p_data.get("amount", 0))
+            except (TypeError, ValueError):
+                amount = 0.0
             reason    = p_data.get("reason", "")
+            _recipient_ok = bool(valid_addr(recipient))
             usd_val   = (amount * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
-            insufficient = sender_balance is not None and sender_balance < amount
+            _gas = _estimate_native_transfer(_net["rpc"], wallet_addr, recipient, hex(int(amount * 1e18))) if wallet_addr and valid_addr(recipient) else {"available": False, "error": "Connect a wallet and enter a valid recipient to estimate fees."}
+            insufficient = sender_balance is not None and sender_balance < amount + (_gas.get("fee_native") or 0)
+            _wallet_chain_ok = not st.session_state.get("w3_chain") or st.session_state.w3_chain.lower() == _net["chain_id"].lower()
 
             st.markdown(
                 f'<div class="pay-preview" style="border-color:{"#E5484D" if insufficient else "var(--pl)"};">'
@@ -18959,17 +19050,27 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 f'<div class="pay-field-val">{esc(recipient)}</div>'
                 '</div>'
                 + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
-                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
-                '<div class="pay-field-val">21,000 units</div></div>'
+                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas &amp; Fee</div>'
+                + (f'<div class="pay-field-val">{_gas["gas_limit"]:,} units · {(_gas["gas_price_wei"] / 1e9):,.4f} Gwei</div><div class="pay-field-sub">Estimated fee: {_gas["fee_native"]:.8f} {_sym} · total: {amount + _gas["fee_native"]:.8f} {_sym}</div>' if _gas.get("available") else '<div class="pay-field-val">Unavailable</div><div class="pay-field-sub">' + esc(_gas.get("error") or "RPC fee estimate unavailable") + '</div>') + '</div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
+            st.code(recipient, language=None)
             if insufficient:
                 st.error(f"⚠️ Insufficient funds: {sender_balance:,.4f} {_sym} < {amount:,.4f} {_sym}")
+            if not _recipient_ok:
+                st.error("Recipient must be a valid 0x EVM address.")
+            if amount <= 0:
+                st.error("Transfer amount must be greater than zero.")
+            if not _wallet_chain_ok:
+                st.warning(f"Wallet is on chain {st.session_state.w3_chain}; this payment is configured for chain {_net['chain_id_dec']}. Switch networks before confirming.")
+            if not _gas.get("available"):
+                st.warning("Network fee estimate is unavailable; confirm the total cost in your wallet before signing.")
             if not wallet_addr:
                 st.info("Connect your wallet in the panel to proceed.")
-            elif not insufficient:
-                if st.button("✅ Confirm & Sign — Send", key="pay_confirm_btn", use_container_width=True, type="primary"):
+            elif not insufficient and _wallet_chain_ok and _recipient_ok and amount > 0:
+                if not st.session_state.pay_submission_in_progress and st.button("✅ Confirm & Sign — Send", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    st.session_state.pay_submission_in_progress = True
                     _tx_widget(
                         chain_id=_net["chain_id"], chain_name=_net["label"],
                         rpc_url=_net["rpc"], explorer=_net["explorer"], net_symbol=_sym,
@@ -18983,9 +19084,13 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
         # ══════════════════════════
         elif _intent == "batch":
             recipients   = p_data.get("recipients", [])
-            amount_each  = float(p_data.get("amount_each", 0))
+            try:
+                amount_each = float(p_data.get("amount_each", 0))
+            except (TypeError, ValueError):
+                amount_each = 0.0
             reason       = p_data.get("reason", "")
             total_amount = amount_each * len(recipients)
+            _batch_valid = bool(recipients) and all(valid_addr(a) for a in recipients) and amount_each > 0
             usd_each     = (amount_each * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
             usd_total    = (total_amount * _pros_price) if _pros_price and st.session_state.pay_network == "mainnet" else None
             insufficient = sender_balance is not None and sender_balance < total_amount
@@ -19016,17 +19121,20 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 ]) +
                 '</div>'
                 + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
-                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
-                f'<div class="pay-field-val">21,000 × {len(recipients)} = {21000*len(recipients):,} units</div></div>'
+                '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas &amp; Fee</div>'
+                '<div class="pay-field-val">Aggregate estimate unavailable</div><div class="pay-field-sub">Your wallet estimates each recipient transaction before signing.</div></div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
             if insufficient:
                 st.error(f"⚠️ Insufficient funds: {sender_balance:,.4f} {_sym} < total {total_amount:,.4f} {_sym}")
+            if not _batch_valid:
+                st.error("Every batch recipient must be a valid address, and each amount must be greater than zero.")
             if not wallet_addr:
                 st.info("Connect your wallet in the panel to proceed.")
-            elif not insufficient:
-                if st.button(f"✅ Confirm & Sign — Send to {len(recipients)} addresses", key="pay_confirm_btn", use_container_width=True, type="primary"):
+            elif not insufficient and _batch_valid:
+                if not st.session_state.pay_submission_in_progress and st.button(f"✅ Confirm & Sign — Send to {len(recipients)} addresses", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    st.session_state.pay_submission_in_progress = True
                     import json as _json
                     _tx_widget(
                         chain_id=_net["chain_id"], chain_name=_net["label"],
@@ -19046,8 +19154,12 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             spender      = p_data.get("spender", "")
             raw_amount   = p_data.get("amount", 0)
             reason       = p_data.get("reason", "")
+            try:
+                raw_amount = float(raw_amount)
+            except (TypeError, ValueError):
+                raw_amount = 0
             is_unlimited = raw_amount == -1
-            approve_amt  = float(raw_amount) if not is_unlimited else 0
+            approve_amt  = raw_amount if not is_unlimited else 0
             MAX_UINT256  = 2**256 - 1
             approve_hex  = hex(MAX_UINT256) if is_unlimited else hex(int(approve_amt * 1e18))
             amt_display  = "Unlimited" if is_unlimited else f"{approve_amt:,.4f} {_sym}"
@@ -19076,16 +19188,19 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 f'<div class="pay-field-val" style="color:var(--pacc);">{esc(spender) or "—"}</div></div>'
                 + (f'<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Note</div><div class="pay-field-val">{esc(reason)}</div></div>' if reason else '') +
                 '<div class="pay-field"><div class="pay-field-lbl">Estimated Gas</div>'
-                '<div class="pay-field-val">~62,000 units (ERC-20 approve)</div></div>'
+                '<div class="pay-field-val">Unavailable in preview</div><div class="pay-field-sub">Your wallet estimates the contract call before signing.</div></div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
             if not wallet_addr:
                 st.info("Connect your wallet in the panel to proceed.")
-            elif not spender:
-                st.error('No spender address found. Try: "Approve 0xContractAddress to spend 100 PROS"')
+            elif not valid_addr(spender):
+                st.error('Enter a valid spender contract address. Try: "Approve 0xContractAddress to spend 100 PROS"')
+            elif not is_unlimited and approve_amt <= 0:
+                st.error("Approval amount must be greater than zero or explicitly set to unlimited.")
             else:
-                if st.button("✅ Confirm & Sign — Approve", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                if not st.session_state.pay_submission_in_progress and st.button("✅ Confirm & Sign — Approve", key="pay_confirm_btn", use_container_width=True, type="primary"):
+                    st.session_state.pay_submission_in_progress = True
                     _tx_widget(
                         chain_id=_net["chain_id"], chain_name=_net["label"],
                         rpc_url=_net["rpc"], explorer=_net["explorer"], net_symbol=_sym,
@@ -19105,7 +19220,10 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             st.rerun()
 
     # ── Handle tx hash returned via query param ───
-    _pay_tx   = valid_txhash(st.query_params.get("pay_tx", "")) or ("batch" if st.query_params.get("pay_tx", "") == "batch" else "")
+    _pay_tx_raw = st.query_params.get("pay_tx", "")
+    _pay_hashes = [valid_txhash(x) for x in _pay_tx_raw.split(",") if x]
+    _pay_hashes = [x for x in _pay_hashes if x]
+    _pay_tx = _pay_hashes[0] if len(_pay_hashes) == 1 else ""
     _pay_to   = valid_addr(st.query_params.get("pay_to", "")) or ""
     _pay_amt  = valid_amount(st.query_params.get("pay_amt", ""))
     _pay_net  = st.query_params.get("pay_net", "mainnet")
@@ -19114,31 +19232,57 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     _pay_mode = st.query_params.get("pay_mode", "send")
     if _pay_mode not in ("send", "batch", "approve"):
         _pay_mode = "send"
-    if _pay_tx and _pay_to and _pay_amt is not None:
+    if _pay_hashes and _pay_to and _pay_amt is not None:
         try:
             amt_float = float(_pay_amt)
         except Exception:
             amt_float = 0.0
         _net_cfg = _pay_net_config(_pay_net)
         _mode_label = {"send": "Send", "batch": "Batch Send", "approve": "Approve"}.get(_pay_mode, "Send")
-        entry = {
-            "tx_hash":   _pay_tx,
-            "recipient": _pay_to,
-            "amount":    amt_float,
-            "network":   _net_cfg["label"],
-            "explorer":  _net_cfg["explorer"],
-            "symbol":    _net_cfg.get("symbol", "PROS"),
-            "mode":      _mode_label,
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        }
-        existing = [h.get("tx_hash") for h in st.session_state.pay_history]
-        if _pay_tx not in existing:
-            st.session_state.pay_history.insert(0, entry)
+        _chain_id_dec = _net_cfg["chain_id_dec"]
+        _batch_recipients = []
+        if _pay_mode == "batch":
+            try:
+                _batch_recipients = [valid_addr(a) for a in json.loads(st.query_params.get("pay_recipients", "[]"))]
+                _batch_recipients = [a for a in _batch_recipients if a]
+            except (TypeError, ValueError):
+                _batch_recipients = []
+        _tx_recipients = _batch_recipients if _pay_mode == "batch" else [_pay_to]
+        _sender = st.session_state.get("w3_address") or st.session_state.get("wallet_address", "")
+        _entries = []
+        for _index, _hash in enumerate(_pay_hashes):
+            _recipient = _tx_recipients[_index] if _index < len(_tx_recipients) else _pay_to
+            _tx_check = fetch_pharos_transaction(_hash, rpc_override=_net_cfg["rpc"])
+            _tx_status = _tx_check.get("status") if _tx_check.get("available") else None
+            _tx_error = _tx_check.get("error") if not _tx_check.get("available") else None
+            if _tx_status == "success":
+                _wrong_identity = ((_tx_check.get("to_addr") or "").lower() != _recipient.lower()
+                                   or (_sender and (_tx_check.get("from_addr") or "").lower() != _sender.lower()))
+                _wrong_value = (_pay_mode in ("send", "batch") and (
+                    _tx_check.get("value_pros") is None
+                    or abs(float(_tx_check.get("value_pros") or 0) - amt_float) > max(1e-12, amt_float * 1e-9)))
+                if _wrong_identity or _wrong_value:
+                    _tx_status = "verification_failed"
+                    _tx_error = "Confirmed transaction details do not match the preview."
+            _entry = {
+                "tx_hash": _hash, "sender": _sender, "recipient": _recipient,
+                "amount": amt_float, "chain_id": _chain_id_dec,
+                "status": "confirmed" if _tx_status == "success" else "failed" if _tx_status == "failed" else "verification_failed" if _tx_status == "verification_failed" else "pending",
+                "error": _tx_error, "network": _net_cfg["label"], "explorer": _net_cfg["explorer"],
+                "symbol": _net_cfg.get("symbol", "PROS"), "mode": _mode_label,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            }
+            _entries.append(_entry)
+            if not _ledger_save("payment", _sender, _entry):
+                _warn_ledger_unavailable()
+        entry = _entries[0]
+        _existing_hashes = {(h.get("tx_hash"), int(h.get("chain_id") or 0)) for h in st.session_state.pay_history}
+        st.session_state.pay_history = [e for e in _entries if (e.get("tx_hash"), int(e.get("chain_id") or 0)) not in _existing_hashes] + st.session_state.pay_history
         st.session_state.pay_result    = entry
+        st.session_state.pay_submission_in_progress = False
         st.session_state.pay_parsed    = None
         st.session_state.pay_confirmed = True
         st.query_params.clear()
-        st.rerun()
 
     # ── Success card ─────────────────────────────
     if st.session_state.pay_result:
@@ -19148,7 +19292,7 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
         _m   = r.get("mode", "Send")
         st.markdown(
             '<div class="pay-preview" style="border-color:#22C55E;background:rgba(34,197,94,0.04);">'
-            '<div class="pay-preview-title" style="color:var(--pok);"><span>🎉</span> ' + esc(_m) + ' Complete!</div>'
+            '<div class="pay-preview-title" style="color:' + ("var(--pok)" if r.get("status") == "confirmed" else "var(--pwarn)" if r.get("status") == "pending" else "#E5484D") + ';"><span>⏳</span> ' + esc(_m) + ' · ' + esc(r.get("status", "submitted").replace("_", " ").title()) + '</div>'
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.7rem;">'
             '<div class="pay-field"><div class="pay-field-lbl">Amount</div>'
             f'<div class="pay-amount-big" style="color:var(--pok);">{r["amount"]:,.4f}</div>'
@@ -19160,18 +19304,51 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             f'<div class="pay-field-val">{esc(r["recipient"])}</div></div>'
             '<div class="pay-field" style="margin-bottom:0.7rem;"><div class="pay-field-lbl">Tx Hash</div>'
             f'<div class="pay-field-val" style="font-size:11px;">{esc(r["tx_hash"])}</div></div>'
+            + (f'<div class="pay-field-sub">{esc(r.get("error"))}</div>' if r.get("error") else '') +
             f'<a href="{esc_url(_exp)}/tx/{esc(r["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
             'style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;'
             'color:var(--pacc);text-decoration:none;margin-top:4px;">View on Pharosscan ↗</a>'
             '</div>',
             unsafe_allow_html=True,
         )
+        if r.get("status") == "pending" and st.button("↻ Refresh confirmation status", key="pay_refresh_status"):
+            _refresh_net = "testnet" if int(r.get("chain_id") or 0) == PHAROS_TESTNET_CHAIN_ID_DEC else "mainnet"
+            _check = fetch_pharos_transaction(r["tx_hash"], rpc_override=_pay_net_config(_refresh_net)["rpc"])
+            _new_status = _check.get("status") if _check.get("available") else None
+            if _new_status == "success":
+                _expected_sender = (r.get("sender") or "").lower()
+                _identity_mismatch = ((_check.get("to_addr") or "").lower() != (r.get("recipient") or "").lower()
+                                      or (_expected_sender and (_check.get("from_addr") or "").lower() != _expected_sender))
+                _value_mismatch = (r.get("mode") in ("Send", "Batch Send") and (
+                    _check.get("value_pros") is None
+                    or abs(float(_check.get("value_pros") or 0) - float(r.get("amount") or 0)) > max(1e-12, float(r.get("amount") or 0) * 1e-9)))
+                if _identity_mismatch or _value_mismatch:
+                    _new_status = "verification_failed"
+                    _check["error"] = "Confirmed transaction details do not match the preview."
+            r["status"] = "confirmed" if _new_status == "success" else "failed" if _new_status == "failed" else "verification_failed" if _new_status == "verification_failed" else "pending"
+            r["error"] = _check.get("error") if not _check.get("available") else None
+            if not _ledger_save("payment", r.get("sender", wallet_addr), r):
+                _warn_ledger_unavailable()
+            st.rerun()
+    _pay_error = st.query_params.get("pay_error", "")
+    if _pay_error:
+        st.session_state.pay_submission_in_progress = False
+        st.error("Wallet request was rejected." if _pay_error == "rejected" else "Wallet submission failed. Check your wallet and network, then try again.")
+        st.query_params.clear()
         if st.button("💸 New Transaction", key="pay_again_btn"):
             st.session_state.pay_result     = None
             st.session_state.pay_parsed     = None
             st.session_state.pay_confirmed  = False
             st.session_state.pay_intent_raw = ""
             st.rerun()
+
+    # Restore wallet-scoped durable records after page navigation or a browser refresh.
+    _history_wallet = st.session_state.get("w3_address") or st.session_state.get("wallet_address", "")
+    _stored_payments = _ledger_load("payment", _history_wallet)
+    _by_hash = {(h.get("tx_hash"), int(h.get("chain_id") or 0)): h for h in st.session_state.pay_history if h.get("tx_hash")}
+    for _saved in _stored_payments:
+        _by_hash.setdefault((_saved.get("tx_hash"), int(_saved.get("chain_id") or 0)), _saved)
+    st.session_state.pay_history = sorted(_by_hash.values(), key=lambda h: h.get("timestamp", ""), reverse=True)
 
     # ── Payment History ───────────────────────────
     if st.session_state.pay_history:
@@ -19192,7 +19369,7 @@ body:has(.pay-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 f'<div><div style="font-size:13px;font-weight:700;color:var(--t1);">'
                 f'{_mode_icon} {esc(_h_mode)} · {h["amount"]:,.4f} {esc(_h_sym)}</div>'
                 f'<div style="font-size:11px;color:var(--t3);margin-top:2px;">'
-                f'{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(tx_short)}</div></div>'
+                f'{esc(h.get("timestamp",""))} · {esc(_h_net)} · {esc(h.get("status","submitted").replace("_", " ").title())} · {esc(tx_short)}</div></div>'
                 f'<a href="{esc_url(_h_exp)}/tx/{esc(h["tx_hash"])}" target="_blank" rel="noopener noreferrer" '
                 'style="font-size:12px;font-weight:700;color:var(--pacc);white-space:nowrap;text-decoration:none;">View ↗</a>'
                 '</div>',
@@ -19431,6 +19608,7 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
 (async function(){{
   var dot=document.getElementById('dot'),msg=document.getElementById('msg'),res=document.getElementById('res');
   function st(t,c,d){{msg.textContent=t;msg.style.color=c||'#5B5F6E';dot.style.background=d||'#9499A8';}}
+  function reportReqError(code){{try{{var tgt=window.parent||window.top||window,url=new URL(tgt.location.href);url.searchParams.set('req_paid_error',code);tgt.history.replaceState({{}},'',url.toString());if(tgt.__octoBridgeRerun)tgt.__octoBridgeRerun();}}catch(e){{}}}}
   function rp(){{
     if(typeof window.ethereum!=='undefined') return window.ethereum;
     if(typeof window.okxwallet!=='undefined') return window.okxwallet;
@@ -19442,11 +19620,11 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
   st('⏳ Looking for wallet…','#5B5F6E','#F5C842');
   var p=null;
   for(var i=0;i<15;i++){{p=rp();if(p)break;await new Promise(r=>setTimeout(r,100));}}
-  if(!p){{st('❌ No Web3 wallet found. Unlock your wallet extension and try again.','#B91C1C','#E5484D');return;}}
+  if(!p){{st('❌ No Web3 wallet found. Unlock your wallet extension and try again.','#B91C1C','#E5484D');reportReqError('wallet_error');return;}}
   try{{
     st('⏳ Requesting account access…','#5B5F6E','#F5C842');
     var acc=await p.request({{method:'eth_requestAccounts'}});
-    if(!acc||!acc.length){{st('❌ No accounts returned.','#B91C1C','#E5484D');return;}}
+    if(!acc||!acc.length){{st('❌ No accounts returned.','#B91C1C','#E5484D');reportReqError('wallet_error');return;}}
     st('⏳ Switching to {chain_name}…','#5B5F6E','#F5C842');
     try{{
       await p.request({{method:'wallet_switchEthereumChain',params:[{{chainId:'{chain_id}'}}]}});
@@ -19462,9 +19640,9 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     }}
     st('⏳ Waiting for your signature…','#5B5F6E','#F5C842');
     var tx=await p.request({{method:'eth_sendTransaction',params:[{{
-      from:acc[0],to:'{recipient}',value:'{amount_hex}',gas:'0x5208',chainId:'{chain_id}'
+      from:acc[0],to:'{recipient}',value:'{amount_hex}',chainId:'{chain_id}'
     }}]}});
-    st('✅ Payment sent!','#15803D','#22C55E');
+    st('⏳ Payment submitted — awaiting Pharos confirmation.','#92400E','#F5C842');
     res.style.display='block';
     res.innerHTML='🎉 <strong>Tx Hash:</strong> '+tx+'<br>'
       +'<a href="{explorer}/tx/'+tx+'" target="_blank" style="color:#1A1AFF;font-weight:600;">View on Pharosscan ↗</a>';
@@ -19477,12 +19655,13 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
         url.searchParams.set('req_paid_amt','{amount_display}');
         url.searchParams.set('req_paid_net','{pay_net_ss}');
         tgt.history.pushState({{}},'',url.toString());
-        tgt.location.reload();
+        if(tgt.__octoBridgeRerun) tgt.__octoBridgeRerun();
       }}catch(e){{}}
     }},2200);
   }}catch(err){{
     if(err.code===4001){{st('❌ Rejected — you cancelled.','#B91C1C','#E5484D');}}
     else{{st('❌ '+(err.message||JSON.stringify(err)),'#B91C1C','#E5484D');}}
+    reportReqError(err.code===4001?'rejected':'wallet_error');
   }}
 }})();
 </script></body></html>"""
@@ -19496,32 +19675,65 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     if _rpaid_net not in ("mainnet", "testnet"):
         _rpaid_net = "mainnet"
     if _rpaid_tx and _rpaid_to:
+        st.session_state.req_payment_in_progress = False
         _rn_cfg = _req_net_config(_rpaid_net)
+        _paid_amount = str(_rpaid_amt) if _rpaid_amt is not None else "0"
+        _receipt = fetch_pharos_transaction(_rpaid_tx, rpc_override=_rn_cfg["rpc"])
+        _paid_status = _receipt.get("status") if _receipt.get("available") else None
+        _paid_error = _receipt.get("error") if not _receipt.get("available") else None
+        try:
+            _amount_matches = (_rpaid_amt is not None and _receipt.get("value_pros") is not None
+                               and abs(float(_receipt["value_pros"]) - float(_rpaid_amt)) <= max(1e-12, float(_rpaid_amt) * 1e-9))
+        except (TypeError, ValueError):
+            _amount_matches = False
+        if _paid_status == "success" and ((_receipt.get("to_addr") or "").lower() != _rpaid_to.lower() or not _amount_matches):
+            _paid_status = "failed"
+            _paid_error = "The confirmed transfer does not match this payment request."
         _paid_entry = {
             "type":      "paid",
             "tx_hash":   _rpaid_tx,
             "to":        _rpaid_to,
-            "amount":    str(_rpaid_amt) if _rpaid_amt is not None else "0",
+            "amount":    _paid_amount,
+            "status":    "confirmed" if _paid_status == "success" else "failed" if _paid_status == "failed" else "pending",
+            "error":     _paid_error,
+            "chain_id":  _rn_cfg["chain_id_dec"],
             "network":   _rn_cfg["label"],
             "explorer":  _rn_cfg["explorer"],
             "symbol":    _rn_cfg.get("symbol", "PROS"),
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         }
-        existing = [e.get("tx_hash") for e in st.session_state.req_invoices]
-        if _rpaid_tx not in existing:
+        existing = {(e.get("tx_hash"), int(e.get("chain_id") or 0)) for e in st.session_state.req_invoices}
+        if (_rpaid_tx, _rn_cfg["chain_id_dec"]) not in existing:
             st.session_state.req_invoices.insert(0, _paid_entry)
-        st.session_state.req_draft = {"mode": "paid_success", "entry": _paid_entry}
+        if not _ledger_save("request_payment", _rpaid_to, _paid_entry):
+            _warn_ledger_unavailable()
+        _paid_mode = "paid_success" if _paid_entry["status"] == "confirmed" else "payment_failed" if _paid_entry["status"] in ("failed", "verification_failed") else "payment_pending"
+        st.session_state.req_draft = {"mode": _paid_mode, "entry": _paid_entry}
         st.query_params.clear()
-        st.rerun()
+
+    _request_payment_error = st.query_params.get("req_paid_error", "")
+    if _request_payment_error:
+        st.session_state.req_payment_in_progress = False
+        st.error("Wallet request was rejected." if _request_payment_error == "rejected" else "Wallet payment could not be submitted. Check your wallet and network, then try again.")
+        st.query_params.clear()
 
     _draft = st.session_state.get("req_draft") or {}
     _mode  = _draft.get("mode", "create")
     wallet_addr = st.session_state.get("wallet_address", "")
+    _stored_requests = (_ledger_load("request", wallet_addr) + _ledger_load("request_payment", wallet_addr)) if wallet_addr else []
+    _req_seen = {str(x.get("request_id") or x.get("tx_hash")) for x in st.session_state.req_invoices}
+    for _saved_req in _stored_requests:
+        _req_key = str(_saved_req.get("request_id") or _saved_req.get("tx_hash"))
+        if _req_key and _req_key not in _req_seen:
+            st.session_state.req_invoices.append(_saved_req)
+            _req_seen.add(_req_key)
 
     # ── Title strip — mode-aware, sleek glass (mirrors the Pay strip) ──
     _hdr_map = {
         "pay_invoice":  ("🧾", "Payment Request", "Check the details below and pay in one click. Your wallet handles the rest."),
         "paid_success": ("🎉", "Payment Sent",    "This invoice is paid and confirmed on Pharos."),
+        "payment_pending": ("⏳", "Payment Submitted", "The transaction was submitted; confirmation is still pending."),
+        "payment_failed": ("⚠️", "Payment Not Confirmed", "The transaction failed or did not match this request."),
         "create":       ("🧾", "Request PROS",    "Set an amount and get a link anyone can open and pay in one click. A QR code comes with it."),
     }
     _hdr_icon, _hdr_title, _hdr_sub = _hdr_map.get(_mode, _hdr_map["create"])
@@ -19639,12 +19851,13 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 f'</div></div>',
                 unsafe_allow_html=True,
             )
-            if st.button(
+            if not st.session_state.req_payment_in_progress and st.button(
                 f"✅ Pay {inv_amt_f:,.4f} {_sym} now",
                 key="req_pay_confirm_btn",
                 use_container_width=True,
                 type="primary",
             ):
+                st.session_state.req_payment_in_progress = True
                 _pay_invoice_widget(
                     chain_id=_n["chain_id"], chain_name=_n["label"],
                     rpc_url=_n["rpc"], explorer=_n["explorer"], net_symbol=_sym,
@@ -19659,7 +19872,7 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
     # ══════════════════════════════════════════════
     # MODE B — PAID SUCCESS
     # ══════════════════════════════════════════════
-    elif _mode == "paid_success":
+    elif _mode in ("paid_success", "payment_pending", "payment_failed"):
         entry = _draft.get("entry", {})
         _exp  = entry.get("explorer", PHAROS_EXPLORER_URL)
         _sym  = entry.get("symbol", "PROS")
@@ -19668,8 +19881,8 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:1.2rem;">'
             '<div style="width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#14532D,#22C55E);'
             'display:flex;align-items:center;justify-content:center;font-size:22px;">🎉</div>'
-            '<div><div style="font-family:Syne,sans-serif;font-size:17px;font-weight:800;color:#15803D;">Invoice Paid!</div>'
-            '<div style="font-size:12px;color:var(--t3);">Transaction confirmed on Pharos Network</div></div>'
+            '<div><div style="font-family:Syne,sans-serif;font-size:17px;font-weight:800;color:' + ("#15803D" if entry.get("status") == "confirmed" else "#B91C1C" if entry.get("status") in ("failed", "verification_failed") else "#B45309") + ';">' + ("Invoice Paid!" if entry.get("status") == "confirmed" else "Payment Not Confirmed" if entry.get("status") in ("failed", "verification_failed") else "Payment Submitted") + '</div>'
+            '<div style="font-size:12px;color:var(--t3);">' + ("Transaction confirmed on Pharos Network" if entry.get("status") == "confirmed" else esc(entry.get("error")) if entry.get("error") else "Waiting for Pharos transaction confirmation") + '</div></div>'
             '</div>'
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0.8rem;">'
             '<div class="req-field"><div class="req-field-lbl">Amount</div>'
@@ -19721,6 +19934,29 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
             f'</div>',
             unsafe_allow_html=True,
         )
+        if entry.get("status") == "pending" and st.button("↻ Refresh payment status", key="req_refresh_paid_status"):
+            _rcfg = _req_net_config("testnet" if int(entry.get("chain_id") or 0) == PHAROS_TESTNET_CHAIN_ID_DEC else "mainnet")
+            _receipt = fetch_pharos_transaction(entry["tx_hash"], rpc_override=_rcfg["rpc"])
+            _status = _receipt.get("status") if _receipt.get("available") else None
+            if _status == "success":
+                try:
+                    _wanted = float(entry.get("amount") or 0)
+                    _matches = ((_receipt.get("to_addr") or "").lower() == (entry.get("to") or "").lower()
+                                and _receipt.get("value_pros") is not None
+                                and abs(float(_receipt["value_pros"]) - _wanted) <= max(1e-12, _wanted * 1e-9))
+                except (TypeError, ValueError):
+                    _matches = False
+                if not _matches:
+                    _status = "verification_failed"
+                    _receipt["error"] = "The confirmed transfer does not match this payment request."
+            entry["status"] = "confirmed" if _status == "success" else "failed" if _status == "failed" else "pending"
+            if _status == "verification_failed":
+                entry["status"] = "verification_failed"
+            entry["error"] = _receipt.get("error") if (_status in (None, "verification_failed") or not _receipt.get("available")) else None
+            if not _ledger_save("request_payment", entry.get("to", ""), entry):
+                _warn_ledger_unavailable()
+            st.session_state.req_draft["mode"] = "paid_success" if entry["status"] == "confirmed" else "payment_failed" if entry["status"] in ("failed", "verification_failed") else "payment_pending"
+            st.rerun()
 
         st.markdown('<div class="req-section-gap"></div>', unsafe_allow_html=True)
 
@@ -19848,8 +20084,10 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                 st.error(_err)
             else:
                 _amt_f = float(req_amount.strip())
+                _created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
                 _invoice = {
                     "type":      "created",
+                    "request_id": hashlib.sha256(f"{wallet_addr.lower()}|{req_amount.strip()}|{req_note.strip()}|{_created_at}".encode()).hexdigest(),
                     "to":        wallet_addr,
                     "amount":    str(_amt_f),
                     "note":      req_note.strip(),
@@ -19857,9 +20095,11 @@ body:has(.req-top) [data-testid="stMainBlockContainer"] > [data-testid="stVertic
                     "network":   st.session_state.pay_network,
                     "net_label": _rn["label"],
                     "symbol":    _rsym,
-                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                    "timestamp": _created_at,
                 }
                 st.session_state.req_invoices.insert(0, _invoice)
+                if not _ledger_save("request", wallet_addr, _invoice):
+                    _warn_ledger_unavailable()
 
                 _base_url = "http://localhost:8501"
                 try:
