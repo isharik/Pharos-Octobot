@@ -16594,14 +16594,16 @@ elif st.session_state.page == "portfolio":
       --pa-input:var(--bg);
       --pa-shadow:var(--shadow-md);
     }
-    html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{
-      max-width:900px!important;padding-top:6rem!important;padding-bottom:3rem!important;}
+    html[data-octo-page="portfolio"] .stApp:has(.pa-hero) [data-testid="stMainBlockContainer"]{
+      max-width:900px!important;padding-top:1.1rem!important;padding-bottom:2rem!important;}
     html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{
-      gap:1rem!important;}
+      gap:.7rem!important;}
     html[data-octo-page="portfolio"] [data-testid="stForm"]{
-      border:1px solid var(--pa-line)!important;border-radius:18px!important;
-      background:var(--pa-surface)!important;padding:1.25rem 1.35rem!important;
+      border:1px solid var(--pa-line)!important;border-radius:16px!important;
+      background:var(--pa-surface)!important;padding:.9rem 1.1rem!important;
       box-shadow:var(--pa-shadow)!important;}
+    html[data-octo-page="portfolio"] [data-testid="stAlert"]{padding:.45rem .75rem!important;margin:.1rem 0!important;}
+    html[data-octo-page="portfolio"] [data-testid="stAlert"] p{margin:.1rem 0!important;line-height:1.45!important;}
     html[data-octo-page="portfolio"] [data-testid="stTextInput"] input{
       color:var(--pa-text)!important;background:var(--pa-input)!important;
       border-color:var(--pa-line)!important;border-radius:11px!important;}
@@ -16610,28 +16612,27 @@ elif st.session_state.page == "portfolio":
     html[data-octo-page="portfolio"] [data-testid="stTextInput"] input:focus{
       border-color:var(--pa-accent)!important;box-shadow:0 0 0 1px var(--pa-accent)!important;}
     html[data-octo-page="portfolio"] [data-testid="stWidgetLabel"] p{color:var(--pa-text)!important;}
-    .pa-hero{position:relative;display:flex;align-items:center;gap:20px;overflow:hidden;
-      padding:26px 30px;border:1px solid var(--pa-line);border-radius:22px;
+    .pa-hero{position:relative;display:flex;align-items:center;gap:16px;overflow:hidden;
+      padding:17px 22px;border:1px solid var(--pa-line);border-radius:20px;
       background:linear-gradient(115deg,var(--pa-accent-soft),var(--pa-surface));
-      box-shadow:var(--pa-shadow);backdrop-filter:blur(18px);margin:0 0 4px;}
-    .pa-mark{width:58px;height:58px;flex:none;display:grid;place-items:center;border-radius:17px;
-      background:var(--subtle);color:var(--pa-accent);font-size:26px;}
+      box-shadow:var(--pa-shadow);backdrop-filter:blur(18px);margin:0 0 2px;}
+    .pa-mark{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:14px;
+      background:var(--subtle);color:var(--pa-accent);font-size:22px;}
     .pa-copy{min-width:0;}
     .pa-kicker{font-size:10px;font-weight:750;letter-spacing:.15em;text-transform:uppercase;
       color:var(--pa-accent);margin-bottom:6px;}
-    .pa-title{font-size:clamp(24px,3vw,31px);line-height:1.12;font-weight:800;
-      letter-spacing:-.035em;margin:0 0 7px;color:var(--pa-text);}
-    .pa-sub{font-size:14px;line-height:1.6;color:var(--pa-muted);max-width:68ch;margin:0;}
+    .pa-title{font-size:clamp(22px,2.7vw,28px);line-height:1.12;font-weight:800;
+      letter-spacing:-.035em;margin:0 0 5px;color:var(--pa-text);}
+    .pa-sub{font-size:13px;line-height:1.5;color:var(--pa-muted);max-width:68ch;margin:0;}
     .pa-answer{margin:12px 0 4px;padding:17px 19px;border:1px solid var(--pa-line);
       border-radius:18px 18px 18px 5px;background:var(--pa-surface);
       color:var(--pa-text);box-shadow:var(--pa-shadow);line-height:1.7;overflow-wrap:anywhere;}
     .pa-answer-label{font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase;
       color:var(--pa-accent);margin:0 0 7px;}
     @media(max-width:640px){
-      html[data-octo-page="portfolio"] [data-testid="stMainBlockContainer"]{padding:5rem 1rem 2rem!important;}
-      .pa-hero{align-items:flex-start;padding:22px 20px;gap:14px;}
-      .pa-mark{width:46px;height:46px;border-radius:14px;font-size:21px;}
-      html[data-octo-page="portfolio"] [data-testid="stForm"]{padding:1rem!important;}
+      html[data-octo-page="portfolio"] .stApp:has(.pa-hero) [data-testid="stMainBlockContainer"]{padding:1rem 1rem 1.5rem!important;}
+      .pa-hero{align-items:flex-start;padding:15px 16px;gap:12px;}
+      html[data-octo-page="portfolio"] [data-testid="stForm"]{padding:.8rem!important;}
     }
     </style>
     <section class="pa-hero" aria-labelledby="pa-title">
