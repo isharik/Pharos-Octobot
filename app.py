@@ -15262,6 +15262,32 @@ html[data-theme="dark"] [class*="st-key-x402_enabled_toggle_main"] label p{color
 
     question   = pending or user_input
 
+    # Streamlit reruns the script for every submitted prompt. Replay the
+    # persisted conversation in insertion order on each run so the chat stays
+    # top-to-bottom chronological (older turns above, newest turn at bottom).
+    _assistant_source_index = 0
+    for _history_index, _history_message in enumerate(st.session_state.messages):
+        _history_role = _history_message.get("role", "assistant")
+        _history_avatar = "👤" if _history_role == "user" else "🐙"
+        with st.chat_message(_history_role, avatar=_history_avatar):
+            st.markdown(_history_message.get("content", ""))
+            if _history_role == "assistant":
+                _history_sources = (
+                    st.session_state.sources_history[_assistant_source_index]
+                    if _assistant_source_index < len(st.session_state.sources_history) else []
+                )
+                _assistant_source_index += 1
+                if st.session_state.get("show_sources") and _history_sources:
+                    with st.expander(f"📚 Sources · {_history_index + 1}", expanded=False):
+                        for _source in _history_sources:
+                            _source_title = esc(_source.get("title", "Pharos source"))
+                            _source_url = esc_url(_source.get("url", ""))
+                            st.markdown(
+                                f'<div class="source-card"><a href="{_source_url}" target="_blank" '
+                                f'rel="noopener noreferrer">{_source_title} ↗</a></div>',
+                                unsafe_allow_html=True,
+                            )
+
     if question:
         # Prepend a language instruction to guide OctoBot's response language
         lang_prefix = (
